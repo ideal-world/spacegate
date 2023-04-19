@@ -1,0 +1,27 @@
+[package]
+name = "spacegate-impl-hyper"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../README.md"
+
+[lib]
+name = "spacegate_impl_hyper"
+path = "src/lib.rs"
+
+[dependencies]
+spacegate-kernel = { path = "../kernel" }
+hyper = { version = "0.14" }
+
+[dev-dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

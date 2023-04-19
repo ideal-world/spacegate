@@ -1,0 +1,40 @@
+[package]
+name = "spacegate-kernel"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../README.md"
+
+[lib]
+name = "spacegate_kernel"
+path = "src/lib.rs"
+
+[features]
+cache = ["tardis/cache"]
+crypto = ["tardis/crypto-with-sm"]
+k8s = ["k8s-openapi", "k8s-gateway-api"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+lazy_static = { version = "1.4" }
+async-trait = { version = "0.1" }
+tardis = { workspace = true }
+
+# K8s
+k8s-openapi = { version = "0.17", features = ["v1_21"], optional = true }
+k8s-gateway-api = { version = "0.11", optional = true }
+
+[dev-dependencies]
+tardis = { workspace = true, features = ["test"] }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

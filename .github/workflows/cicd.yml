@@ -1,0 +1,67 @@
+name: CICD
+
+on: [push]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check format
+        run: cargo fmt --all -- --check
+
+      - name: Check clippy
+        run: cargo clippy --all --all-features
+
+      - name: Run test
+        run: cargo test --all-features
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v2
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
+
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v2
+        with:
+          name: code-coverage-report
+          path: cobertura.xml
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check, publish-macros]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cargo login
+        run: cargo login ${{ secrets.CRATES_TOKEN }}
+
+      - name: Cargo package
+        run: cargo package
+
+      - name: Cargo publish
+        run: cargo publish

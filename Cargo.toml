@@ -1,0 +1,23 @@
+[workspace]
+members = ["kernel", "impl-hyper", "serv"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
+
+[workspace.package]
+version = "0.1.0-alpha1"
+authors = ["gudaoxuri <i@sunisle.org>"]
+description = "Cloud-native-first lightweight API gateway"
+keywords = ["http", "gateway", "web", "cloud", "kubernates"]
+categories = ["gateway", "web-programming", "kubernetes", "api"]
+homepage = "https://github.com/ideal-world/spacegate"
+documentation = "https://docs.rs/spacegate/"
+repository = "https://github.com/ideal-world/spacegate"
+edition = "2021"
+license = "MIT/Apache-2.0"
+rust-version = "1.64"
+
+[workspace.dependencies]
+tardis = { version = "0.1.0-beta3" }
