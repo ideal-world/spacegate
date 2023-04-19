@@ -17,7 +17,7 @@ name = "spacegate_impl_hyper"
 path = "src/lib.rs"
 
 [dependencies]
-spacegate-kernel = { path = "../kernel" }
+spacegate-kernel = { version = "0.1.0-alpha1", path = "../kernel" }
 hyper = { version = "0.14" }
 
 [dev-dependencies]

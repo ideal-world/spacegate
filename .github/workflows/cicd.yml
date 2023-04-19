@@ -44,7 +44,7 @@ jobs:
           name: code-coverage-report
           path: cobertura.xml
 
-  publish:
+  publish-kernel:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [check, publish-macros]
     runs-on: ubuntu-latest
@@ -60,8 +60,58 @@ jobs:
       - name: Cargo login
         run: cargo login ${{ secrets.CRATES_TOKEN }}
 
-      - name: Cargo package
+      - name: Cargo package kernel
+        working-directory: kernel
         run: cargo package
 
-      - name: Cargo publish
+      - name: Cargo publish kernel
+        working-directory: kernel
         run: cargo publish
+
+  publish-impl-hyper:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check, publish-macros]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cargo login
+        run: cargo login ${{ secrets.CRATES_TOKEN }}
+
+      - name: Cargo package impl-hyper
+        working-directory: impl-hyper
+        run: cargo package
+
+      - name: Cargo publish impl-hyper
+        working-directory: impl-hyper
+        run: cargo publish
+
+  publish-serv:
+      if: startsWith(github.ref, 'refs/tags/')
+      needs: [check, publish-macros]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Check out the repo
+          uses: actions/checkout@v3
+
+        - name: Init rust envrionment
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+
+        - name: Cargo login
+          run: cargo login ${{ secrets.CRATES_TOKEN }}
+
+        - name: Cargo package serv
+          working-directory: serv
+          run: cargo package
+
+        - name: Cargo publish serv
+          working-directory: serv
+          run: cargo publish
