@@ -46,7 +46,7 @@ jobs:
 
   publish-kernel:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [check, publish-macros]
+    needs: [check]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -68,33 +68,9 @@ jobs:
         working-directory: kernel
         run: cargo publish
 
-  publish-impl-hyper:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: [check, publish-macros]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v3
-
-      - name: Init rust envrionment
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Cargo login
-        run: cargo login ${{ secrets.CRATES_TOKEN }}
-
-      - name: Cargo package impl-hyper
-        working-directory: impl-hyper
-        run: cargo package
-
-      - name: Cargo publish impl-hyper
-        working-directory: impl-hyper
-        run: cargo publish
-
   publish-serv:
       if: startsWith(github.ref, 'refs/tags/')
-      needs: [check, publish-macros]
+      needs: [check, publish-kernel]
       runs-on: ubuntu-latest
       steps:
         - name: Check out the repo

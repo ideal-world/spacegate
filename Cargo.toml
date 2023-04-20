@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "impl-hyper", "serv"]
+members = ["kernel", "serv"]
 
 [profile.release]
 lto = true
@@ -7,7 +7,7 @@ codegen-units = 1
 opt-level = "z"
 
 [workspace.package]
-version = "0.1.0-alpha1"
+version = "0.1.0-alpha.2"
 authors = ["gudaoxuri <i@sunisle.org>"]
 description = "Cloud-native-first lightweight API gateway"
 keywords = ["http", "gateway", "web", "cloud", "kubernates"]
