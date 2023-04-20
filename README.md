@@ -8,8 +8,7 @@ Do NOT use in production environment!**
 ---
 
 [![Build Status](https://github.com/ideal-world/spacegate/actions/workflows/cicd.yml/badge.svg)](https://github.com/ideal-world/spacegate/actions/workflows/cicd.yml)
-[![Test Coverage](https://codecov.io/gh/ideal-world/spacegate/branch/main/graph/badge.svg?token=L1LQ8DLUS2)](https://codecov.io/gh/ideal-world/spacegate)
-[![License](https://img.shields.io/github/license/ideal-world/spacegate)](https://github.com/ideal-world/spacegate/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/ideal-world/spacegate)](https://github.com/ideal-world/spacegate/blob/master/LICENSE)
 
 > SpaceGate("Spacegates are Stargates suspended in space, or in planetary orbit") From "Stargate".
 
