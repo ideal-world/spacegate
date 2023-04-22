@@ -24,5 +24,4 @@ Do NOT use in production environment!**
 | Crate                         | Description | 
 |-------------------------------|-------------|
 | **spacegate-kernel** [![Crate](https://img.shields.io/crates/v/spacegate-kernel.svg)](https://crates.io/crates/spacegate-kernel) [![Docs](https://docs.rs/spacegate-kernel/badge.svg)](https://docs.rs/spacegate-kernel) | All core functions included |
-| **spacegate-impl-hyper** [![Crate](https://img.shields.io/crates/v/spacegate-impl-hyper.svg)](https://crates.io/crates/spacegate-impl-hyper) [![Docs](https://docs.rs/spacegate-impl-hyper/badge.svg)](https://docs.rs/spacegate-impl-hyper)  | Implementation under the hyper framework |
 | **spacegate** [![Crate](https://img.shields.io/crates/v/spacegate.svg)](https://crates.io/crates/spacegate) [![Docs](https://docs.rs/spacegate/badge.svg)](https://docs.rs/spacegate)  | Default service |
