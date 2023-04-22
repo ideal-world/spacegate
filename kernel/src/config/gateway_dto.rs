@@ -1,15 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+use super::plugin_filter_dto::SgRouteFilter;
+
 /// Gateway represents an instance of a service-traffic handling infrastructure
 /// by binding Listeners to a set of IP addresses.
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1beta1.Gateway)
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgGateway {
+    /// Name of the Gateway. Global Unique.
+    pub name: String,
     /// Some parameters necessary for the gateway.
-    parameters: SgParameters,
+    pub parameters: SgParameters,
     /// Listeners associated with this Gateway. Listeners define logical endpoints that are bound on this Gateway’s addresses.
-    listeners: Vec<SgListener>,
+    pub listeners: Vec<SgListener>,
+    /// Filters define the filters that are applied to requests that match this gateway.
+    pub filters: Option<Vec<SgRouteFilter>>,
 }
 
 /// Gateway parameter configuration.
@@ -23,7 +29,9 @@ pub struct SgParameters {
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
-    pub name: String,
+    pub name: Option<String>,
+    /// Ip bound to the Listener. Default is 0.0.0.0
+    pub ip: Option<String>,
     /// Port is the network port. Multiple listeners may use the same port, subject to the Listener compatibility rules.
     pub port: u16,
     /// Protocol specifies the network protocol this listener expects to receive.
@@ -52,7 +60,6 @@ impl Default for SgProtocol {
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SgTlsConfig {
-    pub name: String,
-    pub key: Option<String>,
-    pub cert: Option<String>,
+    pub key: String,
+    pub cert: String,
 }

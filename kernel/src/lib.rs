@@ -1,9 +1,11 @@
 use tardis::basic::result::TardisResult;
 
 mod config;
-mod plugin;
-mod server;
+mod functions;
+mod plugins;
 
-pub async fn init() -> TardisResult<()> {
+pub async fn startup(k8s_mode: bool, ext_conf_url: Option<String>) -> TardisResult<()> {
+    let config = config::init(k8s_mode, ext_conf_url).await?;
+    
     Ok(())
 }
