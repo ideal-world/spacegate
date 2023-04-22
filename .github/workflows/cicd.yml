@@ -1,6 +1,9 @@
 name: CICD
 
-on: [push]
+on:
+  push:
+    tags:
+      - '*'
 
 jobs:
   check:
