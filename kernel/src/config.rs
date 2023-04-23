@@ -37,19 +37,19 @@ async fn init_by_k8s() -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
 async fn init_by_native(ext_conf_url: &str) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     cache::init("", ext_conf_url).await?;
     let cache = cache::get("")?;
-    let gateway_confs = cache.hgetall(CONF_GATEWAY_KEY).await?;
-    let gateway_confs = gateway_confs.into_iter().map(|(k, v)| TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
-    let http_route_confs = cache.hgetall(CONF_HTTP_ROUTE_KEY).await?;
-    let http_route_confs = http_route_confs.into_iter().map(|(k, v)| TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
-    let config = gateway_confs
+    let gateway_configs = cache.hgetall(CONF_GATEWAY_KEY).await?;
+    let gateway_configs = gateway_configs.into_iter().map(|(k, v)| TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
+    let http_route_configs = cache.hgetall(CONF_HTTP_ROUTE_KEY).await?;
+    let http_route_configs = http_route_configs.into_iter().map(|(k, v)| TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
+    let config = gateway_configs
         .into_iter()
         .map(|gateway_conf| {
-            let http_route_confs = http_route_confs
+            let http_route_configs = http_route_configs
                 .iter()
                 .filter(|http_route_conf| http_route_conf.gateway_name == gateway_conf.name)
                 .map(|http_route_conf| http_route_conf.clone())
                 .collect::<Vec<SgHttpRoute>>();
-            (gateway_conf, http_route_confs)
+            (gateway_conf, http_route_configs)
         })
         .collect::<Vec<(SgGateway, Vec<SgHttpRoute>)>>();
     Ok(config)

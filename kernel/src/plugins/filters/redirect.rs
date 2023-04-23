@@ -5,7 +5,7 @@ use http::{Method, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
 use tardis::basic::{error::TardisError, result::TardisResult};
 
-use super::{SgPluginFilter, SgRouteFilterContext};
+use super::{SgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction};
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilerRedirect {
@@ -19,6 +19,14 @@ pub struct SgFilerRedirect {
 impl SgPluginFilter for SgFilerRedirect {
     fn kind(&self) -> super::SgPluginFilterKind {
         super::SgPluginFilterKind::Http
+    }
+
+    async fn init(&self) -> TardisResult<()> {
+        Ok(())
+    }
+
+    async fn destroy(&self) -> TardisResult<()> {
+        Ok(())
     }
 
     async fn req_filter(&self, mut ctx: SgRouteFilterContext) -> TardisResult<(bool, SgRouteFilterContext)> {
@@ -38,6 +46,7 @@ impl SgPluginFilter for SgFilerRedirect {
         if let Some(uri) = self.uri.as_ref() {
             ctx.uri = Uri::try_from(uri).map_err(|error| TardisError::format_error(&format!("[SG.filter.redirect] Uri {uri} parsing error: {error} "), ""))?;
         }
+        ctx.action = SgRouteFilterRequestAction::Redirect;
         Ok((true, ctx))
     }
 

@@ -30,6 +30,14 @@ impl SgPluginFilter for SgFilerHeaderModifier {
         super::SgPluginFilterKind::Http
     }
 
+    async fn init(&self) -> TardisResult<()> {
+        Ok(())
+    }
+
+    async fn destroy(&self) -> TardisResult<()> {
+        Ok(())
+    }
+
     async fn req_filter(&self, mut ctx: SgRouteFilterContext) -> TardisResult<(bool, SgRouteFilterContext)> {
         if self.kind != SgFilerHeaderModifierKind::Request {
             return Ok((true, ctx));

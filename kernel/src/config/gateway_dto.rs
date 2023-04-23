@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 use super::plugin_filter_dto::SgRouteFilter;
@@ -22,7 +24,7 @@ pub struct SgGateway {
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgParameters {
     /// Redis access Url, Url with permission information.
-    pub redis_url: String,
+    pub redis_url: Option<String>,
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
@@ -49,6 +51,15 @@ pub enum SgProtocol {
     Http,
     /// Accepts HTTP/1.1 or HTTP/2 sessions over TLS.
     Https,
+}
+
+impl Display for SgProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SgProtocol::Http => write!(f, "http"),
+            SgProtocol::Https => write!(f, "https"),
+        }
+    }
 }
 
 impl Default for SgProtocol {

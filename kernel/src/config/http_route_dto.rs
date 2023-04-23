@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::plugin_filter_dto::SgRouteFilter;
+use super::{plugin_filter_dto::SgRouteFilter, gateway_dto::SgProtocol};
 
 /// HTTPRoute provides a way to route HTTP requests.
 ///
@@ -129,6 +129,8 @@ pub struct SgHttpBackendRef {
     pub namespace_or_host: Option<String>,
     /// Port specifies the destination port number to use for this resource.
     pub port: u16,
+    // Protocol specifies the protocol used to talk to the referenced backend.
+    pub protocol: Option<SgProtocol>,
     /// Weight specifies the proportion of requests forwarded to the referenced backend.
     /// This is computed as weight/(sum of all weights in this BackendRefs list).
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.

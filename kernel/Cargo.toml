@@ -26,6 +26,7 @@ serde.workspace = true
 serde_json.workspace = true
 lazy_static.workspace = true
 async-trait.workspace = true
+itertools.workspace = true
 
 tardis = { workspace = true, features = ["future"] }
 

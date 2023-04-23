@@ -1,16 +1,16 @@
 use std::{
     collections::HashMap,
+    convert::Infallible,
     future::Future,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
 use crate::config::gateway_dto::{SgGateway, SgProtocol};
 use core::task::{Context, Poll};
-use http::{Request, Response};
 use hyper::server::accept::Accept;
 use hyper::server::conn::{AddrIncoming, AddrStream};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Server, StatusCode};
+use hyper::Server;
 use lazy_static::lazy_static;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use std::pin::Pin;
@@ -29,11 +29,13 @@ use tardis::{
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+use super::http_route;
+
 lazy_static! {
     static ref SHUTDOWN_TX: Arc<Mutex<HashMap<String, Sender<()>>>> = <_>::default();
 }
 
-pub async fn startup(gateway_conf: SgGateway) -> TardisResult<()> {
+pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.is_empty() {
         return Err(TardisError::bad_request("[SG.server] Missing Listeners", ""));
     }
@@ -42,20 +44,22 @@ pub async fn startup(gateway_conf: SgGateway) -> TardisResult<()> {
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
-    let mut serv_futures = Vec::new();
-    for listener in gateway_conf.listeners {
+    let gateway_name = Arc::new(gateway_conf.name.to_string());
+    let mut server_insts: Vec<SgServerInst> = Vec::new();
+    for listener in &gateway_conf.listeners {
         let ip = listener.ip.as_deref().unwrap_or("0.0.0.0");
         let addr = if ip.contains('.') {
-            let ip: Ipv4Addr = ip.parse().map_err(|error| TardisError::bad_request(&format!("[SG.server] IP {ip} is not legal"), ""))?;
+            let ip: Ipv4Addr = ip.parse().map_err(|_| TardisError::bad_request(&format!("[SG.server] IP {ip} is not legal"), ""))?;
             SocketAddr::new(std::net::IpAddr::V4(ip), listener.port)
         } else {
-            let ip: Ipv6Addr = ip.parse().map_err(|error| TardisError::bad_request(&format!("[SG.server] IP {ip} is not legal"), ""))?;
+            let ip: Ipv6Addr = ip.parse().map_err(|_| TardisError::bad_request(&format!("[SG.server] IP {ip} is not legal"), ""))?;
             SocketAddr::new(std::net::IpAddr::V6(ip), listener.port)
         };
 
         let mut shutdown_rx = shutdown_tx.subscribe();
 
-        if let Some(tls) = listener.tls {
+        let gateway_name = gateway_name.clone();
+        if let Some(tls) = &listener.tls {
             let tls_cfg = {
                 let cert = Certificate(tls.cert.as_bytes().to_vec());
                 let key = PrivateKey(tls.key.as_bytes().to_vec());
@@ -68,25 +72,50 @@ pub async fn startup(gateway_conf: SgGateway) -> TardisResult<()> {
                 sync::Arc::new(cfg)
             };
             let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.server] Bind address error: {error}"), ""))?;
-            let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(sg_process)) }));
+            let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
+                let remote_addr = match &client.state {
+                    State::Handshaking(addr) => {
+                        if let Some(addr) = addr.get_ref() {
+                            addr.remote_addr()
+                        } else {
+                            // TODO
+                            panic!("TODO")
+                        }
+                    }
+                    State::Streaming(addr) => addr.get_ref().0.remote_addr(),
+                };
+                let gateway_name = gateway_name.clone();
+                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), remote_addr, req))) }
+            }));
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
             });
-            serv_futures.push(server.boxed());
+            server_insts.push(SgServerInst { addr, server: server.boxed() });
         } else {
-            let server = Server::bind(&addr).serve(make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(sg_process)) }));
+            let server = Server::bind(&addr).serve(make_service_fn(move |client: &AddrStream| {
+                let remote_addr = client.remote_addr();
+                let gateway_name = gateway_name.clone();
+                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), remote_addr, req))) }
+            }));
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
             });
-            serv_futures.push(server.boxed());
+            server_insts.push(SgServerInst { addr, server: server.boxed() });
         }
-        log::info!("[SG.server] Listening on http://{} ", addr);
     }
 
     let mut shutdown = SHUTDOWN_TX.lock().await;
-    shutdown.insert(gateway_conf.name, shutdown_tx);
+    shutdown.insert(gateway_name.to_string(), shutdown_tx);
 
-    join_all(serv_futures).await;
+    Ok(server_insts)
+}
+
+pub async fn startup(servers: Vec<SgServerInst>) -> TardisResult<()> {
+    for server in &servers {
+        log::info!("[SG.server] Listening on http://{} ", server.addr);
+    }
+    let servers = servers.into_iter().map(|s| s.server).collect::<Vec<_>>();
+    join_all(servers).await;
     Ok(())
 }
 
@@ -189,26 +218,7 @@ impl AsyncWrite for TlsStream {
     }
 }
 
-async fn sg_process(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    let mut response = Response::new(Body::empty());
-    match (req.method(), req.uri().path()) {
-        // Help route.
-        (&Method::GET, "/") => {
-            *response.body_mut() = Body::from("Try POST /echo\n");
-        }
-        // Echo service route.
-        (&Method::POST, "/echo") => {
-            *response.body_mut() = req.into_body();
-        }
-        // Catch-all 404.
-        _ => {
-            *response.status_mut() = StatusCode::NOT_FOUND;
-        }
-    };
-
-    // let mut not_found = Response::default();
-    //         *not_found.status_mut() = StatusCode::NOT_FOUND;
-    //         Ok(not_found)
-
-    Ok(response)
+pub struct SgServerInst {
+    pub addr: SocketAddr,
+    pub server: Pin<Box<dyn std::future::Future<Output = Result<(), hyper::Error>> + std::marker::Send>>,
 }
