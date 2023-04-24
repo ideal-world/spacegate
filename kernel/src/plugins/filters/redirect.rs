@@ -31,20 +31,18 @@ impl SgPluginFilter for SgFilerRedirect {
 
     async fn req_filter(&self, mut ctx: SgRouteFilterContext) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(method) = self.method.as_ref() {
-            ctx.method = Method::from_bytes(method.as_bytes())
-                .map_err(|error| TardisError::format_error(&format!("[SG.filter.redirect] Method name {method} parsing error: {error} "), ""))?;
+            ctx.set_req_method(
+                Method::from_bytes(method.as_bytes())
+                    .map_err(|error| TardisError::format_error(&format!("[SG.Filter.Redirect] Method name {method} parsing error: {error} "), ""))?,
+            );
         }
         if let Some(headers) = self.headers.as_ref() {
             for (k, v) in headers.iter() {
-                let name = http::header::HeaderName::try_from(k)
-                    .map_err(|error| TardisError::format_error(&format!("[SG.filter.redirect] Header name {k} parsing error: {error} "), ""))?;
-                let value = http::header::HeaderValue::try_from(v)
-                    .map_err(|error| TardisError::format_error(&format!("[SG.filter.redirect] Header value {v} parsing error: {error} "), ""))?;
-                ctx.req_headers.insert(name, value);
+                ctx.set_req_header(k, v)?;
             }
         }
         if let Some(uri) = self.uri.as_ref() {
-            ctx.uri = Uri::try_from(uri).map_err(|error| TardisError::format_error(&format!("[SG.filter.redirect] Uri {uri} parsing error: {error} "), ""))?;
+            ctx.set_req_uri(Uri::try_from(uri).map_err(|error| TardisError::format_error(&format!("[SG.Filter.Redirect] Uri {uri} parsing error: {error} "), ""))?);
         }
         ctx.action = SgRouteFilterRequestAction::Redirect;
         Ok((true, ctx))
@@ -52,9 +50,9 @@ impl SgPluginFilter for SgFilerRedirect {
 
     async fn resp_filter(&self, mut ctx: SgRouteFilterContext) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(status_code) = self.status_code {
-            ctx.resp_status_code = Some(
+            ctx.set_resp_status_code(
                 StatusCode::from_u16(status_code)
-                    .map_err(|error| TardisError::format_error(&format!("[SG.filter.redirect] Status code {status_code} parsing error: {error} "), ""))?,
+                    .map_err(|error| TardisError::format_error(&format!("[SG.Filter.Redirect] Status code {status_code} parsing error: {error} "), ""))?,
             );
         }
         Ok((true, ctx))

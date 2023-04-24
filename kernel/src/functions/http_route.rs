@@ -2,22 +2,26 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use crate::{
     config::{
-        gateway_dto::{SgGateway, SgProtocol},
+        gateway_dto::SgGateway,
         http_route_dto::{SgHttpBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryParamMatchType, SgHttpRoute},
     },
     plugins::filters::{self, SgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
 use http::{HeaderValue, Request, Response};
-use hyper::{Body, Client, StatusCode};
+use hyper::{client::HttpConnector, Body, Client, StatusCode};
+use hyper_rustls::HttpsConnector;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::vec::Vec;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
+    rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng},
     regex::Regex,
     TardisFuns,
 };
+
+use super::client;
 
 static mut ROUTES: Option<HashMap<String, SgGatewayInst>> = None;
 
@@ -122,7 +126,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     let route_inst = SgGatewayInst {
         filters: global_filters,
         routes: route_insts,
-        client: Client::new(),
+        client: client::init()?,
     };
     unsafe {
         if ROUTES.is_none() {
@@ -165,65 +169,69 @@ fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
         if let Some(routes) = ROUTES.as_ref().unwrap().get(name) {
             Ok(routes)
         } else {
-            Err(TardisError::bad_request(&format!("[SG.server] Get routes {name} failed"), ""))
+            Err(TardisError::bad_request(&format!("[SG.Route] Get routes {name} failed"), ""))
         }
     }
 }
 
 pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    let gateway_inst = match get(&gateway_name) {
-        Ok(route) => route,
-        Err(error) => return process_error(error),
-    };
+    match do_process(gateway_name, remote_addr, request).await {
+        Ok(result) => Ok(result),
+        Err(error) => into_http_error(error),
+    }
+}
+
+async fn do_process(gateway_name: Arc<String>, remote_addr: SocketAddr, request: Request<Body>) -> TardisResult<Response<Body>> {
+    let gateway_inst = get(&gateway_name)?;
 
     let matched_route_inst = match_route_insts_with_priority(&request, gateway_inst);
-    if let Some(matched_route_inst) = matched_route_inst {
-        if let Some(Some(matched_rule_inst)) = matched_route_inst.rules.map(|rules| rules.iter().find(|rule| match_rule_inst(&request, rule))) {
-            let ctx = process_req_filters(remote_addr, request, Some(&matched_rule_inst.filters), &matched_route_inst.filters, &gateway_inst.filters).await?;
-            let response = if let Some(backends) = &matched_rule_inst.backends {
-                let backend = choose_backend(backends);
-                do_request(&gateway_inst.client, backend, ctx).await?;
-            } else {
-                do_request(&gateway_inst.client, None, ctx).await?;
-            };
-        } else {
-            let ctx = process_req_filters(remote_addr, request, None, &matched_route_inst.filters, &gateway_inst.filters).await?;
-            let response = do_request(&gateway_inst.client, None, ctx).await?;
-        }
-    } else {
+    if matched_route_inst.is_none() {
         let mut not_found = Response::default();
         *not_found.status_mut() = StatusCode::NOT_FOUND;
-        Ok(not_found)
+        return Ok(not_found);
     }
-}
 
-async fn do_request(client: &Client<Body>, backend: Option<SgHttpBackendRef>, ctx: SgRouteFilterContext) -> TardisResult<()> {
-    let mut req = Request::builder();
-    req = req.method(ctx.method);
-    if let Some(backend) = backend {
-        let url = format!(
-            "{}://{}:{}/{}",
-            backend.protocol.as_ref().unwrap_or(&SgProtocol::Http),
-            backend.namespace_or_host.as_ref().unwrap_or(&"default".to_string()),
-            backend.port,
-            backend.name_or_path
-        );
-        req = req.uri(url);
+    let matched_route_inst = matched_route_inst.unwrap();
+    let matched_rule_inst = if let Some(matched_rule_insts) = &matched_route_inst.rules {
+        matched_rule_insts.iter().find(|rule| match_rule_inst(&request, rule))
     } else {
-        req = req.uri(ctx.uri);
-    }
-    for (k, v) in ctx.req_headers {
-        req.header(k.unwrap().as_str(), v.to_str().unwrap());
-    }
-    req.body(ctx.get_raw_body());
-    let response = client.request(req).await;
+        None
+    };
+    let rule_filters = matched_rule_inst.map(|rule| &rule.filters);
 
-    Ok(())
-}
+    let ctx = process_req_filters(
+        gateway_name.to_string(),
+        remote_addr,
+        request,
+        rule_filters,
+        &matched_route_inst.filters,
+        &gateway_inst.filters,
+    )
+    .await?;
 
-fn choose_backend(backends: &Vec<SgHttpBackendRef>) -> Option<&SgHttpBackendRef> {
-    // TODO
-    backends.get(0)
+    let ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
+        ctx
+    } else if ctx.get_action() == &SgRouteFilterRequestAction::Redirect {
+        client::request(&gateway_inst.client, None, ctx).await?
+    } else {
+        if let Some(Some(backends)) = matched_rule_inst.map(|rule| &rule.backends) {
+            let backend = choose_backend(backends);
+            client::request(&gateway_inst.client, backend, ctx).await?
+        } else {
+            client::request(&gateway_inst.client, None, ctx).await?
+        }
+    };
+
+    let mut ctx = process_resp_filters(ctx, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
+
+    let mut resp = Response::builder();
+    for (k, v) in ctx.get_resp_headers() {
+        resp = resp.header(k.as_str(), v.to_str().unwrap());
+    }
+    let resp = resp
+        .body(ctx.pop_resp_body_raw()?.unwrap_or_else(|| Body::empty()))
+        .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
+    Ok(resp)
 }
 
 fn match_route_insts_with_priority<'a>(req: &Request<Body>, gateway_inst: &'a SgGatewayInst) -> Option<&'a SgHttpRouteInst> {
@@ -362,26 +370,23 @@ fn match_rule_inst(req: &Request<Body>, rule_inst: &SgHttpRouteRuleInst) -> bool
 }
 
 async fn process_req_filters(
+    gateway_name: String,
     remote_addr: SocketAddr,
     request: Request<Body>,
     rule_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
     route_filers: &Vec<(String, Box<dyn SgPluginFilter>)>,
     global_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
 ) -> TardisResult<SgRouteFilterContext> {
-    let mut ctx = SgRouteFilterContext {
-        method: request.method().clone(),
-        uri: request.uri().clone(),
-        version: request.version(),
-        req_headers: request.headers().clone(),
-        remote_addr: remote_addr,
-        resp_headers: None,
-        resp_status_code: None,
-        ext: HashMap::new(),
-        inner_body: None,
-        raw_body: Some(request.into_body()),
-        action: SgRouteFilterRequestAction::None,
-    };
-    let mut is_continue = true;
+    let mut ctx = SgRouteFilterContext::new(
+        request.method().clone(),
+        request.uri().clone(),
+        request.version(),
+        request.headers().clone(),
+        request.into_body(),
+        remote_addr,
+        gateway_name,
+    );
+    let mut is_continue;
     let mut executed_filters = Vec::new();
     if let Some(rule_filters) = rule_filters {
         for (name, filter) in rule_filters {
@@ -421,7 +426,7 @@ async fn process_resp_filters(
     route_filers: &Vec<(String, Box<dyn SgPluginFilter>)>,
     global_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
 ) -> TardisResult<SgRouteFilterContext> {
-    let mut is_continue = true;
+    let mut is_continue;
     let mut executed_filters = Vec::new();
     if let Some(rule_filters) = rule_filters {
         for (name, filter) in rule_filters {
@@ -455,7 +460,43 @@ async fn process_resp_filters(
     Ok(ctx)
 }
 
-pub fn process_error(error: TardisError) -> Result<Response<Body>, hyper::Error> {
+fn choose_backend(backends: &Vec<SgHttpBackendRef>) -> Option<&SgHttpBackendRef> {
+    if backends.is_empty() {
+        None
+    } else if backends.len() == 1 {
+        backends.get(0)
+    } else {
+        let weights = backends.iter().map(|backend| backend.weight.unwrap_or(0)).collect_vec();
+        let dist = WeightedIndex::new(weights).unwrap();
+        let mut rng = thread_rng();
+        backends.get(dist.sample(&mut rng))
+    }
+}
+
+pub fn into_http_error(error: TardisError) -> Result<Response<Body>, hyper::Error> {
+    let status_code = match error.code.parse::<u16>() {
+        Ok(code) => match StatusCode::from_u16(code) {
+            Ok(status_code) => status_code,
+            Err(_) => {
+                if code >= 200 && code < 400 {
+                    StatusCode::OK
+                } else if code >= 400 && code < 500 {
+                    StatusCode::BAD_REQUEST
+                } else {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
+            }
+        },
+        Err(_) => {
+            if error.code.starts_with('2') || error.code.starts_with('3') {
+                StatusCode::OK
+            } else if error.code.starts_with('4') {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        }
+    };
     let mut response = Response::new(Body::from(
         TardisFuns::json
             .obj_to_string(&SgRespError {
@@ -464,6 +505,7 @@ pub fn process_error(error: TardisError) -> Result<Response<Body>, hyper::Error>
             })
             .unwrap(),
     ));
+    *response.status_mut() = status_code;
     response.headers_mut().insert("Content-Type", HeaderValue::from_static("application/json"));
     Ok(response)
 }
@@ -477,7 +519,7 @@ struct SgRespError {
 struct SgGatewayInst {
     pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
     pub routes: Vec<SgHttpRouteInst>,
-    pub client: Client<Body>,
+    pub client: Client<HttpsConnector<HttpConnector>>,
 }
 
 struct SgHttpRouteInst {

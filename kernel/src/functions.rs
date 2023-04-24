@@ -1,3 +1,5 @@
+#[cfg(feature = "cache")]
 pub mod cache;
-pub mod server;
+pub mod client;
 pub mod http_route;
+pub mod server;

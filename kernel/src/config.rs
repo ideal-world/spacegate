@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     TardisFuns,
 };
 
-use crate::{config::gateway_dto::SgGateway, functions::cache};
+use crate::config::gateway_dto::SgGateway;
 
 use self::http_route_dto::SgHttpRoute;
 
@@ -26,7 +24,14 @@ pub async fn init(k8s_mode: bool, ext_conf_url: Option<String>) -> TardisResult<
                 "",
             )
         })?;
-        init_by_native(&ext_conf_url).await
+        #[cfg(feature = "cache")]
+        {
+            init_by_native(&ext_conf_url).await
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            Err(TardisError::not_found("[SG.Config] Missing [ext_conf_url] configuration address", ""))
+        }
     }
 }
 
@@ -34,13 +39,14 @@ async fn init_by_k8s() -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     todo!()
 }
 
+#[cfg(feature = "cache")]
 async fn init_by_native(ext_conf_url: &str) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
-    cache::init("", ext_conf_url).await?;
-    let cache = cache::get("")?;
+    crate::functions::cache::init("", ext_conf_url).await?;
+    let cache = crate::functions::cache::get("")?;
     let gateway_configs = cache.hgetall(CONF_GATEWAY_KEY).await?;
-    let gateway_configs = gateway_configs.into_iter().map(|(k, v)| TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
+    let gateway_configs = gateway_configs.into_iter().map(|(_, v)| TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
     let http_route_configs = cache.hgetall(CONF_HTTP_ROUTE_KEY).await?;
-    let http_route_configs = http_route_configs.into_iter().map(|(k, v)| TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
+    let http_route_configs = http_route_configs.into_iter().map(|(_, v)| TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
     let config = gateway_configs
         .into_iter()
         .map(|gateway_conf| {
