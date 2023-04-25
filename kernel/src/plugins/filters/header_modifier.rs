@@ -1,9 +1,20 @@
 use std::collections::HashMap;
 
-use super::{SgPluginFilter, SgRouteFilterContext};
+use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tardis::basic::result::TardisResult;
+use tardis::{basic::result::TardisResult, TardisFuns};
+
+pub const CODE: &str = "header_modifier";
+
+pub struct SgFilerHeaderModifierDef;
+
+impl SgPluginFilterDef for SgFilerHeaderModifierDef {
+    fn new(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+        let filter = TardisFuns::json.json_to_obj::<SgFilerHeaderModifier>(spec)?;
+        Ok(Box::new(filter))
+    }
+}
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilerHeaderModifier {
@@ -26,6 +37,7 @@ impl Default for SgFilerHeaderModifierKind {
 
 #[async_trait]
 impl SgPluginFilter for SgFilerHeaderModifier {
+
     fn kind(&self) -> super::SgPluginFilterKind {
         super::SgPluginFilterKind::Http
     }

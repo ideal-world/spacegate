@@ -3,6 +3,7 @@ pub mod redirect;
 use async_trait::async_trait;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version};
 use hyper::Body;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tardis::basic::error::TardisError;
@@ -11,21 +12,51 @@ use tardis::TardisFuns;
 
 use crate::config::plugin_filter_dto::SgRouteFilter;
 
+static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
+
+fn init_filter_defs() {
+    let mut filters: HashMap<String, Box<dyn SgPluginFilterDef>> = HashMap::new();
+    filters.insert(header_modifier::CODE.to_string(), Box::new(header_modifier::SgFilerHeaderModifierDef));
+    filters.insert(redirect::CODE.to_string(), Box::new(redirect::SgFilerRedirectDef));
+    unsafe {
+        FILTERS = Some(filters);
+    }
+}
+
+pub fn register_filter_def(code: &str, filter_def: Box<dyn SgPluginFilterDef>) {
+    unsafe {
+        if FILTERS.is_none() {
+            init_filter_defs();
+        }
+        FILTERS.as_mut().unwrap().insert(code.to_string(), filter_def);
+    }
+}
+
+pub fn get_filter_def(code: &str) -> &Box<dyn SgPluginFilterDef> {
+    unsafe {
+        if FILTERS.is_none() {
+            init_filter_defs();
+        }
+        FILTERS.as_ref().unwrap().get(code).unwrap()
+    }
+}
+
 pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(String, Box<dyn SgPluginFilter>)>> {
     let mut plugin_filters: Vec<(String, Box<dyn SgPluginFilter>)> = Vec::new();
-    for filter in filter_configs {
-        let name = filter.name.unwrap_or(TardisFuns::field.nanoid());
-        if let Some(header_modifier) = filter.header_modifier {
-            plugin_filters.push((format!("{name}_header_modifier"), Box::new(header_modifier)))
-        }
-        if let Some(redirect) = filter.redirect {
-            plugin_filters.push((format!("{name}_redirect"), Box::new(redirect)))
-        }
+    for filter_conf in filter_configs {
+        let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
+        let filter_def = get_filter_def(&filter_conf.code);
+        let filter_inst = filter_def.new(filter_conf.spec)?;
+        plugin_filters.push((format!("{name}_header_modifier"), filter_inst));
     }
     for (_, plugin_filter) in &plugin_filters {
         plugin_filter.init().await?;
     }
     Ok(plugin_filters)
+}
+
+pub trait SgPluginFilterDef {
+    fn new(&self, spec: Value) -> TardisResult<Box<dyn SgPluginFilter>>;
 }
 
 #[async_trait]

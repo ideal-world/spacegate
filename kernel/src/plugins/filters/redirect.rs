@@ -3,9 +3,23 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use http::{Method, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
-use tardis::basic::{error::TardisError, result::TardisResult};
+use tardis::{
+    basic::{error::TardisError, result::TardisResult},
+    TardisFuns,
+};
 
-use super::{SgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction};
+use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
+
+pub const CODE: &str = "redirect";
+
+pub struct SgFilerRedirectDef;
+
+impl SgPluginFilterDef for SgFilerRedirectDef {
+    fn new(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+        let filter = TardisFuns::json.json_to_obj::<SgFilerRedirect>(spec)?;
+        Ok(Box::new(filter))
+    }
+}
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilerRedirect {
