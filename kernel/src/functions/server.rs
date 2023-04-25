@@ -85,7 +85,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
                     State::Streaming(addr) => addr.get_ref().0.remote_addr(),
                 };
                 let gateway_name = gateway_name.clone();
-                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), remote_addr, req))) }
+                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), "https", remote_addr, req))) }
             }));
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
@@ -95,7 +95,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
             let server = Server::bind(&addr).serve(make_service_fn(move |client: &AddrStream| {
                 let remote_addr = client.remote_addr();
                 let gateway_name = gateway_name.clone();
-                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), remote_addr, req))) }
+                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), "http", remote_addr, req))) }
             }));
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
@@ -115,7 +115,9 @@ pub async fn startup(servers: Vec<SgServerInst>) -> TardisResult<()> {
         log::info!("[SG.server] Listening on http://{} ", server.addr);
     }
     let servers = servers.into_iter().map(|s| s.server).collect::<Vec<_>>();
-    join_all(servers).await;
+    tokio::spawn(async move {
+        join_all(servers).await;
+    });
     Ok(())
 }
 

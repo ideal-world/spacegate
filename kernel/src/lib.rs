@@ -22,7 +22,7 @@ async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> Tardis
     {
         // Initialize cache instances
         if let Some(url) = &gateway.parameters.redis_url {
-            crate::functions::cache::init(&gateway.name, url).await?;
+            functions::cache::init(&gateway.name, url).await?;
         }
     }
     // Initialize route instances
@@ -37,8 +37,62 @@ pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     #[cfg(feature = "cache")]
     {
         // Remove cache instances
-        cache::remove(gateway_name).await?;
+        functions::cache::remove(gateway_name).await?;
     }
     // Shutdown service instances
     server::shutdown(gateway_name).await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{env, time::Duration, vec};
+
+    use serde_json::Value;
+    use tardis::{
+        basic::result::TardisResult,
+        tokio::{self, time::sleep},
+        web::web_client::TardisWebClient,
+    };
+
+    use crate::{
+        config::{
+            gateway_dto::{SgGateway, SgListener, SgProtocol},
+            http_route_dto::{SgHttpBackendRef, SgHttpRoute, SgHttpRouteRule},
+        },
+        do_startup,
+    };
+
+    #[tokio::test]
+    async fn test_startup_simple() -> TardisResult<()> {
+        env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
+        tracing_subscriber::fmt::init();
+        do_startup(
+            SgGateway {
+                name: "test_gw".to_string(),
+                listeners: vec![SgListener { port: 8888, ..Default::default() }],
+                ..Default::default()
+            },
+            vec![SgHttpRoute {
+                gateway_name: "test_gw".to_string(),
+                rules: Some(vec![SgHttpRouteRule {
+                    backends: Some(vec![SgHttpBackendRef {
+                        name_or_path: "anything".to_string(),
+                        namespace_or_host: Some("httpbin.org".to_string()),
+                        port: 443,
+                        protocol: Some(SgProtocol::Https),
+                        weight: None,
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }],
+        )
+        .await?;
+        sleep(Duration::from_millis(500)).await;
+        let client = TardisWebClient::init(100)?;
+        let resp = client.get::<Value>("http://root:sss@localhost:8888/hi?dd", None).await?;
+        let resp = resp.body.unwrap();
+        assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/anything"));
+        Ok(())
+    }
 }

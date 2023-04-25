@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{plugin_filter_dto::SgRouteFilter, gateway_dto::SgProtocol};
+use super::{gateway_dto::SgProtocol, plugin_filter_dto::SgRouteFilter};
 
 /// HTTPRoute provides a way to route HTTP requests.
 ///
@@ -36,9 +36,9 @@ pub struct SgHttpRouteMatch {
     /// Headers specifies HTTP request header matchers. Multiple match values are ANDed together, meaning, a request must match all the specified headers to select the route.
     pub header: Option<Vec<SgHttpHeaderMatch>>,
     /// Query specifies HTTP query parameter matchers. Multiple match values are ANDed together, meaning, a request must match all the specified query parameters to select the route.
-    pub query: Option<Vec<SgHttpQueryParamMatch>>,
+    pub query: Option<Vec<SgHttpQueryMatch>>,
     /// Method specifies HTTP method matcher. When specified, this route will be matched only if the request has the specified method.
-    pub method: Option<String>,
+    pub method: Option<Vec<String>>,
 }
 
 /// HTTPPathMatch describes how to select a HTTP route by matching the HTTP request path.
@@ -51,21 +51,16 @@ pub struct SgHttpPathMatch {
 }
 
 /// PathMatchType specifies the semantics of how HTTP paths should be compared.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 pub enum SgHttpPathMatchType {
     /// Matches the URL path exactly and with case sensitivity.
     Exact,
     /// Matches based on a URL path prefix split by /. Matching is case sensitive and done on a path element by element basis.
     /// A path element refers to the list of labels in the path split by the / separator. When specified, a trailing / is ignored.
+    #[default]
     Prefix,
     /// Matches if the URL path matches the given regular expression with case sensitivity.
     Regular,
-}
-
-impl Default for SgHttpPathMatchType {
-    fn default() -> Self {
-        SgHttpPathMatchType::Prefix
-    }
 }
 
 /// HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request headers.
@@ -80,44 +75,34 @@ pub struct SgHttpHeaderMatch {
 }
 
 /// HeaderMatchType specifies the semantics of how HTTP header values should be compared.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 pub enum SgHttpHeaderMatchType {
     /// Matches the HTTP header exactly and with case sensitivity.
+    #[default]
     Exact,
     /// Matches if the Http header matches the given regular expression with case sensitivity.
     Regular,
 }
 
-impl Default for SgHttpHeaderMatchType {
-    fn default() -> Self {
-        SgHttpHeaderMatchType::Exact
-    }
-}
-
-/// HTTPQueryParamMatch describes how to select a HTTP route by matching HTTP query parameters.
+/// HTTPQueryMatch describes how to select a HTTP route by matching HTTP query parameters.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgHttpQueryParamMatch {
+pub struct SgHttpQueryMatch {
     /// Type specifies how to match against the value of the query parameter.
-    pub kind: SgHttpQueryParamMatchType,
+    pub kind: SgHttpQueryMatchType,
     /// Name is the name of the HTTP query param to be matched. This must be an exact string match. (See https://tools.ietf.org/html/rfc7230#section-2.7.3).
     pub name: String,
     /// Value is the value of HTTP query param to be matched.
     pub value: String,
 }
 
-/// QueryParamMatchType specifies the semantics of how HTTP query parameter values should be compared.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub enum SgHttpQueryParamMatchType {
+/// HTTPQueryMatchType specifies the semantics of how HTTP query parameter values should be compared.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+pub enum SgHttpQueryMatchType {
     /// Matches the HTTP query parameter exactly and with case sensitivity.
+    #[default]
     Exact,
     /// Matches if the Http query parameter matches the given regular expression with case sensitivity.
     Regular,
-}
-
-impl Default for SgHttpQueryParamMatchType {
-    fn default() -> Self {
-        SgHttpQueryParamMatchType::Exact
-    }
 }
 
 /// HTTPBackendRef defines how a HTTPRoute should forward an HTTP request.

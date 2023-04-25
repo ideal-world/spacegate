@@ -24,16 +24,14 @@ pub struct SgFilerHeaderModifier {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Default)]
 pub enum SgFilerHeaderModifierKind {
+    #[default]
     Request,
     Response,
 }
 
-impl Default for SgFilerHeaderModifierKind {
-    fn default() -> Self {
-        SgFilerHeaderModifierKind::Request
-    }
-}
+
 
 #[async_trait]
 impl SgPluginFilter for SgFilerHeaderModifier {

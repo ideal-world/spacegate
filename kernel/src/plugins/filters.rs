@@ -135,7 +135,7 @@ impl SgRouteFilterContext {
             mod_resp_body: None,
             ext: HashMap::new(),
             action: SgRouteFilterRequestAction::None,
-            gateway_name: gateway_name,
+            gateway_name,
         }
     }
 
@@ -150,7 +150,7 @@ impl SgRouteFilterContext {
         if self.mod_req_method.is_none() {
             self.mod_req_method = Some(self.raw_req_method.clone());
         }
-        &self.mod_req_method.as_ref().unwrap()
+        self.mod_req_method.as_ref().unwrap()
     }
 
     pub fn set_req_method(&mut self, method: Method) {
@@ -165,7 +165,7 @@ impl SgRouteFilterContext {
         if self.mod_req_uri.is_none() {
             self.mod_req_uri = Some(self.raw_req_uri.clone());
         }
-        &self.mod_req_uri.as_ref().unwrap()
+        self.mod_req_uri.as_ref().unwrap()
     }
 
     pub fn set_req_uri(&mut self, uri: Uri) {
@@ -178,9 +178,9 @@ impl SgRouteFilterContext {
 
     pub fn get_req_version(&mut self) -> &Version {
         if self.mod_req_version.is_none() {
-            self.mod_req_version = Some(self.raw_req_version.clone());
+            self.mod_req_version = Some(self.raw_req_version);
         }
-        &self.mod_req_version.as_ref().unwrap()
+        self.mod_req_version.as_ref().unwrap()
     }
 
     pub fn set_req_version(&mut self, version: Version) {
@@ -195,7 +195,7 @@ impl SgRouteFilterContext {
         if self.mod_req_headers.is_none() {
             self.mod_req_headers = Some(self.raw_req_headers.clone());
         }
-        &self.mod_req_headers.as_ref().unwrap()
+        self.mod_req_headers.as_ref().unwrap()
     }
 
     pub fn set_req_headers(&mut self, req_headers: HeaderMap<HeaderValue>) {
@@ -241,16 +241,17 @@ impl SgRouteFilterContext {
         }
     }
 
-    pub fn set_req_body(&mut self, body: Vec<u8>) {
-        self.set_req_header("Content-Length", body.len().to_string().as_str());
+    pub fn set_req_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
+        self.set_req_header("Content-Length", body.len().to_string().as_str())?;
         self.mod_req_body = Some(body);
+        Ok(())
     }
 
     pub fn pop_req_body_raw(&mut self) -> TardisResult<Option<Body>> {
         if self.mod_req_body.is_some() {
             let mut body = None;
             unsafe { std::mem::swap(&mut body, &mut self.mod_req_body) };
-            Ok(body.map(|b| Body::from(b)))
+            Ok(body.map(Body::from))
         } else if self.raw_req_body.is_some() {
             let mut body = None;
             unsafe { std::mem::swap(&mut body, &mut self.raw_req_body) };
@@ -266,9 +267,9 @@ impl SgRouteFilterContext {
 
     pub fn get_resp_status_code(&mut self) -> &StatusCode {
         if self.mod_resp_status_code.is_none() {
-            self.mod_resp_status_code = Some(self.raw_resp_status_code.clone());
+            self.mod_resp_status_code = Some(self.raw_resp_status_code);
         }
-        &self.mod_resp_status_code.as_ref().unwrap()
+        self.mod_resp_status_code.as_ref().unwrap()
     }
 
     pub fn set_resp_status_code(&mut self, status_code: StatusCode) {
@@ -283,7 +284,7 @@ impl SgRouteFilterContext {
         if self.mod_resp_headers.is_none() {
             self.mod_resp_headers = Some(self.raw_resp_headers.clone());
         }
-        &self.mod_resp_headers.as_ref().unwrap()
+        self.mod_resp_headers.as_ref().unwrap()
     }
 
     pub fn set_resp_headers(&mut self, resp_headers: HeaderMap<HeaderValue>) {
@@ -329,16 +330,17 @@ impl SgRouteFilterContext {
         }
     }
 
-    pub fn set_resp_body(&mut self, body: Vec<u8>) {
-        self.set_resp_header("Content-Length", body.len().to_string().as_str());
+    pub fn set_resp_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
+        self.set_resp_header("Content-Length", body.len().to_string().as_str())?;
         self.mod_resp_body = Some(body);
+        Ok(())
     }
 
     pub fn pop_resp_body_raw(&mut self) -> TardisResult<Option<Body>> {
         if self.mod_resp_body.is_some() {
             let mut body = None;
             unsafe { std::mem::swap(&mut body, &mut self.mod_resp_body) };
-            Ok(body.map(|b| Body::from(b)))
+            Ok(body.map(Body::from))
         } else if self.raw_resp_body.is_some() {
             let mut body = None;
             unsafe { std::mem::swap(&mut body, &mut self.raw_resp_body) };

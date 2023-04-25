@@ -26,6 +26,8 @@ serde_json = { version = "1" }
 lazy_static = { version = "1.4" }
 async-trait = { version = "0.1" }
 itertools = { version = "0" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+urlencoding = { version = "2" }
 
 # Tardis
 tardis = { version = "0.1.0-beta3" }

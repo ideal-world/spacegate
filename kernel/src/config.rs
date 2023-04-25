@@ -1,6 +1,5 @@
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
-    TardisFuns,
 };
 
 use crate::config::gateway_dto::SgGateway;
@@ -44,16 +43,15 @@ async fn init_by_native(ext_conf_url: &str) -> TardisResult<Vec<(SgGateway, Vec<
     crate::functions::cache::init("", ext_conf_url).await?;
     let cache = crate::functions::cache::get("")?;
     let gateway_configs = cache.hgetall(CONF_GATEWAY_KEY).await?;
-    let gateway_configs = gateway_configs.into_iter().map(|(_, v)| TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
+    let gateway_configs = gateway_configs.into_values().map(|v| tardis::TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
     let http_route_configs = cache.hgetall(CONF_HTTP_ROUTE_KEY).await?;
-    let http_route_configs = http_route_configs.into_iter().map(|(_, v)| TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
+    let http_route_configs = http_route_configs.into_values().map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
     let config = gateway_configs
         .into_iter()
         .map(|gateway_conf| {
             let http_route_configs = http_route_configs
                 .iter()
-                .filter(|http_route_conf| http_route_conf.gateway_name == gateway_conf.name)
-                .map(|http_route_conf| http_route_conf.clone())
+                .filter(|http_route_conf| http_route_conf.gateway_name == gateway_conf.name).cloned()
                 .collect::<Vec<SgHttpRoute>>();
             (gateway_conf, http_route_configs)
         })

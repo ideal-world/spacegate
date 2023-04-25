@@ -34,7 +34,7 @@ pub async fn request(client: &Client<HttpsConnector<HttpConnector>>, backend: Op
         req = req.uri(ctx.get_req_uri().clone());
     }
     let req =
-        req.body(ctx.pop_req_body_raw()?.unwrap_or_else(|| Body::empty())).map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build request error:{error}"), ""))?;
+        req.body(ctx.pop_req_body_raw()?.unwrap_or_else(Body::empty)).map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build request error:{error}"), ""))?;
     let response = client.request(req).await.map_err(|error: Error| TardisError::internal_error(&format!("[SG.Client] Request error: {error}"), ""))?;
     ctx = ctx.resp(response.status(), response.headers().clone(), response.into_body());
     Ok(ctx)

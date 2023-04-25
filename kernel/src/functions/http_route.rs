@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr};
 use crate::{
     config::{
         gateway_dto::SgGateway,
-        http_route_dto::{SgHttpBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryParamMatchType, SgHttpRoute},
+        http_route_dto::{SgHttpBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
     plugins::filters::{self, SgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::vec::Vec;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
+    log,
     rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng},
     regex::Regex,
     TardisFuns,
@@ -72,7 +73,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                                         },
                                         kind: header.kind,
                                         name: header.name.clone(),
-                                        value: header.value.clone(),
+                                        value: header.value,
                                     })
                                     .collect()
                             });
@@ -80,8 +81,8 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                             let query_inst = rule_match.query.map(|query| {
                                 query
                                     .into_iter()
-                                    .map(|query| SgHttpQueryParamMatchInst {
-                                        regular: if query.kind == SgHttpQueryParamMatchType::Regular {
+                                    .map(|query| SgHttpQueryMatchInst {
+                                        regular: if query.kind == SgHttpQueryMatchType::Regular {
                                             Some(
                                                 Regex::new(&query.value)
                                                     .map_err(|_| TardisError::format_error(&format!("[SG.Route] Query Regular {} format error", query.value), ""))
@@ -92,7 +93,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                                         },
                                         kind: query.kind,
                                         name: query.name.clone(),
-                                        value: query.value.clone(),
+                                        value: query.value,
                                     })
                                     .collect()
                             });
@@ -101,7 +102,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                                 path: path_inst,
                                 header: header_inst,
                                 query: query_inst,
-                                method: rule_match.method.map(|m| m.to_uppercase()),
+                                method: rule_match.method.map(|m| m.into_iter().map(|m| m.to_uppercase()).collect_vec()),
                             }
                         })
                         .collect_vec()
@@ -174,17 +175,27 @@ fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
     }
 }
 
-pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    match do_process(gateway_name, remote_addr, request).await {
+pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+    match do_process(gateway_name, req_scheme, remote_addr, request).await {
         Ok(result) => Ok(result),
         Err(error) => into_http_error(error),
     }
 }
 
-async fn do_process(gateway_name: Arc<String>, remote_addr: SocketAddr, request: Request<Body>) -> TardisResult<Response<Body>> {
+async fn do_process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, mut request: Request<Body>) -> TardisResult<Response<Body>> {
+    if request.uri().host().is_none() && request.headers().contains_key("Host") {
+        *request.uri_mut() = format!("{}://{}{}", req_scheme, request.headers().get("Host").unwrap().to_str().unwrap(), request.uri()).parse().unwrap();
+    }
+    log::trace!(
+        "[SG.Route] Request method {} url {} , from {} @ {}",
+        request.method(),
+        request.uri(),
+        remote_addr,
+        gateway_name
+    );
     let gateway_inst = get(&gateway_name)?;
 
-    let matched_route_inst = match_route_insts_with_priority(&request, gateway_inst);
+    let matched_route_inst = match_route_insts_with_hostname_priority(request.uri().host(), &gateway_inst.routes);
     if matched_route_inst.is_none() {
         let mut not_found = Response::default();
         *not_found.status_mut() = StatusCode::NOT_FOUND;
@@ -193,7 +204,7 @@ async fn do_process(gateway_name: Arc<String>, remote_addr: SocketAddr, request:
 
     let matched_route_inst = matched_route_inst.unwrap();
     let matched_rule_inst = if let Some(matched_rule_insts) = &matched_route_inst.rules {
-        matched_rule_insts.iter().find(|rule| match_rule_inst(&request, rule))
+        matched_rule_insts.iter().find(|rule| match_rule_inst(&request, rule.matches.as_ref()))
     } else {
         None
     };
@@ -213,13 +224,11 @@ async fn do_process(gateway_name: Arc<String>, remote_addr: SocketAddr, request:
         ctx
     } else if ctx.get_action() == &SgRouteFilterRequestAction::Redirect {
         client::request(&gateway_inst.client, None, ctx).await?
+    } else if let Some(Some(backends)) = matched_rule_inst.map(|rule| &rule.backends) {
+        let backend = choose_backend(backends);
+        client::request(&gateway_inst.client, backend, ctx).await?
     } else {
-        if let Some(Some(backends)) = matched_rule_inst.map(|rule| &rule.backends) {
-            let backend = choose_backend(backends);
-            client::request(&gateway_inst.client, backend, ctx).await?
-        } else {
-            client::request(&gateway_inst.client, None, ctx).await?
-        }
+        client::request(&gateway_inst.client, None, ctx).await?
     };
 
     let mut ctx = process_resp_filters(ctx, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
@@ -228,17 +237,16 @@ async fn do_process(gateway_name: Arc<String>, remote_addr: SocketAddr, request:
     for (k, v) in ctx.get_resp_headers() {
         resp = resp.header(k.as_str(), v.to_str().unwrap());
     }
-    let resp = resp
-        .body(ctx.pop_resp_body_raw()?.unwrap_or_else(|| Body::empty()))
-        .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
+    let resp =
+        resp.body(ctx.pop_resp_body_raw()?.unwrap_or_else(Body::empty)).map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
     Ok(resp)
 }
 
-fn match_route_insts_with_priority<'a>(req: &Request<Body>, gateway_inst: &'a SgGatewayInst) -> Option<&'a SgHttpRouteInst> {
-    if let Some(req_host) = req.uri().host() {
+fn match_route_insts_with_hostname_priority<'a>(req_host: Option<&str>, routes: &'a Vec<SgHttpRouteInst>) -> Option<&'a SgHttpRouteInst> {
+    if let Some(req_host) = req_host {
         let mut matched_route_by_wildcard: Option<&SgHttpRouteInst> = None;
         let mut matched_route_by_no_set = None;
-        for route_inst in &gateway_inst.routes {
+        for route_inst in routes {
             if let Some(hostnames) = &route_inst.hostnames {
                 if hostnames.iter().any(|hostname| hostname == req_host) {
                     // Exact match, highest priority
@@ -268,15 +276,15 @@ fn match_route_insts_with_priority<'a>(req: &Request<Body>, gateway_inst: &'a Sg
             matched_route_by_no_set
         }
     } else {
-        None
+        routes.iter().find(|route_inst| route_inst.hostnames.is_none())
     }
 }
 
-fn match_rule_inst(req: &Request<Body>, rule_inst: &SgHttpRouteRuleInst) -> bool {
-    if let Some(matches) = &rule_inst.matches {
+fn match_rule_inst(req: &Request<Body>, rule_matches: Option<&Vec<SgHttpRouteMatchInst>>) -> bool {
+    if let Some(matches) = rule_matches {
         for rule_match in matches {
             if let Some(method) = &rule_match.method {
-                if req.method().as_str() != method {
+                if !method.contains(&req.method().as_str().to_lowercase()) {
                     return false;
                 }
             }
@@ -331,27 +339,17 @@ fn match_rule_inst(req: &Request<Body>, rule_inst: &SgHttpRouteRuleInst) -> bool
             if let Some(queries) = &rule_match.query {
                 for query in queries {
                     if let Some(Some(req_query_value)) = req.uri().query().map(|q| {
-                        q.split('&')
-                            .collect::<Vec<&str>>()
-                            .into_iter()
-                            .map(|item| {
-                                let mut item = item.split('=');
-                                if item.next().is_some() {
-                                    (item.next().unwrap(), item.next().unwrap_or(""))
-                                } else {
-                                    ("", "")
-                                }
-                            })
-                            .find(|(k, _)| k == &query.name)
-                            .map(|(_, v)| v)
+                        let q = urlencoding::decode(q).unwrap();
+                        let q = q.as_ref().split('&').collect_vec();
+                        q.into_iter().map(|item| item.split('=').collect_vec()).find(|item| item.len() == 2 && item[0] == &query.name).map(|item| item[1].to_string())
                     }) {
                         match query.kind {
-                            SgHttpQueryParamMatchType::Exact => {
-                                if req_query_value != &query.value {
+                            SgHttpQueryMatchType::Exact => {
+                                if req_query_value != query.value {
                                     return false;
                                 }
                             }
-                            SgHttpQueryParamMatchType::Regular => {
+                            SgHttpQueryMatchType::Regular => {
                                 if !&query.regular.as_ref().unwrap().is_match(&req_query_value) {
                                     return false;
                                 }
@@ -478,9 +476,9 @@ pub fn into_http_error(error: TardisError) -> Result<Response<Body>, hyper::Erro
         Ok(code) => match StatusCode::from_u16(code) {
             Ok(status_code) => status_code,
             Err(_) => {
-                if code >= 200 && code < 400 {
+                if (200..400).contains(&code) {
                     StatusCode::OK
-                } else if code >= 400 && code < 500 {
+                } else if (400..500).contains(&code) {
                     StatusCode::BAD_REQUEST
                 } else {
                     StatusCode::INTERNAL_SERVER_ERROR
@@ -522,24 +520,28 @@ struct SgGatewayInst {
     pub client: Client<HttpsConnector<HttpConnector>>,
 }
 
+#[derive(Default)]
 struct SgHttpRouteInst {
     pub hostnames: Option<Vec<String>>,
     pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
     pub rules: Option<Vec<SgHttpRouteRuleInst>>,
 }
 
+#[derive(Default)]
 struct SgHttpRouteRuleInst {
     pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
     pub matches: Option<Vec<SgHttpRouteMatchInst>>,
     pub backends: Option<Vec<SgHttpBackendRef>>,
 }
 
+#[derive(Default)]
 pub struct SgHttpRouteMatchInst {
     pub path: Option<SgHttpPathMatchInst>,
     pub header: Option<Vec<SgHttpHeaderMatchInst>>,
-    pub query: Option<Vec<SgHttpQueryParamMatchInst>>,
-    pub method: Option<String>,
+    pub query: Option<Vec<SgHttpQueryMatchInst>>,
+    pub method: Option<Vec<String>>,
 }
+#[derive(Default)]
 
 pub struct SgHttpPathMatchInst {
     pub kind: SgHttpPathMatchType,
@@ -547,6 +549,7 @@ pub struct SgHttpPathMatchInst {
     pub regular: Option<Regex>,
 }
 
+#[derive(Default)]
 pub struct SgHttpHeaderMatchInst {
     pub kind: SgHttpHeaderMatchType,
     pub name: String,
@@ -554,9 +557,395 @@ pub struct SgHttpHeaderMatchInst {
     pub regular: Option<Regex>,
 }
 
-pub struct SgHttpQueryParamMatchInst {
-    pub kind: SgHttpQueryParamMatchType,
+#[derive(Default)]
+pub struct SgHttpQueryMatchInst {
+    pub kind: SgHttpQueryMatchType,
     pub name: String,
     pub value: String,
     pub regular: Option<Regex>,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use http::Request;
+    use hyper::Body;
+    use tardis::regex::Regex;
+
+    use crate::{
+        config::http_route_dto::{SgHttpBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
+        functions::http_route::{choose_backend, match_route_insts_with_hostname_priority, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst},
+    };
+
+    use super::{match_rule_inst, SgHttpPathMatchInst, SgHttpRouteMatchInst};
+
+    #[test]
+    fn test_match_rule_inst() {
+        assert!(match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), None));
+        // -----------------------------------------------------
+        // Match exact path
+        let match_conds = vec![SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Exact,
+                value: "/iam".to_string(),
+                regular: None,
+            }),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        // Match prefix path
+        let match_conds = vec![SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Prefix,
+                value: "/iam".to_string(),
+                regular: None,
+            }),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/spi/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        // Match regular path
+        let match_conds = vec![SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Regular,
+                value: "/iam/[0-9]+/hi".to_string(),
+                regular: Some(Regex::new("/iam/[0-9]+/hi").unwrap()),
+            }),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct/hi").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/001/hi/hi").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/001/hi/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+
+        // -----------------------------------------------------
+        // Match method
+        let match_conds = vec![SgHttpRouteMatchInst {
+            method: Some(vec!["get".to_string()]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().method("post").uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+
+        // -----------------------------------------------------
+        // Match exact header
+        let match_conds = vec![SgHttpRouteMatchInst {
+            header: Some(vec![
+                SgHttpHeaderMatchInst {
+                    kind: SgHttpHeaderMatchType::Exact,
+                    name: "X-Auth-User".to_string(),
+                    value: "gdxr".to_string(),
+                    regular: None,
+                },
+                SgHttpHeaderMatchInst {
+                    kind: SgHttpHeaderMatchType::Exact,
+                    name: "App".to_string(),
+                    value: "a001".to_string(),
+                    regular: None,
+                },
+            ]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("Tenant", "t001").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "t001").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "a001").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("X-Auth-User", "gdxr").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "a001").header("X-auTh-User", "gdxr").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+
+        // Match regular header
+        let match_conds = vec![SgHttpRouteMatchInst {
+            header: Some(vec![SgHttpHeaderMatchInst {
+                kind: SgHttpHeaderMatchType::Regular,
+                name: "X-Id".to_string(),
+                value: "^[0-9]+$".to_string(),
+                regular: Some(Regex::new("^[0-9]+$").unwrap()),
+            }]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("x-iD", "t001").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("x-iD", "002").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+
+        // -----------------------------------------------------
+        // Match exact query
+        let match_conds = vec![SgHttpRouteMatchInst {
+            query: Some(vec![
+                SgHttpQueryMatchInst {
+                    kind: SgHttpQueryMatchType::Exact,
+                    name: "id".to_string(),
+                    value: "gdxr".to_string(),
+                    regular: None,
+                },
+                SgHttpQueryMatchInst {
+                    kind: SgHttpQueryMatchType::Exact,
+                    name: "name".to_string(),
+                    value: "星航".to_string(),
+                    regular: None,
+                },
+            ]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/?id=gdxr").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA%26id%3Dgdxr").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA%26id%3Dgdxr%26code%3D1").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+
+        // Match regular query
+        let match_conds = vec![SgHttpRouteMatchInst {
+            query: Some(vec![SgHttpQueryMatchInst {
+                kind: SgHttpQueryMatchType::Regular,
+                name: "id".to_string(),
+                value: "id[a-z]+".to_string(),
+                regular: Some(Regex::new("id[a-z]+").unwrap()),
+            }]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/?id=gdxr").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(!match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/?id=idAdef").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+        assert!(match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
+            Some(&match_conds)
+        ));
+    }
+
+    #[test]
+    fn test_match_route_insts_with_hostname_priority() {
+        // Match all hostname
+        assert!(match_route_insts_with_hostname_priority(
+            Some("sg.idealworld.com"),
+            &vec![SgHttpRouteInst {
+                hostnames: None,
+                ..Default::default()
+            }]
+        )
+        .is_some());
+        assert!(match_route_insts_with_hostname_priority(
+            None,
+            &vec![SgHttpRouteInst {
+                hostnames: None,
+                ..Default::default()
+            }]
+        )
+        .is_some());
+        // Match exact hostname
+        assert!(match_route_insts_with_hostname_priority(
+            Some("sg.idealworld.com"),
+            &vec![SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                ..Default::default()
+            }]
+        )
+        .is_none());
+        assert!(match_route_insts_with_hostname_priority(
+            Some("sg.idealworld.group"),
+            &vec![SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                ..Default::default()
+            }]
+        )
+        .is_some());
+        // Match wildcard hostname
+        assert!(match_route_insts_with_hostname_priority(
+            Some("sg.idealworld.com"),
+            &vec![SgHttpRouteInst {
+                hostnames: Some(vec!["*.idealworld.group".to_string()]),
+                ..Default::default()
+            }]
+        )
+        .is_none());
+        assert!(match_route_insts_with_hostname_priority(
+            Some("sg.idealworld.group"),
+            &vec![SgHttpRouteInst {
+                hostnames: Some(vec!["*.idealworld.group".to_string()]),
+                ..Default::default()
+            }]
+        )
+        .is_some());
+        assert!(match_route_insts_with_hostname_priority(
+            Some("sg.idealworld.group"),
+            &vec![SgHttpRouteInst {
+                hostnames: Some(vec!["*.idealworld.*".to_string()]),
+                ..Default::default()
+            }]
+        )
+        .is_some());
+
+        // Match with priority
+        let match_conds = vec![
+            SgHttpRouteInst {
+                hostnames: Some(vec!["*.idealworld.group".to_string()]),
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string(), "spacegate.idealworld.group".to_string()]),
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["www.idealworld.group".to_string(), "idealworld.group".to_string()]),
+                ..Default::default()
+            },
+        ];
+        assert!(match_route_insts_with_hostname_priority(Some("sg.idealworld.com"), &match_conds).is_none());
+        assert!(match_route_insts_with_hostname_priority(Some("sg.idealworld.group"), &match_conds)
+            .unwrap()
+            .hostnames
+            .as_ref()
+            .unwrap()
+            .contains(&"sg.idealworld.group".to_string()));
+        assert!(match_route_insts_with_hostname_priority(Some("spacegate.idealworld.group"), &match_conds)
+            .unwrap()
+            .hostnames
+            .as_ref()
+            .unwrap()
+            .contains(&"sg.idealworld.group".to_string()));
+        assert!(match_route_insts_with_hostname_priority(Some("api.idealworld.group"), &match_conds)
+            .unwrap()
+            .hostnames
+            .as_ref()
+            .unwrap()
+            .contains(&"*.idealworld.group".to_string()));
+        assert!(match_route_insts_with_hostname_priority(Some("idealworld.group"), &match_conds).unwrap().hostnames.as_ref().unwrap().contains(&"idealworld.group".to_string()));
+    }
+
+    #[test]
+    fn test_choose_backend() {
+        // Only one backend
+        assert!(
+            choose_backend(&vec![SgHttpBackendRef {
+                name_or_path: "iam1".to_string(),
+                weight: None,
+                ..Default::default()
+            }])
+            .unwrap()
+            .name_or_path
+                == "iam1"
+        );
+
+        // Check weight
+        let backends = vec![
+            SgHttpBackendRef {
+                name_or_path: "iam1".to_string(),
+                weight: Some(30),
+                ..Default::default()
+            },
+            SgHttpBackendRef {
+                name_or_path: "iam2".to_string(),
+                weight: Some(70),
+                ..Default::default()
+            },
+        ];
+        let mut backend_counts = HashMap::new();
+        for _ in 0..1000 {
+            let backend = choose_backend(&backends);
+            *backend_counts.entry(backend.as_ref().unwrap().name_or_path.clone()).or_insert(0) += 1;
+        }
+        println!("backend_counts: {:?}", backend_counts);
+        assert!(backend_counts.get("iam1").unwrap() < backend_counts.get("iam2").unwrap());
+    }
 }
