@@ -1,5 +1,6 @@
-pub mod header_modifier;
-pub mod redirect;
+mod header_modifier;
+mod redirect;
+mod rewrite;
 use async_trait::async_trait;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version};
 use hyper::Body;
@@ -9,14 +10,18 @@ use std::net::SocketAddr;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::TardisFuns;
+use url::Url;
 
-use crate::config::plugin_filter_dto::SgRouteFilter;
+use crate::config::http_route_dto::SgHttpPathMatchType;
+use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
+use crate::functions::http_route::SgHttpRouteMatchInst;
 
 static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
 fn init_filter_defs() {
     let mut filters: HashMap<String, Box<dyn SgPluginFilterDef>> = HashMap::new();
     filters.insert(header_modifier::CODE.to_string(), Box::new(header_modifier::SgFilerHeaderModifierDef));
+    filters.insert(rewrite::CODE.to_string(), Box::new(rewrite::SgFilerRewriteDef));
     filters.insert(redirect::CODE.to_string(), Box::new(redirect::SgFilerRedirectDef));
     unsafe {
         FILTERS = Some(filters);
@@ -67,11 +72,59 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
-    async fn req_filter(&self, mut ctx: SgRouteFilterContext) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn req_filter(&self, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 
-    async fn resp_filter(&self, mut ctx: SgRouteFilterContext) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn resp_filter(&self, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 }
 
+pub fn modify_path(
+    modify_path: &Option<SgHttpPathModifier>,
+    mut ctx: SgRouteFilterContext,
+    matched_match_inst: Option<&SgHttpRouteMatchInst>,
+) -> TardisResult<SgRouteFilterContext> {
+    if let Some(modify_path) = &modify_path {
+        let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
+        match modify_path.kind {
+            SgHttpPathModifierType::ReplaceFullPath => {
+                uri.set_path(&modify_path.value);
+            }
+            SgHttpPathModifierType::ReplacePrefixMatch => {
+                if let Some(Some(matched_path)) = matched_match_inst.map(|m| m.path.as_ref()) {
+                    match matched_path.kind {
+                        SgHttpPathMatchType::Exact => {
+                            // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
+                            uri.set_path(&modify_path.value);
+                        }
+                        _ => {
+                            let match_path = if matched_path.kind == SgHttpPathMatchType::Prefix {
+                                &matched_path.value
+                            } else {
+                                matched_path.regular.as_ref().unwrap().captures(uri.path()).map(|cap| cap.get(0).map_or("", |m| m.as_str())).unwrap_or("")
+                            };
+                            let path = uri.path().strip_prefix(match_path).unwrap();
+                            if path.is_empty() {
+                                uri.set_path(&modify_path.value);
+                            } else if path.starts_with('/') && modify_path.value.ends_with('/') {
+                                uri.set_path(&format!("{}{}", modify_path.value, &path.to_string()[1..]));
+                            } else if path.starts_with('/') || modify_path.value.ends_with('/') {
+                                uri.set_path(&format!("{}{}", modify_path.value, &path.to_string()));
+                            } else {
+                                uri.set_path(&format!("{}/{}", modify_path.value, &path.to_string()));
+                            }
+                        }
+                    }
+                } else {
+                    // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
+                    uri.set_path(&modify_path.value);
+                }
+            }
+        }
+        ctx.set_req_uri(uri.as_str().parse().unwrap());
+    }
+    Ok(ctx)
+}
+
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum SgPluginFilterKind {
     Http,
@@ -79,6 +132,7 @@ pub enum SgPluginFilterKind {
     Ws,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct SgRouteFilterContext {
     raw_req_method: Method,
@@ -113,6 +167,7 @@ pub enum SgRouteFilterRequestAction {
     Response,
 }
 
+#[allow(dead_code)]
 impl SgRouteFilterContext {
     pub fn new(method: Method, uri: Uri, version: Version, headers: HeaderMap<HeaderValue>, body: Body, remote_addr: SocketAddr, gateway_name: String) -> Self {
         Self {
@@ -228,13 +283,13 @@ impl SgRouteFilterContext {
     pub async fn pop_req_body(&mut self) -> TardisResult<Option<Vec<u8>>> {
         if self.mod_req_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.mod_req_body) };
+            std::mem::swap(&mut body, &mut self.mod_req_body);
             Ok(body)
         } else if self.raw_req_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.raw_req_body) };
+            std::mem::swap(&mut body, &mut self.raw_req_body);
             let body = hyper::body::to_bytes(body.unwrap()).await.map_err(|error| TardisError::format_error(&format!("[SG.Filter] Request Body parsing error:{error}"), ""))?;
-            let body = body.iter().rev().cloned().collect::<Vec<u8>>();
+            let body = body.iter().cloned().collect::<Vec<u8>>();
             Ok(Some(body))
         } else {
             Ok(None)
@@ -250,11 +305,11 @@ impl SgRouteFilterContext {
     pub fn pop_req_body_raw(&mut self) -> TardisResult<Option<Body>> {
         if self.mod_req_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.mod_req_body) };
+            std::mem::swap(&mut body, &mut self.mod_req_body);
             Ok(body.map(Body::from))
         } else if self.raw_req_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.raw_req_body) };
+            std::mem::swap(&mut body, &mut self.raw_req_body);
             Ok(body)
         } else {
             Ok(None)
@@ -317,13 +372,13 @@ impl SgRouteFilterContext {
     pub async fn pop_resp_body(&mut self) -> TardisResult<Option<Vec<u8>>> {
         if self.mod_resp_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.mod_resp_body) };
+            std::mem::swap(&mut body, &mut self.mod_resp_body);
             Ok(body)
         } else if self.raw_resp_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.raw_resp_body) };
+            std::mem::swap(&mut body, &mut self.raw_resp_body);
             let body = hyper::body::to_bytes(body.unwrap()).await.map_err(|error| TardisError::format_error(&format!("[SG.Filter] Response Body parsing error:{error}"), ""))?;
-            let body = body.iter().rev().cloned().collect::<Vec<u8>>();
+            let body = body.iter().cloned().collect::<Vec<u8>>();
             Ok(Some(body))
         } else {
             Ok(None)
@@ -339,11 +394,11 @@ impl SgRouteFilterContext {
     pub fn pop_resp_body_raw(&mut self) -> TardisResult<Option<Body>> {
         if self.mod_resp_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.mod_resp_body) };
+            std::mem::swap(&mut body, &mut self.mod_resp_body);
             Ok(body.map(Body::from))
         } else if self.raw_resp_body.is_some() {
             let mut body = None;
-            unsafe { std::mem::swap(&mut body, &mut self.raw_resp_body) };
+            std::mem::swap(&mut body, &mut self.raw_resp_body);
             Ok(body)
         } else {
             Ok(None)
