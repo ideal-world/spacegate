@@ -12,7 +12,7 @@ use hyper::server::conn::{AddrIncoming, AddrStream};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 use lazy_static::lazy_static;
-use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls::{PrivateKey, ServerConfig};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::vec::Vec;
@@ -39,8 +39,8 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.is_empty() {
         return Err(TardisError::bad_request("[SG.server] Missing Listeners", ""));
     }
-    if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http) {
-        return Err(TardisError::bad_request("[SG.server] Non-Http protocols are not supported yet", ""));
+    if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https) {
+        return Err(TardisError::bad_request("[SG.server] Non-Http(s) protocols are not supported yet", ""));
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
@@ -61,12 +61,16 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
         let gateway_name = gateway_name.clone();
         if let Some(tls) = &listener.tls {
             let tls_cfg = {
-                let cert = Certificate(tls.cert.as_bytes().to_vec());
-                let key = PrivateKey(tls.key.as_bytes().to_vec());
+                let certs =
+                    rustls_pemfile::certs(&mut tls.cert.as_bytes()).map_err(|error| TardisError::bad_request(&format!("[SG.server] Tls certificates not legal: {error}"), ""))?;
+                let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
+                let key = rustls_pemfile::rsa_private_keys(&mut tls.key.as_bytes())
+                    .map_err(|error| TardisError::bad_request(&format!("[SG.server] Tls private keys not legal: {error}"), ""))?;
+                let key = PrivateKey(key[0].clone());
                 let mut cfg = rustls::ServerConfig::builder()
                     .with_safe_defaults()
                     .with_no_client_auth()
-                    .with_single_cert(vec![cert], key)
+                    .with_single_cert(certs, key)
                     .map_err(|error| TardisError::bad_request(&format!("[SG.server] Tls not legal: {error}"), ""))?;
                 cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
                 sync::Arc::new(cfg)
@@ -74,14 +78,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
             let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.server] Bind address error: {error}"), ""))?;
             let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
                 let remote_addr = match &client.state {
-                    State::Handshaking(addr) => {
-                        if let Some(addr) = addr.get_ref() {
-                            addr.remote_addr()
-                        } else {
-                            // TODO
-                            panic!("TODO")
-                        }
-                    }
+                    State::Handshaking(addr) => addr.get_ref().unwrap().remote_addr(),
                     State::Streaming(addr) => addr.get_ref().0.remote_addr(),
                 };
                 let gateway_name = gateway_name.clone();

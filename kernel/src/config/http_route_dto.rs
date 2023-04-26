@@ -26,6 +26,8 @@ pub struct SgHttpRouteRule {
     pub filters: Option<Vec<SgRouteFilter>>,
     /// BackendRefs defines the backend(s) where matching requests should be sent.
     pub backends: Option<Vec<SgHttpBackendRef>>,
+    /// Timeout define the timeout for requests that match this rule.
+    pub timeout: Option<u64>,
 }
 
 /// HTTPRouteMatch defines the predicate used to match requests to a given action. Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
@@ -52,6 +54,7 @@ pub struct SgHttpPathMatch {
 
 /// PathMatchType specifies the semantics of how HTTP paths should be compared.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum SgHttpPathMatchType {
     /// Matches the URL path exactly and with case sensitivity.
     Exact,
@@ -76,6 +79,7 @@ pub struct SgHttpHeaderMatch {
 
 /// HeaderMatchType specifies the semantics of how HTTP header values should be compared.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum SgHttpHeaderMatchType {
     /// Matches the HTTP header exactly and with case sensitivity.
     #[default]
@@ -97,6 +101,7 @@ pub struct SgHttpQueryMatch {
 
 /// HTTPQueryMatchType specifies the semantics of how HTTP query parameter values should be compared.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum SgHttpQueryMatchType {
     /// Matches the HTTP query parameter exactly and with case sensitivity.
     #[default]
@@ -108,12 +113,14 @@ pub enum SgHttpQueryMatchType {
 /// HTTPBackendRef defines how a HTTPRoute should forward an HTTP request.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgHttpBackendRef {
-    /// Name is the kubernetes service name OR url path.
-    pub name_or_path: String,
-    /// Namespace is the kubernetes namespace Or url host
-    pub namespace_or_host: Option<String>,
+    /// Name is the kubernetes service name OR url host.
+    pub name_or_host: String,
+    /// Namespace is the kubernetes namespace
+    pub namespace: Option<String>,
     /// Port specifies the destination port number to use for this resource.
     pub port: u16,
+    /// Timeout specifies the timeout for requests forwarded to the referenced backend.
+    pub timeout: Option<u64>,
     // Protocol specifies the protocol used to talk to the referenced backend.
     pub protocol: Option<SgProtocol>,
     /// Weight specifies the proportion of requests forwarded to the referenced backend.

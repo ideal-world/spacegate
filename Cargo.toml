@@ -27,6 +27,7 @@ lazy_static = { version = "1.4" }
 async-trait = { version = "0.1" }
 itertools = { version = "0" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = { version = "2" }
 urlencoding = { version = "2" }
 
 # Tardis
@@ -37,7 +38,9 @@ http = { version = "0.2" }
 rustls = { version = "0.21.0" }
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls = { version = "0.24" }
+rustls-pemfile = { version = "1" }
 tokio-rustls = { version = "0.24", default-features = false }
+reqwest = { version = "0.11", features = ["json", "gzip"] }
 
 # K8s
 k8s-openapi = { version = "0.17", features = ["v1_21"] }

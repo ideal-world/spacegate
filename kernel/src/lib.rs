@@ -2,20 +2,20 @@ use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
 use tardis::basic::result::TardisResult;
 
-mod config;
+pub mod config;
 mod functions;
-mod plugins;
+pub mod plugins;
 
-pub async fn startup(k8s_mode: bool, ext_conf_url: Option<String>) -> TardisResult<()> {
+pub async fn startup(k8s_mode: bool, ext_conf_url: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<()> {
     // Initialize configuration according to different modes
-    let configs = config::init(k8s_mode, ext_conf_url).await?;
+    let configs = config::init(k8s_mode, ext_conf_url, check_interval_sec).await?;
     for (gateway, http_routes) in configs {
         do_startup(gateway, http_routes).await?;
     }
     Ok(())
 }
 
-async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> TardisResult<()> {
+pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> TardisResult<()> {
     // Initialize service instances
     let server_insts = server::init(&gateway).await?;
     #[cfg(feature = "cache")]
@@ -76,11 +76,11 @@ mod tests {
                 gateway_name: "test_gw".to_string(),
                 rules: Some(vec![SgHttpRouteRule {
                     backends: Some(vec![SgHttpBackendRef {
-                        name_or_path: "anything".to_string(),
-                        namespace_or_host: Some("httpbin.org".to_string()),
-                        port: 443,
-                        protocol: Some(SgProtocol::Https),
-                        weight: None,
+                        name_or_host: "anything".to_string(),
+                        namespace: Some("httpbin.org".to_string()),
+                        port: 80,
+                        protocol: Some(SgProtocol::Http),
+                        ..Default::default()
                     }]),
                     ..Default::default()
                 }]),
@@ -92,7 +92,7 @@ mod tests {
         let client = TardisWebClient::init(100)?;
         let resp = client.get::<Value>("http://root:sss@localhost:8888/hi?dd", None).await?;
         let resp = resp.body.unwrap();
-        assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/anything"));
+        assert!(resp.get("url").unwrap().as_str().unwrap().contains("http://localhost/anything"));
         Ok(())
     }
 }
