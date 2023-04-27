@@ -46,8 +46,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             "gateway_name":"test_gw",
             "rules":[{{
                 "backends":[{{
-                    "name_or_path":"anything",
-                    "namespace_or_host":"httpbin.org",
+                    "name_or_host":"postman-echo.com",
                     "port":80
                 }}]
             }}]
@@ -60,9 +59,10 @@ async fn test_config_by_redis() -> TardisResult<()> {
     spacegate_kernel::startup(false, Some(cache_url.clone()), Some(1)).await?;
     sleep(Duration::from_millis(500)).await;
 
-    let resp = http_client.get::<Value>("http://localhost:8888/hi?dd", None).await?;
+    let resp = http_client.get::<Value>("http://localhost:8888/get?dd", None).await?;
     let resp = resp.body.unwrap();
-    assert!(resp.get("url").unwrap().as_str().unwrap().contains("http://localhost/anything"));
+    println!("resp: {:?}", resp);
+    assert!(resp.get("url").unwrap().as_str().unwrap().contains("http://localhost/get?dd"));
 
     // Modify gateway
     cache_client
@@ -83,9 +83,9 @@ async fn test_config_by_redis() -> TardisResult<()> {
     cache_client.set_ex("sg:conf:change:trigger:111##gateway##test_gw", "", 1).await?;
 
     sleep(Duration::from_millis(1500)).await;
-    let resp = http_client.get::<Value>("http://localhost:8889/hi?dd", None).await?;
+    let resp = http_client.get::<Value>("http://localhost:8889/get?dd", None).await?;
     let resp = resp.body.unwrap();
-    assert!(resp.get("url").unwrap().as_str().unwrap().contains("http://localhost/anything"));
+    assert!(resp.get("url").unwrap().as_str().unwrap().contains("http://localhost/get?dd"));
 
     // Modify route
     cache_client
@@ -96,8 +96,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             "gateway_name":"test_gw",
             "rules":[{{
                 "backends":[{{
-                    "name_or_path":"anything",
-                    "namespace_or_host":"httpbin.org",
+                    "name_or_host":"postman-echo.com",
                     "protocol":"https",
                     "port":443
                 }}]
@@ -111,16 +110,16 @@ async fn test_config_by_redis() -> TardisResult<()> {
     cache_client.set_ex("sg:conf:change:trigger:222##httproute##test_gw", "", 1).await?;
 
     sleep(Duration::from_millis(1500)).await;
-    let resp = http_client.get::<Value>("http://localhost:8889/hi?dd", None).await?;
+    let resp = http_client.get::<Value>("http://localhost:8889/get?dd", None).await?;
     let resp = resp.body.unwrap();
-    assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/anything"));
+    assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
 
     // Remove gateway
     cache_client.hdel("sg:conf:gateway", "test_gw").await?;
     cache_client.set_ex("sg:conf:change:trigger:333##gateway##test_gw", "", 1).await?;
 
     sleep(Duration::from_millis(1500)).await;
-    assert!(http_client.get_to_str("http://localhost:8889/hi?dd", None).await.is_err());
+    assert!(http_client.get_to_str("http://localhost:8889/get?dd", None).await.is_err());
 
     Ok(())
 }

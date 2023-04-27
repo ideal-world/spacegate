@@ -1,15 +1,15 @@
 use async_trait::async_trait;
-use http::{Method, StatusCode, Uri};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use tardis::url::Url;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     TardisFuns,
 };
-use url::Url;
 
 use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{modify_path, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
+use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
 
 pub const CODE: &str = "redirect";
 
@@ -23,6 +23,8 @@ impl SgPluginFilterDef for SgFilerRedirectDef {
 }
 
 /// RedirectFilter defines a filter that redirects a request.
+///
+/// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilerRedirect {
     /// Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.
@@ -51,9 +53,11 @@ impl SgPluginFilter for SgFilerRedirect {
         Ok(())
     }
 
-    async fn req_filter(&self, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(hostname) = &self.hostname {
-            ctx.set_req_header("Host", hostname)?;
+            let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
+            uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Host {hostname} parsing error"), ""))?;
+            ctx.set_req_uri(uri.as_str().parse().unwrap());
         }
         if let Some(scheme) = &self.scheme {
             let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
@@ -65,12 +69,14 @@ impl SgPluginFilter for SgFilerRedirect {
             uri.set_port(Some(port)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Port {port} parsing error"), ""))?;
             ctx.set_req_uri(uri.as_str().parse().unwrap());
         }
-        let mut ctx = modify_path(&self.path, ctx, matched_match_inst)?;
+        if let Some(new_url) = http_common_modify_path(ctx.get_req_uri(), &self.path, matched_match_inst)? {
+            ctx.set_req_uri(new_url);
+        }
         ctx.action = SgRouteFilterRequestAction::Redirect;
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(status_code) = self.status_code {
             ctx.set_resp_status_code(
                 StatusCode::from_u16(status_code)
@@ -83,43 +89,54 @@ impl SgPluginFilter for SgFilerRedirect {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
+        functions::http_route::SgHttpPathMatchInst,
+    };
+
     use super::*;
-    use http::{HeaderMap, StatusCode, Version};
+    use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
-    use std::collections::HashMap;
     use tardis::tokio;
 
     #[tokio::test]
     async fn test_redirect_filter() {
-        // let mut headers = HashMap::new();
-        // headers.insert("X-Test".to_string(), "test".to_string());
-        // let filter = SgFilerRedirect {
-        //     method: Some("post".to_string()),
-        //     headers: Some(headers),
-        //     uri: Some("http://httpbin.org/anything".to_string()),
-        //     status_code: Some(StatusCode::MOVED_PERMANENTLY.as_u16()),
-        // };
+        let filter = SgFilerRedirect {
+            scheme: Some("https".to_string()),
+            hostname: Some("sg_new.idealworld.group".to_string()),
+            path: Some(SgHttpPathModifier {
+                kind: SgHttpPathModifierType::ReplacePrefixMatch,
+                value: "/new_iam".to_string(),
+            }),
+            port: Some(443),
+            status_code: Some(StatusCode::MOVED_PERMANENTLY.as_u16()),
+        };
 
-        // let ctx = SgRouteFilterContext::new(
-        //     Method::GET,
-        //     Uri::from_static("http://sg.idealworld.group/spi/cache/1"),
-        //     Version::HTTP_11,
-        //     HeaderMap::new(),
-        //     Body::empty(),
-        //     "127.0.0.1:8080".parse().unwrap(),
-        //     "".to_string(),
-        // );
+        let ctx = SgRouteFilterContext::new(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "127.0.0.1:8080".parse().unwrap(),
+            "".to_string(),
+        );
+        let matched = SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Prefix,
+                value: "/iam".to_string(),
+                regular: None,
+            }),
+            ..Default::default()
+        };
 
-        // let (is_continue, mut ctx) = filter.req_filter(ctx).await.unwrap();
-        // assert!(is_continue);
-        // assert_eq!(ctx.get_req_method().as_str().to_lowercase(), Method::POST.as_str().to_lowercase());
-        // assert_eq!(ctx.get_req_headers().len(), 1);
-        // assert_eq!(ctx.get_req_headers().get("X-Test").as_ref().unwrap().to_str().unwrap(), "test");
-        // assert_eq!(ctx.get_req_uri().host().unwrap(), "httpbin.org");
-        // assert_eq!(ctx.get_resp_status_code(), &StatusCode::OK);
+        let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
+        assert!(is_continue);
+        assert_eq!(ctx.get_req_uri().to_string(), "https://sg_new.idealworld.group/new_iam/ct/001?name=sg");
+        assert_eq!(ctx.get_resp_status_code(), &StatusCode::OK);
 
-        // let (is_continue, mut ctx) = filter.resp_filter(ctx).await.unwrap();
-        // assert!(is_continue);
-        // assert_eq!(ctx.get_resp_status_code(), &StatusCode::MOVED_PERMANENTLY);
+        let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
+        assert!(is_continue);
+        assert_eq!(ctx.get_resp_status_code(), &StatusCode::MOVED_PERMANENTLY);
     }
 }

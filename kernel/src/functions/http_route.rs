@@ -112,7 +112,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                     filters: rule_filters,
                     matches: rule_matches_insts,
                     backends: rule.backends,
-                    timeout: rule.timeout,
+                    timeout_ms: rule.timeout_ms,
                 })
             }
             Some(rule_insts)
@@ -232,8 +232,8 @@ async fn do_process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: So
     )
     .await?;
 
-    let rule_timeout = if let Some(timeout) = matched_rule_inst.map(|rule| rule.timeout) {
-        timeout
+    let rule_timeout = if let Some(timeout_ms) = matched_rule_inst.map(|rule| rule.timeout_ms) {
+        timeout_ms
     } else {
         None
     };
@@ -325,35 +325,39 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                 }
             }
             if let Some(headers) = &rule_match.header {
-                for header in headers {
+                let matched = headers.iter().all(|header| {
                     if let Some(req_header_value) = req.headers().get(&header.name) {
                         if req_header_value.is_empty() {
-                            continue;
+                            return false;
                         }
                         let req_header_value = req_header_value.to_str();
                         if req_header_value.is_err() {
-                            continue;
+                            return false;
                         }
                         let req_header_value = req_header_value.unwrap();
                         match header.kind {
                             SgHttpHeaderMatchType::Exact => {
                                 if req_header_value != &header.value {
-                                    continue;
+                                    return false;
                                 }
                             }
                             SgHttpHeaderMatchType::Regular => {
                                 if !&header.regular.as_ref().unwrap().is_match(req_header_value) {
-                                    continue;
+                                    return false;
                                 }
                             }
                         }
                     } else {
-                        continue;
+                        return false;
                     }
+                    true
+                });
+                if !matched {
+                    continue;
                 }
             }
             if let Some(queries) = &rule_match.query {
-                for query in queries {
+                let matched = queries.iter().all(|query| {
                     if let Some(Some(req_query_value)) = req.uri().query().map(|q| {
                         let q = urlencoding::decode(q).unwrap();
                         let q = q.as_ref().split('&').collect_vec();
@@ -362,18 +366,22 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                         match query.kind {
                             SgHttpQueryMatchType::Exact => {
                                 if req_query_value != query.value {
-                                    continue;
+                                    return false;
                                 }
                             }
                             SgHttpQueryMatchType::Regular => {
                                 if !&query.regular.as_ref().unwrap().is_match(&req_query_value) {
-                                    continue;
+                                    return false;
                                 }
                             }
                         }
                     } else {
-                        continue;
+                        return false;
                     }
+                    true
+                });
+                if !matched {
+                    continue;
                 }
             }
             return (true, Some(rule_match));
@@ -405,32 +413,32 @@ async fn process_req_filters(
     let mut is_continue;
     let mut executed_filters = Vec::new();
     if let Some(rule_filters) = rule_filters {
-        for (name, filter) in rule_filters {
-            if !executed_filters.contains(&name) {
-                (is_continue, ctx) = filter.req_filter(ctx, matched_match_inst).await?;
+        for (id, filter) in rule_filters {
+            if !executed_filters.contains(&id) {
+                (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
                     return Ok(ctx);
                 }
-                executed_filters.push(name);
+                executed_filters.push(id);
             }
         }
     }
-    for (name, filter) in route_filers {
-        if !executed_filters.contains(&name) {
-            (is_continue, ctx) = filter.req_filter(ctx, matched_match_inst).await?;
+    for (id, filter) in route_filers {
+        if !executed_filters.contains(&id) {
+            (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);
             }
-            executed_filters.push(name);
+            executed_filters.push(id);
         }
     }
-    for (name, filter) in global_filters {
-        if !executed_filters.contains(&name) {
-            (is_continue, ctx) = filter.req_filter(ctx, matched_match_inst).await?;
+    for (id, filter) in global_filters {
+        if !executed_filters.contains(&id) {
+            (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);
             }
-            executed_filters.push(name);
+            executed_filters.push(id);
         }
     }
     Ok(ctx)
@@ -446,32 +454,32 @@ async fn process_resp_filters(
     let mut is_continue;
     let mut executed_filters = Vec::new();
     if let Some(rule_filters) = rule_filters {
-        for (name, filter) in rule_filters {
-            if !executed_filters.contains(&name) {
-                (is_continue, ctx) = filter.resp_filter(ctx, matched_match_inst).await?;
+        for (id, filter) in rule_filters {
+            if !executed_filters.contains(&id) {
+                (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
                     return Ok(ctx);
                 }
-                executed_filters.push(name);
+                executed_filters.push(id);
             }
         }
     }
-    for (name, filter) in route_filers {
-        if !executed_filters.contains(&name) {
-            (is_continue, ctx) = filter.resp_filter(ctx, matched_match_inst).await?;
+    for (id, filter) in route_filers {
+        if !executed_filters.contains(&id) {
+            (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);
             }
-            executed_filters.push(name);
+            executed_filters.push(id);
         }
     }
-    for (name, filter) in global_filters {
-        if !executed_filters.contains(&name) {
-            (is_continue, ctx) = filter.resp_filter(ctx, matched_match_inst).await?;
+    for (id, filter) in global_filters {
+        if !executed_filters.contains(&id) {
+            (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);
             }
-            executed_filters.push(name);
+            executed_filters.push(id);
         }
     }
     Ok(ctx)
@@ -551,7 +559,7 @@ struct SgHttpRouteRuleInst {
     pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
     pub matches: Option<Vec<SgHttpRouteMatchInst>>,
     pub backends: Option<Vec<SgHttpBackendRef>>,
-    pub timeout: Option<u64>,
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Default)]
@@ -589,7 +597,7 @@ pub struct SgHttpQueryMatchInst {
 mod tests {
     use std::collections::HashMap;
 
-    use http::Request;
+    use http::{Method, Request};
     use hyper::Body;
     use tardis::regex::Regex;
 
@@ -600,239 +608,324 @@ mod tests {
 
     use super::{match_rule_inst, SgHttpPathMatchInst, SgHttpRouteMatchInst};
 
-    // #[test]
-    // fn test_match_rule_inst() {
-    //     assert!(match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), None));
-    //     // -----------------------------------------------------
-    //     // Match exact path
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         path: Some(SgHttpPathMatchInst {
-    //             kind: SgHttpPathMatchType::Exact,
-    //             value: "/iam".to_string(),
-    //             regular: None,
-    //         }),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     // Match prefix path
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         path: Some(SgHttpPathMatchInst {
-    //             kind: SgHttpPathMatchType::Prefix,
-    //             value: "/iam".to_string(),
-    //             regular: None,
-    //         }),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/spi/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     // Match regular path
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         path: Some(SgHttpPathMatchInst {
-    //             kind: SgHttpPathMatchType::Regular,
-    //             value: "/iam/[0-9]+/hi".to_string(),
-    //             regular: Some(Regex::new("/iam/[0-9]+/hi").unwrap()),
-    //         }),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct/hi").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/001/hi/hi").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/001/hi/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
+    #[test]
+    fn test_match_rule_inst() {
+        // If there is no matching rule, the match is considered successful
+        let (matched, matched_match_inst) = match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), None);
+        assert!(matched);
+        assert!(matched_match_inst.is_none());
 
-    //     // -----------------------------------------------------
-    //     // Match method
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         method: Some(vec!["get".to_string()]),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().method("post").uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
+        // -----------------------------------------------------
+        // Match exact path
+        let match_conds = vec![SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Exact,
+                value: "/iam".to_string(),
+                regular: None,
+            }),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        let (matched, matched_match_inst) = match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(), Some(&match_conds));
+        assert!(matched);
+        assert!(matched_match_inst.is_some());
 
-    //     // -----------------------------------------------------
-    //     // Match exact header
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         header: Some(vec![
-    //             SgHttpHeaderMatchInst {
-    //                 kind: SgHttpHeaderMatchType::Exact,
-    //                 name: "X-Auth-User".to_string(),
-    //                 value: "gdxr".to_string(),
-    //                 regular: None,
-    //             },
-    //             SgHttpHeaderMatchInst {
-    //                 kind: SgHttpHeaderMatchType::Exact,
-    //                 name: "App".to_string(),
-    //                 value: "a001".to_string(),
-    //                 regular: None,
-    //             },
-    //         ]),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("Tenant", "t001").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "t001").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "a001").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("X-Auth-User", "gdxr").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "a001").header("X-auTh-User", "gdxr").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
+        // Match prefix path
+        let match_conds = vec![SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Prefix,
+                value: "/iam".to_string(),
+                regular: None,
+            }),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/spi/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        let (matched, matched_match_inst) = match_rule_inst(
+            &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
+            Some(&match_conds),
+        );
+        assert!(matched);
+        assert!(matched_match_inst.is_some());
+        let (matched, matched_match_inst) = match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(), Some(&match_conds));
+        assert!(matched);
+        assert!(matched_match_inst.is_some());
+        let (matched, matched_match_inst) = match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(), Some(&match_conds));
+        assert!(matched);
+        assert!(matched_match_inst.is_some());
 
-    //     // Match regular header
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         header: Some(vec![SgHttpHeaderMatchInst {
-    //             kind: SgHttpHeaderMatchType::Regular,
-    //             name: "X-Id".to_string(),
-    //             value: "^[0-9]+$".to_string(),
-    //             regular: Some(Regex::new("^[0-9]+$").unwrap()),
-    //         }]),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("x-iD", "t001").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("x-iD", "002").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
+        // Match regular path
+        let match_conds = vec![SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Regular,
+                value: "/iam/[0-9]+/hi".to_string(),
+                regular: Some(Regex::new("/iam/[0-9]+/hi").unwrap()),
+            }),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/iam/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct/hi").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/001/hi/hi").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/001/hi/").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
 
-    //     // -----------------------------------------------------
-    //     // Match exact query
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         query: Some(vec![
-    //             SgHttpQueryMatchInst {
-    //                 kind: SgHttpQueryMatchType::Exact,
-    //                 name: "id".to_string(),
-    //                 value: "gdxr".to_string(),
-    //                 regular: None,
-    //             },
-    //             SgHttpQueryMatchInst {
-    //                 kind: SgHttpQueryMatchType::Exact,
-    //                 name: "name".to_string(),
-    //                 value: "星航".to_string(),
-    //                 regular: None,
-    //             },
-    //         ]),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/?id=gdxr").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA%26id%3Dgdxr").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA%26id%3Dgdxr%26code%3D1").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
+        // -----------------------------------------------------
+        // Match method
+        let match_conds = vec![SgHttpRouteMatchInst {
+            method: Some(vec!["get".to_string()]),
+            ..Default::default()
+        }];
+        assert!(
+            !match_rule_inst(
+                &Request::builder().method("post").uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
 
-    //     // Match regular query
-    //     let match_conds = vec![SgHttpRouteMatchInst {
-    //         query: Some(vec![SgHttpQueryMatchInst {
-    //             kind: SgHttpQueryMatchType::Regular,
-    //             name: "id".to_string(),
-    //             value: "id[a-z]+".to_string(),
-    //             regular: Some(Regex::new("id[a-z]+").unwrap()),
-    //         }]),
-    //         ..Default::default()
-    //     }];
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/?id=gdxr").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(!match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/?id=idAdef").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    //     assert!(match_rule_inst(
-    //         &Request::builder().uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
-    //         Some(&match_conds)
-    //     ));
-    // }
+        // -----------------------------------------------------
+        // Match exact header
+        let match_conds = vec![SgHttpRouteMatchInst {
+            header: Some(vec![
+                SgHttpHeaderMatchInst {
+                    kind: SgHttpHeaderMatchType::Exact,
+                    name: "X-Auth-User".to_string(),
+                    value: "gdxr".to_string(),
+                    regular: None,
+                },
+                SgHttpHeaderMatchInst {
+                    kind: SgHttpHeaderMatchType::Exact,
+                    name: "App".to_string(),
+                    value: "a001".to_string(),
+                    regular: None,
+                },
+            ]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("Tenant", "t001").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "t001").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "a001").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("X-Auth-User", "gdxr").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("app", "a001").header("X-auTh-User", "gdxr").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+
+        // Match regular header
+        let match_conds = vec![SgHttpRouteMatchInst {
+            header: Some(vec![SgHttpHeaderMatchInst {
+                kind: SgHttpHeaderMatchType::Regular,
+                name: "X-Id".to_string(),
+                value: "^[0-9]+$".to_string(),
+                regular: Some(Regex::new("^[0-9]+$").unwrap()),
+            }]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("x-iD", "t001").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/iam/ct").header("x-iD", "002").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+
+        // -----------------------------------------------------
+        // Match exact query
+        let match_conds = vec![SgHttpRouteMatchInst {
+            query: Some(vec![
+                SgHttpQueryMatchInst {
+                    kind: SgHttpQueryMatchType::Exact,
+                    name: "id".to_string(),
+                    value: "gdxr".to_string(),
+                    regular: None,
+                },
+                SgHttpQueryMatchInst {
+                    kind: SgHttpQueryMatchType::Exact,
+                    name: "name".to_string(),
+                    value: "星航".to_string(),
+                    regular: None,
+                },
+            ]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?id=gdxr").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA%26id%3Dgdxr").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?name%3D%E6%98%9F%E8%88%AA%26id%3Dgdxr%26code%3D1").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+
+        // Match regular query
+        let match_conds = vec![SgHttpRouteMatchInst {
+            query: Some(vec![SgHttpQueryMatchInst {
+                kind: SgHttpQueryMatchType::Regular,
+                name: "id".to_string(),
+                value: "id[a-z]+".to_string(),
+                regular: Some(Regex::new("id[a-z]+").unwrap()),
+            }]),
+            ..Default::default()
+        }];
+        assert!(!match_rule_inst(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), Some(&match_conds)).0);
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?id=gdxr").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?id=idAdef").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+
+        // Match multiple
+        let match_conds = vec![
+            SgHttpRouteMatchInst {
+                method: Some(vec!["put".to_string()]),
+                query: Some(vec![SgHttpQueryMatchInst {
+                    kind: SgHttpQueryMatchType::Regular,
+                    name: "id".to_string(),
+                    value: "id[a-z]+".to_string(),
+                    regular: Some(Regex::new("id[a-z]+").unwrap()),
+                }]),
+                ..Default::default()
+            },
+            SgHttpRouteMatchInst {
+                method: Some(vec!["post".to_string()]),
+                ..Default::default()
+            },
+        ];
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?id=idAdef").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            !match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().method(Method::from_bytes("put".as_bytes()).unwrap()).uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+        assert!(
+            match_rule_inst(
+                &Request::builder().method(Method::from_bytes("post".as_bytes()).unwrap()).uri("https://any").body(Body::empty()).unwrap(),
+                Some(&match_conds)
+            )
+            .0
+        );
+    }
 
     #[test]
     fn test_match_route_insts_with_hostname_priority() {

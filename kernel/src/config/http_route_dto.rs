@@ -27,7 +27,7 @@ pub struct SgHttpRouteRule {
     /// BackendRefs defines the backend(s) where matching requests should be sent.
     pub backends: Option<Vec<SgHttpBackendRef>>,
     /// Timeout define the timeout for requests that match this rule.
-    pub timeout: Option<u64>,
+    pub timeout_ms: Option<u64>,
 }
 
 /// HTTPRouteMatch defines the predicate used to match requests to a given action. Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
@@ -120,7 +120,7 @@ pub struct SgHttpBackendRef {
     /// Port specifies the destination port number to use for this resource.
     pub port: u16,
     /// Timeout specifies the timeout for requests forwarded to the referenced backend.
-    pub timeout: Option<u64>,
+    pub timeout_ms: Option<u64>,
     // Protocol specifies the protocol used to talk to the referenced backend.
     pub protocol: Option<SgProtocol>,
     /// Weight specifies the proportion of requests forwarded to the referenced backend.

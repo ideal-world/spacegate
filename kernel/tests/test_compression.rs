@@ -24,8 +24,7 @@ async fn test_compression() -> TardisResult<()> {
             gateway_name: "test_gw".to_string(),
             rules: Some(vec![SgHttpRouteRule {
                 backends: Some(vec![SgHttpBackendRef {
-                    name_or_host: "anything".to_string(),
-                    namespace: Some("httpbin.org".to_string()),
+                    name_or_host: "postman-echo.com".to_string(),
                     port: 443,
                     protocol: Some(SgProtocol::Https),
                     ..Default::default()
@@ -39,7 +38,7 @@ async fn test_compression() -> TardisResult<()> {
     sleep(Duration::from_millis(500)).await;
     let client = reqwest::Client::builder().gzip(true).danger_accept_invalid_certs(true).build().unwrap();
     let resp = client
-        .post("http://localhost:8888/hi?dd")
+        .post("http://localhost:8888/post?dd")
         .json(&json!({
             "name":"星航",
             "age":6
@@ -47,6 +46,6 @@ async fn test_compression() -> TardisResult<()> {
         .send()
         .await?;
     let resp = resp.json::<Value>().await?;
-    assert!(resp.get("data").unwrap().as_str().unwrap().contains("星航"));
+    assert!(resp.get("data").unwrap().to_string().contains("星航"));
     Ok(())
 }

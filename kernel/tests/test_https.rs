@@ -1,6 +1,6 @@
 use std::{env, time::Duration, vec};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use spacegate_kernel::config::{
     gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig},
     http_route_dto::{SgHttpBackendRef, SgHttpRoute, SgHttpRouteRule},
@@ -8,7 +8,7 @@ use spacegate_kernel::config::{
 use tardis::{
     basic::result::TardisResult,
     tokio::{self, time::sleep},
-    web::web_client::TardisWebClient,
+    web::web_client::{TardisHttpResponse, TardisWebClient},
 };
 
 const TLS_KEY: &str = r#"
@@ -90,8 +90,7 @@ async fn test_https() -> TardisResult<()> {
             gateway_name: "test_gw".to_string(),
             rules: Some(vec![SgHttpRouteRule {
                 backends: Some(vec![SgHttpBackendRef {
-                    name_or_host: "anything".to_string(),
-                    namespace: Some("httpbin.org".to_string()),
+                    name_or_host: "postman-echo.com".to_string(),
                     port: 443,
                     protocol: Some(SgProtocol::Https),
                     ..Default::default()
@@ -104,8 +103,16 @@ async fn test_https() -> TardisResult<()> {
     .await?;
     sleep(Duration::from_millis(500)).await;
     let client = TardisWebClient::init(100)?;
-    let resp = client.get::<Value>("https://localhost:8888/hi?dd", None).await?;
-    let resp = resp.body.unwrap();
-    assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/anything"));
+    let resp: TardisHttpResponse<Value> = client
+        .post(
+            "https://localhost:8888/post?dd",
+            &json!({
+                "name":"星航",
+                "age":6
+            }),
+            None,
+        )
+        .await?;
+    assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
     Ok(())
 }

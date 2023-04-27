@@ -46,7 +46,7 @@ impl SgPluginFilter for SgFilerHeaderModifier {
         Ok(())
     }
 
-    async fn req_filter(&self, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if self.kind != SgFilerHeaderModifierKind::Request {
             return Ok((true, ctx));
         }
@@ -63,7 +63,7 @@ impl SgPluginFilter for SgFilerHeaderModifier {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if self.kind != SgFilerHeaderModifierKind::Response {
             return Ok((true, ctx));
         }
@@ -118,7 +118,7 @@ mod tests {
             "".to_string(),
         );
 
-        let (is_continue, mut ctx) = filter_req.req_filter(ctx, None).await.unwrap();
+        let (is_continue, mut ctx) = filter_req.req_filter("", ctx, None).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
         assert_eq!(ctx.get_req_headers().len(), 2);
@@ -129,7 +129,7 @@ mod tests {
 
         let mock_resp_headers = ctx.get_req_headers().clone();
         ctx.set_resp_headers(mock_resp_headers);
-        let (is_continue, mut ctx) = filter_resp.resp_filter(ctx, None).await.unwrap();
+        let (is_continue, mut ctx) = filter_resp.resp_filter("", ctx, None).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
         assert_eq!(ctx.get_req_headers().len(), 2);

@@ -1,4 +1,6 @@
 mod header_modifier;
+mod inject;
+mod limit;
 mod redirect;
 mod rewrite;
 use async_trait::async_trait;
@@ -9,8 +11,8 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
+use tardis::url::Url;
 use tardis::TardisFuns;
-use url::Url;
 
 use crate::config::http_route_dto::SgHttpPathMatchType;
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
@@ -23,6 +25,8 @@ fn init_filter_defs() {
     filters.insert(header_modifier::CODE.to_string(), Box::new(header_modifier::SgFilerHeaderModifierDef));
     filters.insert(rewrite::CODE.to_string(), Box::new(rewrite::SgFilerRewriteDef));
     filters.insert(redirect::CODE.to_string(), Box::new(redirect::SgFilerRedirectDef));
+    filters.insert(inject::CODE.to_string(), Box::new(inject::SgFilerInjectDef));
+    filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilerLimitDef));
     unsafe {
         FILTERS = Some(filters);
     }
@@ -52,7 +56,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(Strin
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
         let filter_def = get_filter_def(&filter_conf.code);
         let filter_inst = filter_def.new(filter_conf.spec)?;
-        plugin_filters.push((format!("{name}_header_modifier"), filter_inst));
+        plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
     for (_, plugin_filter) in &plugin_filters {
         plugin_filter.init().await?;
@@ -72,18 +76,14 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
-    async fn req_filter(&self, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn req_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 
-    async fn resp_filter(&self, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn resp_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 }
 
-pub fn modify_path(
-    modify_path: &Option<SgHttpPathModifier>,
-    mut ctx: SgRouteFilterContext,
-    matched_match_inst: Option<&SgHttpRouteMatchInst>,
-) -> TardisResult<SgRouteFilterContext> {
+pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathModifier>, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<Option<http::Uri>> {
     if let Some(modify_path) = &modify_path {
-        let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
+        let mut uri = Url::parse(&uri.to_string())?;
         match modify_path.kind {
             SgHttpPathModifierType::ReplaceFullPath => {
                 uri.set_path(&modify_path.value);
@@ -93,13 +93,15 @@ pub fn modify_path(
                     match matched_path.kind {
                         SgHttpPathMatchType::Exact => {
                             // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
+                            // https://cloud.yandex.com/en/docs/application-load-balancer/k8s-ref/http-route
                             uri.set_path(&modify_path.value);
                         }
                         _ => {
                             let match_path = if matched_path.kind == SgHttpPathMatchType::Prefix {
                                 &matched_path.value
                             } else {
-                                matched_path.regular.as_ref().unwrap().captures(uri.path()).map(|cap| cap.get(0).map_or("", |m| m.as_str())).unwrap_or("")
+                                // Support only one capture group
+                                matched_path.regular.as_ref().unwrap().captures(uri.path()).map(|cap| cap.get(1).map_or("", |m| m.as_str())).unwrap_or("")
                             };
                             let path = uri.path().strip_prefix(match_path).unwrap();
                             if path.is_empty() {
@@ -114,16 +116,18 @@ pub fn modify_path(
                         }
                     }
                 } else {
+                    // TODO
                     // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
                     uri.set_path(&modify_path.value);
                 }
             }
         }
-        ctx.set_req_uri(uri.as_str().parse().unwrap());
+        return Ok(Some(uri.as_str().parse().unwrap()));
     }
-    Ok(ctx)
+    Ok(None)
 }
 
+// TODO
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum SgPluginFilterKind {
@@ -428,5 +432,87 @@ impl SgRouteFilterContext {
     #[cfg(feature = "cache")]
     pub fn cache(&self) -> TardisResult<&'static tardis::cache::cache_client::TardisCacheClient> {
         crate::functions::cache::get(&self.gateway_name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tardis::{basic::result::TardisResult, regex::Regex};
+
+    use crate::{
+        config::{
+            http_route_dto::SgHttpPathMatchType,
+            plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType},
+        },
+        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteMatchInst},
+        plugins::filters::http_common_modify_path,
+    };
+
+    #[test]
+    fn test_http_common_modify_path() -> TardisResult<()> {
+        let url = "http://sg.idealworld.group/iam/ct/001?name=sg".parse().unwrap();
+
+        let path_prefix_modifier = SgHttpPathModifier {
+            kind: SgHttpPathModifierType::ReplacePrefixMatch,
+            value: "/new_iam".to_string(),
+        };
+
+        let path_full_modifier = SgHttpPathModifier {
+            kind: SgHttpPathModifierType::ReplaceFullPath,
+            value: "/other_iam".to_string(),
+        };
+
+        // with nothing
+        assert!(http_common_modify_path(&url, &None, None)?.is_none());
+
+        // without match inst
+        assert_eq!(
+            http_common_modify_path(&url, &Some(path_prefix_modifier.clone()), None)?.unwrap().to_string(),
+            "http://sg.idealworld.group/new_iam?name=sg".to_string()
+        );
+        assert_eq!(
+            http_common_modify_path(&url, &Some(path_full_modifier.clone()), None)?.unwrap().to_string(),
+            "http://sg.idealworld.group/other_iam?name=sg".to_string()
+        );
+
+        // with math inst
+        let exact_match_inst = SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Exact,
+                value: "/iam".to_string(),
+                regular: None,
+            }),
+            ..Default::default()
+        };
+        let prefix_match_inst = SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Prefix,
+                value: "/iam".to_string(),
+                regular: None,
+            }),
+            ..Default::default()
+        };
+        let regular_match_inst = SgHttpRouteMatchInst {
+            path: Some(SgHttpPathMatchInst {
+                kind: SgHttpPathMatchType::Regular,
+                value: "(/[a-z]+)".to_string(),
+                regular: Some(Regex::new("(/[a-z]+)")?),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            http_common_modify_path(&url, &Some(path_prefix_modifier.clone()), Some(&exact_match_inst))?.unwrap().to_string(),
+            "http://sg.idealworld.group/new_iam?name=sg".to_string()
+        );
+        assert_eq!(
+            http_common_modify_path(&url, &Some(path_prefix_modifier.clone()), Some(&prefix_match_inst))?.unwrap().to_string(),
+            "http://sg.idealworld.group/new_iam/ct/001?name=sg".to_string()
+        );
+        assert_eq!(
+            http_common_modify_path(&url, &Some(path_prefix_modifier.clone()), Some(&regular_match_inst))?.unwrap().to_string(),
+            "http://sg.idealworld.group/new_iam/ct/001?name=sg".to_string()
+        );
+
+        Ok(())
     }
 }
