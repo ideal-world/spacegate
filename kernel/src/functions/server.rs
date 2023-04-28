@@ -7,12 +7,14 @@ use std::{
 
 use crate::config::gateway_dto::{SgGateway, SgProtocol};
 use core::task::{Context, Poll};
-use hyper::server::accept::Accept;
+use http::{header::UPGRADE, HeaderName, HeaderValue, Request, Response, StatusCode};
 use hyper::server::conn::{AddrIncoming, AddrStream};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
+use hyper::{server::accept::Accept, Body};
 use lazy_static::lazy_static;
 use rustls::{PrivateKey, ServerConfig};
+use serde_json::json;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::vec::Vec;
@@ -22,6 +24,7 @@ use tardis::{
     futures_util::future::join_all,
     log,
     tokio::{self, sync::watch::Sender},
+    TardisFuns,
 };
 use tardis::{
     futures_util::{ready, FutureExt},
@@ -37,10 +40,10 @@ lazy_static! {
 
 pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.is_empty() {
-        return Err(TardisError::bad_request("[SG.server] Missing Listeners", ""));
+        return Err(TardisError::bad_request("[SG.Server] Missing Listeners", ""));
     }
     if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https) {
-        return Err(TardisError::bad_request("[SG.server] Non-Http(s) protocols are not supported yet", ""));
+        return Err(TardisError::bad_request("[SG.Server] Non-Http(s) protocols are not supported yet", ""));
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
@@ -49,10 +52,10 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     for listener in &gateway_conf.listeners {
         let ip = listener.ip.as_deref().unwrap_or("0.0.0.0");
         let addr = if ip.contains('.') {
-            let ip: Ipv4Addr = ip.parse().map_err(|_| TardisError::bad_request(&format!("[SG.server] IP {ip} is not legal"), ""))?;
+            let ip: Ipv4Addr = ip.parse().map_err(|_| TardisError::bad_request(&format!("[SG.Server] IP {ip} is not legal"), ""))?;
             SocketAddr::new(std::net::IpAddr::V4(ip), listener.port)
         } else {
-            let ip: Ipv6Addr = ip.parse().map_err(|_| TardisError::bad_request(&format!("[SG.server] IP {ip} is not legal"), ""))?;
+            let ip: Ipv6Addr = ip.parse().map_err(|_| TardisError::bad_request(&format!("[SG.Server] IP {ip} is not legal"), ""))?;
             SocketAddr::new(std::net::IpAddr::V6(ip), listener.port)
         };
 
@@ -62,27 +65,27 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
         if let Some(tls) = &listener.tls {
             let tls_cfg = {
                 let certs =
-                    rustls_pemfile::certs(&mut tls.cert.as_bytes()).map_err(|error| TardisError::bad_request(&format!("[SG.server] Tls certificates not legal: {error}"), ""))?;
+                    rustls_pemfile::certs(&mut tls.cert.as_bytes()).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
                 let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
                 let key = rustls_pemfile::rsa_private_keys(&mut tls.key.as_bytes())
-                    .map_err(|error| TardisError::bad_request(&format!("[SG.server] Tls private keys not legal: {error}"), ""))?;
+                    .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
                 let key = PrivateKey(key[0].clone());
                 let mut cfg = rustls::ServerConfig::builder()
                     .with_safe_defaults()
                     .with_no_client_auth()
                     .with_single_cert(certs, key)
-                    .map_err(|error| TardisError::bad_request(&format!("[SG.server] Tls not legal: {error}"), ""))?;
+                    .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls not legal: {error}"), ""))?;
                 cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
                 sync::Arc::new(cfg)
             };
-            let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.server] Bind address error: {error}"), ""))?;
+            let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Bind address error: {error}"), ""))?;
             let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
                 let remote_addr = match &client.state {
                     State::Handshaking(addr) => addr.get_ref().unwrap().remote_addr(),
                     State::Streaming(addr) => addr.get_ref().0.remote_addr(),
                 };
                 let gateway_name = gateway_name.clone();
-                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), "https", remote_addr, req))) }
+                async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "https", remote_addr, req))) }
             }));
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
@@ -92,7 +95,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
             let server = Server::bind(&addr).serve(make_service_fn(move |client: &AddrStream| {
                 let remote_addr = client.remote_addr();
                 let gateway_name = gateway_name.clone();
-                async move { Ok::<_, Infallible>(service_fn(move |req| http_route::process(gateway_name.clone(), "http", remote_addr, req))) }
+                async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "http", remote_addr, req))) }
             }));
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
@@ -105,6 +108,51 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     shutdown.insert(gateway_name.to_string(), shutdown_tx);
 
     Ok(server_insts)
+}
+
+async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+    let response = http_route::process(gateway_name, req_scheme, remote_addr, request).await;
+    match response {
+        Ok(result) => Ok(result),
+        Err(error) => into_http_error(error),
+    }
+}
+
+fn into_http_error(error: TardisError) -> Result<Response<Body>, hyper::Error> {
+    let status_code = match error.code.parse::<u16>() {
+        Ok(code) => match StatusCode::from_u16(code) {
+            Ok(status_code) => status_code,
+            Err(_) => {
+                if (200..400).contains(&code) {
+                    StatusCode::OK
+                } else if (400..500).contains(&code) {
+                    StatusCode::BAD_REQUEST
+                } else {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
+            }
+        },
+        Err(_) => {
+            if error.code.starts_with('2') || error.code.starts_with('3') {
+                StatusCode::OK
+            } else if error.code.starts_with('4') {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        }
+    };
+    let mut response = Response::new(Body::from(
+        TardisFuns::json
+            .json_to_string(json!({
+                "code": error.code,
+                "msg": error.message,
+            }))
+            .unwrap(),
+    ));
+    *response.status_mut() = status_code;
+    response.headers_mut().insert("Content-Type", HeaderValue::from_static("application/json"));
+    Ok(response)
 }
 
 pub async fn startup(servers: Vec<SgServerInst>) -> TardisResult<()> {
@@ -121,7 +169,7 @@ pub async fn startup(servers: Vec<SgServerInst>) -> TardisResult<()> {
 pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     let mut shutdown = SHUTDOWN_TX.lock().await;
     if let Some(shutdown_tx) = shutdown.remove(gateway_name) {
-        shutdown_tx.send(()).map_err(|_| TardisError::bad_request("[SG.server] Shutdown failed", ""))?;
+        shutdown_tx.send(()).map_err(|_| TardisError::bad_request("[SG.Server] Shutdown failed", ""))?;
     }
     Ok(())
 }

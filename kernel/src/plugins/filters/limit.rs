@@ -137,7 +137,7 @@ impl SgPluginFilter for SgFilerLimit {
 mod tests {
     use std::time::Duration;
 
-    use crate::functions::cache;
+    use crate::functions::cache_client;
 
     use super::*;
     use http::{HeaderMap, Method, Uri, Version};
@@ -154,7 +154,7 @@ mod tests {
         let redis_container = TardisTestContainer::redis_custom(&docker);
         let port = redis_container.get_host_port_ipv4(6379);
         let url = format!("redis://127.0.0.1:{port}/0",);
-        cache::init("test_gate", &url).await.unwrap();
+        cache_client::init("test_gate", &url).await.unwrap();
 
         let filter = SgFilerLimit {
             max_request_number: Some(4),

@@ -44,8 +44,7 @@ pub struct SgListener {
 }
 
 /// ProtocolType defines the application protocol accepted by a Listener.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SgProtocol {
     /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support HTTP/2 over cleartext.
@@ -54,6 +53,8 @@ pub enum SgProtocol {
     Http,
     /// Accepts HTTP/1.1 or HTTP/2 sessions over TLS.
     Https,
+    Ws,
+    Wss,
 }
 
 impl Display for SgProtocol {
@@ -61,11 +62,11 @@ impl Display for SgProtocol {
         match self {
             SgProtocol::Http => write!(f, "http"),
             SgProtocol::Https => write!(f, "https"),
+            SgProtocol::Ws => write!(f, "ws"),
+            SgProtocol::Wss => write!(f, "wss"),
         }
     }
 }
-
-
 
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, Deserialize, Clone)]

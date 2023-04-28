@@ -19,6 +19,7 @@ path = "src/lib.rs"
 [features]
 cache = ["tardis/cache"]
 crypto = ["tardis/crypto-with-sm"]
+ws = ["tardis/ws-client", "tardis/crypto"]
 k8s = ["k8s-openapi", "k8s-gateway-api"]
 
 [dependencies]
@@ -42,7 +43,7 @@ k8s-openapi = { workspace = true, optional = true }
 k8s-gateway-api = { workspace = true, optional = true }
 
 [dev-dependencies]
-tardis = { workspace = true, features = ["test", "web-client"] }
+tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
 reqwest = { workspace = true }
 tracing-subscriber = { workspace = true }
 

@@ -3,15 +3,14 @@ use std::{collections::HashMap, net::SocketAddr};
 use crate::{
     config::{
         gateway_dto::SgGateway,
-        http_route_dto::{SgHttpBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
+        http_route_dto::{SgBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
     plugins::filters::{self, SgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
-use http::{HeaderValue, Request, Response};
+use http::{header::UPGRADE, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
 use hyper_rustls::HttpsConnector;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::vec::Vec;
 use tardis::{
@@ -19,10 +18,9 @@ use tardis::{
     log,
     rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng},
     regex::Regex,
-    TardisFuns,
 };
 
-use super::client;
+use super::http_client;
 
 static mut ROUTES: Option<HashMap<String, SgGatewayInst>> = None;
 
@@ -128,7 +126,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     let route_inst = SgGatewayInst {
         filters: global_filters,
         routes: route_insts,
-        client: client::init()?,
+        client: http_client::init()?,
     };
     unsafe {
         if ROUTES.is_none() {
@@ -176,14 +174,7 @@ fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
     }
 }
 
-pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    match do_process(gateway_name, req_scheme, remote_addr, request).await {
-        Ok(result) => Ok(result),
-        Err(error) => into_http_error(error),
-    }
-}
-
-async fn do_process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, mut request: Request<Body>) -> TardisResult<Response<Body>> {
+pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, mut request: Request<Body>) -> TardisResult<Response<Body>> {
     if request.uri().host().is_none() && request.headers().contains_key("Host") {
         *request.uri_mut() = format!("{}://{}{}", req_scheme, request.headers().get("Host").unwrap().to_str().unwrap(), request.uri()).parse().unwrap();
     }
@@ -219,6 +210,34 @@ async fn do_process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: So
     } else {
         (None, None)
     };
+
+    let backend = if let Some(Some(backends)) = matched_rule_inst.map(|rule| &rule.backends) {
+        choose_backend(backends)
+    } else {
+        None
+    };
+
+    if request.headers().get(UPGRADE).map(|v| &v.to_str().unwrap().to_lowercase() == "websocket").unwrap_or(false) {
+        #[cfg(feature = "ws")]
+        {
+            if let Some(backend) = backend {
+                return crate::functions::websocket::process(gateway_name, remote_addr, backend, request).await;
+            } else {
+                return Err(TardisError::bad_request(
+                    &format!("[SG.Websocket] No backend found , from {remote_addr} @ {gateway_name}"),
+                    "",
+                ));
+            }
+        }
+        #[cfg(not(feature = "ws"))]
+        {
+            return Err(TardisError::bad_request(
+                &format!("[SG.Websocket] Websocket function is not enabled , from {remote_addr} @ {gateway_name}"),
+                "",
+            ));
+        }
+    }
+
     let rule_filters = matched_rule_inst.map(|rule| &rule.filters);
 
     let ctx = process_req_filters(
@@ -232,19 +251,15 @@ async fn do_process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: So
     )
     .await?;
 
-    let rule_timeout = if let Some(timeout_ms) = matched_rule_inst.map(|rule| rule.timeout_ms) {
-        timeout_ms
-    } else {
-        None
-    };
-
     let ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
         ctx
-    } else if let Some(Some(backends)) = matched_rule_inst.map(|rule| &rule.backends) {
-        let backend = choose_backend(backends);
-        client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     } else {
-        client::request(&gateway_inst.client, None, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
+        let rule_timeout = if let Some(timeout_ms) = matched_rule_inst.map(|rule| rule.timeout_ms) {
+            timeout_ms
+        } else {
+            None
+        };
+        http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
     let mut ctx = process_resp_filters(ctx, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
@@ -485,7 +500,7 @@ async fn process_resp_filters(
     Ok(ctx)
 }
 
-fn choose_backend(backends: &Vec<SgHttpBackendRef>) -> Option<&SgHttpBackendRef> {
+fn choose_backend(backends: &Vec<SgBackendRef>) -> Option<&SgBackendRef> {
     if backends.is_empty() {
         None
     } else if backends.len() == 1 {
@@ -496,49 +511,6 @@ fn choose_backend(backends: &Vec<SgHttpBackendRef>) -> Option<&SgHttpBackendRef>
         let mut rng = thread_rng();
         backends.get(dist.sample(&mut rng))
     }
-}
-
-pub fn into_http_error(error: TardisError) -> Result<Response<Body>, hyper::Error> {
-    let status_code = match error.code.parse::<u16>() {
-        Ok(code) => match StatusCode::from_u16(code) {
-            Ok(status_code) => status_code,
-            Err(_) => {
-                if (200..400).contains(&code) {
-                    StatusCode::OK
-                } else if (400..500).contains(&code) {
-                    StatusCode::BAD_REQUEST
-                } else {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
-            }
-        },
-        Err(_) => {
-            if error.code.starts_with('2') || error.code.starts_with('3') {
-                StatusCode::OK
-            } else if error.code.starts_with('4') {
-                StatusCode::BAD_REQUEST
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-        }
-    };
-    let mut response = Response::new(Body::from(
-        TardisFuns::json
-            .obj_to_string(&SgRespError {
-                code: error.code,
-                msg: error.message,
-            })
-            .unwrap(),
-    ));
-    *response.status_mut() = status_code;
-    response.headers_mut().insert("Content-Type", HeaderValue::from_static("application/json"));
-    Ok(response)
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-struct SgRespError {
-    pub code: String,
-    pub msg: String,
 }
 
 struct SgGatewayInst {
@@ -558,7 +530,7 @@ struct SgHttpRouteInst {
 struct SgHttpRouteRuleInst {
     pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
     pub matches: Option<Vec<SgHttpRouteMatchInst>>,
-    pub backends: Option<Vec<SgHttpBackendRef>>,
+    pub backends: Option<Vec<SgBackendRef>>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -602,7 +574,7 @@ mod tests {
     use tardis::regex::Regex;
 
     use crate::{
-        config::http_route_dto::{SgHttpBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
+        config::http_route_dto::{SgBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
         functions::http_route::{choose_backend, match_route_insts_with_hostname_priority, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst},
     };
 
@@ -1030,7 +1002,7 @@ mod tests {
     fn test_choose_backend() {
         // Only one backend
         assert!(
-            choose_backend(&vec![SgHttpBackendRef {
+            choose_backend(&vec![SgBackendRef {
                 name_or_host: "iam1".to_string(),
                 weight: None,
                 ..Default::default()
@@ -1042,12 +1014,12 @@ mod tests {
 
         // Check weight
         let backends = vec![
-            SgHttpBackendRef {
+            SgBackendRef {
                 name_or_host: "iam1".to_string(),
                 weight: Some(30),
                 ..Default::default()
             },
-            SgHttpBackendRef {
+            SgBackendRef {
                 name_or_host: "iam2".to_string(),
                 weight: Some(70),
                 ..Default::default()

@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use spacegate_kernel::{
     config::{
         gateway_dto::{SgGateway, SgListener},
-        http_route_dto::{SgHttpBackendRef, SgHttpRoute, SgHttpRouteRule},
+        http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
     functions::http_route::SgHttpRouteMatchInst,
@@ -76,7 +76,7 @@ async fn test_custom_plugin() -> TardisResult<()> {
                 ..Default::default()
             }]),
             rules: Some(vec![SgHttpRouteRule {
-                backends: Some(vec![SgHttpBackendRef {
+                backends: Some(vec![SgBackendRef {
                     name_or_host: "postman-echo.com".to_string(),
                     ..Default::default()
                 }]),

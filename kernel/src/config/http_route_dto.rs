@@ -25,7 +25,7 @@ pub struct SgHttpRouteRule {
     /// Filters define the filters that are applied to requests that match this rule.
     pub filters: Option<Vec<SgRouteFilter>>,
     /// BackendRefs defines the backend(s) where matching requests should be sent.
-    pub backends: Option<Vec<SgHttpBackendRef>>,
+    pub backends: Option<Vec<SgBackendRef>>,
     /// Timeout define the timeout for requests that match this rule.
     pub timeout_ms: Option<u64>,
 }
@@ -110,9 +110,9 @@ pub enum SgHttpQueryMatchType {
     Regular,
 }
 
-/// HTTPBackendRef defines how a HTTPRoute should forward an HTTP request.
+/// BackendRef defines how a HTTPRoute should forward an HTTP request.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgHttpBackendRef {
+pub struct SgBackendRef {
     /// Name is the kubernetes service name OR url host.
     pub name_or_host: String,
     /// Namespace is the kubernetes namespace

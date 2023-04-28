@@ -3,7 +3,7 @@ use http::Method;
 use serde::{Deserialize, Serialize};
 use tardis::{basic::result::TardisResult, TardisFuns};
 
-use crate::functions::{client, http_route::SgHttpRouteMatchInst};
+use crate::functions::{http_client, http_route::SgHttpRouteMatchInst};
 
 use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
@@ -49,7 +49,7 @@ impl SgPluginFilter for SgFilerInject {
             let real_url = ctx.get_req_uri().clone();
             ctx.set_req_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
             ctx.set_req_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
-            let mut resp = client::raw_request(None, Method::PUT, req_inject_url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), self.req_timeout_ms).await?;
+            let mut resp = http_client::raw_request(None, Method::PUT, req_inject_url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), self.req_timeout_ms).await?;
             let new_req_headers = resp.headers_mut();
             let new_req_method = new_req_headers.get(SG_INJECT_REAL_METHOD).map(|m| Method::from_bytes(m.to_str().unwrap().as_bytes()).unwrap()).unwrap_or(real_method);
             let new_req_url = new_req_headers.get(SG_INJECT_REAL_URL).map(|m| m.to_str().unwrap().parse().unwrap()).unwrap_or(real_url);
@@ -74,7 +74,7 @@ impl SgPluginFilter for SgFilerInject {
             let real_url = ctx.get_req_uri().clone();
             ctx.set_resp_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
             ctx.set_resp_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
-            let resp = client::raw_request(None, Method::PUT, resp_inject_url, ctx.pop_resp_body_raw()?, ctx.get_resp_headers(), self.resp_timeout_ms).await?;
+            let resp = http_client::raw_request(None, Method::PUT, resp_inject_url, ctx.pop_resp_body_raw()?, ctx.get_resp_headers(), self.resp_timeout_ms).await?;
             ctx = ctx.resp(resp.status(), resp.headers().clone(), resp.into_body());
         }
         Ok((true, ctx))
@@ -90,7 +90,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_inject_filter() {
-        client::init().unwrap();
+        http_client::init().unwrap();
 
         let filter = SgFilerInject {
             req_inject_url: Some("http://postman-echo.com/put".to_string()),

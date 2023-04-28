@@ -25,8 +25,8 @@ const CONF_HTTP_ROUTE_KEY: &str = "sg:conf:route:http:";
 const CONF_CHANGE_TRIGGER: &str = "sg:conf:change:trigger:";
 
 pub async fn init(ext_conf_url: &str, check_interval_sec: u64) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
-    crate::functions::cache::init("", ext_conf_url).await?;
-    let cache_client = crate::functions::cache::get("")?;
+    crate::functions::cache_client::init("", ext_conf_url).await?;
+    let cache_client = crate::functions::cache_client::get("")?;
     let mut config = Vec::new();
     let gateway_configs = cache_client.hgetall(CONF_GATEWAY_KEY).await?;
     if gateway_configs.is_empty() {

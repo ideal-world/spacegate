@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    config::{gateway_dto::SgProtocol, http_route_dto::SgHttpBackendRef},
+    config::{gateway_dto::SgProtocol, http_route_dto::SgBackendRef},
     plugins::filters::SgRouteFilterContext,
 };
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
@@ -39,7 +39,7 @@ fn default_client() -> &'static Client<HttpsConnector<HttpConnector>> {
 
 pub async fn request(
     client: &Client<HttpsConnector<HttpConnector>>,
-    backend: Option<&SgHttpBackendRef>,
+    backend: Option<&SgBackendRef>,
     rule_timeout_ms: Option<u64>,
     redirect: bool,
     mut ctx: SgRouteFilterContext,
@@ -106,8 +106,8 @@ mod tests {
     use tardis::{basic::result::TardisResult, tokio};
 
     use crate::{
-        config::{gateway_dto::SgProtocol, http_route_dto::SgHttpBackendRef},
-        functions::client::{init, request},
+        config::{gateway_dto::SgProtocol, http_route_dto::SgBackendRef},
+        functions::http_client::{init, request},
         plugins::filters::SgRouteFilterContext,
     };
 
@@ -118,7 +118,7 @@ mod tests {
         // test simple
         let mut resp = request(
             &client,
-            Some(&SgHttpBackendRef {
+            Some(&SgBackendRef {
                 name_or_host: "www.baidu.com".to_string(),
                 port: 80,
                 ..Default::default()
@@ -143,7 +143,7 @@ mod tests {
         // test get
         let mut resp = request(
             &client,
-            Some(&SgHttpBackendRef {
+            Some(&SgBackendRef {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 80,
                 ..Default::default()
@@ -168,7 +168,7 @@ mod tests {
         // test post with tls
         let mut resp = request(
             &client,
-            Some(&SgHttpBackendRef {
+            Some(&SgBackendRef {
                 name_or_host: "postman-echo.com".to_string(),
                 protocol: Some(SgProtocol::Https),
                 port: 443,
@@ -195,7 +195,7 @@ mod tests {
         // test timeout
         let mut resp = request(
             &client,
-            Some(&SgHttpBackendRef {
+            Some(&SgBackendRef {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 80,
                 ..Default::default()
@@ -218,7 +218,7 @@ mod tests {
 
         let mut resp = request(
             &client,
-            Some(&SgHttpBackendRef {
+            Some(&SgBackendRef {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 80,
                 timeout_ms: Some(20000),

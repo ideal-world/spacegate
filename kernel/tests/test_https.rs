@@ -3,7 +3,7 @@ use std::{env, time::Duration, vec};
 use serde_json::{json, Value};
 use spacegate_kernel::config::{
     gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig},
-    http_route_dto::{SgHttpBackendRef, SgHttpRoute, SgHttpRouteRule},
+    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
 use tardis::{
     basic::result::TardisResult,
@@ -89,7 +89,7 @@ async fn test_https() -> TardisResult<()> {
         vec![SgHttpRoute {
             gateway_name: "test_gw".to_string(),
             rules: Some(vec![SgHttpRouteRule {
-                backends: Some(vec![SgHttpBackendRef {
+                backends: Some(vec![SgBackendRef {
                     name_or_host: "postman-echo.com".to_string(),
                     port: 443,
                     protocol: Some(SgProtocol::Https),

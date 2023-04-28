@@ -431,7 +431,7 @@ impl SgRouteFilterContext {
 
     #[cfg(feature = "cache")]
     pub fn cache(&self) -> TardisResult<&'static tardis::cache::cache_client::TardisCacheClient> {
-        crate::functions::cache::get(&self.gateway_name)
+        crate::functions::cache_client::get(&self.gateway_name)
     }
 }
 

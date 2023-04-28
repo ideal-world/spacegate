@@ -23,7 +23,7 @@ pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> Ta
     {
         // Initialize cache instances
         if let Some(url) = &gateway.parameters.redis_url {
-            functions::cache::init(&gateway.name, url).await?;
+            functions::cache_client::init(&gateway.name, url).await?;
         }
     }
     // Initialize route instances
@@ -38,7 +38,7 @@ pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     #[cfg(feature = "cache")]
     {
         // Remove cache instances
-        functions::cache::remove(gateway_name).await?;
+        functions::cache_client::remove(gateway_name).await?;
     }
     // Shutdown service instances
     server::shutdown(gateway_name).await
