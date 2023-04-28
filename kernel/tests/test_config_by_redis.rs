@@ -41,17 +41,15 @@ async fn test_config_by_redis() -> TardisResult<()> {
     cache_client
         .lpush(
             "sg:conf:route:http:test_gw",
-            &format!(
-                r#"{{
+            r#"{
             "gateway_name":"test_gw",
-            "rules":[{{
-                "backends":[{{
+            "rules":[{
+                "backends":[{
                     "name_or_host":"postman-echo.com",
                     "port":80
-                }}]
-            }}]
-        }}"#
-            ),
+                }]
+            }]
+        }"#,
         )
         .await?;
 
@@ -91,18 +89,16 @@ async fn test_config_by_redis() -> TardisResult<()> {
     cache_client
         .lpush(
             "sg:conf:route:http:test_gw",
-            &format!(
-                r#"{{
+            r#"{
             "gateway_name":"test_gw",
-            "rules":[{{
-                "backends":[{{
+            "rules":[{
+                "backends":[{
                     "name_or_host":"postman-echo.com",
                     "protocol":"https",
                     "port":443
-                }}]
-            }}]
-        }}"#
-            ),
+                }]
+            }]
+        }"#,
         )
         .await?;
     cache_client.set_ex("sg:conf:change:trigger:222##httproute##test_gw", "", 1).await?;
