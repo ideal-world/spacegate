@@ -7,7 +7,7 @@ use std::{
 
 use crate::config::gateway_dto::{SgGateway, SgProtocol};
 use core::task::{Context, Poll};
-use http::{header::UPGRADE, HeaderName, HeaderValue, Request, Response, StatusCode};
+use http::{HeaderValue, Request, Response, StatusCode};
 use hyper::server::conn::{AddrIncoming, AddrStream};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;

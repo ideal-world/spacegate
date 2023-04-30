@@ -1,5 +1,5 @@
 [package]
-name = "spacegate"
+name = "spacegate-native"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -10,10 +10,13 @@ documentation.workspace = true
 repository.workspace = true
 license.workspace = true
 edition.workspace = true
-readme = "../README.md"
+readme = "../../README.md"
 
 [dependencies]
-spacegate-kernel = { version = "0.1.0-alpha.2", path = "../kernel", all-features = true }
+spacegate-kernel = { version = "0.1.0-alpha.2", path = "../../kernel", features = [
+    "cache",
+    "ws",
+] }
 
 tardis = { workspace = true }
 

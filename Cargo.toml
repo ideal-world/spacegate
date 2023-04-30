@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "serv"]
+members = ["kernel", "services/*"]
 
 [profile.release]
 lto = true

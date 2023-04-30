@@ -30,7 +30,7 @@ pub async fn init(ext_conf_url: &str, check_interval_sec: u64) -> TardisResult<V
     let mut config = Vec::new();
     let gateway_configs = cache_client.hgetall(CONF_GATEWAY_KEY).await?;
     if gateway_configs.is_empty() {
-        return Err(TardisError::not_found("[SG.Config] Gateway Config not found in {CONF_GATEWAY_KEY}", ""));
+        return Err(TardisError::not_found(&format!("[SG.Config] Gateway Config not found in {CONF_GATEWAY_KEY}"), ""));
     }
     let gateway_configs = gateway_configs.into_values().map(|v| tardis::TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
     for gateway_config in gateway_configs {

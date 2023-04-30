@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use crate::config::gateway_dto::SgProtocol;
@@ -10,11 +9,9 @@ use hyper::{Body, Request, Response, StatusCode};
 use std::sync::Arc;
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::futures::stream::StreamExt;
-use tardis::futures_util::{future, SinkExt, TryStreamExt};
-use tardis::web::poem::error;
-use tardis::web::tokio_tungstenite::tungstenite::{protocol, Message};
+use tardis::futures_util::SinkExt;
+use tardis::web::tokio_tungstenite::tungstenite::protocol;
 use tardis::web::tokio_tungstenite::{connect_async, WebSocketStream};
-use tardis::web::ws_client::TardisWSClient;
 use tardis::{log, tokio, TardisFuns};
 
 pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend: &SgBackendRef, mut request: Request<Body>) -> TardisResult<Response<Body>> {
