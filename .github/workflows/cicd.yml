@@ -47,6 +47,44 @@ jobs:
           name: code-coverage-report
           path: cobertura.xml
 
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Run build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+
+      # - name: Prepare Artifact
+      #   shell: bash
+      #   run: |
+
+      # - name: Upload Artifact to Summary
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: ${{ env.ARTIFACT_DIR }}
+      #     path: |
+      #       *.tar.gz
+      #       *.txt
+
+      # - name: Upload Artifact to Release
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     files: |
+      #       *.tar.gz
+      #       *.txt
+
   publish-kernel:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
@@ -71,7 +109,7 @@ jobs:
         working-directory: kernel
         run: cargo publish
 
-  publish-serv:
+  publish-serv-full:
       if: startsWith(github.ref, 'refs/tags/')
       needs: [check, publish-kernel]
       runs-on: ubuntu-latest
@@ -87,10 +125,58 @@ jobs:
         - name: Cargo login
           run: cargo login ${{ secrets.CRATES_TOKEN }}
 
-        - name: Cargo package serv
-          working-directory: serv
+        - name: Cargo package service full
+          working-directory: services/full
           run: cargo package
 
-        - name: Cargo publish serv
-          working-directory: serv
+        - name: Cargo publish service full
+          working-directory: services/full
+          run: cargo publish
+
+publish-serv-native:
+      if: startsWith(github.ref, 'refs/tags/')
+      needs: [check, publish-kernel]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Check out the repo
+          uses: actions/checkout@v3
+
+        - name: Init rust envrionment
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+
+        - name: Cargo login
+          run: cargo login ${{ secrets.CRATES_TOKEN }}
+
+        - name: Cargo package service native
+          working-directory: services/native
+          run: cargo package
+
+        - name: Cargo publish service native
+          working-directory: services/native
+          run: cargo publish
+
+publish-serv-simplify:
+      if: startsWith(github.ref, 'refs/tags/')
+      needs: [check, publish-kernel]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Check out the repo
+          uses: actions/checkout@v3
+
+        - name: Init rust envrionment
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+
+        - name: Cargo login
+          run: cargo login ${{ secrets.CRATES_TOKEN }}
+
+        - name: Cargo package service simplify
+          working-directory: services/simplify
+          run: cargo package
+
+        - name: Cargo publish service simplify
+          working-directory: services/simplify
           run: cargo publish
