@@ -9,8 +9,8 @@ opt-level = "z"
 [workspace.package]
 version = "0.1.0-alpha.2"
 authors = ["gudaoxuri <i@sunisle.org>"]
-description = "Cloud-native-first lightweight API gateway"
-keywords = ["http", "gateway", "web", "cloud", "kubernates"]
+description = "A library-first, lightweight, high-performance, cloud-native supported API gateway"
+keywords = ["http", "gateway", "proxy", "websocket", "kubernates"]
 categories = ["gateway", "web-programming", "kubernetes", "api"]
 homepage = "https://github.com/ideal-world/spacegate"
 documentation = "https://docs.rs/spacegate/"

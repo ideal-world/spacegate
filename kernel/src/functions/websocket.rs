@@ -63,26 +63,49 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
         let (mut client_write, mut client_read) = ws_client_stream.split();
         match hyper::upgrade::on(&mut request).await {
             Ok(upgraded) => {
-                let mut ws_service_stream = WebSocketStream::from_raw_socket(upgraded, protocol::Role::Server, None).await;
-                while let Some(Ok(message)) = ws_service_stream.next().await {
-                    if let Err(error) = client_write.send(message).await {
-                        log::warn!("[SG.Websocket] Client send error: {error} from {remote_addr} @ {gateway_name}");
-                        return;
-                    }
-                    match client_read.next().await {
-                        Some(Ok(message)) => {
-                            if let Err(error) = ws_service_stream.send(message).await {
-                                log::warn!("[SG.Websocket] Reply error: {error} from {remote_addr} @ {gateway_name}");
+                let ws_service_stream = WebSocketStream::from_raw_socket(upgraded, protocol::Role::Server, None).await;
+                let (mut service_write, mut service_read) = ws_service_stream.split();
+
+                let gateway_name_clone = gateway_name.clone();
+
+                tokio::task::spawn(async move {
+                    loop {
+                        match service_read.next().await {
+                            Some(Ok(message)) => {
+                                log::trace!("[SG.Websocket] Gateway receive and forward message: {message} from {remote_addr} @ {gateway_name_clone}");
+                                if let Err(error) = client_write.send(message).await {
+                                    log::warn!("[SG.Websocket] Forward message error: {error} from {remote_addr} @ {gateway_name_clone}");
+                                    return;
+                                }
+                            }
+                            Some(Err(error)) => {
+                                log::warn!("[SG.Websocket] Gateway receive message error: {error} from {remote_addr} @ {gateway_name_clone}");
                                 return;
                             }
+                            _ => {}
                         }
-                        Some(Err(error)) => {
-                            log::warn!("[SG.Websocket] Client receive error: {error} from {remote_addr} @ {gateway_name}");
-                            return;
-                        }
-                        _ => {}
                     }
-                }
+                });
+
+                let gateway_name = gateway_name.clone();
+                tokio::task::spawn(async move {
+                    loop {
+                        match client_read.next().await {
+                            Some(Ok(message)) => {
+                                log::trace!("[SG.Websocket] Client receive and reply message: {message} from {remote_addr} @ {gateway_name}");
+                                if let Err(error) = service_write.send(message).await {
+                                    log::warn!("[SG.Websocket] Reply message error: {error} from {remote_addr} @ {gateway_name}");
+                                    return;
+                                }
+                            }
+                            Some(Err(error)) => {
+                                log::warn!("[SG.Websocket] Client receive message error: {error} from {remote_addr} @ {gateway_name}");
+                                return;
+                            }
+                            _ => {}
+                        }
+                    }
+                });
             }
             Err(error) => {
                 log::warn!("[SG.Websocket] Upgrade error: {error} from {remote_addr} @ {gateway_name}");

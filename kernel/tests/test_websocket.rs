@@ -1,7 +1,16 @@
-use std::{collections::HashMap, env, time::Duration, vec};
+use std::{
+    collections::HashMap,
+    env,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+    vec,
+};
 
-use serde::{Deserialize, Serialize};
-
+use lazy_static::lazy_static;
+use serde_json::json;
 use spacegate_kernel::config::{
     gateway_dto::{SgGateway, SgListener},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
@@ -9,28 +18,34 @@ use spacegate_kernel::config::{
 use tardis::{
     basic::result::TardisResult,
     config::config_dto::{CacheConfig, DBConfig, FrameworkConfig, MQConfig, MailConfig, OSConfig, SearchConfig, TardisConfig, WebServerConfig},
-    tokio::{self, sync::broadcast::Sender, time::sleep},
+    tokio::{
+        self,
+        sync::{broadcast::Sender, RwLock},
+        time::sleep,
+    },
     web::{
-        poem::web::{
-            websocket::{BoxWebSocketUpgraded, WebSocket},
-            Data,
-        },
-        poem_openapi::{self, param::Path, payload::Html},
-        ws_processor::{ws_broadcast, ws_echo, TardisWebsocketResp},
+        poem::web::websocket::{BoxWebSocketUpgraded, WebSocket},
+        poem_openapi::{self, param::Path},
+        tokio_tungstenite::tungstenite::Message,
+        ws_processor::{ws_broadcast, ws_echo, TardisWebsocketReq, TardisWebsocketResp},
     },
     TardisFuns,
 };
 
+lazy_static! {
+    static ref SENDERS: Arc<RwLock<HashMap<String, Sender<String>>>> = Arc::new(RwLock::new(HashMap::new()));
+}
+
 #[tokio::test]
 async fn test_webscoket() -> TardisResult<()> {
-    env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
+    env::set_var("RUST_LOG", "info,spacegate_kernel=trace,tardis=trace");
     TardisFuns::init_conf(TardisConfig {
         cs: Default::default(),
         fw: FrameworkConfig {
             app: Default::default(),
             web_server: WebServerConfig {
                 enabled: true,
-                port: 8080,
+                port: 8081,
                 ..Default::default()
             },
             web_client: Default::default(),
@@ -66,7 +81,7 @@ async fn test_webscoket() -> TardisResult<()> {
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),
-            listeners: vec![SgListener { port: 8888, ..Default::default() }],
+            listeners: vec![SgListener { port: 8080, ..Default::default() }],
             ..Default::default()
         },
         vec![SgHttpRoute {
@@ -74,7 +89,7 @@ async fn test_webscoket() -> TardisResult<()> {
             rules: Some(vec![SgHttpRouteRule {
                 backends: Some(vec![SgBackendRef {
                     name_or_host: "127.0.0.1".to_string(),
-                    port: 8080,
+                    port: 8081,
                     ..Default::default()
                 }]),
                 ..Default::default()
@@ -83,19 +98,187 @@ async fn test_webscoket() -> TardisResult<()> {
         }],
     )
     .await?;
-    sleep(Duration::from_millis(4000000)).await;
-    // let client = TardisWebClient::init(100)?;
-    // let resp: TardisHttpResponse<Value> = client
-    //     .post(
-    //         "https://localhost:8888/post?dd",
-    //         &json!({
-    //             "name":"星航",
-    //             "age":6
-    //         }),
-    //         None,
-    //     )
-    //     .await?;
-    // assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+    sleep(Duration::from_millis(500)).await;
+
+    static ERROR_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static SUB_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static NON_SUB_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    // message not illegal test
+    let error_client_a = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/gerror/a", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_not_found recv:{}", msg);
+            assert_eq!(msg, r#"{"msg":"message not illegal","event":"__sys_error__"}"#);
+            ERROR_COUNTER.fetch_add(1, Ordering::SeqCst);
+        }
+        None
+    })
+    .await?;
+    error_client_a.send_text("hi".to_string()).await?;
+    // not found test
+    let error_client_b = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/gxxx/a", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_not_found recv:{}", msg);
+            assert_eq!(msg, "Websocket connection error: group not found");
+            ERROR_COUNTER.fetch_add(1, Ordering::SeqCst);
+        }
+        None
+    })
+    .await?;
+    error_client_b
+        .send_obj(&TardisWebsocketReq {
+            msg: json! {"hi"},
+            from_avatar: "a".to_string(),
+            ..Default::default()
+        })
+        .await?;
+
+    // subscribe mode test
+    let sub_client_a = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/g1/a", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_a recv:{}", msg);
+            assert_eq!(msg, r#"{"msg":"service send:\"hi\"","event":null}"#);
+            SUB_COUNTER.fetch_add(1, Ordering::SeqCst);
+        }
+        None
+    })
+    .await?;
+    let sub_client_b1 = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/g1/b", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_b1 recv:{}", msg);
+            assert_eq!(msg, r#"{"msg":"service send:\"hi\"","event":null}"#);
+            SUB_COUNTER.fetch_add(1, Ordering::SeqCst);
+            Some(Message::Text(
+                TardisFuns::json
+                    .obj_to_string(&TardisWebsocketReq {
+                        msg: json! {"client_b send:hi again"},
+                        from_avatar: "b".to_string(),
+                        ..Default::default()
+                    })
+                    .unwrap(),
+            ))
+        } else {
+            None
+        }
+    })
+    .await?;
+    let sub_client_b2 = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/g1/b", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_b2 recv:{}", msg);
+            assert_eq!(msg, r#"{"msg":"service send:\"hi\"","event":null}"#);
+            SUB_COUNTER.fetch_add(1, Ordering::SeqCst);
+            Some(Message::Text(
+                TardisFuns::json
+                    .obj_to_string(&TardisWebsocketReq {
+                        msg: json! {"client_b send:hi again"},
+                        from_avatar: "b".to_string(),
+                        ..Default::default()
+                    })
+                    .unwrap(),
+            ))
+        } else {
+            None
+        }
+    })
+    .await?;
+    sub_client_a
+        .send_obj(&TardisWebsocketReq {
+            msg: json! {"hi"},
+            from_avatar: "a".to_string(),
+            ..Default::default()
+        })
+        .await?;
+    sub_client_b1
+        .send_obj(&TardisWebsocketReq {
+            msg: json! {"hi"},
+            from_avatar: "b".to_string(),
+            ..Default::default()
+        })
+        .await?;
+    sub_client_b2
+        .send_obj(&TardisWebsocketReq {
+            msg: json! {"hi"},
+            from_avatar: "b".to_string(),
+            ..Default::default()
+        })
+        .await?;
+
+    // non-subscribe mode test
+    let non_sub_client_a = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/g2/a", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_a recv:{}", msg);
+            assert_eq!(msg, r#"{"msg":"service send:\"hi\"","event":null}"#);
+            NON_SUB_COUNTER.fetch_add(1, Ordering::SeqCst);
+        }
+        None
+    })
+    .await?;
+    let non_sub_client_b1 = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/g2/b", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_b1 recv:{}", msg);
+            assert_eq!(msg, r#"{"msg":"service send:\"hi\"","event":null}"#);
+            NON_SUB_COUNTER.fetch_add(1, Ordering::SeqCst);
+            Some(Message::Text(
+                TardisFuns::json
+                    .obj_to_string(&TardisWebsocketReq {
+                        msg: json! {"client_b send:hi again"},
+                        from_avatar: "b".to_string(),
+                        ..Default::default()
+                    })
+                    .unwrap(),
+            ))
+        } else {
+            None
+        }
+    })
+    .await?;
+    let non_sub_client_b2 = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/g2/b", move |msg| async move {
+        if let Message::Text(msg) = msg {
+            println!("client_b2 recv:{}", msg);
+            assert_eq!(msg, r#"{"msg":"service send:\"hi\"","event":null}"#);
+            NON_SUB_COUNTER.fetch_add(1, Ordering::SeqCst);
+            Some(Message::Text(
+                TardisFuns::json
+                    .obj_to_string(&TardisWebsocketReq {
+                        msg: json! {"client_b send:hi again"},
+                        from_avatar: "b".to_string(),
+                        ..Default::default()
+                    })
+                    .unwrap(),
+            ))
+        } else {
+            None
+        }
+    })
+    .await?;
+
+    non_sub_client_a
+        .send_obj(&TardisWebsocketReq {
+            msg: json! {"hi"},
+            from_avatar: "a".to_string(),
+            ..Default::default()
+        })
+        .await?;
+    non_sub_client_b1
+        .send_obj(&TardisWebsocketReq {
+            msg: json! {"hi"},
+            from_avatar: "b".to_string(),
+            ..Default::default()
+        })
+        .await?;
+    non_sub_client_b2
+        .send_obj(&TardisWebsocketReq {
+            msg: json! {"hi"},
+            from_avatar: "b".to_string(),
+            ..Default::default()
+        })
+        .await?;
+
+    sleep(Duration::from_millis(500)).await;
+    assert_eq!(ERROR_COUNTER.load(Ordering::SeqCst), 2);
+    assert_eq!(SUB_COUNTER.load(Ordering::SeqCst), 6);
+    assert_eq!(NON_SUB_COUNTER.load(Ordering::SeqCst), 5);
+
     Ok(())
 }
 
@@ -103,142 +286,76 @@ pub struct WsApi;
 
 #[poem_openapi::OpenApi]
 impl WsApi {
-    #[oai(path = "/echo", method = "get")]
-    async fn echo(&self) -> Html<&'static str> {
-        Html(
-            r###"
-    <body>
-        <form id="loginForm">
-            Name: <input id="nameInput" type="text" />
-            <button type="submit">Login</button>
-        </form>
-        
-        <form id="sendForm" hidden>
-            Text: <input id="msgInput" type="text" />
-            <button type="submit">Send</button>
-        </form>
-        
-        <textarea id="msgsArea" cols="50" rows="30" hidden></textarea>
-    </body>
-    <script>
-        let ws;
-        const loginForm = document.querySelector("#loginForm");
-        const sendForm = document.querySelector("#sendForm");
-        const nameInput = document.querySelector("#nameInput");
-        const msgInput = document.querySelector("#msgInput");
-        const msgsArea = document.querySelector("#msgsArea");
-        
-        nameInput.focus();
-        loginForm.addEventListener("submit", function(event) {
-            event.preventDefault();
-            loginForm.hidden = true;
-            sendForm.hidden = false;
-            msgsArea.hidden = false;
-            msgInput.focus();
-            ws = new WebSocket("ws://" + location.host + "/ws/echo/" + nameInput.value);
-            ws.onmessage = function(event) {
-                msgsArea.value += event.data + "\r\n";
-            }
-        });
-        
-        sendForm.addEventListener("submit", function(event) {
-            event.preventDefault();
-            ws.send(msgInput.value);
-            msgInput.value = "";
-        });
-    </script>
-    "###,
-        )
+    #[oai(path = "/ws/broadcast/:group/:name", method = "get")]
+    async fn ws_broadcast(&self, group: Path<String>, name: Path<String>, websocket: WebSocket) -> BoxWebSocketUpgraded {
+        if !SENDERS.read().await.contains_key(&group.0) {
+            SENDERS.write().await.insert(group.0.clone(), tokio::sync::broadcast::channel::<String>(100).0);
+        }
+        let sender = SENDERS.read().await.get(&group.0).unwrap().clone();
+        if group.0 == "g1" {
+            ws_broadcast(
+                vec![name.0],
+                false,
+                true,
+                HashMap::new(),
+                websocket,
+                sender,
+                |req_msg, _ext| async move {
+                    println!("service g1 recv:{}:{}", req_msg.from_avatar, req_msg.msg);
+                    if req_msg.msg == json! {"client_b send:hi again"} {
+                        return None;
+                    }
+                    Some(TardisWebsocketResp {
+                        msg: json! { format!("service send:{}", TardisFuns::json.json_to_string(req_msg.msg).unwrap())},
+                        to_avatars: vec![],
+                        ignore_avatars: vec![],
+                    })
+                },
+                |_, _| async move {},
+            )
+        } else if group.0 == "g2" {
+            ws_broadcast(
+                vec![name.0],
+                false,
+                false,
+                HashMap::new(),
+                websocket,
+                sender,
+                |req_msg, _ext| async move {
+                    println!("service g2 recv:{}:{}", req_msg.from_avatar, req_msg.msg);
+                    if req_msg.msg == json! {"client_b send:hi again"} {
+                        return None;
+                    }
+                    Some(TardisWebsocketResp {
+                        msg: json! { format!("service send:{}", TardisFuns::json.json_to_string(req_msg.msg).unwrap())},
+                        to_avatars: vec![],
+                        ignore_avatars: vec![],
+                    })
+                },
+                |_, _| async move {},
+            )
+        } else if group.0 == "gerror" {
+            ws_broadcast(
+                vec![name.0],
+                false,
+                false,
+                HashMap::new(),
+                websocket,
+                sender,
+                |req_msg, _ext| async move {
+                    println!("service gerror recv:{}:{}", req_msg.from_avatar, req_msg.msg);
+                    None
+                },
+                |_, _| async move {},
+            )
+        } else {
+            ws_echo(
+                name.0,
+                HashMap::new(),
+                websocket,
+                |_, _, _| async move { Some("Websocket connection error: group not found".to_string()) },
+                |_, _| async move {},
+            )
+        }
     }
-
-    #[oai(path = "/broadcast", method = "get")]
-    async fn broadcast(&self) -> Html<&'static str> {
-        Html(
-            r###"
-    <body>
-        <form id="loginForm">
-            Name: <input id="nameInput" type="text" />
-            <button type="submit">Login</button>
-        </form>
-        
-        <form id="sendForm" hidden>
-            Text: <input id="msgInput" type="text" /> Receiver name: <input id="recNameInput" type="text" />
-            <button type="submit">Send</button>
-        </form>
-        
-        <textarea id="msgsArea" cols="50" rows="30" hidden></textarea>
-    </body>
-    <script>
-        let ws;
-        const loginForm = document.querySelector("#loginForm");
-        const sendForm = document.querySelector("#sendForm");
-        const nameInput = document.querySelector("#nameInput");
-        const msgInput = document.querySelector("#msgInput");
-        const recNameInput = document.querySelector("#recNameInput");
-        const msgsArea = document.querySelector("#msgsArea");
-        
-        nameInput.focus();
-        loginForm.addEventListener("submit", function(event) {
-            event.preventDefault();
-            loginForm.hidden = true;
-            sendForm.hidden = false;
-            msgsArea.hidden = false;
-            msgInput.focus();
-            ws = new WebSocket("ws://" + location.host + "/ws/broadcast/" + nameInput.value);
-            ws.onmessage = function(event) {
-                msgsArea.value += event.data + "\r\n";
-            }
-        });
-        
-        sendForm.addEventListener("submit", function(event) {
-            event.preventDefault();
-            ws.send(JSON.stringify({"from_avatar": nameInput.value, "msg": {"to": recNameInput.value, "msg": msgInput.value}}));
-            recNameInput.value = "";
-            msgInput.value = "";
-        });
-    </script>
-    "###,
-        )
-    }
-
-    #[oai(path = "/ws/echo/:name", method = "get")]
-    async fn ws_echo(&self, name: Path<String>, websocket: WebSocket) -> BoxWebSocketUpgraded {
-        ws_echo(
-            name.0,
-            HashMap::new(),
-            websocket,
-            |req_session, msg, _| async move {
-                let resp = format!("echo:{msg} by {req_session}");
-                Some(resp)
-            },
-            |_, _| async move {},
-        )
-    }
-
-    #[oai(path = "/ws/broadcast/:name", method = "get")]
-    async fn ws_broadcast(&self, name: Path<String>, websocket: WebSocket, sender: Data<&Sender<String>>) -> BoxWebSocketUpgraded {
-        ws_broadcast(
-            vec![name.0],
-            false,
-            false,
-            HashMap::from([("some_key".to_string(), "ext_value".to_string())]),
-            websocket,
-            sender.clone(),
-            |req_msg, ext| async move {
-                let example_msg = TardisFuns::json.json_to_obj::<WebsocketExample>(req_msg.msg).unwrap();
-                Some(TardisWebsocketResp {
-                    msg: TardisFuns::json.obj_to_json(&TardisResult::Ok(format!("echo:{}, ext info:{}", example_msg.msg, ext.get("some_key").unwrap()))).unwrap(),
-                    to_avatars: if example_msg.to.is_empty() { vec![] } else { vec![example_msg.to] },
-                    ignore_avatars: vec![],
-                })
-            },
-            |_, _| async move {},
-        )
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct WebsocketExample {
-    pub msg: String,
-    pub to: String,
 }
