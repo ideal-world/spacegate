@@ -3,7 +3,7 @@ name: CICD
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
 
 jobs:
   check:
@@ -47,45 +47,227 @@ jobs:
           name: code-coverage-report
           path: cobertura.xml
 
-  release:
+  release-linux:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          [
+            aarch64-unknown-linux-gnu,
+            x86_64-unknown-linux-gnu,
+            aarch64-unknown-linux-musl,
+          ]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
 
-      - name: Run build
+      - name: Run build (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }}
+
+      - name: Prepare artifacts
+        run: |
+          SRC_DIR=target/${{ matrix.target }}/release
+          DEST_DIR=${{ env.ARTIFACT_DIR }}
+          mkdir -p ${DEST_DIR}
+
+          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
+          mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
+          shasum -a 256 ${RELEASE_NAME_FULL} > ${CHECKSUM_FULL}
+
+          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
+          mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
+          shasum -a 256 ${RELEASE_NAME_NATIVE} > ${CHECKSUM_NATIVE}
+
+          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
+          mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
+          shasum -a 256 ${RELEASE_NAME_SIMPLIFY} > ${CHECKSUM_SIMPLIFY}
+
+          mv ${RELEASE_NAME_FULL} ${DEST_DIR}
+          mv ${CHECKSUM_FULL} ${DEST_DIR}
+          mv ${RELEASE_NAME_NATIVE} ${DEST_DIR}
+          mv ${CHECKSUM_NATIVE} ${DEST_DIR}
+          mv ${RELEASE_NAME_SIMPLIFY} ${DEST_DIR}
+          mv ${CHECKSUM_SIMPLIFY} ${DEST_DIR}
+
+          ls ${DEST_DIR}
+
+      - name: Upload artifacts to summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_DIR }}
+          path: |
+            ${{ env.ARTIFACT_DIR }}/
+
+      - name: Upload artifacts to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ARTIFACT_DIR }}/*.*
+
+  release-macos:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check]
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target:
+          [
+            x86_64-apple-darwin,
+            aarch64-apple-darwin,
+          ]
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust environment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Run build (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }}
+
+      - name: Prepare artifacts
+        run: |
+          SRC_DIR=target/${{ matrix.target }}/release
+          DEST_DIR=${{ env.ARTIFACT_DIR }}
+          mkdir -p ${DEST_DIR}
+
+          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
+          mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
+          shasum -a 256 ${RELEASE_NAME_FULL} > ${CHECKSUM_FULL}
+
+          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
+          mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
+          shasum -a 256 ${RELEASE_NAME_NATIVE} > ${CHECKSUM_NATIVE}
+
+          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
+          mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
+          shasum -a 256 ${RELEASE_NAME_SIMPLIFY} > ${CHECKSUM_SIMPLIFY}
+
+          mv ${RELEASE_NAME_FULL} ${DEST_DIR}
+          mv ${CHECKSUM_FULL} ${DEST_DIR}
+          mv ${RELEASE_NAME_NATIVE} ${DEST_DIR}
+          mv ${CHECKSUM_NATIVE} ${DEST_DIR}
+          mv ${RELEASE_NAME_SIMPLIFY} ${DEST_DIR}
+          mv ${CHECKSUM_SIMPLIFY} ${DEST_DIR}
+
+          ls ${DEST_DIR}
+
+      - name: Upload artifacts to summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_DIR }}
+          path: |
+            ${{ env.ARTIFACT_DIR }}/
+
+      - name: Upload artifacts to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ARTIFACT_DIR }}/*.*
+
+  release-windows:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check]
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target:
+          [
+            x86_64-pc-windows-gnu,
+            x86_64-pc-windows-msvc,
+          ]
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust environment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Run build (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release
+          args: --release --target ${{ matrix.target }}
 
-      # - name: Prepare Artifact
-      #   shell: bash
-      #   run: |
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          SRC_DIR=target/${{ matrix.target }}/release
+          DEST_DIR=${{ env.ARTIFACT_DIR }}
+          mkdir -p ${DEST_DIR}
 
-      # - name: Upload Artifact to Summary
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: ${{ env.ARTIFACT_DIR }}
-      #     path: |
-      #       *.tar.gz
-      #       *.txt
+          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
+          mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
+          certutil -hashfile ${RELEASE_NAME_FULL} SHA256 >${CHECKSUM_FULL}
 
-      # - name: Upload Artifact to Release
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     files: |
-      #       *.tar.gz
-      #       *.txt
+          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
+          mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
+          certutil -hashfile ${RELEASE_NAME_NATIVE} SHA256 >${CHECKSUM_NATIVE}
 
-  publish-kernel:
+          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
+          mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
+          certutil -hashfile ${RELEASE_NAME_SIMPLIFY} SHA256 >${CHECKSUM_SIMPLIFY}
+
+          mv ${RELEASE_NAME_FULL} ${DEST_DIR}
+          mv ${CHECKSUM_FULL} ${DEST_DIR}
+          mv ${RELEASE_NAME_NATIVE} ${DEST_DIR}
+          mv ${CHECKSUM_NATIVE} ${DEST_DIR}
+          mv ${RELEASE_NAME_SIMPLIFY} ${DEST_DIR}
+          mv ${CHECKSUM_SIMPLIFY} ${DEST_DIR}
+
+          ls ${DEST_DIR}
+
+      - name: Upload artifacts to summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_DIR }}
+          path: |
+            ${{ env.ARTIFACT_DIR }}/
+
+      - name: Upload artifacts to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ARTIFACT_DIR }}/*.*
+
+  publish-lib-kernel:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
     runs-on: ubuntu-latest
