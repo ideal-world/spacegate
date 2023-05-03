@@ -312,7 +312,7 @@ jobs:
           working-directory: services/full
           run: cargo publish
 
-publish-serv-native:
+  publish-serv-native:
       if: startsWith(github.ref, 'refs/tags/')
       needs: [check, publish-kernel]
       runs-on: ubuntu-latest
@@ -336,7 +336,7 @@ publish-serv-native:
           working-directory: services/native
           run: cargo publish
 
-publish-serv-simplify:
+  publish-serv-simplify:
       if: startsWith(github.ref, 'refs/tags/')
       needs: [check, publish-kernel]
       runs-on: ubuntu-latest
