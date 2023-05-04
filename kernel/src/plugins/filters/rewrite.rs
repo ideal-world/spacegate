@@ -14,7 +14,7 @@ pub const CODE: &str = "rewrite";
 pub struct SgFilerRewriteDef;
 
 impl SgPluginFilterDef for SgFilerRewriteDef {
-    fn new(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
         let filter = TardisFuns::json.json_to_obj::<SgFilerRewrite>(spec)?;
         Ok(Box::new(filter))
     }

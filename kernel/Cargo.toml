@@ -18,9 +18,8 @@ path = "src/lib.rs"
 
 [features]
 cache = ["tardis/cache"]
-crypto = ["tardis/crypto-with-sm"]
-ws = ["tardis/ws-client", "tardis/crypto"]
-k8s = ["k8s-openapi", "k8s-gateway-api"]
+ws = ["tardis/ws-client"]
+k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "cache"]
 
 [dependencies]
 serde.workspace = true
@@ -30,7 +29,7 @@ async-trait.workspace = true
 itertools.workspace = true
 urlencoding.workspace = true
 
-tardis = { workspace = true, features = ["future"] }
+tardis = { workspace = true, features = ["future", "crypto"] }
 
 http.workspace = true
 rustls.workspace = true
@@ -39,6 +38,7 @@ hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
 tokio-rustls.workspace = true
 
+kube = { workspace = true, optional = true }
 k8s-openapi = { workspace = true, optional = true }
 k8s-gateway-api = { workspace = true, optional = true }
 

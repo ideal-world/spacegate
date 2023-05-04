@@ -7,9 +7,9 @@ pub mod config;
 pub mod functions;
 pub mod plugins;
 
-pub async fn startup(k8s_mode: bool, ext_conf_url: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<()> {
+pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: String, check_interval_sec: Option<u64>) -> TardisResult<()> {
     // Initialize configuration according to different modes
-    let configs = config::init(k8s_mode, ext_conf_url, check_interval_sec).await?;
+    let configs = config::init(k8s_mode, namespace_or_conf_uri, check_interval_sec).await?;
     for (gateway, http_routes) in configs {
         do_startup(gateway, http_routes).await?;
     }

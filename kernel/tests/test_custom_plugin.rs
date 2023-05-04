@@ -22,7 +22,7 @@ use tardis::{
 pub struct SgFilerAuthDef;
 
 impl SgPluginFilterDef for SgFilerAuthDef {
-    fn new(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
         let filter = TardisFuns::json.json_to_obj::<SgFilerAuth>(spec)?;
         Ok(Box::new(filter))
     }

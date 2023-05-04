@@ -16,7 +16,7 @@ pub const CODE: &str = "redirect";
 pub struct SgFilerRedirectDef;
 
 impl SgPluginFilterDef for SgFilerRedirectDef {
-    fn new(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
         let filter = TardisFuns::json.json_to_obj::<SgFilerRedirect>(spec)?;
         Ok(Box::new(filter))
     }

@@ -55,7 +55,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(Strin
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
         let filter_def = get_filter_def(&filter_conf.code);
-        let filter_inst = filter_def.new(filter_conf.spec)?;
+        let filter_inst = filter_def.inst(filter_conf.spec)?;
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
     for (_, plugin_filter) in &plugin_filters {
@@ -65,7 +65,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(Strin
 }
 
 pub trait SgPluginFilterDef {
-    fn new(&self, spec: Value) -> TardisResult<Box<dyn SgPluginFilter>>;
+    fn inst(&self, spec: Value) -> TardisResult<Box<dyn SgPluginFilter>>;
 }
 
 #[async_trait]
@@ -471,7 +471,7 @@ mod tests {
             "http://sg.idealworld.group/new_iam?name=sg".to_string()
         );
         assert_eq!(
-            http_common_modify_path(&url, &Some(path_full_modifier.clone()), None)?.unwrap().to_string(),
+            http_common_modify_path(&url, &Some(path_full_modifier), None)?.unwrap().to_string(),
             "http://sg.idealworld.group/other_iam?name=sg".to_string()
         );
 
@@ -509,7 +509,7 @@ mod tests {
             "http://sg.idealworld.group/new_iam/ct/001?name=sg".to_string()
         );
         assert_eq!(
-            http_common_modify_path(&url, &Some(path_prefix_modifier.clone()), Some(&regular_match_inst))?.unwrap().to_string(),
+            http_common_modify_path(&url, &Some(path_prefix_modifier), Some(&regular_match_inst))?.unwrap().to_string(),
             "http://sg.idealworld.group/new_iam/ct/001?name=sg".to_string()
         );
 

@@ -12,7 +12,7 @@ pub const CODE: &str = "inject";
 pub struct SgFilerInjectDef;
 
 impl SgPluginFilterDef for SgFilerInjectDef {
-    fn new(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
         let filter = TardisFuns::json.json_to_obj::<SgFilerInject>(spec)?;
         Ok(Box::new(filter))
     }
@@ -58,10 +58,10 @@ impl SgPluginFilter for SgFilerInject {
             ctx = SgRouteFilterContext::new(
                 new_req_method,
                 new_req_url,
-                ctx.get_req_version().clone(),
+                *ctx.get_req_version(),
                 new_req_headers.clone(),
                 resp.into_body(),
-                ctx.get_req_remote_addr().clone(),
+                *ctx.get_req_remote_addr(),
                 ctx.gateway_name,
             )
         }

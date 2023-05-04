@@ -12,7 +12,7 @@ pub const CODE: &str = "header_modifier";
 pub struct SgFilerHeaderModifierDef;
 
 impl SgPluginFilterDef for SgFilerHeaderModifierDef {
-    fn new(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
         let filter = TardisFuns::json.json_to_obj::<SgFilerHeaderModifier>(spec)?;
         Ok(Box::new(filter))
     }

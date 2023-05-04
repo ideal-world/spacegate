@@ -42,7 +42,7 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
     let client_url = format!(
         "{}://{}{}{}",
         scheme,
-        format!("{}{}", backend.namespace.as_ref().map(|n| format!("{n}.")).unwrap_or("".to_string()), backend.name_or_host),
+        format_args!("{}{}", backend.namespace.as_ref().map(|n| format!("{n}.")).unwrap_or("".to_string()), backend.name_or_host),
         if (backend.port == 0 || backend.port == 80) && scheme == &SgProtocol::Http || (backend.port == 0 || backend.port == 443) && scheme == &SgProtocol::Https {
             "".to_string()
         } else {
@@ -109,12 +109,11 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
             }
             Err(error) => {
                 log::warn!("[SG.Websocket] Upgrade error: {error} from {remote_addr} @ {gateway_name}");
-                return;
             }
         }
     });
-    let accept_key = TardisFuns::crypto.base64.encode_raw(&TardisFuns::crypto.digest.digest_raw(
-        &format!("{request_key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11").as_bytes(),
+    let accept_key = TardisFuns::crypto.base64.encode_raw(TardisFuns::crypto.digest.digest_raw(
+        format!("{request_key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11").as_bytes(),
         tardis::crypto::rust_crypto::sha1::Sha1::new(),
     )?);
 

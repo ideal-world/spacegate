@@ -30,8 +30,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = { version = "2" }
 
 # Tardis
-# tardis = { version = "0.1.0-beta3" }
-tardis = { path = "../tardis/tardis" }
+tardis = { version = "0.1.0-beta4" }
+# tardis = { path = "../tardis/tardis" }
 
 # Http
 http = { version = "0.2" }
@@ -42,6 +42,7 @@ rustls-pemfile = { version = "1" }
 tokio-rustls = { version = "0.24", default-features = false }
 
 # K8s
+kube = { version = "0.80", features = ["runtime"] }
 k8s-openapi = { version = "0.17", features = ["v1_21"] }
 k8s-gateway-api = { version = "0.11" }
 

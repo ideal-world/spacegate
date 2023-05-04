@@ -18,11 +18,8 @@ async fn test_config_by_redis() -> TardisResult<()> {
     let docker = testcontainers::clients::Cli::default();
     let (cache_url, _x) = init_cache_container::init(&docker).await?;
 
-    // Without cache url
-    assert!(spacegate_kernel::startup(false, None, None).await.is_err());
-
     // Without keys
-    assert!(spacegate_kernel::startup(false, Some(cache_url.clone()), None).await.is_err());
+    assert!(spacegate_kernel::startup(false, cache_url.clone(), None).await.is_err());
 
     let cache_client = TardisCacheClient::init(&cache_url).await?;
     cache_client
@@ -54,7 +51,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
         .await?;
 
     // With cache url
-    spacegate_kernel::startup(false, Some(cache_url.clone()), Some(1)).await?;
+    spacegate_kernel::startup(false, cache_url.clone(), Some(1)).await?;
     sleep(Duration::from_millis(500)).await;
 
     let resp = http_client.get::<Value>("http://localhost:8888/get?dd", None).await?;

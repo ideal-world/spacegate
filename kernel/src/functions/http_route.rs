@@ -254,8 +254,8 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
     let ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
         ctx
     } else {
-        let rule_timeout = if let Some(timeout_ms) = matched_rule_inst.map(|rule| rule.timeout_ms) {
-            timeout_ms
+        let rule_timeout = if let Some(matched_rule_inst) = matched_rule_inst {
+            matched_rule_inst.timeout_ms
         } else {
             None
         };
@@ -323,7 +323,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                 let req_path = req.uri().path();
                 match path.kind {
                     SgHttpPathMatchType::Exact => {
-                        if req_path != &path.value {
+                        if req_path != path.value {
                             continue;
                         }
                     }
@@ -352,7 +352,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                         let req_header_value = req_header_value.unwrap();
                         match header.kind {
                             SgHttpHeaderMatchType::Exact => {
-                                if req_header_value != &header.value {
+                                if req_header_value != header.value {
                                     return false;
                                 }
                             }
@@ -376,7 +376,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                     if let Some(Some(req_query_value)) = req.uri().query().map(|q| {
                         let q = urlencoding::decode(q).unwrap();
                         let q = q.as_ref().split('&').collect_vec();
-                        q.into_iter().map(|item| item.split('=').collect_vec()).find(|item| item.len() == 2 && item[0] == &query.name).map(|item| item[1].to_string())
+                        q.into_iter().map(|item| item.split('=').collect_vec()).find(|item| item.len() == 2 && item[0] == query.name).map(|item| item[1].to_string())
                     }) {
                         match query.kind {
                             SgHttpQueryMatchType::Exact => {
