@@ -68,12 +68,26 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
-      - name: Run build (${{ matrix.target }})
+      - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --release --target ${{ matrix.target }} -p spacegate-simplify
+
+      - name: Run build spacegate-native (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }} -p spacegate-native
+
+      - name: Run build spacegate-full (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }} -p spacegate
 
       - name: Prepare artifacts
         run: |
@@ -83,16 +97,19 @@ jobs:
 
           RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
+          strip -s ${SRC_DIR}/spacegate
           mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
           shasum -a 256 ${RELEASE_NAME_FULL} > ${CHECKSUM_FULL}
 
           RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
+          strip -s ${SRC_DIR}/spacegate-native
           mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
           shasum -a 256 ${RELEASE_NAME_NATIVE} > ${CHECKSUM_NATIVE}
 
           RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
+          strip -s ${SRC_DIR}/spacegate-simplify
           mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
           shasum -a 256 ${RELEASE_NAME_SIMPLIFY} > ${CHECKSUM_SIMPLIFY}
 
@@ -141,12 +158,26 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
-      - name: Run build (${{ matrix.target }})
+      - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --release --target ${{ matrix.target }} -p spacegate-simplify
+
+      - name: Run build spacegate-native (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }} -p spacegate-native
+
+      - name: Run build spacegate-full (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }} -p spacegate
 
       - name: Prepare artifacts
         run: |
@@ -214,11 +245,23 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
-      - name: Run build (${{ matrix.target }})
+      - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --release --target ${{ matrix.target }} -p spacegate-simplify
+
+      - name: Run build spacegate-native (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.target }} -p spacegate-native
+
+      - name: Run build spacegate-full (${{ matrix.target }})
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.target }} -p spacegate
 
       - name: Prepare artifacts
         shell: bash
