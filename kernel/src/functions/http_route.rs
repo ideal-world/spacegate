@@ -2,8 +2,8 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use crate::{
     config::{
-        gateway_dto::SgGateway,
-        http_route_dto::{SgBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
+        gateway_dto::{SgGateway, SgProtocol},
+        http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
     plugins::filters::{self, SgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::vec::Vec;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
+    futures_util::future::join_all,
     log,
     rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng},
     regex::Regex,
@@ -100,7 +101,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                                 path: path_inst,
                                 header: header_inst,
                                 query: query_inst,
-                                method: rule_match.method.map(|m| m.into_iter().map(|m| m.to_uppercase()).collect_vec()),
+                                method: rule_match.method.map(|m| m.into_iter().map(|m| m.to_lowercase()).collect_vec()),
                             }
                         })
                         .collect_vec()
@@ -109,7 +110,32 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                 rule_insts.push(SgHttpRouteRuleInst {
                     filters: rule_filters,
                     matches: rule_matches_insts,
-                    backends: rule.backends,
+                    backends: if let Some(backend_refs) = rule.backends {
+                        let backends = join_all(
+                            backend_refs
+                                .into_iter()
+                                .map(|backend_ref| async move {
+                                    SgBackend {
+                                        name_or_host: backend_ref.name_or_host,
+                                        namespace: backend_ref.namespace,
+                                        port: backend_ref.port,
+                                        timeout_ms: backend_ref.timeout_ms,
+                                        protocol: backend_ref.protocol,
+                                        weight: backend_ref.weight,
+                                        filters: if let Some(filters) = backend_ref.filters {
+                                            filters::init(filters).await.unwrap()
+                                        } else {
+                                            Vec::new()
+                                        },
+                                    }
+                                })
+                                .collect_vec(),
+                        )
+                        .await;
+                        Some(backends)
+                    } else {
+                        None
+                    },
                     timeout_ms: rule.timeout_ms,
                 })
             }
@@ -238,12 +264,14 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         }
     }
 
+    let backend_filters = backend.map(|backend| &backend.filters);
     let rule_filters = matched_rule_inst.map(|rule| &rule.filters);
 
     let ctx = process_req_filters(
         gateway_name.to_string(),
         remote_addr,
         request,
+        backend_filters,
         rule_filters,
         &matched_route_inst.filters,
         &gateway_inst.filters,
@@ -262,7 +290,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
-    let mut ctx = process_resp_filters(ctx, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
+    let mut ctx = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
 
     let mut resp = Response::builder();
     for (k, v) in ctx.get_resp_headers() {
@@ -411,8 +439,9 @@ async fn process_req_filters(
     gateway_name: String,
     remote_addr: SocketAddr,
     request: Request<Body>,
+    backend_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
     rule_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
-    route_filers: &Vec<(String, Box<dyn SgPluginFilter>)>,
+    route_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
     global_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
 ) -> TardisResult<SgRouteFilterContext> {
@@ -427,6 +456,17 @@ async fn process_req_filters(
     );
     let mut is_continue;
     let mut executed_filters = Vec::new();
+    if let Some(backend_filters) = backend_filters {
+        for (id, filter) in backend_filters {
+            if !executed_filters.contains(&id) {
+                (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
+                if !is_continue {
+                    return Ok(ctx);
+                }
+                executed_filters.push(id);
+            }
+        }
+    }
     if let Some(rule_filters) = rule_filters {
         for (id, filter) in rule_filters {
             if !executed_filters.contains(&id) {
@@ -438,7 +478,7 @@ async fn process_req_filters(
             }
         }
     }
-    for (id, filter) in route_filers {
+    for (id, filter) in route_filters {
         if !executed_filters.contains(&id) {
             (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
@@ -461,13 +501,25 @@ async fn process_req_filters(
 
 async fn process_resp_filters(
     mut ctx: SgRouteFilterContext,
+    backend_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
     rule_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
-    route_filers: &Vec<(String, Box<dyn SgPluginFilter>)>,
+    route_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
     global_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
 ) -> TardisResult<SgRouteFilterContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
+    if let Some(backend_filters) = backend_filters {
+        for (id, filter) in backend_filters {
+            if !executed_filters.contains(&id) {
+                (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
+                if !is_continue {
+                    return Ok(ctx);
+                }
+                executed_filters.push(id);
+            }
+        }
+    }
     if let Some(rule_filters) = rule_filters {
         for (id, filter) in rule_filters {
             if !executed_filters.contains(&id) {
@@ -479,7 +531,7 @@ async fn process_resp_filters(
             }
         }
     }
-    for (id, filter) in route_filers {
+    for (id, filter) in route_filters {
         if !executed_filters.contains(&id) {
             (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
@@ -500,7 +552,7 @@ async fn process_resp_filters(
     Ok(ctx)
 }
 
-fn choose_backend(backends: &Vec<SgBackendRef>) -> Option<&SgBackendRef> {
+fn choose_backend(backends: &Vec<SgBackend>) -> Option<&SgBackend> {
     if backends.is_empty() {
         None
     } else if backends.len() == 1 {
@@ -530,7 +582,7 @@ struct SgHttpRouteInst {
 struct SgHttpRouteRuleInst {
     pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
     pub matches: Option<Vec<SgHttpRouteMatchInst>>,
-    pub backends: Option<Vec<SgBackendRef>>,
+    pub backends: Option<Vec<SgBackend>>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -565,6 +617,17 @@ pub struct SgHttpQueryMatchInst {
     pub regular: Option<Regex>,
 }
 
+#[derive(Default)]
+pub struct SgBackend {
+    pub name_or_host: String,
+    pub namespace: Option<String>,
+    pub port: u16,
+    pub timeout_ms: Option<u64>,
+    pub protocol: Option<SgProtocol>,
+    pub weight: Option<u16>,
+    pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -574,8 +637,8 @@ mod tests {
     use tardis::regex::Regex;
 
     use crate::{
-        config::http_route_dto::{SgBackendRef, SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
-        functions::http_route::{choose_backend, match_route_insts_with_hostname_priority, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst},
+        config::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
+        functions::http_route::{choose_backend, match_route_insts_with_hostname_priority, SgBackend, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst},
     };
 
     use super::{match_rule_inst, SgHttpPathMatchInst, SgHttpRouteMatchInst};
@@ -1002,7 +1065,7 @@ mod tests {
     fn test_choose_backend() {
         // Only one backend
         assert!(
-            choose_backend(&vec![SgBackendRef {
+            choose_backend(&vec![SgBackend {
                 name_or_host: "iam1".to_string(),
                 weight: None,
                 ..Default::default()
@@ -1014,12 +1077,12 @@ mod tests {
 
         // Check weight
         let backends = vec![
-            SgBackendRef {
+            SgBackend {
                 name_or_host: "iam1".to_string(),
                 weight: Some(30),
                 ..Default::default()
             },
-            SgBackendRef {
+            SgBackend {
                 name_or_host: "iam2".to_string(),
                 weight: Some(70),
                 ..Default::default()

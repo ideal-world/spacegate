@@ -9,17 +9,17 @@ use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
 pub const CODE: &str = "inject";
 
-pub struct SgFilerInjectDef;
+pub struct SgFilterInjectDef;
 
-impl SgPluginFilterDef for SgFilerInjectDef {
+impl SgPluginFilterDef for SgFilterInjectDef {
     fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilerInject>(spec)?;
+        let filter = TardisFuns::json.json_to_obj::<SgFilterInject>(spec)?;
         Ok(Box::new(filter))
     }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilerInject {
+pub struct SgFilterInject {
     pub req_inject_url: Option<String>,
     pub req_timeout_ms: Option<u64>,
     pub resp_inject_url: Option<String>,
@@ -30,7 +30,7 @@ const SG_INJECT_REAL_METHOD: &str = "Sg_Inject_Real_Method";
 const SG_INJECT_REAL_URL: &str = "Sg_Inject_Real_Url";
 
 #[async_trait]
-impl SgPluginFilter for SgFilerInject {
+impl SgPluginFilter for SgFilterInject {
     fn kind(&self) -> super::SgPluginFilterKind {
         super::SgPluginFilterKind::Http
     }
@@ -92,7 +92,7 @@ mod tests {
     async fn test_inject_filter() {
         http_client::init().unwrap();
 
-        let filter = SgFilerInject {
+        let filter = SgFilterInject {
             req_inject_url: Some("http://postman-echo.com/put".to_string()),
             resp_inject_url: Some("http://postman-echo.com/put".to_string()),
             ..Default::default()

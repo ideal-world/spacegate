@@ -13,7 +13,9 @@ edition.workspace = true
 readme = "../../README.md"
 
 [dependencies]
-spacegate-kernel = { version = "0.1.0-alpha.2", path = "../../kernel" }
+spacegate-kernel = { version = "0.1.0-alpha.2", path = "../../kernel", features = [
+    "ws",
+] }
 
 tardis = { workspace = true }
 

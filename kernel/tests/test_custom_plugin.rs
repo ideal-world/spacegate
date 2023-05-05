@@ -19,20 +19,20 @@ use tardis::{
     TardisFuns,
 };
 
-pub struct SgFilerAuthDef;
+pub struct SgFilterAuthDef;
 
-impl SgPluginFilterDef for SgFilerAuthDef {
+impl SgPluginFilterDef for SgFilterAuthDef {
     fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilerAuth>(spec)?;
+        let filter = TardisFuns::json.json_to_obj::<SgFilterAuth>(spec)?;
         Ok(Box::new(filter))
     }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilerAuth {}
+pub struct SgFilterAuth {}
 
 #[async_trait]
-impl SgPluginFilter for SgFilerAuth {
+impl SgPluginFilter for SgFilterAuth {
     fn kind(&self) -> SgPluginFilterKind {
         SgPluginFilterKind::Http
     }
@@ -61,7 +61,7 @@ impl SgPluginFilter for SgFilerAuth {
 async fn test_custom_plugin() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();
-    spacegate_kernel::register_filter_def("auth", Box::new(SgFilerAuthDef));
+    spacegate_kernel::register_filter_def("auth", Box::new(SgFilterAuthDef));
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),

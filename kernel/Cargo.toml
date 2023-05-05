@@ -24,6 +24,7 @@ k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "cache"]
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
 lazy_static.workspace = true
 async-trait.workspace = true
 itertools.workspace = true

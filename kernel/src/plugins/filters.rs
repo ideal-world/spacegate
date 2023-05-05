@@ -1,8 +1,9 @@
-mod header_modifier;
+pub mod header_modifier;
 mod inject;
+#[cfg(feature = "cache")]
 mod limit;
-mod redirect;
-mod rewrite;
+pub mod redirect;
+pub mod rewrite;
 use async_trait::async_trait;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version};
 use hyper::Body;
@@ -22,11 +23,12 @@ static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
 fn init_filter_defs() {
     let mut filters: HashMap<String, Box<dyn SgPluginFilterDef>> = HashMap::new();
-    filters.insert(header_modifier::CODE.to_string(), Box::new(header_modifier::SgFilerHeaderModifierDef));
-    filters.insert(rewrite::CODE.to_string(), Box::new(rewrite::SgFilerRewriteDef));
-    filters.insert(redirect::CODE.to_string(), Box::new(redirect::SgFilerRedirectDef));
-    filters.insert(inject::CODE.to_string(), Box::new(inject::SgFilerInjectDef));
-    filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilerLimitDef));
+    filters.insert(header_modifier::CODE.to_string(), Box::new(header_modifier::SgFilterHeaderModifierDef));
+    filters.insert(rewrite::CODE.to_string(), Box::new(rewrite::SgFilterRewriteDef));
+    filters.insert(redirect::CODE.to_string(), Box::new(redirect::SgFilterRedirectDef));
+    filters.insert(inject::CODE.to_string(), Box::new(inject::SgFilterInjectDef));
+    #[cfg(feature = "cache")]
+    filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilterLimitDef));
     unsafe {
         FILTERS = Some(filters);
     }

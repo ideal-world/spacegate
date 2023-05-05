@@ -127,5 +127,7 @@ pub struct SgBackendRef {
     /// This is computed as weight/(sum of all weights in this BackendRefs list).
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
     /// Weight is not a percentage and the sum of weights does not need to equal 100.
-    pub weight: Option<i32>,
+    pub weight: Option<u16>,
+    /// Filters define the filters that are applied to backend that match this hostnames.
+    pub filters: Option<Vec<SgRouteFilter>>,
 }

@@ -13,11 +13,11 @@ use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterDef, SgRouteF
 
 pub const CODE: &str = "redirect";
 
-pub struct SgFilerRedirectDef;
+pub struct SgFilterRedirectDef;
 
-impl SgPluginFilterDef for SgFilerRedirectDef {
+impl SgPluginFilterDef for SgFilterRedirectDef {
     fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilerRedirect>(spec)?;
+        let filter = TardisFuns::json.json_to_obj::<SgFilterRedirect>(spec)?;
         Ok(Box::new(filter))
     }
 }
@@ -26,7 +26,7 @@ impl SgPluginFilterDef for SgFilerRedirectDef {
 ///
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilerRedirect {
+pub struct SgFilterRedirect {
     /// Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.
     pub scheme: Option<String>,
     /// Hostname is the hostname to be used in the value of the Location header in the response. When empty, the hostname in the Host header of the request is used.
@@ -40,7 +40,7 @@ pub struct SgFilerRedirect {
 }
 
 #[async_trait]
-impl SgPluginFilter for SgFilerRedirect {
+impl SgPluginFilter for SgFilterRedirect {
     fn kind(&self) -> super::SgPluginFilterKind {
         super::SgPluginFilterKind::Http
     }
@@ -101,7 +101,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_redirect_filter() {
-        let filter = SgFilerRedirect {
+        let filter = SgFilterRedirect {
             scheme: Some("https".to_string()),
             hostname: Some("sg_new.idealworld.group".to_string()),
             path: Some(SgHttpPathModifier {

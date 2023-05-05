@@ -11,11 +11,11 @@ use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterDef, SgRouteF
 
 pub const CODE: &str = "rewrite";
 
-pub struct SgFilerRewriteDef;
+pub struct SgFilterRewriteDef;
 
-impl SgPluginFilterDef for SgFilerRewriteDef {
+impl SgPluginFilterDef for SgFilterRewriteDef {
     fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilerRewrite>(spec)?;
+        let filter = TardisFuns::json.json_to_obj::<SgFilterRewrite>(spec)?;
         Ok(Box::new(filter))
     }
 }
@@ -24,7 +24,7 @@ impl SgPluginFilterDef for SgFilerRewriteDef {
 ///
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilerRewrite {
+pub struct SgFilterRewrite {
     /// Hostname is the value to be used to replace the Host header value during forwarding.
     pub hostname: Option<String>,
     /// Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.
@@ -32,7 +32,7 @@ pub struct SgFilerRewrite {
 }
 
 #[async_trait]
-impl SgPluginFilter for SgFilerRewrite {
+impl SgPluginFilter for SgFilterRewrite {
     fn kind(&self) -> super::SgPluginFilterKind {
         super::SgPluginFilterKind::Http
     }
@@ -76,7 +76,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rewrite_filter() {
-        let filter = SgFilerRewrite {
+        let filter = SgFilterRewrite {
             hostname: Some("sg_new.idealworld.group".to_string()),
             path: Some(SgHttpPathModifier {
                 kind: SgHttpPathModifierType::ReplacePrefixMatch,

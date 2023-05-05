@@ -9,31 +9,31 @@ use tardis::{basic::result::TardisResult, TardisFuns};
 
 pub const CODE: &str = "header_modifier";
 
-pub struct SgFilerHeaderModifierDef;
+pub struct SgFilterHeaderModifierDef;
 
-impl SgPluginFilterDef for SgFilerHeaderModifierDef {
+impl SgPluginFilterDef for SgFilterHeaderModifierDef {
     fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilerHeaderModifier>(spec)?;
+        let filter = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(spec)?;
         Ok(Box::new(filter))
     }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilerHeaderModifier {
-    kind: SgFilerHeaderModifierKind,
-    sets: Option<HashMap<String, String>>,
-    remove: Option<Vec<String>>,
+pub struct SgFilterHeaderModifier {
+    pub kind: SgFilterHeaderModifierKind,
+    pub sets: Option<HashMap<String, String>>,
+    pub remove: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
-pub enum SgFilerHeaderModifierKind {
+pub enum SgFilterHeaderModifierKind {
     #[default]
     Request,
     Response,
 }
 
 #[async_trait]
-impl SgPluginFilter for SgFilerHeaderModifier {
+impl SgPluginFilter for SgFilterHeaderModifier {
     fn kind(&self) -> super::SgPluginFilterKind {
         super::SgPluginFilterKind::Http
     }
@@ -47,7 +47,7 @@ impl SgPluginFilter for SgFilerHeaderModifier {
     }
 
     async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
-        if self.kind != SgFilerHeaderModifierKind::Request {
+        if self.kind != SgFilterHeaderModifierKind::Request {
             return Ok((true, ctx));
         }
         if let Some(set) = &self.sets {
@@ -64,7 +64,7 @@ impl SgPluginFilter for SgFilerHeaderModifier {
     }
 
     async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
-        if self.kind != SgFilerHeaderModifierKind::Response {
+        if self.kind != SgFilterHeaderModifierKind::Response {
             return Ok((true, ctx));
         }
         if let Some(set) = &self.sets {
@@ -94,13 +94,13 @@ mod tests {
         let mut headers = HashMap::new();
         headers.insert("X-Test1".to_string(), "test1".to_string());
         headers.insert("X-Test2".to_string(), "test2".to_string());
-        let filter_req = SgFilerHeaderModifier {
-            kind: SgFilerHeaderModifierKind::Request,
+        let filter_req = SgFilterHeaderModifier {
+            kind: SgFilterHeaderModifierKind::Request,
             sets: Some(headers),
             remove: Some(vec!["X-1".to_string(), "X-2".to_string()]),
         };
-        let filter_resp = SgFilerHeaderModifier {
-            kind: SgFilerHeaderModifierKind::Response,
+        let filter_resp = SgFilterHeaderModifier {
+            kind: SgFilterHeaderModifierKind::Response,
             sets: None,
             remove: Some(vec!["X-Test2".to_string(), "X-2".to_string()]),
         };

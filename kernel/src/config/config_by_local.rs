@@ -3,7 +3,7 @@ use std::time::Duration;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     log,
-    tokio::{self, sync::Mutex, time},
+    tokio::{sync::Mutex, time},
     TardisFuns,
 };
 
@@ -72,7 +72,7 @@ async fn fetch_configs(gateway_config_path: &str, routes_config_path: &str) -> T
 
     if gateway_config_changed || http_route_configs_changed {
         let gateway_config = tardis::TardisFuns::json.str_to_obj::<SgGateway>(&gateway_config_content)?;
-        let http_route_configs = routes_config_content.into_iter().map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect();
+        let http_route_configs = routes_config_content.iter().map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(v).unwrap()).collect();
         Ok((Some((gateway_config, http_route_configs)), gateway_config_changed, http_route_configs_changed))
     } else {
         Ok((None, gateway_config_changed, http_route_configs_changed))

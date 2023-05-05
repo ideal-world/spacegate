@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 
 use crate::config::gateway_dto::SgProtocol;
-use crate::config::http_route_dto::SgBackendRef;
 use http::header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION, UPGRADE};
 use hyper::header::HeaderValue;
 use hyper::{self};
@@ -14,7 +13,9 @@ use tardis::web::tokio_tungstenite::tungstenite::protocol;
 use tardis::web::tokio_tungstenite::{connect_async, WebSocketStream};
 use tardis::{log, tokio, TardisFuns};
 
-pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend: &SgBackendRef, mut request: Request<Body>) -> TardisResult<Response<Body>> {
+use super::http_route::SgBackend;
+
+pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend: &SgBackend, mut request: Request<Body>) -> TardisResult<Response<Body>> {
     if request.headers().get(CONNECTION).map(|v| !v.to_str().unwrap().to_lowercase().contains("upgrade")).unwrap_or(false) {
         return Err(TardisError::bad_request(
             &format!("[SG.Websocket] Connection header must be upgrade , from {remote_addr} @ {gateway_name}"),

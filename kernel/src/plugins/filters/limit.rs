@@ -14,17 +14,17 @@ use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 use lazy_static::lazy_static;
 pub const CODE: &str = "limit";
 
-pub struct SgFilerLimitDef;
+pub struct SgFilterLimitDef;
 
-impl SgPluginFilterDef for SgFilerLimitDef {
+impl SgPluginFilterDef for SgFilterLimitDef {
     fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilerLimit>(spec)?;
+        let filter = TardisFuns::json.json_to_obj::<SgFilterLimit>(spec)?;
         Ok(Box::new(filter))
     }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilerLimit {
+pub struct SgFilterLimit {
     pub max_request_number: Option<u64>,
     pub time_window_ms: Option<u64>,
 }
@@ -92,7 +92,7 @@ lazy_static! {
 }
 
 #[async_trait]
-impl SgPluginFilter for SgFilerLimit {
+impl SgPluginFilter for SgFilterLimit {
     fn kind(&self) -> super::SgPluginFilterKind {
         super::SgPluginFilterKind::Http
     }
@@ -156,7 +156,7 @@ mod tests {
         let url = format!("redis://127.0.0.1:{port}/0",);
         cache_client::init("test_gate", &url).await.unwrap();
 
-        let filter = SgFilerLimit {
+        let filter = SgFilterLimit {
             max_request_number: Some(4),
             ..Default::default()
         };
