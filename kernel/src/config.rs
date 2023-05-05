@@ -41,11 +41,12 @@ pub async fn init(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_i
         let conf_uri = namespace_or_conf_uri.ok_or_else(|| TardisError::not_found("[SG.Config] The configuration path must be specified in the current mode", ""))?;
         #[cfg(feature = "cache")]
         {
-            config_by_redis::init(&conf_uri, check_interval_sec.unwrap_or(10)).await
+            return config_by_redis::init(&conf_uri, check_interval_sec.unwrap_or(10)).await;
         }
-        #[cfg(not(feature = "cache"))]
+        #[cfg(feature = "local")]
         {
-            config_by_local::init(&conf_uri, check_interval_sec.unwrap_or(10)).await
+            return config_by_local::init(&conf_uri, check_interval_sec.unwrap_or(10)).await;
         }
+        Err(tardis::basic::error::TardisError::not_found("[SG.Config] The current compilation mode does not exist", ""))
     }
 }

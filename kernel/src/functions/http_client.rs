@@ -202,7 +202,7 @@ mod tests {
                 port: 80,
                 ..Default::default()
             }),
-            Some(10),
+            Some(5),
             false,
             SgRouteFilterContext::new(
                 Method::GET,
