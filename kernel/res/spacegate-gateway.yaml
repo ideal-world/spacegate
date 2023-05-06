@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spacegate
+  namespace: spacegate
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spacegate
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - secrets
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  - gateways
+  - httproutes
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - httproutes/status
+  - gateways/status
+  - gatewayclasses/status
+  verbs:
+  - update
+- apiGroups:
+  - k8s.spacegate.idealworld.group
+  resources:
+  - gatewayconfigs
+  verbs:
+  - list
+  - watch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spacegate
+subjects:
+- kind: ServiceAccount
+  name: spacegate
+  namespace: spacegate
+roleRef:
+  kind: ClusterRole
+  name: spacegate
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spacegate
+  namespace: spacegate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spacegate
+  template:
+    metadata:
+      labels:
+        app: spacegate
+    spec:
+      shareProcessNamespace: true
+      serviceAccountName: spacegate
+      containers:
+      - image: ecfront/spacegate:latest
+        imagePullPolicy: Always
+        name: spacegate
+        securityContext:
+          runAsUser: 1001

@@ -9,6 +9,7 @@ use self::http_route_dto::SgHttpRoute;
 
 #[cfg(feature = "k8s")]
 pub mod config_by_k8s;
+#[cfg(feature = "local")]
 pub mod config_by_local;
 #[cfg(feature = "cache")]
 pub mod config_by_redis;

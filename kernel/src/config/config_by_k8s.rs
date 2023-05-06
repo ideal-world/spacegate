@@ -25,7 +25,7 @@ use super::{
     plugin_filter_dto::SgRouteFilter,
 };
 
-const GATEWAY_CLASS_NAME: &str = "spacegateway";
+const GATEWAY_CLASS_NAME: &str = "spacegate";
 
 pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     let (gateway_api, http_route_api): (Api<Gateway>, Api<HttpRoute>) = if let Some(namespaces) = namespaces {
