@@ -51,4 +51,4 @@ This guide walks you through how to install Spacegate Kubernetes Gateway on a ge
 
 ### Use Spacegate Kubernetes Gateway
 
-To get started, follow the tutorials in the [examples/k8s](../../examples/k8s) directory.
+To get started, follow the tutorials in the `examples/k8s-*` directory.

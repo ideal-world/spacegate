@@ -35,15 +35,24 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     };
 
     let gateway_objs = gateway_api
-        .list(&ListParams::default().fields(&format!("spec.gatewayClassName={GATEWAY_CLASS_NAME}")))
+        .list(&ListParams::default())
         .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?;
+        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .into_iter()
+        .filter(|gateway_obj| gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME)
+        .collect::<Vec<Gateway>>();
     let gateway_configs = process_gateway_config(gateway_objs.into_iter().collect()).await?;
+    let gateway_names = gateway_configs.iter().map(|gateway_config| gateway_config.name.clone()).collect::<Vec<String>>();
 
-    let http_route_objs = http_route_api
-        .list(&ListParams::default().fields(&format!("spec.gatewayClassName={GATEWAY_CLASS_NAME}")))
+    let http_route_objs: Vec<HttpRoute> = http_route_api
+        .list(&ListParams::default())
         .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?;
+        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .into_iter()
+        .filter(|http_route_obj| {
+            http_route_obj.spec.inner.parent_refs.as_ref().map(|parent_refs| parent_refs.iter().any(|parent_ref| gateway_names.contains(&parent_ref.name))).unwrap_or(false)
+        })
+        .collect::<Vec<HttpRoute>>();
     let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect()).await?;
 
     let config = gateway_configs
@@ -61,13 +70,27 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let ew = watcher(gateway_api_clone, ListParams::default()).applied_objects();
         pin_mut!(ew);
         while let Some(gateway_obj) = ew.try_next().await.unwrap() {
+            if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
+                continue;
+            }
             let gateway_configs = process_gateway_config(vec![gateway_obj]).await.unwrap();
             for gateway_config in gateway_configs {
                 let http_route_objs = http_route_api_clone
-                    .list(&ListParams::default().fields(&format!("spec.parentRefs={}", gateway_config.name)))
+                    .list(&ListParams::default())
                     .await
                     .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                    .unwrap();
+                    .unwrap()
+                    .into_iter()
+                    .filter(|http_route_obj| {
+                        http_route_obj
+                            .spec
+                            .inner
+                            .parent_refs
+                            .as_ref()
+                            .map(|parent_refs| parent_refs.iter().any(|parent_ref| gateway_config.name == parent_ref.name))
+                            .unwrap_or(false)
+                    })
+                    .collect::<Vec<HttpRoute>>();
                 let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect())
                     .await
                     .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
@@ -79,20 +102,50 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     });
 
     tardis::tokio::spawn(async move {
-        let ew = watcher(http_route_api, ListParams::default()).applied_objects();
+        let http_route_api_clone = http_route_api.clone();
+        let ew = watcher(http_route_api_clone, ListParams::default()).applied_objects();
         pin_mut!(ew);
         while let Some(http_route_obj) = ew.try_next().await.unwrap() {
-            let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(vec![http_route_obj]).await.unwrap();
+            if http_route_obj.spec.inner.parent_refs.is_none() {
+                continue;
+            }
+            let gateway_names = http_route_obj.spec.inner.parent_refs.as_ref().unwrap().iter().map(|parent_ref| parent_ref.name.clone()).collect::<Vec<String>>();
+            let mut gateway_objs = Vec::new();
+            for gateway_name in &gateway_names {
+                let gateway_obj = gateway_api.get(gateway_name).await.unwrap();
+                if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
+                    continue;
+                }
+                gateway_objs.push(gateway_obj);
+            }
+            let gateway_configs = process_gateway_config(gateway_objs).await.unwrap();
+
+            let http_route_objs: Vec<HttpRoute> = http_route_api
+                .list(&ListParams::default())
+                .await
+                .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
+                .unwrap()
+                .into_iter()
+                .filter(|http_route_obj| {
+                    http_route_obj.spec.inner.parent_refs.as_ref().map(|parent_refs| parent_refs.iter().any(|parent_ref| gateway_names.contains(&parent_ref.name))).unwrap_or(false)
+                })
+                .collect::<Vec<HttpRoute>>();
+
+            let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs).await.unwrap();
             let http_route_configs = http_route_configs
                 .into_iter()
                 .group_by(|http_route_config| http_route_config.gateway_name.to_string())
                 .into_iter()
                 .map(|(gateway_name, http_route_configs)| (gateway_name, http_route_configs.collect::<Vec<SgHttpRoute>>()))
                 .collect::<Vec<(String, Vec<SgHttpRoute>)>>();
+
             for (gateway_name, http_route_configs) in http_route_configs {
-                let gateway_obj = gateway_api.get(&gateway_name).await.unwrap();
-                let gateway_configs = process_gateway_config(vec![gateway_obj]).await.unwrap();
-                http_route::init(gateway_configs.get(0).unwrap().clone(), http_route_configs).await.unwrap();
+                http_route::init(
+                    gateway_configs.iter().find(|gateway_config| gateway_config.name == gateway_name).unwrap().clone(),
+                    http_route_configs,
+                )
+                .await
+                .unwrap();
             }
         }
     });
