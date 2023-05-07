@@ -87,8 +87,8 @@ spec:
       shareProcessNamespace: true
       serviceAccountName: spacegate
       containers:
-      - image: ecfront/spacegate:latest
-        imagePullPolicy: Always
+      - image: ecfront/spacegate:0.1.0-alpha.2
+        imagePullPolicy: IfNotPresent
         name: spacegate
         securityContext:
           runAsUser: 1001

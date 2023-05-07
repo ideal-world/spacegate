@@ -76,8 +76,9 @@ pub async fn raw_request(
     timeout_ms: Option<u64>,
 ) -> TardisResult<Response<Body>> {
     let timeout_ms = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
-
-    log::trace!("[SG.Client] Request method {} url {} , timeout {} ms", method.to_string(), url.to_string(), timeout_ms);
+    let method_str = method.to_string();
+    let url_str = url.to_string();
+    log::trace!("[SG.Client] Request method {} url {} , timeout {} ms", method_str, url_str, timeout_ms);
 
     let mut req = Request::builder();
     req = req.method(method);
@@ -85,14 +86,16 @@ pub async fn raw_request(
         req = req.header(k.as_str(), v.to_str().unwrap());
     }
     req = req.uri(url);
-    let req = req.body(body.unwrap_or_else(Body::empty)).map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build request error:{error}"), ""))?;
+    let req = req
+        .body(body.unwrap_or_else(Body::empty))
+        .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build request method {method_str} url {url_str} error:{error}"), ""))?;
     let req = if let Some(client) = client {
         client.request(req)
     } else {
         default_client().request(req)
     };
     let response = match timeout(Duration::from_millis(timeout_ms), req).await {
-        Ok(response) => response.map_err(|error: Error| TardisError::internal_error(&format!("[SG.Client] Request error: {error}"), "")),
+        Ok(response) => response.map_err(|error: Error| TardisError::internal_error(&format!("[SG.Client] Request method {method_str} url {url_str} error: {error}"), "")),
         Err(_) => Ok(Response::builder().status(StatusCode::GATEWAY_TIMEOUT).body(Body::empty()).unwrap()),
     }?;
     Ok(response)

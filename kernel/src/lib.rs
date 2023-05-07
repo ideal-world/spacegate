@@ -1,7 +1,7 @@
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
 use plugins::filters::{self, SgPluginFilterDef};
-use tardis::basic::result::TardisResult;
+use tardis::{basic::result::TardisResult, log, tokio::signal};
 
 pub mod config;
 pub mod functions;
@@ -42,6 +42,18 @@ pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     }
     // Shutdown service instances
     server::shutdown(gateway_name).await
+}
+
+pub async fn wait_graceful_shutdown() -> TardisResult<()> {
+    match signal::ctrl_c().await {
+        Ok(_) => {
+            log::info!("Received ctrl+c signal, shutting down...");
+        }
+        Err(error) => {
+            log::error!("Received the ctrl+c signal, but with an error: {error}");
+        }
+    }
+    Ok(())
 }
 
 pub fn register_filter_def(code: &str, filter_def: Box<dyn SgPluginFilterDef>) {

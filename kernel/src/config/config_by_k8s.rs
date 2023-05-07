@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
 use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
@@ -6,11 +6,13 @@ use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::ListParams,
     runtime::{watcher, WatchStreamExt},
-    Api, Client,
+    Api, Client, ResourceExt,
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::{future::join_all, pin_mut, TryStreamExt},
+    log,
+    tokio::sync::RwLock,
     TardisFuns,
 };
 
@@ -24,6 +26,11 @@ use super::{
     },
     plugin_filter_dto::SgRouteFilter,
 };
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref GATEWAY_NAMES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+}
 
 const GATEWAY_CLASS_NAME: &str = "spacegate";
 
@@ -41,6 +48,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .into_iter()
         .filter(|gateway_obj| gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME)
         .collect::<Vec<Gateway>>();
+    let gateway_objs_generation = gateway_objs
+        .iter()
+        .map(|gateway_obj| (gateway_obj.metadata.uid.clone().unwrap_or("".to_string()), gateway_obj.metadata.generation.unwrap_or(0)))
+        .collect::<HashMap<String, i64>>();
     let gateway_configs = process_gateway_config(gateway_objs.into_iter().collect()).await?;
     let gateway_names = gateway_configs.iter().map(|gateway_config| gateway_config.name.clone()).collect::<Vec<String>>();
 
@@ -50,9 +61,36 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
         .into_iter()
         .filter(|http_route_obj| {
-            http_route_obj.spec.inner.parent_refs.as_ref().map(|parent_refs| parent_refs.iter().any(|parent_ref| gateway_names.contains(&parent_ref.name))).unwrap_or(false)
+            http_route_obj
+                .spec
+                .inner
+                .parent_refs
+                .as_ref()
+                .map(|parent_refs| {
+                    parent_refs.iter().any(|parent_ref| {
+                        gateway_names.contains(&format!(
+                            "{}.{}",
+                            if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                                namespaces.to_string()
+                            } else {
+                                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
+                            },
+                            parent_ref.name
+                        ))
+                    })
+                })
+                .unwrap_or(false)
         })
         .collect::<Vec<HttpRoute>>();
+    let http_route_objs_generation = http_route_objs
+        .iter()
+        .map(|http_route_obj| {
+            (
+                http_route_obj.metadata.uid.clone().unwrap_or("".to_string()),
+                http_route_obj.metadata.generation.unwrap_or(0),
+            )
+        })
+        .collect::<HashMap<String, i64>>();
     let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect()).await?;
 
     let config = gateway_configs
@@ -64,61 +102,119 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         })
         .collect();
 
-    let gateway_api_clone = gateway_api.clone();
+    {
+        let mut gateway_names_guard = GATEWAY_NAMES.write().await;
+        *gateway_names_guard = gateway_names;
+    }
+
     let http_route_api_clone = http_route_api.clone();
+
     tardis::tokio::spawn(async move {
-        let ew = watcher(gateway_api_clone, ListParams::default()).applied_objects();
+        let ew = watcher(gateway_api, ListParams::default()).touched_objects();
         pin_mut!(ew);
         while let Some(gateway_obj) = ew.try_next().await.unwrap() {
+            if gateway_objs_generation.get(gateway_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &gateway_obj.metadata.generation.unwrap_or(0) {
+                // ignore the original object
+                continue;
+            }
             if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
                 continue;
             }
-            let gateway_configs = process_gateway_config(vec![gateway_obj]).await.unwrap();
-            for gateway_config in gateway_configs {
-                let http_route_objs = http_route_api_clone
-                    .list(&ListParams::default())
-                    .await
-                    .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                    .unwrap()
-                    .into_iter()
-                    .filter(|http_route_obj| {
-                        http_route_obj
-                            .spec
-                            .inner
-                            .parent_refs
-                            .as_ref()
-                            .map(|parent_refs| parent_refs.iter().any(|parent_ref| gateway_config.name == parent_ref.name))
-                            .unwrap_or(false)
-                    })
-                    .collect::<Vec<HttpRoute>>();
-                let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect())
-                    .await
-                    .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                    .unwrap();
-                shutdown(&gateway_config.name).await.unwrap();
-                do_startup(gateway_config, http_route_configs).await.unwrap();
+            log::trace!("[SG.Config] Gateway config change found");
+
+            let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.unwrap(), &gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()));
+            match gateway_api.get_metadata_opt(&gateway_obj.metadata.name.as_ref().unwrap_or(&"".to_string())).await {
+                Ok(has_gateway_obj) => {
+                    let gateway_config = process_gateway_config(vec![gateway_obj]).await.unwrap().get(0).unwrap().clone();
+
+                    if has_gateway_obj.is_some() {
+                        {
+                            let mut gateway_names_guard = GATEWAY_NAMES.write().await;
+                            gateway_names_guard.push(gateway_config.name.clone());
+                        }
+                        let gateway_names_guard = GATEWAY_NAMES.read().await;
+                        let http_route_objs = http_route_api_clone
+                            .list(&ListParams::default())
+                            .await
+                            .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
+                            .unwrap()
+                            .into_iter()
+                            .filter(|http_route_obj| {
+                                http_route_obj
+                                    .spec
+                                    .inner
+                                    .parent_refs
+                                    .as_ref()
+                                    .map(|parent_refs| {
+                                        parent_refs.iter().any(|parent_ref| {
+                                            gateway_names_guard.contains(&format!(
+                                                "{}.{}",
+                                                if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                                                    namespaces.to_string()
+                                                } else {
+                                                    http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
+                                                },
+                                                parent_ref.name
+                                            ))
+                                        })
+                                    })
+                                    .unwrap_or(false)
+                            })
+                            .collect::<Vec<HttpRoute>>();
+                        let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect())
+                            .await
+                            .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
+                            .unwrap();
+                        shutdown(&gateway_config.name).await.unwrap();
+                        do_startup(gateway_config, http_route_configs).await.unwrap();
+                    } else {
+                        {
+                            let mut gateway_names_guard = GATEWAY_NAMES.write().await;
+                            gateway_names_guard.retain(|name| name != &gateway_config.name);
+                        }
+                        shutdown(&gateway_config.name).await.unwrap();
+                    }
+                }
+                _ => {}
             }
         }
     });
 
     tardis::tokio::spawn(async move {
         let http_route_api_clone = http_route_api.clone();
-        let ew = watcher(http_route_api_clone, ListParams::default()).applied_objects();
+        let ew = watcher(http_route_api_clone, ListParams::default()).touched_objects();
         pin_mut!(ew);
         while let Some(http_route_obj) = ew.try_next().await.unwrap() {
+            if http_route_objs_generation.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &http_route_obj.metadata.generation.unwrap_or(0) {
+                // ignore the original object
+                continue;
+            }
             if http_route_obj.spec.inner.parent_refs.is_none() {
                 continue;
             }
-            let gateway_names = http_route_obj.spec.inner.parent_refs.as_ref().unwrap().iter().map(|parent_ref| parent_ref.name.clone()).collect::<Vec<String>>();
-            let mut gateway_objs = Vec::new();
-            for gateway_name in &gateway_names {
-                let gateway_obj = gateway_api.get(gateway_name).await.unwrap();
+            let (rel_gateway_namespaces, rel_gateway_name) = (
+                if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].namespace.as_ref() {
+                    namespaces.to_string()
+                } else {
+                    http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
+                },
+                http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].name.clone(),
+            );
+            let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.unwrap(), &rel_gateway_namespaces);
+            let gateway_obj = if let Ok(Some(gateway_obj)) = gateway_api.get_opt(&rel_gateway_name).await {
                 if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
                     continue;
                 }
-                gateway_objs.push(gateway_obj);
-            }
-            let gateway_configs = process_gateway_config(gateway_objs).await.unwrap();
+                gateway_obj
+            } else {
+                continue;
+            };
+
+            log::trace!("[SG.Config] Http route config change found");
+
+            let gateway_config = process_gateway_config(vec![gateway_obj]).await.unwrap().get(0).unwrap().clone();
+
+            let gateway_names_guard = GATEWAY_NAMES.read().await;
 
             let http_route_objs: Vec<HttpRoute> = http_route_api
                 .list(&ListParams::default())
@@ -127,25 +223,33 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 .unwrap()
                 .into_iter()
                 .filter(|http_route_obj| {
-                    http_route_obj.spec.inner.parent_refs.as_ref().map(|parent_refs| parent_refs.iter().any(|parent_ref| gateway_names.contains(&parent_ref.name))).unwrap_or(false)
+                    http_route_obj
+                        .spec
+                        .inner
+                        .parent_refs
+                        .as_ref()
+                        .map(|parent_refs| {
+                            parent_refs.iter().any(|parent_ref| {
+                                gateway_names_guard.contains(&format!(
+                                    "{}.{}",
+                                    if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                                        namespaces.to_string()
+                                    } else {
+                                        http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
+                                    },
+                                    parent_ref.name
+                                ))
+                            })
+                        })
+                        .unwrap_or(false)
                 })
                 .collect::<Vec<HttpRoute>>();
 
-            let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs).await.unwrap();
-            let http_route_configs = http_route_configs
-                .into_iter()
-                .group_by(|http_route_config| http_route_config.gateway_name.to_string())
-                .into_iter()
-                .map(|(gateway_name, http_route_configs)| (gateway_name, http_route_configs.collect::<Vec<SgHttpRoute>>()))
-                .collect::<Vec<(String, Vec<SgHttpRoute>)>>();
-
-            for (gateway_name, http_route_configs) in http_route_configs {
-                http_route::init(
-                    gateway_configs.iter().find(|gateway_config| gateway_config.name == gateway_name).unwrap().clone(),
-                    http_route_configs,
-                )
-                .await
-                .unwrap();
+            if http_route_objs.is_empty() {
+                http_route::init(gateway_config, vec![]).await.unwrap();
+            } else {
+                let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs).await.unwrap();
+                http_route::init(gateway_config, http_route_configs).await.unwrap();
             }
         }
     });
@@ -160,9 +264,6 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         // Key configuration compatibility checks
         if gateway_obj.spec.listeners.iter().any(|listener| listener.hostname.is_some()) {
             return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.listener.hostname] not supported yet", ""));
-        }
-        if gateway_obj.spec.listeners.iter().any(|listener| listener.allowed_routes.is_some()) {
-            return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.listener.allowedRoutes] not supported yet", ""));
         }
         if gateway_obj.spec.addresses.is_some() {
             return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.addresses] not supported yet", ""));
@@ -208,7 +309,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         }
         // Generate gateway configuration
         let gateway_config = SgGateway {
-            name: gateway_obj.metadata.name.unwrap(),
+            name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_obj.metadata.name.unwrap()),
             parameters: SgParameters {
                 redis_url: gateway_obj.metadata.annotations.and_then(|ann| ann.get("redis_url").map(|v| v.to_string())),
             },
@@ -321,8 +422,17 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
             return Err(TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""));
         }
         // Generate gateway configuration
+        let rel_gateway_name = format!(
+            "{}.{}",
+            if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].namespace.as_ref() {
+                namespaces.to_string()
+            } else {
+                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
+            },
+            http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].name
+        );
         let http_route_config = SgHttpRoute {
-            gateway_name: http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].name.to_string(),
+            gateway_name: rel_gateway_name,
             hostnames: http_route_obj.spec.hostnames,
             filters: None,
             rules: match http_route_obj.spec.rules {
