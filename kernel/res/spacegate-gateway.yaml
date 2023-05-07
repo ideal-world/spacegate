@@ -87,8 +87,16 @@ spec:
       shareProcessNamespace: true
       serviceAccountName: spacegate
       containers:
-      - image: ecfront/spacegate:0.1.0-alpha.2
+      - name: spacegate
+        image: ecfront/spacegate:0.1.0-alpha.2
         imagePullPolicy: IfNotPresent
-        name: spacegate
         securityContext:
           runAsUser: 1001
+        volumeMounts:
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /kube
+      volumes:
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig

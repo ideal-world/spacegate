@@ -48,7 +48,7 @@ pub async fn request(
     }
     if let Some(backend) = backend {
         let scheme = backend.protocol.as_ref().unwrap_or(&SgProtocol::Http);
-        let host = format!("{}{}", backend.namespace.as_ref().map(|n| format!("{n}.")).unwrap_or("".to_string()), backend.name_or_host);
+        let host = format!("{}{}", backend.name_or_host, backend.namespace.as_ref().map(|n| format!(".{n}")).unwrap_or("".to_string()));
         let port = if (backend.port == 0 || backend.port == 80) && scheme == &SgProtocol::Http || (backend.port == 0 || backend.port == 443) && scheme == &SgProtocol::Https {
             "".to_string()
         } else {

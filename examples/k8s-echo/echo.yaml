@@ -13,7 +13,8 @@ spec:
         app: echo
     spec:
       containers:
-      - image: jmalloc/echo-server
+      - name: echo
+        image: jmalloc/echo-server
         ports:
         - containerPort: 8080
 ---
