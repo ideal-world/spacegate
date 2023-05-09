@@ -175,7 +175,9 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                         shutdown(&gateway_config.name).await.unwrap();
                     }
                 }
-                _ => {}
+                Err(error) => {
+                    log::warn!("[SG.Config] Gateway config change process error:{error}");
+                }
             }
         }
     });
@@ -505,7 +507,7 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
                                         let backend = backend.backend_ref.unwrap();
                                         SgBackendRef {
                                             name_or_host: backend.inner.name,
-                                            namespace: backend.inner.namespace,
+                                            namespace: Some(backend.inner.namespace.unwrap_or("default".to_string())),
                                             port: backend.inner.port.unwrap(),
                                             timeout_ms: None,
                                             protocol: None,

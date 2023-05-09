@@ -38,6 +38,7 @@ rules:
   - gateways
   - httproutes
   verbs:
+  - get
   - list
   - watch
 - apiGroups:
@@ -70,12 +71,11 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: spacegate
   namespace: spacegate
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: spacegate
@@ -84,19 +84,42 @@ spec:
       labels:
         app: spacegate
     spec:
-      shareProcessNamespace: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: spacegate
       containers:
       - name: spacegate
         image: ecfront/spacegate:0.1.0-alpha.2
         imagePullPolicy: IfNotPresent
-        securityContext:
-          runAsUser: 1001
-        volumeMounts:
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /kube
-      volumes:
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig
+# ---        
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: spacegate
+#   namespace: spacegate
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: spacegate
+#   template:
+#     metadata:
+#       labels:
+#         app: spacegate
+#     spec:
+#       shareProcessNamespace: true
+#       serviceAccountName: spacegate
+#       containers:
+#       - name: spacegate
+#         image: ecfront/spacegate:0.1.0-alpha.2
+#         imagePullPolicy: IfNotPresent
+#         securityContext:
+#           runAsUser: 1001
+#         volumeMounts:
+#         - name: kubeconfig
+#           readOnly: true
+#           mountPath: /kube
+#       volumes:
+#       - name: kubeconfig
+#         secret:
+#           secretName: kubeconfig

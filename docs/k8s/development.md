@@ -19,13 +19,13 @@
 1. Install Gateway API resources
 
     ```
-    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/standard-install.yaml
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
     ```
 
     OR
 
     ```
-    kubectl apply -f ./docs/k8s/gateway-api-0.6.2-china.yaml
+    kubectl apply -f ./docs/k8s/gateway-api-0.6.2-experimental-china.yaml
     ```
 
     * This file replaces the addresses of the two images to solve the problem of inaccessibility in mainland China
@@ -53,7 +53,7 @@
 
 ## Process spacegate resources
 
-1. Import kubeconfig to Secret:
+1. Import kubeconfig to Secret(Optional, this step is not required if using the default `hostNetwork: true` ):
 
     ```
     export kubeconfig=`cat $HOME/.kube/config | base64 -w 0`

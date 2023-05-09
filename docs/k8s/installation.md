@@ -16,7 +16,7 @@ This guide walks you through how to install Spacegate Kubernetes Gateway on a ge
     kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/standard-install.yaml
     ```
 
-1. Import kubeconfig to Secret:
+1. Import kubeconfig to Secret(Optional, this step is not required if using the default `hostNetwork: true` ):
 
     ```
     export kubeconfig=`cat $HOME/.kube/config | base64 -w 0`
