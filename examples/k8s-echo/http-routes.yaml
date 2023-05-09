@@ -12,7 +12,7 @@ spec:
           path:
             type: ReplacePrefixMatch
             replacePrefixMatch: /
-  - matches:
+    matches:
     - path:
         type: PathPrefix
         value: /echo

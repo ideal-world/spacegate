@@ -459,6 +459,7 @@ async fn process_req_filters(
     if let Some(backend_filters) = backend_filters {
         for (id, filter) in backend_filters {
             if !executed_filters.contains(&id) {
+                log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
                 (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
                     return Ok(ctx);
@@ -470,6 +471,7 @@ async fn process_req_filters(
     if let Some(rule_filters) = rule_filters {
         for (id, filter) in rule_filters {
             if !executed_filters.contains(&id) {
+                log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
                 (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
                     return Ok(ctx);
@@ -480,6 +482,7 @@ async fn process_req_filters(
     }
     for (id, filter) in route_filters {
         if !executed_filters.contains(&id) {
+            log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
             (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);
@@ -489,6 +492,7 @@ async fn process_req_filters(
     }
     for (id, filter) in global_filters {
         if !executed_filters.contains(&id) {
+            log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
             (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);
@@ -512,6 +516,7 @@ async fn process_resp_filters(
     if let Some(backend_filters) = backend_filters {
         for (id, filter) in backend_filters {
             if !executed_filters.contains(&id) {
+                log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
                 (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
                     return Ok(ctx);
@@ -523,6 +528,7 @@ async fn process_resp_filters(
     if let Some(rule_filters) = rule_filters {
         for (id, filter) in rule_filters {
             if !executed_filters.contains(&id) {
+                log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
                 (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
                     return Ok(ctx);
@@ -533,6 +539,7 @@ async fn process_resp_filters(
     }
     for (id, filter) in route_filters {
         if !executed_filters.contains(&id) {
+            log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
             (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);
@@ -542,6 +549,7 @@ async fn process_resp_filters(
     }
     for (id, filter) in global_filters {
         if !executed_filters.contains(&id) {
+            log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
             (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
                 return Ok(ctx);

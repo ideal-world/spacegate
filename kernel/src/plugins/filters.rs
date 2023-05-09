@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::url::Url;
-use tardis::TardisFuns;
+use tardis::{log, TardisFuns};
 
 use crate::config::http_route_dto::SgHttpPathMatchType;
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
@@ -88,6 +88,11 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
         let mut uri = Url::parse(&uri.to_string())?;
         match modify_path.kind {
             SgHttpPathModifierType::ReplaceFullPath => {
+                log::trace!(
+                    "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplaceFullPath], form {} to  {}",
+                    uri.path(),
+                    modify_path.value
+                );
                 uri.set_path(&modify_path.value);
             }
             SgHttpPathModifierType::ReplacePrefixMatch => {
@@ -96,30 +101,47 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
                         SgHttpPathMatchType::Exact => {
                             // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
                             // https://cloud.yandex.com/en/docs/application-load-balancer/k8s-ref/http-route
+                            log::trace!(
+                                "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplacePrefixMatch] and match kind [Exact], form {} to {}",
+                                uri.path(),
+                                modify_path.value
+                            );
                             uri.set_path(&modify_path.value);
                         }
                         _ => {
+                            let origin_path = uri.path();
                             let match_path = if matched_path.kind == SgHttpPathMatchType::Prefix {
                                 &matched_path.value
                             } else {
                                 // Support only one capture group
-                                matched_path.regular.as_ref().unwrap().captures(uri.path()).map(|cap| cap.get(1).map_or("", |m| m.as_str())).unwrap_or("")
+                                matched_path.regular.as_ref().unwrap().captures(origin_path).map(|cap| cap.get(1).map_or("", |m| m.as_str())).unwrap_or("")
                             };
-                            let path = uri.path().strip_prefix(match_path).unwrap();
-                            if path.is_empty() {
-                                uri.set_path(&modify_path.value);
-                            } else if path.starts_with('/') && modify_path.value.ends_with('/') {
-                                uri.set_path(&format!("{}{}", modify_path.value, &path.to_string()[1..]));
-                            } else if path.starts_with('/') || modify_path.value.ends_with('/') {
-                                uri.set_path(&format!("{}{}", modify_path.value, &path.to_string()));
+                            let match_path_reduce = origin_path.strip_prefix(match_path).unwrap();
+                            let new_path = if match_path_reduce.is_empty() {
+                                modify_path.value.to_string()
+                            } else if match_path_reduce.starts_with('/') && modify_path.value.ends_with('/') {
+                                format!("{}{}", modify_path.value, &match_path_reduce.to_string()[1..])
+                            } else if match_path_reduce.starts_with('/') || modify_path.value.ends_with('/') {
+                                format!("{}{}", modify_path.value, &match_path_reduce.to_string())
                             } else {
-                                uri.set_path(&format!("{}/{}", modify_path.value, &path.to_string()));
-                            }
+                                format!("{}/{}", modify_path.value, &match_path_reduce.to_string())
+                            };
+                            log::trace!(
+                                "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplacePrefixMatch] and match kind [Prefix/Regular], form {} to {}",
+                                origin_path,
+                                new_path,
+                            );
+                            uri.set_path(&new_path);
                         }
                     }
                 } else {
                     // TODO
                     // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
+                    log::trace!(
+                        "[SG.Plugin.Filter.Common] Modify path with modify kind [None], form {} to {}",
+                        uri.path(),
+                        modify_path.value,
+                    );
                     uri.set_path(&modify_path.value);
                 }
             }
