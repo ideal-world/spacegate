@@ -1,0 +1,40 @@
+name: Publish k8s-test docker image
+
+on:
+  push:
+    paths:
+      - "helper/k8s-test/Dockerfile"
+
+jobs:
+  push_to_registry:
+    name: Push docker image to registry
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Build and push Docker image to github
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: helper/k8s-test/
+          dockerfile: helper/k8s-test/Dockerfile
+          registry: ghcr.io
+          image: spacegate-k8s-test
+          tags: latest
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build and push Docker image to dockerhub
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: helper/k8s-test/
+          dockerfile: helper/k8s-test/Dockerfile
+          registry: docker.io
+          image: ecfront/spacegate-k8s-test
+          tags: latest
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
