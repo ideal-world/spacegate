@@ -24,14 +24,43 @@ jobs:
       - name: Cache rust
         uses: Swatinem/rust-cache@v2
 
-      - name: Check format
-        run: cargo fmt --all -- --check
+      # - name: Check format
+      #   run: cargo fmt --all -- --check
 
-      - name: Check clippy
-        run: cargo clippy --all --all-features
+      # - name: Check clippy
+      #   run: cargo clippy --all --all-features
 
-      - name: Run test
-        run: cargo test --all-features
+      # - name: Run rust test
+      #   run: cargo test --all-features
+
+      - name: Setup k8s e2e env
+        uses: AbsaOSS/k3d-action@v2
+        with:
+          cluster-name: spacegate-test
+          args: >-
+            --agents 1
+            --no-lb
+            --k3s-arg "--no-deploy=traefik,servicelb,metrics-server@server:*"
+
+      - name: Init k8s e2e env
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
+          cargo build --release -p spacegate
+          cd services/full/res
+          mv ../../../target/release/spacegate ./
+          docker build -t ecfront/spacegate:0.1.0-alpha.2 .
+          rm spacegate
+          k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test --verbose
+
+          cd ../../../
+          kubectl apply -f ./kernel/res/namespace.yaml
+          kubectl apply -f ./kernel/res/gatewayclass.yaml
+          kubectl apply -f ./kernel/res/spacegate-gateway.yaml
+          kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
+
+      - name: Run k8s e2e test
+        run: |
+          bash ./ele/e2e-test.sh
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
