@@ -4,7 +4,7 @@ apt update
 apt install libxml2-dev
 cargo install hurl
 
-cluster_ip=`kubectl get nodes --selector=kubernetes.io/role!=master -o jsonpath={.items[*].status.addresses[?\(@.type==\"InternalIP\"\)].address}`
+cluster_ip=`kubectl get nodes -o jsonpath={.items[0].status.addresses[?\(@.type==\"InternalIP\"\)].address}`
 
 echo "===echo test==="
 kubectl apply -f echo.yaml
