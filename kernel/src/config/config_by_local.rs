@@ -17,7 +17,7 @@ lazy_static! {
 }
 
 pub async fn init(conf_path: &str, check_interval_sec: u64) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
-    let gateway_config_path = format!("{conf_path}/gateway.yml");
+    let gateway_config_path = format!("{conf_path}/gateway.yaml");
     let routes_config_path = format!("{conf_path}/routes");
 
     let (config, _, _) = fetch_configs(&gateway_config_path, &routes_config_path).await?;
