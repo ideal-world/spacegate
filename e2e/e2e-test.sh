@@ -12,6 +12,8 @@ echo "===echo test==="
 kubectl apply -f echo.yaml
 kubectl wait --for=condition=Ready pod -l app=echo
 
+sleep 5
+
 cat>echo<<EOF 
 GET http://${cluster_ip}:9000/echo/get
 
