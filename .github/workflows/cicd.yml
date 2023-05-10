@@ -45,9 +45,9 @@ jobs:
       - name: Init k8s e2e env
         run: |
           kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
-          cargo build --release -p spacegate
+          cargo build -p spacegate
           cd services/full/res
-          mv ../../../target/release/spacegate ./
+          mv ../../../target/debug/spacegate ./
           docker build -t ecfront/spacegate:0.1.0-alpha.2 .
           rm spacegate
           k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test --verbose
@@ -61,7 +61,7 @@ jobs:
 
       - name: Run k8s e2e test
         run: |
-          bash ./ele/e2e-test.sh
+          bash ./e2e/e2e-test.sh
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
