@@ -24,14 +24,14 @@ jobs:
       - name: Cache rust
         uses: Swatinem/rust-cache@v2
 
-      # - name: Check format
-      #   run: cargo fmt --all -- --check
+      - name: Check format
+        run: cargo fmt --all -- --check
 
-      # - name: Check clippy
-      #   run: cargo clippy --all --all-features
+      - name: Check clippy
+        run: cargo clippy --all --all-features
 
-      # - name: Run rust test
-      #   run: cargo test --all-features
+      - name: Run rust test
+        run: cargo test --all-features
 
       - name: Setup k8s e2e env
         uses: AbsaOSS/k3d-action@v2
