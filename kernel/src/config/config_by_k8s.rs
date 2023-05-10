@@ -122,8 +122,8 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             }
             log::trace!("[SG.Config] Gateway config change found");
 
-            let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.unwrap(), &gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()));
-            match gateway_api.get_metadata_opt(&gateway_obj.metadata.name.as_ref().unwrap_or(&"".to_string())).await {
+            let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.unwrap(), gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()));
+            match gateway_api.get_metadata_opt(gateway_obj.metadata.name.as_ref().unwrap_or(&"".to_string())).await {
                 Ok(has_gateway_obj) => {
                     let gateway_config = process_gateway_config(vec![gateway_obj]).await.unwrap().get(0).unwrap().clone();
 
