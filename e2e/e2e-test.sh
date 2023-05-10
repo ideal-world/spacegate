@@ -19,5 +19,5 @@ jsonpath "$.url" == "http://${cluster_ip}:9000/get"
 EOF
 hurl --test echo
 
-echo "===change port==="
-kubectl patch service nginx --type json   -p='[{"op": "replace", "path": "/spec/type/spec/ports/0/targetPort", "new port"}]' && \
+# echo "===change port==="
+# kubectl patch service nginx --type json -p='[{"op": "replace", "path": "/spec/type/spec/ports/0/targetPort", "new port"}]' && \
