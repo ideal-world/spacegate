@@ -61,7 +61,8 @@ jobs:
 
       - name: Run k8s e2e test
         run: |
-          bash ./e2e/e2e-test.sh
+          cd ./e2e
+          bash ./e2e-test.sh
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
