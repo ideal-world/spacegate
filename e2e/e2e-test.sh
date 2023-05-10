@@ -4,6 +4,8 @@ apt update
 apt install libxml2-dev
 cargo install hurl
 
+echo `kubectl get nodes -o wide`
+
 cluster_ip=`kubectl get nodes -o jsonpath={.items[1].status.addresses[?\(@.type==\"InternalIP\"\)].address}`
 
 echo "===echo test==="
