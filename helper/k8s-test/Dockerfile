@@ -1,4 +1,4 @@
-FROM latest-dind
+FROM rancher/k3d:latest-dind
 
 RUN apt update
 RUN apt install -y curl
