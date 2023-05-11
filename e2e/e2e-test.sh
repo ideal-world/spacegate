@@ -56,6 +56,7 @@ hurl --test change-route -v
 # TODO
 echo "============[gateway]tls test============"
 echo "============[gateway]multiple listeners test============"
+echo "============[gateway]hostname test============"
 echo "============[gateway]redis connction test============"
 echo "============[websocket]no backend test============"
 echo "============[websocket]basic test============"
@@ -70,5 +71,3 @@ echo "============[filter]rule level test============"
 echo "============[filter]routing level test============"
 echo "============[filter]global level test============"
 echo "============[filter]multiple levels test============"
-
-

@@ -2,6 +2,9 @@ name: CICD
 
 on: [push, pull_request]
 
+env:
+  ARTIFACT_DIR: release-artifacts
+  
 jobs:
   # check:
   #   runs-on: ubuntu-latest
@@ -277,6 +280,17 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
+
+      - name: Prepare build
+        shell: bash
+        run: |
+          git clone https://github.com/Microsoft/vcpkg --depth=1
+          cd vcpkg
+          bootstrap-vcpkg.bat
+          vcpkg.exe integrate install
+          vcpkg.exe install openssl:x64-windows-static
+          export OPENSSL_NO_VENDOR=1
+          export OPENSSL_DIR=$PWD/packages/openssl_x64-windows-static
 
       - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
