@@ -321,17 +321,17 @@ jobs:
           DEST_DIR=${{ env.ARTIFACT_DIR }}
           mkdir -p ${DEST_DIR}
 
-          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
+          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}.exe
           CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
           mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
           certutil -hashfile ${RELEASE_NAME_FULL} SHA256 >${CHECKSUM_FULL}
 
-          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
+          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}.exe
           CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
           mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
           certutil -hashfile ${RELEASE_NAME_NATIVE} SHA256 >${CHECKSUM_NATIVE}
 
-          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
+          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}.exe
           CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
           mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
           certutil -hashfile ${RELEASE_NAME_SIMPLIFY} SHA256 >${CHECKSUM_SIMPLIFY}
