@@ -39,7 +39,9 @@ kubectl patch httproute echo --type json -p='[{"op": "replace", "path": "/spec/r
 cat>change-route<<EOF 
 GET http://${cluster_ip}:9001/echo/get
 
-HTTP 404
+HTTP 200
+[Asserts]
+header "content-length" == "0"
 
 GET http://${cluster_ip}:9001/hi/get
 
