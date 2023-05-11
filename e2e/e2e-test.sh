@@ -11,8 +11,7 @@ cluster_ip=`kubectl get nodes -o jsonpath={.items[1].status.addresses[?\(@.type=
 echo "===echo test==="
 kubectl apply -f echo.yaml
 kubectl wait --for=condition=Ready pod -l app=echo
-
-sleep 1
+sleep 2
 
 cat>echo<<EOF 
 GET http://${cluster_ip}:9000/echo/get
@@ -24,4 +23,5 @@ EOF
 hurl --test echo -v
 
 # echo "===change port==="
-# kubectl patch service nginx --type json -p='[{"op": "replace", "path": "/spec/type/spec/ports/0/targetPort", "new port"}]' && \
+# kubectl patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0", "port", "9001"}]'
+# kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
