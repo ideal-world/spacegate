@@ -1,9 +1,8 @@
 #!/bin/bash
 
-apt update
-apt install libxml2-dev curl
+sudo apt update && sudo apt install curl
 curl --location --remote-name https://github.com/Orange-OpenSource/hurl/releases/download/3.0.0/hurl_3.0.0_amd64.deb
-apt update && apt install ./hurl_3.0.0_amd64.deb
+sudo apt update && sudo apt install ./hurl_3.0.0_amd64.deb
 
 echo `kubectl get nodes -o wide`
 
