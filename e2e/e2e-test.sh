@@ -11,7 +11,7 @@ cluster_ip=`kubectl get nodes -o jsonpath={.items[1].status.addresses[?\(@.type=
 echo "===echo test==="
 kubectl apply -f echo.yaml
 kubectl wait --for=condition=Ready pod -l app=echo
-sleep 2
+sleep 5
 
 cat>echo<<EOF 
 GET http://${cluster_ip}:9000/echo/get
@@ -22,6 +22,29 @@ jsonpath "$.url" == "http://${cluster_ip}:9000/get"
 EOF
 hurl --test echo -v
 
-# echo "===change port==="
-# kubectl patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0", "port", "9001"}]'
-# kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
+echo "===change config==="
+kubectl patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/port", "value": 9001}]'
+
+cat>change-port<<EOF 
+GET http://${cluster_ip}:9001/echo/get
+
+HTTP 200
+[Asserts]
+jsonpath "$.url" == "http://${cluster_ip}:9001/get"
+EOF
+hurl --test change-port -v
+
+kubectl patch httproute echo --type json -p='[{"op": "replace", "path": "/spec/rules/0/matches/0/path/value", "value": "/hi"}]'
+
+cat>change-route<<EOF 
+GET http://${cluster_ip}:9001/echo/get
+
+HTTP 404
+
+GET http://${cluster_ip}:9001/hi/get
+
+HTTP 200
+[Asserts]
+jsonpath "$.url" == "http://${cluster_ip}:9001/get"
+EOF
+hurl --test change-route -v

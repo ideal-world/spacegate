@@ -53,11 +53,13 @@ jobs:
           k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test --verbose
 
           kubectl wait --for=condition=Ready pod -l name=gateway-api-admission-server -n gateway-system
+          sleep 5
           cd ../../../
           kubectl apply -f ./kernel/res/namespace.yaml
           kubectl apply -f ./kernel/res/gatewayclass.yaml
           kubectl apply -f ./kernel/res/spacegate-gateway.yaml
           kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
+          sleep 5
 
       - name: Run k8s e2e test
         run: |
