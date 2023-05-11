@@ -8,18 +8,18 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::functions::http_route::SgRouteMatchInst;
 
-use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 use lazy_static::lazy_static;
 pub const CODE: &str = "limit";
 
 pub struct SgFilterLimitDef;
 
 impl SgPluginFilterDef for SgFilterLimitDef {
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterLimit>(spec)?;
-        Ok(Box::new(filter))
+        Ok(filter.boxed())
     }
 }
 
@@ -105,7 +105,7 @@ impl SgPluginFilter for SgFilterLimit {
         Ok(())
     }
 
-    async fn req_filter(&self, id: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, id: &str, ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(max_request_number) = &self.max_request_number {
             let result: &bool = &SCRIPT
                 // counter key
@@ -128,7 +128,7 @@ impl SgPluginFilter for SgFilterLimit {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         Ok((true, ctx))
     }
 }

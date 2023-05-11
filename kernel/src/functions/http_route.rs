@@ -5,7 +5,7 @@ use crate::{
         gateway_dto::{SgGateway, SgProtocol},
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
-    plugins::filters::{self, SgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
+    plugins::filters::{self, BoxSgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
 use http::{header::UPGRADE, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
@@ -97,7 +97,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                                     .collect()
                             });
 
-                            SgHttpRouteMatchInst {
+                            SgRouteMatchInst {
                                 path: path_inst,
                                 header: header_inst,
                                 query: query_inst,
@@ -296,8 +296,9 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
     for (k, v) in ctx.get_resp_headers() {
         resp = resp.header(k.as_str(), v.to_str().unwrap());
     }
-    let resp =
-        resp.body(ctx.pop_resp_body_raw()?.unwrap_or_else(Body::empty)).map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
+    let resp = resp
+        .body(Body::from(ctx.pop_resp_body().await?.unwrap_or_default()))
+        .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
     Ok(resp)
 }
 
@@ -339,7 +340,7 @@ fn match_route_insts_with_hostname_priority<'a>(req_host: Option<&str>, routes: 
     }
 }
 
-fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpRouteMatchInst>>) -> (bool, Option<&'a SgHttpRouteMatchInst>) {
+fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgRouteMatchInst>>) -> (bool, Option<&'a SgRouteMatchInst>) {
     if let Some(matches) = rule_matches {
         for rule_match in matches {
             if let Some(method) = &rule_match.method {
@@ -439,11 +440,11 @@ async fn process_req_filters(
     gateway_name: String,
     remote_addr: SocketAddr,
     request: Request<Body>,
-    backend_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
-    rule_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
-    route_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
-    global_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
-    matched_match_inst: Option<&SgHttpRouteMatchInst>,
+    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    route_filters: &Vec<(String, BoxSgPluginFilter)>,
+    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    matched_match_inst: Option<&SgRouteMatchInst>,
 ) -> TardisResult<SgRouteFilterContext> {
     let mut ctx = SgRouteFilterContext::new(
         request.method().clone(),
@@ -505,11 +506,11 @@ async fn process_req_filters(
 
 async fn process_resp_filters(
     mut ctx: SgRouteFilterContext,
-    backend_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
-    rule_filters: Option<&Vec<(String, Box<dyn SgPluginFilter>)>>,
-    route_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
-    global_filters: &Vec<(String, Box<dyn SgPluginFilter>)>,
-    matched_match_inst: Option<&SgHttpRouteMatchInst>,
+    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    route_filters: &Vec<(String, BoxSgPluginFilter)>,
+    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    matched_match_inst: Option<&SgRouteMatchInst>,
 ) -> TardisResult<SgRouteFilterContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
@@ -574,7 +575,7 @@ fn choose_backend(backends: &Vec<SgBackend>) -> Option<&SgBackend> {
 }
 
 struct SgGatewayInst {
-    pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
+    pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub routes: Vec<SgHttpRouteInst>,
     pub client: Client<HttpsConnector<HttpConnector>>,
 }
@@ -582,20 +583,20 @@ struct SgGatewayInst {
 #[derive(Default)]
 struct SgHttpRouteInst {
     pub hostnames: Option<Vec<String>>,
-    pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
+    pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub rules: Option<Vec<SgHttpRouteRuleInst>>,
 }
 
 #[derive(Default)]
 struct SgHttpRouteRuleInst {
-    pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
-    pub matches: Option<Vec<SgHttpRouteMatchInst>>,
+    pub filters: Vec<(String, BoxSgPluginFilter)>,
+    pub matches: Option<Vec<SgRouteMatchInst>>,
     pub backends: Option<Vec<SgBackend>>,
     pub timeout_ms: Option<u64>,
 }
 
 #[derive(Default)]
-pub struct SgHttpRouteMatchInst {
+pub struct SgRouteMatchInst {
     pub path: Option<SgHttpPathMatchInst>,
     pub header: Option<Vec<SgHttpHeaderMatchInst>>,
     pub query: Option<Vec<SgHttpQueryMatchInst>>,
@@ -633,7 +634,7 @@ pub struct SgBackend {
     pub timeout_ms: Option<u64>,
     pub protocol: Option<SgProtocol>,
     pub weight: Option<u16>,
-    pub filters: Vec<(String, Box<dyn SgPluginFilter>)>,
+    pub filters: Vec<(String, BoxSgPluginFilter)>,
 }
 
 #[cfg(test)]
@@ -649,7 +650,7 @@ mod tests {
         functions::http_route::{choose_backend, match_route_insts_with_hostname_priority, SgBackend, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst},
     };
 
-    use super::{match_rule_inst, SgHttpPathMatchInst, SgHttpRouteMatchInst};
+    use super::{match_rule_inst, SgHttpPathMatchInst, SgRouteMatchInst};
 
     #[test]
     fn test_match_rule_inst() {
@@ -660,7 +661,7 @@ mod tests {
 
         // -----------------------------------------------------
         // Match exact path
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Exact,
                 value: "/iam".to_string(),
@@ -683,7 +684,7 @@ mod tests {
         assert!(matched_match_inst.is_some());
 
         // Match prefix path
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
                 value: "/iam".to_string(),
@@ -707,7 +708,7 @@ mod tests {
         assert!(matched_match_inst.is_some());
 
         // Match regular path
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Regular,
                 value: "/iam/[0-9]+/hi".to_string(),
@@ -740,7 +741,7 @@ mod tests {
 
         // -----------------------------------------------------
         // Match method
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             method: Some(vec!["get".to_string()]),
             ..Default::default()
         }];
@@ -761,7 +762,7 @@ mod tests {
 
         // -----------------------------------------------------
         // Match exact header
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             header: Some(vec![
                 SgHttpHeaderMatchInst {
                     kind: SgHttpHeaderMatchType::Exact,
@@ -816,7 +817,7 @@ mod tests {
         );
 
         // Match regular header
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             header: Some(vec![SgHttpHeaderMatchInst {
                 kind: SgHttpHeaderMatchType::Regular,
                 name: "X-Id".to_string(),
@@ -843,7 +844,7 @@ mod tests {
 
         // -----------------------------------------------------
         // Match exact query
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             query: Some(vec![
                 SgHttpQueryMatchInst {
                     kind: SgHttpQueryMatchType::Exact,
@@ -891,7 +892,7 @@ mod tests {
         );
 
         // Match regular query
-        let match_conds = vec![SgHttpRouteMatchInst {
+        let match_conds = vec![SgRouteMatchInst {
             query: Some(vec![SgHttpQueryMatchInst {
                 kind: SgHttpQueryMatchType::Regular,
                 name: "id".to_string(),
@@ -925,7 +926,7 @@ mod tests {
 
         // Match multiple
         let match_conds = vec![
-            SgHttpRouteMatchInst {
+            SgRouteMatchInst {
                 method: Some(vec!["put".to_string()]),
                 query: Some(vec![SgHttpQueryMatchInst {
                     kind: SgHttpQueryMatchType::Regular,
@@ -935,7 +936,7 @@ mod tests {
                 }]),
                 ..Default::default()
             },
-            SgHttpRouteMatchInst {
+            SgRouteMatchInst {
                 method: Some(vec!["post".to_string()]),
                 ..Default::default()
             },

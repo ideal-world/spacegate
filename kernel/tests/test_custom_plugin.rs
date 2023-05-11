@@ -9,8 +9,8 @@ use spacegate_kernel::{
         http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
-    functions::http_route::SgHttpRouteMatchInst,
-    plugins::filters::{SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind, SgRouteFilterContext},
+    functions::http_route::SgRouteMatchInst,
+    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind, SgRouteFilterContext},
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -22,9 +22,9 @@ use tardis::{
 pub struct SgFilterAuthDef;
 
 impl SgPluginFilterDef for SgFilterAuthDef {
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterAuth>(spec)?;
-        Ok(Box::new(filter))
+        Ok(filter.boxed())
     }
 }
 
@@ -45,14 +45,14 @@ impl SgPluginFilter for SgFilterAuth {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if ctx.get_req_headers().contains_key("Authorization") {
             return Ok((true, ctx));
         }
         Err(TardisError::unauthorized("unauthorized", ""))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         Ok((true, ctx))
     }
 }

@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod header_modifier;
 mod inject;
 #[cfg(feature = "cache")]
@@ -17,7 +18,7 @@ use tardis::{log, TardisFuns};
 
 use crate::config::http_route_dto::SgHttpPathMatchType;
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::functions::http_route::SgRouteMatchInst;
 
 static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
@@ -29,6 +30,7 @@ fn init_filter_defs() {
     filters.insert(inject::CODE.to_string(), Box::new(inject::SgFilterInjectDef));
     #[cfg(feature = "cache")]
     filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilterLimitDef));
+    filters.insert(compression::CODE.to_string(), Box::new(compression::SgFilterCompressionDef));
     unsafe {
         FILTERS = Some(filters);
     }
@@ -52,8 +54,8 @@ pub fn get_filter_def(code: &str) -> &Box<dyn SgPluginFilterDef> {
     }
 }
 
-pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(String, Box<dyn SgPluginFilter>)>> {
-    let mut plugin_filters: Vec<(String, Box<dyn SgPluginFilter>)> = Vec::new();
+pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
+    let mut plugin_filters: Vec<(String, BoxSgPluginFilter)> = Vec::new();
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
         let filter_def = get_filter_def(&filter_conf.code);
@@ -67,8 +69,10 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(Strin
 }
 
 pub trait SgPluginFilterDef {
-    fn inst(&self, spec: Value) -> TardisResult<Box<dyn SgPluginFilter>>;
+    fn inst(&self, spec: Value) -> TardisResult<BoxSgPluginFilter>;
 }
+
+pub type BoxSgPluginFilter = Box<dyn SgPluginFilter>;
 
 #[async_trait]
 pub trait SgPluginFilter: Send + Sync + 'static {
@@ -78,12 +82,19 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
-    async fn req_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn req_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 
-    async fn resp_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn resp_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+
+    fn boxed(self) -> BoxSgPluginFilter
+    where
+        Self: Sized,
+    {
+        Box::new(self)
+    }
 }
 
-pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathModifier>, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<Option<http::Uri>> {
+pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathModifier>, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<Option<http::Uri>> {
     if let Some(modify_path) = &modify_path {
         let mut uri = Url::parse(&uri.to_string())?;
         match modify_path.kind {
@@ -468,7 +479,7 @@ mod tests {
             http_route_dto::SgHttpPathMatchType,
             plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType},
         },
-        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteMatchInst},
+        functions::http_route::{SgHttpPathMatchInst, SgRouteMatchInst},
         plugins::filters::http_common_modify_path,
     };
 
@@ -500,7 +511,7 @@ mod tests {
         );
 
         // with math inst
-        let exact_match_inst = SgHttpRouteMatchInst {
+        let exact_match_inst = SgRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Exact,
                 value: "/iam".to_string(),
@@ -508,7 +519,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let prefix_match_inst = SgHttpRouteMatchInst {
+        let prefix_match_inst = SgRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
                 value: "/iam".to_string(),
@@ -516,7 +527,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let regular_match_inst = SgHttpRouteMatchInst {
+        let regular_match_inst = SgRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Regular,
                 value: "(/[a-z]+)".to_string(),

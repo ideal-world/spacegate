@@ -1,4 +1,4 @@
-use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
+use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgRouteMatchInst};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tardis::url::Url;
@@ -7,16 +7,16 @@ use tardis::{
     TardisFuns,
 };
 
-use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
 pub const CODE: &str = "rewrite";
 
 pub struct SgFilterRewriteDef;
 
 impl SgPluginFilterDef for SgFilterRewriteDef {
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterRewrite>(spec)?;
-        Ok(Box::new(filter))
+        Ok(filter.boxed())
     }
 }
 
@@ -45,7 +45,7 @@ impl SgPluginFilter for SgFilterRewrite {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Rewrite] Host {hostname} parsing error"), ""))?;
@@ -57,7 +57,7 @@ impl SgPluginFilter for SgFilterRewrite {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         Ok((true, ctx))
     }
 }
@@ -93,7 +93,7 @@ mod tests {
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
         );
-        let matched = SgHttpRouteMatchInst {
+        let matched = SgRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
                 value: "/iam".to_string(),
