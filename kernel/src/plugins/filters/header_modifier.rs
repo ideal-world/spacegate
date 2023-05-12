@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::functions::http_route::SgHttpRouteMatchInst;
 
-use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tardis::{basic::result::TardisResult, TardisFuns};
@@ -12,9 +12,9 @@ pub const CODE: &str = "header_modifier";
 pub struct SgFilterHeaderModifierDef;
 
 impl SgPluginFilterDef for SgFilterHeaderModifierDef {
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(spec)?;
-        Ok(Box::new(filter))
+        Ok(filter.boxed())
     }
 }
 
