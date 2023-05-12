@@ -3,7 +3,7 @@ use http::Method;
 use serde::{Deserialize, Serialize};
 use tardis::{basic::result::TardisResult, TardisFuns};
 
-use crate::functions::{http_client, http_route::SgRouteMatchInst};
+use crate::functions::{http_client, http_route::SgHttpRouteMatchInst};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
@@ -43,7 +43,7 @@ impl SgPluginFilter for SgFilterInject {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(req_inject_url) = &self.req_inject_url {
             let real_method = ctx.get_req_method().clone();
             let real_url = ctx.get_req_uri().clone();
@@ -68,7 +68,7 @@ impl SgPluginFilter for SgFilterInject {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(resp_inject_url) = &self.resp_inject_url {
             let real_method = ctx.get_req_method().clone();
             let real_url = ctx.get_req_uri().clone();

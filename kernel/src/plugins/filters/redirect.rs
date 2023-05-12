@@ -7,7 +7,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgRouteMatchInst};
+use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
 
 use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
 
@@ -53,7 +53,7 @@ impl SgPluginFilter for SgFilterRedirect {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Host {hostname} parsing error"), ""))?;
@@ -76,7 +76,7 @@ impl SgPluginFilter for SgFilterRedirect {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(status_code) = self.status_code {
             ctx.set_resp_status_code(
                 StatusCode::from_u16(status_code)
@@ -121,7 +121,7 @@ mod tests {
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
         );
-        let matched = SgRouteMatchInst {
+        let matched = SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
                 value: "/iam".to_string(),

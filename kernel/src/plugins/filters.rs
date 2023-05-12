@@ -18,7 +18,7 @@ use tardis::{log, TardisFuns};
 
 use crate::config::http_route_dto::SgHttpPathMatchType;
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
-use crate::functions::http_route::SgRouteMatchInst;
+use crate::functions::http_route::SgHttpRouteMatchInst;
 
 static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
@@ -82,9 +82,9 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
-    async fn req_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn req_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 
-    async fn resp_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn resp_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 
     fn boxed(self) -> BoxSgPluginFilter
     where
@@ -94,7 +94,7 @@ pub trait SgPluginFilter: Send + Sync + 'static {
     }
 }
 
-pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathModifier>, matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<Option<http::Uri>> {
+pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathModifier>, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<Option<http::Uri>> {
     if let Some(modify_path) = &modify_path {
         let mut uri = Url::parse(&uri.to_string())?;
         match modify_path.kind {
@@ -479,7 +479,7 @@ mod tests {
             http_route_dto::SgHttpPathMatchType,
             plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType},
         },
-        functions::http_route::{SgHttpPathMatchInst, SgRouteMatchInst},
+        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteMatchInst},
         plugins::filters::http_common_modify_path,
     };
 
@@ -511,7 +511,7 @@ mod tests {
         );
 
         // with math inst
-        let exact_match_inst = SgRouteMatchInst {
+        let exact_match_inst = SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Exact,
                 value: "/iam".to_string(),
@@ -519,7 +519,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let prefix_match_inst = SgRouteMatchInst {
+        let prefix_match_inst = SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
                 value: "/iam".to_string(),
@@ -527,7 +527,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let regular_match_inst = SgRouteMatchInst {
+        let regular_match_inst = SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Regular,
                 value: "(/[a-z]+)".to_string(),

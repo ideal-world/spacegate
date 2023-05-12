@@ -11,7 +11,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::http_route::SgRouteMatchInst;
+use crate::functions::http_route::SgHttpRouteMatchInst;
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
@@ -94,11 +94,11 @@ impl SgPluginFilter for SgFilterCompression {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         let resp_body = ctx.pop_resp_body().await?;
         if let Some(mut resp_body) = resp_body {
             let resp_encode_type = get_encode_type(ctx.get_resp_headers_raw().get(header::CONTENT_ENCODING));
@@ -244,7 +244,7 @@ mod tests {
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
         );
-        let matched = SgRouteMatchInst { ..Default::default() };
+        let matched = SgHttpRouteMatchInst { ..Default::default() };
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);
@@ -281,7 +281,7 @@ mod tests {
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
         );
-        let matched = SgRouteMatchInst { ..Default::default() };
+        let matched = SgHttpRouteMatchInst { ..Default::default() };
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);
