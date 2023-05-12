@@ -1,6 +1,9 @@
+use std::cmp::Ordering;
+
 use async_compression::tokio::bufread::{BrotliDecoder, BrotliEncoder, DeflateDecoder, DeflateEncoder, GzipDecoder, GzipEncoder};
 use async_trait::async_trait;
 use http::{header, HeaderValue};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tardis::{
     basic::result::TardisResult,
@@ -44,6 +47,7 @@ impl From<CompressionType> for HeaderValue {
         })
     }
 }
+
 impl From<CompressionType> for &str {
     #[inline]
     fn from(algo: CompressionType) -> Self {
@@ -54,10 +58,25 @@ impl From<CompressionType> for &str {
         }
     }
 }
+
 impl PartialEq<CompressionType> for &str {
     fn eq(&self, other: &CompressionType) -> bool {
         let other_str: &str = other.clone().into();
         self.to_lowercase() == *other_str
+    }
+}
+
+impl CompressionType {
+    fn from_str(s: &str) -> Option<Self> {
+        if s == CompressionType::Gzip {
+            Some(CompressionType::Gzip)
+        } else if s == CompressionType::Br {
+            Some(CompressionType::Br)
+        } else if s == CompressionType::Deflate {
+            Some(CompressionType::Deflate)
+        } else {
+            None
+        }
     }
 }
 
@@ -140,28 +159,40 @@ fn get_encode_type(header_value: Option<&HeaderValue>) -> Option<CompressionType
         header_value.to_str().map_or_else(
             |_| None,
             |v_str| {
-                let split: Vec<&str> = v_str.split(',').collect();
+                let split: Vec<&str> = v_str.split(',').map(|s| s.trim()).collect();
+                // support ;q=
                 if v_str.contains(";q=") {
-                    let result = None;
-                    for s in split {
-                        let split: Vec<&str> = v_str.split(";q=").collect();
-                        if split.len() == 2 {
-                            //TODO support ;q=
-                        }
+                    let high_q_last: Vec<(f32, Option<CompressionType>)> = split
+                        .iter()
+                        .map(|s| {
+                            let split: Vec<&str> = s.split(";q=").collect();
+                            if split.len() == 2 {
+                                (split[1].parse::<f32>().unwrap_or(1f32), CompressionType::from_str(split[0]))
+                            } else {
+                                (1f32, CompressionType::from_str(split[0]))
+                            }
+                        })
+                        .sorted_by(|(q1, t1), (q2, t2)| {
+                            if t1.is_none() && t2.is_none() {
+                                Ordering::Equal
+                            } else if t1.is_none() && t2.is_some() {
+                                Ordering::Less
+                            } else if t1.is_some() && t2.is_none() {
+                                Ordering::Greater
+                            } else {
+                                q1.total_cmp(q2)
+                            }
+                        })
+                        .collect();
+                    if let Some(first) = high_q_last.last() {
+                        first.1.clone()
+                    } else {
+                        None
                     }
-                    result
                 } else if !split.is_empty() {
                     let mut result = None;
                     for s in split {
-                        result = if s == CompressionType::Gzip {
-                            Some(CompressionType::Gzip)
-                        } else if s == CompressionType::Br {
-                            Some(CompressionType::Br)
-                        } else if s == CompressionType::Deflate {
-                            Some(CompressionType::Deflate)
-                        } else {
-                            None
-                        };
+                        result = CompressionType::from_str(s);
                         if result.is_some() {
                             break;
                         }
@@ -185,6 +216,18 @@ mod tests {
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
     use tardis::tokio::{self};
+
+    #[test]
+    fn test_get_encode_type() {
+        assert_eq!(get_encode_type(None), None);
+        assert_eq!(get_encode_type(Some(&HeaderValue::from_static("identity"))), None);
+        assert_eq!(get_encode_type(Some(&HeaderValue::from_static("*"))), None);
+        assert_eq!(get_encode_type(Some(&HeaderValue::from_static("gzip, deflate, br"))), Some(CompressionType::Gzip));
+        assert_eq!(
+            get_encode_type(Some(&HeaderValue::from_static("br;q=0.2, gzip;q=0.8, *;q=0.1"))),
+            Some(CompressionType::Gzip)
+        );
+    }
 
     #[tokio::test]
     async fn test_gzip() {
