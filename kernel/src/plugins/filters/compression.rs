@@ -1,4 +1,4 @@
-use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipDecoder, GzipEncoder};
+use async_compression::tokio::bufread::{BrotliDecoder, BrotliEncoder, DeflateDecoder, DeflateEncoder, GzipDecoder, GzipEncoder};
 use async_trait::async_trait;
 use http::{header, HeaderValue};
 use serde::{Deserialize, Serialize};
@@ -92,16 +92,16 @@ impl SgPluginFilter for SgFilterCompression {
                 if let Some(resp_encode_type) = resp_encode_type {
                     match resp_encode_type {
                         CompressionType::Gzip => {
-                            let mut encoded = GzipDecoder::new(BufReader::new(&resp_body[..]));
-                            let _ = encoded.read_to_end(&mut decoded_body).await;
+                            let mut decoded = GzipDecoder::new(BufReader::new(&resp_body[..]));
+                            let _ = decoded.read_to_end(&mut decoded_body).await;
                         }
                         CompressionType::Deflate => {
-                            let mut encoded = GzipDecoder::new(BufReader::new(&resp_body[..]));
-                            let _ = encoded.read_to_end(&mut decoded_body).await;
+                            let mut decoded = DeflateDecoder::new(BufReader::new(&resp_body[..]));
+                            let _ = decoded.read_to_end(&mut decoded_body).await;
                         }
                         CompressionType::Br => {
-                            let mut encoded = GzipDecoder::new(BufReader::new(&resp_body[..]));
-                            let _ = encoded.read_to_end(&mut decoded_body).await;
+                            let mut decoded = BrotliDecoder::new(BufReader::new(&resp_body[..]));
+                            let _ = decoded.read_to_end(&mut decoded_body).await;
                         }
                     }
                     resp_body = decoded_body;
@@ -191,7 +191,7 @@ mod tests {
         let filter = SgFilterCompression {};
 
         let mut header = HeaderMap::new();
-        header.insert(header::ACCEPT_ENCODING, "gzip".parse().unwrap());
+        header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
         let ctx = SgRouteFilterContext::new(
             Method::POST,
             Uri::from_static("http://sg.idealworld.group/"),
@@ -205,6 +205,7 @@ mod tests {
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);
+
         let body_str = "test 1 测试 1 ";
         let resp_body = Body::from(body_str);
         ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), resp_body);
@@ -217,6 +218,49 @@ mod tests {
         let _ = decode.read_to_end(&mut encoder_body).await;
         unsafe {
             let body = String::from_utf8_unchecked(encoder_body);
+            assert_eq!(&body, body_str);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_convert_compression() {
+        //gzip -> deflate
+        let filter = SgFilterCompression {};
+
+        let mut header = HeaderMap::new();
+        header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
+        let ctx = SgRouteFilterContext::new(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group/"),
+            Version::HTTP_11,
+            header,
+            Body::empty(),
+            "127.0.0.1:8080".parse().unwrap(),
+            "".to_string(),
+        );
+        let matched = SgRouteMatchInst { ..Default::default() };
+
+        let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
+        assert!(is_continue);
+
+        let body_str = "test 1 测试 1 ";
+        let mut dncoder = DeflateEncoder::new(BufReader::new(body_str.as_bytes()));
+        let mut dncoded_body = vec![];
+        let _ = dncoder.read_to_end(&mut dncoded_body).await;
+        let resp_body = Body::from(dncoded_body);
+        let mut mock_resp_header = HeaderMap::new();
+        mock_resp_header.insert(header::CONTENT_ENCODING, CompressionType::Deflate.into());
+        ctx = ctx.resp(StatusCode::OK, mock_resp_header, resp_body);
+
+        let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
+        assert!(is_continue);
+
+        let resp_body = ctx.pop_resp_body().await.unwrap().unwrap();
+        let mut decode = GzipDecoder::new(BufReader::new(&resp_body[..]));
+        let mut decoded_body = vec![];
+        let _ = decode.read_to_end(&mut decoded_body).await;
+        unsafe {
+            let body = String::from_utf8_unchecked(decoded_body);
             assert_eq!(&body, body_str);
         }
     }

@@ -11,6 +11,7 @@ use spacegate_kernel::{
 };
 use tardis::{
     basic::result::TardisResult,
+    log::info,
     tokio::{self, time::sleep},
 };
 const HTTP_PORT: u16 = 8888;
@@ -60,10 +61,13 @@ async fn test_compression() -> TardisResult<()> {
     )
     .await?;
     sleep(Duration::from_millis(500)).await;
+
+    info!("【test_compression】test backend is gzip");
     let client = reqwest::Client::builder().gzip(true).danger_accept_invalid_certs(true).build().unwrap();
     let resp = client.get(format!("http://localhost:{HTTP_PORT}/gzip")).send().await?;
     assert!(resp.text().await.expect("response").contains("gzipped"));
 
+    info!("【test_compression】test backend not gzip ,gateway compression with gzip");
     let client = reqwest::Client::builder().gzip(true).danger_accept_invalid_certs(true).build().unwrap();
     let resp = client
         .post(format!("http://localhost:{HTTP_PORT}/post?dd"))
@@ -76,7 +80,8 @@ async fn test_compression() -> TardisResult<()> {
     let resp = resp.json::<Value>().await?;
     assert!(resp.get("data").unwrap().to_string().contains("星航"));
 
-    let client = reqwest::Client::builder().gzip(true).danger_accept_invalid_certs(true).build().unwrap();
+    info!("【test_compression】https with gateway compression(br)");
+    let client = reqwest::Client::builder().brotli(true).danger_accept_invalid_certs(true).build().unwrap();
     let resp = client
         .post(format!("https://localhost:{HTTPS_PORT}/post?dd"))
         .json(&json!({
