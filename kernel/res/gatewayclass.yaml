@@ -3,4 +3,4 @@ kind: GatewayClass
 metadata:
   name: spacegate
 spec:
-  controllerName: k8s-spacegate.idealworld.group/spacegate-controller
+  controllerName: spacegate.idealworld.group/spacegate-controller

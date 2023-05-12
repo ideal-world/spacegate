@@ -20,7 +20,13 @@ path = "src/lib.rs"
 local = ["tardis/fs"]
 cache = ["tardis/cache"]
 ws = ["tardis/ws-client"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "cache"]
+k8s = [
+    "kube",
+    "k8s-openapi",
+    "k8s-gateway-api",
+    "schemars",
+    "cache",
+]
 
 [dependencies]
 serde.workspace = true
@@ -42,6 +48,7 @@ tokio-rustls.workspace = true
 kube = { workspace = true, optional = true }
 k8s-openapi = { workspace = true, optional = true }
 k8s-gateway-api = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
