@@ -24,6 +24,7 @@ use super::{
         SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
         SgHttpRouteRule,
     },
+    k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
 };
 use lazy_static::lazy_static;
@@ -310,8 +311,9 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             ));
         }
         // Generate gateway configuration
+        let gateway_name_without_namespace = gateway_obj.metadata.name.as_ref().unwrap();
         let gateway_config = SgGateway {
-            name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_obj.metadata.name.unwrap()),
+            name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_name_without_namespace),
             parameters: SgParameters {
                 redis_url: gateway_obj.metadata.annotations.and_then(|ann| ann.get("redis_url").map(|v| v.to_string())),
             },
@@ -377,7 +379,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             .into_iter()
             .map(|listener| listener.unwrap())
             .collect(),
-            filters: None,
+            filters: get_filters_from_cdr("gateway", gateway_name_without_namespace, &gateway_obj.metadata.namespace).await?,
         };
         gateway_configs.push(gateway_config);
     }
@@ -436,7 +438,11 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
         let http_route_config = SgHttpRoute {
             gateway_name: rel_gateway_name,
             hostnames: http_route_obj.spec.hostnames,
-            filters: None,
+            filters: if let Some(name) = http_route_obj.metadata.name {
+                get_filters_from_cdr("httproute", &name, &http_route_obj.metadata.namespace).await?
+            } else {
+                None
+            },
             rules: match http_route_obj.spec.rules {
                 Some(rules) => {
                     let sg_rules = rules
@@ -528,6 +534,36 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
         http_route_configs.push(http_route_config);
     }
     Ok(http_route_configs)
+}
+
+async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
+    let filter_api: Api<SgFilter> = Api::all(get_client().await?);
+
+    let filter_objs: Vec<SgRouteFilter> = filter_api
+        .list(&ListParams::default())
+        .await
+        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .into_iter()
+        .filter(|filter_obj| {
+            filter_obj.spec.target_refs.iter().any(|target_ref| {
+                target_ref.kind.to_lowercase() == kind.to_lowercase()
+                    && target_ref.name.to_lowercase() == name.to_lowercase()
+                    && target_ref.namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase() == namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase()
+            })
+        })
+        .flat_map(|filter_obj| {
+            filter_obj.spec.filters.into_iter().map(|filter| SgRouteFilter {
+                code: filter.code,
+                name: filter.name,
+                spec: filter.config,
+            })
+        })
+        .collect();
+    if filter_objs.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(filter_objs))
+    }
 }
 
 fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteFilter>> {
