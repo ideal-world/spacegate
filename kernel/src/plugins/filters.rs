@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod header_modifier;
 mod inject;
 #[cfg(feature = "cache")]
@@ -29,6 +30,7 @@ fn init_filter_defs() {
     filters.insert(inject::CODE.to_string(), Box::new(inject::SgFilterInjectDef));
     #[cfg(feature = "cache")]
     filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilterLimitDef));
+    filters.insert(compression::CODE.to_string(), Box::new(compression::SgFilterCompressionDef));
     unsafe {
         FILTERS = Some(filters);
     }
@@ -52,8 +54,8 @@ pub fn get_filter_def(code: &str) -> &Box<dyn SgPluginFilterDef> {
     }
 }
 
-pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(String, Box<dyn SgPluginFilter>)>> {
-    let mut plugin_filters: Vec<(String, Box<dyn SgPluginFilter>)> = Vec::new();
+pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
+    let mut plugin_filters: Vec<(String, BoxSgPluginFilter)> = Vec::new();
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
         let filter_def = get_filter_def(&filter_conf.code);
@@ -67,8 +69,10 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(Strin
 }
 
 pub trait SgPluginFilterDef {
-    fn inst(&self, spec: Value) -> TardisResult<Box<dyn SgPluginFilter>>;
+    fn inst(&self, spec: Value) -> TardisResult<BoxSgPluginFilter>;
 }
+
+pub type BoxSgPluginFilter = Box<dyn SgPluginFilter>;
 
 #[async_trait]
 pub trait SgPluginFilter: Send + Sync + 'static {
@@ -81,6 +85,13 @@ pub trait SgPluginFilter: Send + Sync + 'static {
     async fn req_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
 
     async fn resp_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+
+    fn boxed(self) -> BoxSgPluginFilter
+    where
+        Self: Sized,
+    {
+        Box::new(self)
+    }
 }
 
 pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathModifier>, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<Option<http::Uri>> {
