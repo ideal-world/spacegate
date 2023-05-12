@@ -43,9 +43,11 @@ rustls-pemfile = { version = "1" }
 tokio-rustls = { version = "0.24", default-features = false }
 
 # K8s
-kube = { version = "0.80", features = ["runtime"] }
+kube = { version = "0.80", features = ["runtime", "derive"] }
 k8s-openapi = { version = "0.17", features = ["v1_21"] }
 k8s-gateway-api = { version = "0.11" }
+# validator = { version = "0.16.0", features = ["derive"] }
+schemars = { version = "0.8.6" }
 
 # Test
 reqwest = { version = "0.11", features = ["json", "gzip", "brotli"] }
