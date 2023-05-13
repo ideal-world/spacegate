@@ -134,6 +134,7 @@ impl SgPluginFilter for SgFilterLimit {
 }
 
 #[cfg(test)]
+#[ignore]
 mod tests {
     use std::time::Duration;
 

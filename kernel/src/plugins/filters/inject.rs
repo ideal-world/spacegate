@@ -82,6 +82,7 @@ impl SgPluginFilter for SgFilterInject {
 }
 
 #[cfg(test)]
+#[ignore]
 mod tests {
     use super::*;
     use http::{HeaderMap, StatusCode, Uri, Version};

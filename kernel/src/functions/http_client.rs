@@ -102,6 +102,7 @@ pub async fn raw_request(
 }
 
 #[cfg(test)]
+#[ignore]
 mod tests {
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;

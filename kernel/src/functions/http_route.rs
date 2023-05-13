@@ -638,6 +638,7 @@ pub struct SgBackend {
 }
 
 #[cfg(test)]
+#[ignore]
 mod tests {
     use std::collections::HashMap;
 

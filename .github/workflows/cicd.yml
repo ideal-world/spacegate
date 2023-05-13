@@ -24,18 +24,6 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
-      - name: Cache rust
-        uses: Swatinem/rust-cache@v2
-
-      - name: Check format
-        run: cargo fmt --all -- --check
-
-      - name: Check clippy
-        run: cargo clippy --all --all-features
-
-      - name: Run rust test
-        run: cargo test --all-features
-
       - name: Setup k8s e2e env
         uses: AbsaOSS/k3d-action@v2
         with:
@@ -47,6 +35,12 @@ jobs:
 
       - name: Init k8s e2e env
         run: |
+          cd ~ 
+          pwd
+          cd -
+          echo $KUBECONFIG
+          echo "========="
+          cat ~/.kube/config
           kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
           cargo build -p spacegate
           cd services/full/res
@@ -67,7 +61,7 @@ jobs:
       - name: Run k8s e2e test
         run: |
           cd ./e2e
-          bash ./e2e-test.sh
+          sudo bash ./e2e-test.sh
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2

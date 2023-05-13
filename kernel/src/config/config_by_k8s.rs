@@ -349,8 +349,8 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                                     .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), ""))
                                     .unwrap();
                                 Some(SgTlsConfig {
-                                    key: serde_json::to_string(tls_crt).unwrap(),
-                                    cert: serde_json::to_string(tls_key).unwrap(),
+                                    key: serde_json::to_string(tls_key).unwrap(),
+                                    cert: serde_json::to_string(tls_crt).unwrap(),
                                 })
                             }
                             None => None,

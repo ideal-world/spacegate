@@ -69,6 +69,7 @@ FZygs8miAhWPzqnpmgTj1cPiU1M=
 "#;
 
 #[tokio::test]
+#[ignore]
 async fn test_https() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();

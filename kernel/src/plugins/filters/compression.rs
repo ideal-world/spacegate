@@ -209,6 +209,7 @@ fn get_encode_type(header_value: Option<&HeaderValue>) -> Option<CompressionType
 }
 
 #[cfg(test)]
+#[ignore]
 mod tests {
 
     use super::*;

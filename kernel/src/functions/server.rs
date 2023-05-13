@@ -63,11 +63,13 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
 
         let gateway_name = gateway_name.clone();
         if let Some(tls) = &listener.tls {
+            println!("===========cert {:?}", tls_base64_decode(&tls.cert)?);
+            println!("===========key {:?}", tls_base64_decode(&tls.key)?);
             let tls_cfg = {
-                let certs =
-                    rustls_pemfile::certs(&mut tls.cert.as_bytes()).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
+                let certs = rustls_pemfile::certs(&mut tls_base64_decode(&tls.cert)?.as_bytes())
+                    .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
                 let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
-                let key = rustls_pemfile::rsa_private_keys(&mut tls.key.as_bytes())
+                let key = rustls_pemfile::rsa_private_keys(&mut tls_base64_decode(&tls.key)?.as_bytes())
                     .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
                 let key = PrivateKey(key[0].clone());
                 let mut cfg = rustls::ServerConfig::builder()
@@ -109,7 +111,20 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
 
     Ok(server_insts)
 }
-
+fn tls_base64_decode(mut key: &str) -> TardisResult<String> {
+    if key.starts_with('"') {
+        key = &key[1..];
+    }
+    if key.ends_with('"') {
+        key = &key[..key.len() - 1];
+    }
+    // stat_with -----BEGIN
+    if key.starts_with("LS0tLS1CRUdJTi") {
+        TardisFuns::crypto.base64.decode(key).map_err(|e| TardisError::bad_request(&format!("[SG.Server] Tls keys base64 decode error: {e}"), ""))
+    } else {
+        Ok(key.to_string())
+    }
+}
 async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
     let response = http_route::process(gateway_name, req_scheme, remote_addr, request).await;
     match response {

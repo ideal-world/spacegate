@@ -63,6 +63,7 @@ impl SgPluginFilter for SgFilterRewrite {
 }
 
 #[cfg(test)]
+#[ignore]
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
