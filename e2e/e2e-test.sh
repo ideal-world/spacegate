@@ -53,8 +53,49 @@ jsonpath "$.url" == "http://${cluster_ip}:9001/get"
 EOF
 hurl --test change-route -v
 
-# TODO
 echo "============[gateway]tls test============"
+openssl genrsa -out rsa_priv.key 2048
+# ca
+openssl req -new -x509 -key rsa_priv.key -out ca.crt -days 3650 -subj "/C=CN/ST=HangZhou/O=idealworld/OU=idealworld/CN=www.idealworld.group"
+# csr
+openssl req -new -key rsa_priv.key -out server.csr -subj "/C=CN/ST=HangZhou/O=idealworld/OU=idealworld/CN=www.idealworld.group"
+#cert
+openssl x509 -req -days 365 -in server.csr -CA ca.crt -CAkey rsa_priv.key -CAcreateserial -out cert.cert
+secret_crt=$(cat cert.cert)
+secret_key=$(cat rsa_priv.key)
+cat>secret.yaml<<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tls-secret
+type: kubernetes.io/tls
+data:
+  tls.crt: "${secret_crt}"
+  tls.key: "${secret_key}"
+EOF
+kubectl apply -f secret.yaml
+
+kubectl get secret -o wide
+
+kubectl patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/protocol", "value": "HTTPS"},{"op": "replace", "path": "/spec/listeners/0/tls", "value": "{ "mode": "Terminate","certificateRefs":[{"kind":"Secret","name":"tls-secret","namespace":"default"}]}"}]'
+sleep 1
+
+cat>tls-test<<EOF
+GET https://${cluster_ip}:9001/echo/get
+
+HTTP 200
+[Asserts]
+header "content-length" == "0"
+
+GET https://${cluster_ip}:9001/hi/get
+
+HTTP 200
+[Asserts]
+jsonpath "$.url" == "https://${cluster_ip}:9001/get"
+EOF
+hurl --test tls-test -v
+
+#TODO
 echo "============[gateway]multiple listeners test============"
 echo "============[gateway]hostname test============"
 echo "============[gateway]redis connction test============"
