@@ -3,6 +3,7 @@ use std::{
     convert::Infallible,
     future::Future,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    str::FromStr,
 };
 
 use crate::config::gateway_dto::{SgGateway, SgProtocol};
@@ -22,8 +23,8 @@ use std::{io, sync};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
-    log,
-    tokio::{self, sync::watch::Sender},
+    log::{self, info, LevelFilter},
+    tokio::{self, sync::watch::Sender, task::JoinHandle},
     TardisFuns,
 };
 use tardis::{
@@ -36,6 +37,7 @@ use super::http_route;
 
 lazy_static! {
     static ref SHUTDOWN_TX: Arc<Mutex<HashMap<String, Sender<()>>>> = <_>::default();
+    static ref START_JOIN_HANDLE: Arc<Mutex<Option<JoinHandle<()>>>> = <_>::default();
 }
 
 pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
@@ -45,6 +47,10 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https) {
         return Err(TardisError::bad_request("[SG.Server] Non-Http(s) protocols are not supported yet", ""));
     }
+    if let Some(log_level) = gateway_conf.log_level.clone() {
+        log::set_max_level(LevelFilter::from_str(&log_level).unwrap_or(log::max_level()))
+    }
+    log::info!("[SG.Server] Gateway use log level:{}", log::max_level());
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
     let gateway_name = Arc::new(gateway_conf.name.to_string());
@@ -63,11 +69,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
 
         let gateway_name = gateway_name.clone();
         if let Some(tls) = &listener.tls {
-            println!("===========raw cert {:?}", tls.cert);
-            println!("===========raw key {:?}", tls.key);
-
-            println!("===========cert {:?}", tls_base64_decode(&tls.cert)?);
-            println!("===========key {:?}", tls_base64_decode(&tls.key)?);
+            log::debug!("[SG.Server] Tls is init...");
             let tls_cfg = {
                 let certs = rustls_pemfile::certs(&mut tls_base64_decode(&tls.cert)?.as_bytes())
                     .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
@@ -198,9 +200,11 @@ pub async fn startup(servers: Vec<SgServerInst>) -> TardisResult<()> {
         log::info!("[SG.server] Listening on http://{} ", server.addr);
     }
     let servers = servers.into_iter().map(|s| s.server).collect::<Vec<_>>();
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         join_all(servers).await;
     });
+    let mut handle_guard = START_JOIN_HANDLE.lock().await;
+    *handle_guard = Some(handle);
     Ok(())
 }
 
@@ -208,6 +212,15 @@ pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     let mut shutdown = SHUTDOWN_TX.lock().await;
     if let Some(shutdown_tx) = shutdown.remove(gateway_name) {
         shutdown_tx.send(()).map_err(|_| TardisError::bad_request("[SG.Server] Shutdown failed", ""))?;
+    }
+    let mut handle_guard: tokio::sync::MutexGuard<Option<JoinHandle<()>>> = START_JOIN_HANDLE.lock().await;
+    if handle_guard.is_some() {
+        let mut swap_handle: Option<JoinHandle<()>> = None;
+        std::mem::swap(&mut swap_handle, &mut *handle_guard);
+        swap_handle.unwrap().await.map_err(|e| TardisError::bad_request(&format!("[SG.Server] Wait shutdown failed:{e}"), ""))?;
+        log::info!("[SG.Server] Gateway shutdown");
+    } else {
+        log::warn!("[SG.Server] Can't found server join handle , you may have called shutdown before start");
     }
     Ok(())
 }
