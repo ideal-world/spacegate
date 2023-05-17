@@ -2,7 +2,7 @@ use std::{env, time::Duration, vec};
 
 use serde_json::{json, Value};
 use spacegate_kernel::config::{
-    gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig},
+    gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
 use tardis::{
@@ -108,6 +108,7 @@ async fn test_https() -> TardisResult<()> {
                     port: 8888,
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
+                        mode: SgTlsMode::Terminate,
                         key: TLS_RSA_KEY.to_string(),
                         cert: TLS_CERT.to_string(),
                     }),
@@ -117,6 +118,7 @@ async fn test_https() -> TardisResult<()> {
                     port: 8889,
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
+                        mode: SgTlsMode::Terminate,
                         key: TLS_PKCS8_KEY.to_string(),
                         cert: TLS_EC_CERT.to_string(),
                     }),
@@ -126,6 +128,7 @@ async fn test_https() -> TardisResult<()> {
                     port: 8890,
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
+                        mode: SgTlsMode::Terminate,
                         key: TLS_EC_KEY.to_string(),
                         cert: TLS_EC_CERT.to_string(),
                     }),

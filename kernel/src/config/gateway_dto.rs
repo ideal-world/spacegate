@@ -1,6 +1,7 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize};
+use tardis::basic::error::TardisError;
 
 use super::plugin_filter_dto::SgRouteFilter;
 
@@ -18,6 +19,7 @@ pub struct SgGateway {
     pub listeners: Vec<SgListener>,
     /// Filters define the filters that are applied to requests that match this gateway.
     pub filters: Option<Vec<SgRouteFilter>>,
+    pub log_level: Option<String>,
 }
 
 /// Gateway parameter configuration.
@@ -71,6 +73,37 @@ impl Display for SgProtocol {
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SgTlsConfig {
+    pub mode: SgTlsMode,
     pub key: String,
     pub cert: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub enum SgTlsMode {
+    Terminate,
+    #[default]
+    Passthrough,
+}
+
+impl FromStr for SgTlsMode {
+    type Err = TardisError;
+    fn from_str(mode: &str) -> Result<SgTlsMode, Self::Err> {
+        let level = mode.to_lowercase();
+        match level.as_str() {
+            "terminate" => Ok(SgTlsMode::Terminate),
+            "passthrough" => Ok(SgTlsMode::Passthrough),
+            _ => Err(TardisError::bad_request("SgTlsMode parse error", "")),
+        }
+    }
+}
+
+impl SgTlsMode {
+    pub fn from(mode: Option<String>) -> Option<Self> {
+        if let Some(mode) = mode {
+            if let Ok(mode) = SgTlsMode::from_str(&mode) {
+                return Some(mode);
+            }
+        }
+        None
+    }
 }

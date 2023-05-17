@@ -19,7 +19,7 @@ use tardis::{
 use crate::{do_startup, functions::http_route, shutdown};
 
 use super::{
-    gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig},
+    gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{
         SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
         SgHttpRouteRule,
@@ -167,6 +167,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                             .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
                             .unwrap();
                         shutdown(&gateway_config.name).await.unwrap();
+                        log::trace!("[SG.Config] Gateway config change to:{:?}", gateway_config);
                         do_startup(gateway_config, http_route_configs).await.unwrap();
                     } else {
                         {
@@ -349,6 +350,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                                     .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), ""))
                                     .unwrap();
                                 Some(SgTlsConfig {
+                                    mode: SgTlsMode::from(tls.mode).unwrap_or_default(),
                                     key: serde_json::to_string(tls_key).unwrap(),
                                     cert: serde_json::to_string(tls_crt).unwrap(),
                                 })
@@ -380,6 +382,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             .map(|listener| listener.unwrap())
             .collect(),
             filters: get_filters_from_cdr("gateway", gateway_name_without_namespace, &gateway_obj.metadata.namespace).await?,
+            log_level: None,
         };
         gateway_configs.push(gateway_config);
     }

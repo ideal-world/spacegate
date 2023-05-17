@@ -136,6 +136,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
 
     Ok(server_insts)
 }
+
 fn tls_base64_decode(mut key: &str) -> TardisResult<String> {
     if key.starts_with('"') {
         key = &key[1..];
@@ -150,6 +151,7 @@ fn tls_base64_decode(mut key: &str) -> TardisResult<String> {
         Ok(key.to_string())
     }
 }
+
 async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
     let response = http_route::process(gateway_name, req_scheme, remote_addr, request).await;
     match response {
