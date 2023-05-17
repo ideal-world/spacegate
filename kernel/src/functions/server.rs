@@ -63,22 +63,45 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
 
         let gateway_name = gateway_name.clone();
         if let Some(tls) = &listener.tls {
+            println!("===========raw cert {:?}", tls.cert);
+            println!("===========raw key {:?}", tls.key);
+
             println!("===========cert {:?}", tls_base64_decode(&tls.cert)?);
             println!("===========key {:?}", tls_base64_decode(&tls.key)?);
             let tls_cfg = {
                 let certs = rustls_pemfile::certs(&mut tls_base64_decode(&tls.cert)?.as_bytes())
                     .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
                 let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
-                let key = rustls_pemfile::rsa_private_keys(&mut tls_base64_decode(&tls.key)?.as_bytes())
+                let key = rustls_pemfile::read_all(&mut tls_base64_decode(&tls.key)?.as_bytes())
                     .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
-                let key = PrivateKey(key[0].clone());
-                let mut cfg = rustls::ServerConfig::builder()
-                    .with_safe_defaults()
-                    .with_no_client_auth()
-                    .with_single_cert(certs, key)
-                    .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls not legal: {error}"), ""))?;
-                cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
-                sync::Arc::new(cfg)
+                if key.is_empty() {
+                    return Err(TardisError::bad_request(&format!("[SG.Server] not found Tls private key"), ""));
+                }
+                let mut selected_key = None;
+                for k in key {
+                    selected_key = match k {
+                        rustls_pemfile::Item::X509Certificate(_) => continue,
+                        rustls_pemfile::Item::RSAKey(k) => Some(k),
+                        rustls_pemfile::Item::PKCS8Key(k) => Some(k),
+                        rustls_pemfile::Item::ECKey(k) => Some(k),
+                        _ => continue,
+                    };
+                    if selected_key.is_some() {
+                        break;
+                    }
+                }
+                if let Some(selected_key) = selected_key {
+                    let key = PrivateKey(selected_key);
+                    let mut cfg = rustls::ServerConfig::builder()
+                        .with_safe_defaults()
+                        .with_no_client_auth()
+                        .with_single_cert(certs, key)
+                        .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls not legal: {error}"), ""))?;
+                    cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+                    sync::Arc::new(cfg)
+                } else {
+                    return Err(TardisError::not_implemented(&format!("[SG.Server] Tls encoding not supported "), ""));
+                }
             };
             let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Bind address error: {error}"), ""))?;
             let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
