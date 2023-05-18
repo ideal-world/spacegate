@@ -144,9 +144,42 @@ EOF
 
 hurl --test hostname_test -v
 
-#TODO
+
 echo "============[gateway]multiple listeners test============"
+kubectl --kubeconfig /home/runner/.kube/config apply -f mult_listeners.yaml
+sleep 5
+
+cat>mult_listeners.hurl<<EOF 
+GET http://${cluster_ip}:9000/echo/get
+
+HTTP 200
+[Asserts]
+jsonpath "$.url" == "http://${cluster_ip}:9000/get"
+
+GET http://${cluster_ip}:9100/echo/get
+
+HTTP 200
+[Asserts]
+jsonpath "$.url" == "http://${cluster_ip}:9100/get"
+EOF
+hurl --test mult_listeners.hurl -v
+
+
 echo "============[gateway]redis connction test============"
+kubectl --kubeconfig /home/runner/.kube/config apply -f redis_test.yaml
+sleep 1
+
+cat>mult_listeners.hurl<<EOF 
+GET http://${cluster_ip}:9000/echo/get
+
+HTTP 200
+[Asserts]
+jsonpath "$.url" == "http://${cluster_ip}:9000/get"
+
+EOF
+hurl --test mult_listeners.hurl -v
+
+#TODO
 echo "============[websocket]no backend test============"
 echo "============[websocket]basic test============"
 echo "============[httproute]hostnames test============"
