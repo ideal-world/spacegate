@@ -167,6 +167,8 @@ hurl --test mult_listeners.hurl -v
 
 echo "============[gateway]redis connction test============"
 kubectl --kubeconfig /home/runner/.kube/config apply -f redis_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=redis
+kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis-service:6379"
 sleep 1
 
 cat>mult_listeners.hurl<<EOF 
