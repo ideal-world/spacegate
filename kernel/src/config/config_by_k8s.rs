@@ -316,7 +316,8 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         let gateway_config = SgGateway {
             name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_name_without_namespace),
             parameters: SgParameters {
-                redis_url: gateway_obj.metadata.annotations.and_then(|ann| ann.get("redis_url").map(|v| v.to_string())),
+                redis_url: gateway_obj.metadata.annotations.clone().and_then(|ann| ann.get("redis_url").map(|v| v.to_string())),
+                log_level: gateway_obj.metadata.annotations.and_then(|ann: std::collections::BTreeMap<String, String>| ann.get("log_level").map(|v| v.to_string())),
             },
             listeners: join_all(
                 gateway_obj
@@ -382,7 +383,6 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             .map(|listener| listener.unwrap())
             .collect(),
             filters: get_filters_from_cdr("gateway", gateway_name_without_namespace, &gateway_obj.metadata.namespace).await?,
-            log_level: None,
         };
         gateway_configs.push(gateway_config);
     }

@@ -19,7 +19,6 @@ pub struct SgGateway {
     pub listeners: Vec<SgListener>,
     /// Filters define the filters that are applied to requests that match this gateway.
     pub filters: Option<Vec<SgRouteFilter>>,
-    pub log_level: Option<String>,
 }
 
 /// Gateway parameter configuration.
@@ -27,6 +26,8 @@ pub struct SgGateway {
 pub struct SgParameters {
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
+    // Gateway Log_Level
+    pub log_level: Option<String>,
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.

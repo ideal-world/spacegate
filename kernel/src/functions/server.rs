@@ -47,7 +47,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https) {
         return Err(TardisError::bad_request("[SG.Server] Non-Http(s) protocols are not supported yet", ""));
     }
-    if let Some(log_level) = gateway_conf.log_level.clone() {
+    if let Some(log_level) = gateway_conf.parameters.log_level.clone() {
         log::set_max_level(LevelFilter::from_str(&log_level).unwrap_or(log::max_level()))
     }
     log::info!("[SG.Server] Gateway use log level:{}", log::max_level());

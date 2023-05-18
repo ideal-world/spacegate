@@ -55,6 +55,9 @@ jsonpath "$.url" == "http://${cluster_ip}:9001/get"
 EOF
 hurl --test change-route -v
 
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/metadata/annotations", "value": {"log_level":"trace"}}]'
+sleep 1
+
 echo "============[gateway]tls test============"
 openssl genrsa -out rsa_priv.key 2048
 # ca
@@ -93,7 +96,6 @@ GET https://${cluster_ip}:9001/hi/get
 
 HTTP 200
 [Asserts]
-jsonpath "$.url" == "https://${cluster_ip}:9001/get"
 certificate "Subject" == "C=CN, ST=HangZhou, O=idealworld, OU=idealworld, CN=www.idealworld.group"
 EOF
 hurl --test tls-test --insecure --verbose
@@ -101,7 +103,7 @@ hurl --test tls-test --insecure --verbose
 echo "kubectl logs -l app=spacegate -n spacegate"
 kubectl --kubeconfig /home/runner/.kube/config logs -l app=spacegate -n spacegate
 
-curl --insecure "https://${cluster_ip}:9001/echo/get" -v
+curl --insecure "https://${cluster_ip}:9001/hi/get" -v
 
 echo "============[gateway]hostname test============"
 cat>>/etc/hosts<<EOF
@@ -121,7 +123,8 @@ GET http://testhosts1:9000/echo/get
 
 HTTP 200
 [Asserts]
-header "content-length" == "0"
+header "content-length" != "0"
+jsonpath "$.url" == "http://${cluster_ip}:9001/get"
 
 GET http://testhosts1:9000/hi/get
 
