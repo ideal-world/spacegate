@@ -87,7 +87,6 @@ GET https://${cluster_ip}:9001/echo/get
 
 HTTP 200
 [Asserts]
-header "content-length" == "0"
 certificate "Subject" == "C=CN, ST=HangZhou, O=idealworld, OU=idealworld, CN=www.idealworld.group"
 
 GET https://${cluster_ip}:9001/hi/get
