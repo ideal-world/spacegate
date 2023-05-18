@@ -58,6 +58,9 @@ hurl --test change-route -v
 kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/metadata/annotations", "value": {"log_level":"trace"}}]'
 sleep 1
 
+echo "kubectl logs -l app=spacegate -n spacegate"
+kubectl --kubeconfig /home/runner/.kube/config logs -l app=spacegate -n spacegate
+
 echo "============[gateway]tls test============"
 openssl genrsa -out rsa_priv.key 2048
 # ca
