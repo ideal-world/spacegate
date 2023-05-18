@@ -144,9 +144,8 @@ fn tls_base64_decode(mut key: &str) -> TardisResult<String> {
     if key.ends_with('"') {
         key = &key[..key.len() - 1];
     }
-    // stat_with -----BEGIN
-    if key.starts_with("LS0tLS1CRUdJTi") {
-        TardisFuns::crypto.base64.decode(key).map_err(|e| TardisError::bad_request(&format!("[SG.Server] Tls keys base64 decode error: {e}"), ""))
+    if let Ok(key) = TardisFuns::crypto.base64.decode(key) {
+        Ok(key)
     } else {
         Ok(key.to_string())
     }
