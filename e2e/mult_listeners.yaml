@@ -5,10 +5,10 @@ metadata:
 spec:
   gatewayClassName: spacegate
   listeners:
-  - name: http
+  - name: http1
     port: 9000
     protocol: HTTP
-  - name: http
+  - name: http2
     port: 9100
     protocol: HTTP
 ---
