@@ -127,7 +127,7 @@ GET http://testhosts1:9000/echo/get
 HTTP 200
 [Asserts]
 header "content-length" != "0"
-jsonpath "$.url" == "http://${cluster_ip}:9001/get"
+jsonpath "$.url" == "http://testhosts1:9001/get"
 
 GET http://testhosts1:9000/hi/get
 
