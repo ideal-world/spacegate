@@ -5,7 +5,7 @@ use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::ListParams,
-    runtime::{watcher, WatchStreamExt},
+    runtime::{metadata_watcher, watcher, WatchStreamExt},
     Api, Client, ResourceExt,
 };
 use tardis::{
@@ -53,6 +53,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .iter()
         .map(|gateway_obj| (gateway_obj.metadata.uid.clone().unwrap_or("".to_string()), gateway_obj.metadata.generation.unwrap_or(0)))
         .collect::<HashMap<String, i64>>();
+    let mut gateway_objs_param = gateway_objs
+        .iter()
+        .map(|gateway_obj| (gateway_obj.metadata.uid.clone().unwrap_or("".to_string()), gateway_obj.metadata.annotations.clone()))
+        .collect::<HashMap<String, Option<_>>>();
+
     let gateway_configs = process_gateway_config(gateway_objs.into_iter().collect()).await?;
     let gateway_names = gateway_configs.iter().map(|gateway_config| gateway_config.name.clone()).collect::<Vec<String>>();
 
@@ -111,16 +116,22 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_route_api_clone = http_route_api.clone();
 
     tardis::tokio::spawn(async move {
-        let ew = watcher(gateway_api, ListParams::default()).touched_objects();
+        let ew = watcher(gateway_api.clone(), ListParams::default()).touched_objects();
         pin_mut!(ew);
         while let Some(gateway_obj) = ew.try_next().await.unwrap() {
-            if gateway_objs_generation.get(gateway_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &gateway_obj.metadata.generation.unwrap_or(0) {
+            let default_uid = "".to_string();
+            let gateway_uid = gateway_obj.metadata.uid.as_ref().unwrap_or(&default_uid);
+            if gateway_objs_generation.get(gateway_uid).unwrap_or(&0) == &gateway_obj.metadata.generation.unwrap_or(0)
+                && (gateway_objs_param.get(gateway_uid).unwrap_or(&None) == &gateway_obj.metadata.annotations)
+            {
                 // ignore the original object
                 continue;
             }
             if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
                 continue;
             }
+            gateway_objs_param.insert(gateway_uid.to_string(), gateway_obj.metadata.annotations.clone());
+
             log::trace!("[SG.Config] Gateway config change found");
 
             let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.unwrap(), gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()));

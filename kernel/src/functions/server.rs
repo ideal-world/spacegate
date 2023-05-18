@@ -37,7 +37,7 @@ use super::http_route;
 
 lazy_static! {
     static ref SHUTDOWN_TX: Arc<Mutex<HashMap<String, Sender<()>>>> = <_>::default();
-    static ref START_JOIN_HANDLE: Arc<Mutex<Option<JoinHandle<()>>>> = <_>::default();
+    static ref START_JOIN_HANDLE: Arc<Mutex<HashMap<String, JoinHandle<()>>>> = <_>::default();
 }
 
 pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
@@ -196,7 +196,7 @@ fn into_http_error(error: TardisError) -> Result<Response<Body>, hyper::Error> {
     Ok(response)
 }
 
-pub async fn startup(servers: Vec<SgServerInst>) -> TardisResult<()> {
+pub async fn startup(gateway_name: &str, servers: Vec<SgServerInst>) -> TardisResult<()> {
     for server in &servers {
         log::info!("[SG.server] Listening on http://{} ", server.addr);
     }
@@ -205,7 +205,7 @@ pub async fn startup(servers: Vec<SgServerInst>) -> TardisResult<()> {
         join_all(servers).await;
     });
     let mut handle_guard = START_JOIN_HANDLE.lock().await;
-    *handle_guard = Some(handle);
+    handle_guard.insert(gateway_name.to_string(), handle);
     Ok(())
 }
 
@@ -214,14 +214,12 @@ pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     if let Some(shutdown_tx) = shutdown.remove(gateway_name) {
         shutdown_tx.send(()).map_err(|_| TardisError::bad_request("[SG.Server] Shutdown failed", ""))?;
     }
-    let mut handle_guard: tokio::sync::MutexGuard<Option<JoinHandle<()>>> = START_JOIN_HANDLE.lock().await;
-    if handle_guard.is_some() {
-        let mut swap_handle: Option<JoinHandle<()>> = None;
-        std::mem::swap(&mut swap_handle, &mut *handle_guard);
-        swap_handle.unwrap().await.map_err(|e| TardisError::bad_request(&format!("[SG.Server] Wait shutdown failed:{e}"), ""))?;
+    let mut handle_guard: tokio::sync::MutexGuard<HashMap<String, JoinHandle<()>>> = START_JOIN_HANDLE.lock().await;
+    if let Some(handle) = handle_guard.remove(gateway_name) {
+        handle.await.map_err(|e| TardisError::bad_request(&format!("[SG.Server] Wait shutdown failed:{e}"), ""))?;
         log::info!("[SG.Server] Gateway shutdown");
     } else {
-        log::warn!("[SG.Server] Can't found server join handle , you may have called shutdown before start");
+        log::warn!("[SG.Server] Can't found server join handle , you may have called shutdown() before start");
     }
     Ok(())
 }

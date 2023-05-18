@@ -55,7 +55,7 @@ jsonpath "$.url" == "http://${cluster_ip}:9001/get"
 EOF
 hurl --test change-route -v
 
-kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/metadata/annotations", "value": {"log_level":"trace"}}]'
+kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway log_level="trace"
 sleep 1
 
 echo "kubectl logs -l app=spacegate -n spacegate"
