@@ -70,17 +70,34 @@
 
 1. Install spacegate resources
 
-```
-cd ../../../
-kubectl apply -f ./kernel/res/namespace.yaml
-kubectl apply -f ./kernel/res/gatewayclass.yaml
-kubectl apply -f ./kernel/res/spacegate-gateway.yaml
-```
+    ```
+    cd ../../../
+    kubectl apply -f ./kernel/res/namespace.yaml
+    kubectl apply -f ./kernel/res/gatewayclass.yaml
+    kubectl apply -f ./kernel/res/spacegate-gateway.yaml
+    ```
 
 1. Confirm the spacegate resources is running in `spacegate` namespace:
 
-```
-kubectl get pods -n spacegate
-NAME             READY   STATUS    RESTARTS   AGE
-spacegate-xxxx   1/1     Running   0          10s
-```
+    ```
+    kubectl get pods -n spacegate
+    NAME             READY   STATUS    RESTARTS   AGE
+    spacegate-xxxx   1/1     Running   0          10s
+    ```
+
+1. Forward gateway port to host(Optional)
+    > https://github.com/k3d-io/k3d/issues/89
+
+    ```
+    docker run \
+    -d \
+    -p 9002:9002 \
+    --name=k3d-default-server-9002-link \
+    --network k3d-spacegate-test \
+    --rm \
+    alpine/socat \
+      TCP4-LISTEN:9002,fork,reuseaddr \
+      TCP4:k3d-spacegate-test-server-0:9000
+    ```
+
+    Now,you can use 127.0.0.1:9002 to access spacegate
