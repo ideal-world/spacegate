@@ -7,16 +7,16 @@ use tardis::{
     TardisFuns,
 };
 
-use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
 pub const CODE: &str = "rewrite";
 
 pub struct SgFilterRewriteDef;
 
 impl SgPluginFilterDef for SgFilterRewriteDef {
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterRewrite>(spec)?;
-        Ok(Box::new(filter))
+        Ok(filter.boxed())
     }
 }
 

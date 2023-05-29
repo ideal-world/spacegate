@@ -10,7 +10,7 @@ use spacegate_kernel::{
         plugin_filter_dto::SgRouteFilter,
     },
     functions::http_route::SgHttpRouteMatchInst,
-    plugins::filters::{SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind, SgRouteFilterContext},
+    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind, SgRouteFilterContext},
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -22,9 +22,9 @@ use tardis::{
 pub struct SgFilterAuthDef;
 
 impl SgPluginFilterDef for SgFilterAuthDef {
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterAuth>(spec)?;
-        Ok(Box::new(filter))
+        Ok(filter.boxed())
     }
 }
 

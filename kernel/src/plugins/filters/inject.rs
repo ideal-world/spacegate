@@ -5,16 +5,16 @@ use tardis::{basic::result::TardisResult, TardisFuns};
 
 use crate::functions::{http_client, http_route::SgHttpRouteMatchInst};
 
-use super::{SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
 pub const CODE: &str = "inject";
 
 pub struct SgFilterInjectDef;
 
 impl SgPluginFilterDef for SgFilterInjectDef {
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<Box<dyn SgPluginFilter>> {
+    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterInject>(spec)?;
-        Ok(Box::new(filter))
+        Ok(filter.boxed())
     }
 }
 
