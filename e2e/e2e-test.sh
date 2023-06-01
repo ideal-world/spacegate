@@ -88,23 +88,24 @@ kubectl --kubeconfig /home/runner/.kube/config get secret -o wide
 kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/protocol", "value": "HTTPS"},{"op": "replace", "path": "/spec/listeners/0/tls", "value": {"mode": "Terminate","certificateRefs":[{"kind":"Secret","name":"tls-secret","namespace":"default"}]}}]'
 sleep 1
 
-cat>tls-test<<EOF
+cat>tls-test1.hurl<<EOF
 GET https://${cluster_ip}:9001/echo/get
 
 HTTP 200
 [Asserts]
 certificate "Subject" == "C=CN, ST=HangZhou, O=idealworld, OU=idealworld, CN=www.idealworld.group"
+EOF
+hurl --test tls-test1.hurl --insecure --verbose
 
+cat>tls-test2.hurl<<EOF
 GET https://${cluster_ip}:9001/hi/get
 
 HTTP 200
 [Asserts]
 certificate "Subject" == "C=CN, ST=HangZhou, O=idealworld, OU=idealworld, CN=www.idealworld.group"
 EOF
-hurl --test tls-test --insecure --verbose
+hurl --test tls-test2.hurl --insecure --verbose
 
-echo "kubectl logs -l app=spacegate -n spacegate"
-kubectl --kubeconfig /home/runner/.kube/config logs -l app=spacegate -n spacegate
 
 curl --insecure "https://${cluster_ip}:9001/hi/get" -v
 
