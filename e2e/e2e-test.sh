@@ -9,7 +9,7 @@ kubectl --kubeconfig /home/runner/.kube/config get nodes -o wide
 
 cluster_ip=$(kubectl --kubeconfig /home/runner/.kube/config get nodes -o jsonpath={.items[1].status.addresses[?\(@.type==\"InternalIP\"\)].address})
 
-echo "============cluster_ip:${cluster_ip}"
+echo "============cluster_ip:${cluster_ip}============"
 echo "============echo test============"
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
@@ -113,37 +113,54 @@ cat>>/etc/hosts<<EOF
 # test hostname
 ${cluster_ip} testhosts1
 ${cluster_ip} testhosts2
+${cluster_ip} app.testhosts2
 EOF
 echo /etc/hosts:
 cat /etc/hosts
 
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "testhosts1"}]'
-sleep 5
+sleep 1
 
-cat>hostname_test<<EOF
+cat>hostname_test.hurl<<EOF
 GET http://testhosts1:9000/echo/get
 
 HTTP 200
 [Asserts]
 header "content-length" != "0"
-jsonpath "$.url" == "http://testhosts1:9001/get"
-
-GET http://testhosts1:9000/hi/get
-
-HTTP 200
-[Asserts]
 jsonpath "$.url" == "http://testhosts1:9000/get"
 
 GET http://testhosts2:9000/echo/get
 
 HTTP 404
 [Asserts]
-header "content-length" == "0"
+header "content-length" != "0"
+jsonpath "$.msg" == "[SG] Hostname Not found"
 EOF
 
-hurl --test hostname_test -v
+hurl --test hostname_test.hurl -v
 
+kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "*.testhosts2"}]'
+sleep 1
+
+cat>hostname_test2.hurl<<EOF
+GET http://testhosts2:9000/echo/get
+
+HTTP 404
+[Asserts]
+header "content-length" != "0"
+jsonpath "$.msg" == "[SG] Hostname Not found"
+
+GET http://app.testhosts2:9000/echo/get
+
+HTTP 200
+[Asserts]
+header "content-length" != "0"
+jsonpath "$.url" == "http://app.testhosts2:9000/get"
+EOF
+
+hurl --test hostname_test2.hurl -v
 
 echo "============[gateway]multiple listeners test============"
 kubectl --kubeconfig /home/runner/.kube/config apply -f mult_listeners.yaml
@@ -166,6 +183,7 @@ hurl --test mult_listeners.hurl -v
 
 
 echo "============[gateway]redis connction test============"
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
 kubectl --kubeconfig /home/runner/.kube/config apply -f redis_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=redis
 kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis-service:6379"

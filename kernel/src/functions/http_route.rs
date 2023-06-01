@@ -2,12 +2,12 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use crate::{
     config::{
-        gateway_dto::{SgGateway, SgProtocol},
+        gateway_dto::{SgGateway, SgListener, SgProtocol},
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
     plugins::filters::{self, BoxSgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
-use http::{header::UPGRADE, Request, Response};
+use http::{header::UPGRADE, uri::Scheme, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
 use hyper_rustls::HttpsConnector;
 use itertools::Itertools;
@@ -153,6 +153,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
         filters: global_filters,
         routes: route_insts,
         client: http_client::init()?,
+        listeners: gateway_conf.listeners,
     };
     unsafe {
         if ROUTES.is_none() {
@@ -212,6 +213,22 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         gateway_name
     );
     let gateway_inst = get(&gateway_name)?;
+    if !match_listeners_hostname_and_port(
+        request.uri().host(),
+        request.uri().port().map_or_else(
+            || {
+                if request.uri().scheme().unwrap_or(&Scheme::HTTP) == &Scheme::HTTPS {
+                    443
+                } else {
+                    80
+                }
+            },
+            |p| p.as_u16(),
+        ),
+        &gateway_inst.listeners,
+    ) {
+        return Err(TardisError::not_found("[SG] Hostname Not found", ""));
+    }
 
     let matched_route_inst = match_route_insts_with_hostname_priority(request.uri().host(), &gateway_inst.routes);
     if matched_route_inst.is_none() {
@@ -436,6 +453,30 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
     }
 }
 
+fn match_listeners_hostname_and_port(hostname: Option<&str>, port: u16, listeners: &[SgListener]) -> bool {
+    if let Some(hostname) = hostname {
+        listeners
+            .iter()
+            .filter(|listener| {
+                (if let Some(listener_hostname) = listener.hostname.clone() {
+                    if listener_hostname == *hostname {
+                        true
+                    } else if let Some(stripped) = listener_hostname.strip_prefix("*.") {
+                        hostname.ends_with(stripped) && hostname != stripped
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }) && listener.port == port
+            })
+            .count()
+            > 0
+    } else {
+        true
+    }
+}
+
 async fn process_req_filters(
     gateway_name: String,
     remote_addr: SocketAddr,
@@ -578,6 +619,7 @@ struct SgGatewayInst {
     pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub routes: Vec<SgHttpRouteInst>,
     pub client: Client<HttpsConnector<HttpConnector>>,
+    pub listeners: Vec<SgListener>,
 }
 
 #[derive(Default)]

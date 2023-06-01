@@ -44,6 +44,8 @@ pub struct SgListener {
     /// TLS is the TLS configuration for the Listener.
     /// This field is required if the Protocol field is “HTTPS” or “TLS”. It is invalid to set this field if the Protocol field is “HTTP”, “TCP”, or “UDP”.
     pub tls: Option<SgTlsConfig>,
+
+    pub hostname: Option<String>,
 }
 
 /// ProtocolType defines the application protocol accepted by a Listener.
@@ -79,7 +81,7 @@ pub struct SgTlsConfig {
     pub cert: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default)]
 pub enum SgTlsMode {
     Terminate,
     #[default]

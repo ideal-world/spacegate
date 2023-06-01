@@ -5,7 +5,7 @@ use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::ListParams,
-    runtime::{metadata_watcher, watcher, WatchStreamExt},
+    runtime::{watcher, WatchStreamExt},
     Api, Client, ResourceExt,
 };
 use tardis::{
@@ -277,9 +277,6 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
 
     for gateway_obj in gateway_objs {
         // Key configuration compatibility checks
-        if gateway_obj.spec.listeners.iter().any(|listener| listener.hostname.is_some()) {
-            return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.listener.hostname] not supported yet", ""));
-        }
         if gateway_obj.spec.addresses.is_some() {
             return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.addresses] not supported yet", ""));
         }
@@ -384,6 +381,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                                 }
                             },
                             tls,
+                            hostname: listener.hostname,
                         };
                         Ok(sg_listener)
                     })

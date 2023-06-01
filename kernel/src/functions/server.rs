@@ -3,16 +3,16 @@ use std::{
     convert::Infallible,
     future::Future,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    str::FromStr,
 };
 
-use crate::config::gateway_dto::{SgGateway, SgProtocol};
+use crate::config::gateway_dto::{SgGateway, SgProtocol, SgTlsMode};
 use core::task::{Context, Poll};
 use http::{HeaderValue, Request, Response, StatusCode};
 use hyper::server::conn::{AddrIncoming, AddrStream};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 use hyper::{server::accept::Accept, Body};
+
 use lazy_static::lazy_static;
 use rustls::{PrivateKey, ServerConfig};
 use serde_json::json;
@@ -23,7 +23,7 @@ use std::{io, sync};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
-    log::{self, info, LevelFilter},
+    log::{self},
     tokio::{self, sync::watch::Sender, task::JoinHandle},
     TardisFuns,
 };
@@ -47,10 +47,10 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https) {
         return Err(TardisError::bad_request("[SG.Server] Non-Http(s) protocols are not supported yet", ""));
     }
-    if let Some(log_level) = gateway_conf.parameters.log_level.clone() {
-        log::set_max_level(LevelFilter::from_str(&log_level).unwrap_or(log::max_level()))
+    if let Some(_log_level) = gateway_conf.parameters.log_level.clone() {
+        //TODO update log level
+        // TardisTracing::update_log_level();
     }
-    log::info!("[SG.Server] Gateway use log level:{}", log::max_level());
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
     let gateway_name = Arc::new(gateway_conf.name.to_string());
@@ -69,55 +69,68 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
 
         let gateway_name = gateway_name.clone();
         if let Some(tls) = &listener.tls {
-            log::debug!("[SG.Server] Tls is init...");
-            let tls_cfg = {
-                let certs = rustls_pemfile::certs(&mut tls_base64_decode(&tls.cert)?.as_bytes())
-                    .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
-                let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
-                let key = rustls_pemfile::read_all(&mut tls_base64_decode(&tls.key)?.as_bytes())
-                    .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
-                if key.is_empty() {
-                    return Err(TardisError::bad_request(&format!("[SG.Server] not found Tls private key"), ""));
-                }
-                let mut selected_key = None;
-                for k in key {
-                    selected_key = match k {
-                        rustls_pemfile::Item::X509Certificate(_) => continue,
-                        rustls_pemfile::Item::RSAKey(k) => Some(k),
-                        rustls_pemfile::Item::PKCS8Key(k) => Some(k),
-                        rustls_pemfile::Item::ECKey(k) => Some(k),
-                        _ => continue,
-                    };
-                    if selected_key.is_some() {
-                        break;
+            log::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
+            if SgTlsMode::Terminate == tls.mode {
+                let tls_cfg = {
+                    let certs = rustls_pemfile::certs(&mut tls_base64_decode(&tls.cert)?.as_bytes())
+                        .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
+                    let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
+                    let key = rustls_pemfile::read_all(&mut tls_base64_decode(&tls.key)?.as_bytes())
+                        .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
+                    if key.is_empty() {
+                        return Err(TardisError::bad_request(&format!("[SG.Server] not found Tls private key"), ""));
                     }
-                }
-                if let Some(selected_key) = selected_key {
-                    let key = PrivateKey(selected_key);
-                    let mut cfg = rustls::ServerConfig::builder()
-                        .with_safe_defaults()
-                        .with_no_client_auth()
-                        .with_single_cert(certs, key)
-                        .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls not legal: {error}"), ""))?;
-                    cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
-                    sync::Arc::new(cfg)
-                } else {
-                    return Err(TardisError::not_implemented(&format!("[SG.Server] Tls encoding not supported "), ""));
-                }
-            };
-            let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Bind address error: {error}"), ""))?;
-            let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
-                let remote_addr = match &client.state {
-                    State::Handshaking(addr) => addr.get_ref().unwrap().remote_addr(),
-                    State::Streaming(addr) => addr.get_ref().0.remote_addr(),
+                    let mut selected_key = None;
+                    for k in key {
+                        selected_key = match k {
+                            rustls_pemfile::Item::X509Certificate(_) => continue,
+                            rustls_pemfile::Item::RSAKey(k) => Some(k),
+                            rustls_pemfile::Item::PKCS8Key(k) => Some(k),
+                            rustls_pemfile::Item::ECKey(k) => Some(k),
+                            _ => continue,
+                        };
+                        if selected_key.is_some() {
+                            break;
+                        }
+                    }
+                    if let Some(selected_key) = selected_key {
+                        let key = PrivateKey(selected_key);
+                        let mut cfg = rustls::ServerConfig::builder()
+                            .with_safe_defaults()
+                            .with_no_client_auth()
+                            .with_single_cert(certs, key)
+                            .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls not legal: {error}"), ""))?;
+                        cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+                        sync::Arc::new(cfg)
+                    } else {
+                        return Err(TardisError::not_implemented(&format!("[SG.Server] Tls encoding not supported "), ""));
+                    }
                 };
-                let gateway_name = gateway_name.clone();
-                async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "https", remote_addr, req))) }
-            }));
-            let server = server.with_graceful_shutdown(async move {
-                shutdown_rx.changed().await.ok();
-            });
-            server_insts.push(SgServerInst { addr, server: server.boxed() });
+
+                let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Bind address error: {error}"), ""))?;
+                let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
+                    let remote_addr = match &client.state {
+                        State::Handshaking(addr) => addr.get_ref().unwrap().remote_addr(),
+                        State::Streaming(addr) => addr.get_ref().0.remote_addr(),
+                    };
+                    let gateway_name = gateway_name.clone();
+                    async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "https", remote_addr, req))) }
+                }));
+                let server = server.with_graceful_shutdown(async move {
+                    shutdown_rx.changed().await.ok();
+                });
+                server_insts.push(SgServerInst { addr, server: server.boxed() });
+            } else {
+                let server = Server::bind(&addr).serve(make_service_fn(move |client: &AddrStream| {
+                    let remote_addr = client.remote_addr();
+                    let gateway_name = gateway_name.clone();
+                    async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "http", remote_addr, req))) }
+                }));
+                let server = server.with_graceful_shutdown(async move {
+                    shutdown_rx.changed().await.ok();
+                });
+                server_insts.push(SgServerInst { addr, server: server.boxed() });
+            }
         } else {
             let server = Server::bind(&addr).serve(make_service_fn(move |client: &AddrStream| {
                 let remote_addr = client.remote_addr();
@@ -218,8 +231,6 @@ pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     if let Some(handle) = handle_guard.remove(gateway_name) {
         handle.await.map_err(|e| TardisError::bad_request(&format!("[SG.Server] Wait shutdown failed:{e}"), ""))?;
         log::info!("[SG.Server] Gateway shutdown");
-    } else {
-        log::warn!("[SG.Server] Can't found server join handle , you may have called shutdown() before start");
     }
     Ok(())
 }
