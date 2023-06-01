@@ -127,22 +127,16 @@ jobs:
 
           RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
-          #TODO
-          #strip -s ${SRC_DIR}/spacegate
           mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
           shasum -a 256 ${RELEASE_NAME_FULL} > ${CHECKSUM_FULL}
 
           RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
-          #TODO
-          #strip -s ${SRC_DIR}/spacegate-native
           mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
           shasum -a 256 ${RELEASE_NAME_NATIVE} > ${CHECKSUM_NATIVE}
 
           RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
-          #TODO
-          #strip -s ${SRC_DIR}/spacegate-simplify
           mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
           shasum -a 256 ${RELEASE_NAME_SIMPLIFY} > ${CHECKSUM_SIMPLIFY}
 

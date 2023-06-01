@@ -6,6 +6,7 @@ lto = true
 codegen-units = 1
 opt-level = "z"
 panic = 'abort'
+strip = true
 
 [workspace.package]
 version = "0.1.0-alpha.2"
