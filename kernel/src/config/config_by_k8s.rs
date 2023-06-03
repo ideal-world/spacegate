@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use itertools::Itertools;
 use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
@@ -10,6 +10,7 @@ use kube::{
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
+    cache::FromRedisValue,
     futures_util::{future::join_all, pin_mut, TryStreamExt},
     log,
     tokio::sync::RwLock,
@@ -118,7 +119,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     tardis::tokio::spawn(async move {
         let ew = watcher(gateway_api.clone(), ListParams::default()).touched_objects();
         pin_mut!(ew);
-        while let Some(gateway_obj) = ew.try_next().await.unwrap() {
+        while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
             let default_uid = "".to_string();
             let gateway_uid = gateway_obj.metadata.uid.as_ref().unwrap_or(&default_uid);
             if gateway_objs_generation.get(gateway_uid).unwrap_or(&0) == &gateway_obj.metadata.generation.unwrap_or(0)
@@ -134,10 +135,18 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
             log::trace!("[SG.Config] Gateway config change found");
 
-            let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.unwrap(), gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()));
+            let gateway_api: Api<Gateway> = Api::namespaced(
+                get_client().await.expect("[SG.Config] Failed to get client"),
+                gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
+            );
             match gateway_api.get_metadata_opt(gateway_obj.metadata.name.as_ref().unwrap_or(&"".to_string())).await {
                 Ok(has_gateway_obj) => {
-                    let gateway_config = process_gateway_config(vec![gateway_obj]).await.unwrap().get(0).unwrap().clone();
+                    let gateway_config = process_gateway_config(vec![gateway_obj])
+                        .await
+                        .expect("[SG.Config] Failed to process gateway config")
+                        .get(0)
+                        .expect("[SG.Config] Gateway config not found")
+                        .clone();
 
                     if has_gateway_obj.is_some() {
                         {
@@ -149,7 +158,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                             .list(&ListParams::default())
                             .await
                             .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                            .unwrap()
+                            .expect("")
                             .into_iter()
                             .filter(|http_route_obj| {
                                 http_route_obj
@@ -176,16 +185,16 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                         let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect())
                             .await
                             .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                            .unwrap();
-                        shutdown(&gateway_config.name).await.unwrap();
+                            .expect("");
+                        shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
                         log::trace!("[SG.Config] Gateway config change to:{:?}", gateway_config);
-                        do_startup(gateway_config, http_route_configs).await.unwrap();
+                        do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] Failed to restart gateway");
                     } else {
                         {
                             let mut gateway_names_guard = GATEWAY_NAMES.write().await;
                             gateway_names_guard.retain(|name| name != &gateway_config.name);
                         }
-                        shutdown(&gateway_config.name).await.unwrap();
+                        shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
                     }
                 }
                 Err(error) => {
@@ -199,7 +208,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let http_route_api_clone = http_route_api.clone();
         let ew = watcher(http_route_api_clone, ListParams::default()).touched_objects();
         pin_mut!(ew);
-        while let Some(http_route_obj) = ew.try_next().await.unwrap() {
+        while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
             if http_route_objs_generation.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &http_route_obj.metadata.generation.unwrap_or(0) {
                 // ignore the original object
                 continue;
@@ -208,14 +217,14 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 continue;
             }
             let (rel_gateway_namespaces, rel_gateway_name) = (
-                if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].namespace.as_ref() {
+                if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].namespace.as_ref() {
                     namespaces.to_string()
                 } else {
                     http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
                 },
-                http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].name.clone(),
+                http_route_obj.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].name.clone(),
             );
-            let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.unwrap(), &rel_gateway_namespaces);
+            let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.expect("[SG.Config] Failed to get client"), &rel_gateway_namespaces);
             let gateway_obj = if let Ok(Some(gateway_obj)) = gateway_api.get_opt(&rel_gateway_name).await {
                 if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
                     continue;
@@ -227,7 +236,12 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
             log::trace!("[SG.Config] Http route config change found");
 
-            let gateway_config = process_gateway_config(vec![gateway_obj]).await.unwrap().get(0).unwrap().clone();
+            let gateway_config = process_gateway_config(vec![gateway_obj])
+                .await
+                .expect("[SG.Config] Failed to process gateway config for http_route parent ref")
+                .get(0)
+                .expect("[SG.Config] Gateway config not found for http_route parent ref")
+                .clone();
 
             let gateway_names_guard = GATEWAY_NAMES.read().await;
 
@@ -235,7 +249,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 .list(&ListParams::default())
                 .await
                 .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                .unwrap()
+                .expect("")
                 .into_iter()
                 .filter(|http_route_obj| {
                     http_route_obj
@@ -261,10 +275,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 .collect::<Vec<HttpRoute>>();
 
             if http_route_objs.is_empty() {
-                http_route::init(gateway_config, vec![]).await.unwrap();
+                http_route::init(gateway_config, vec![]).await.expect("[SG.Config] Failed to re-init http_route");
             } else {
-                let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs).await.unwrap();
-                http_route::init(gateway_config, http_route_configs).await.unwrap();
+                let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs).await.expect("[SG.Config] Failed to process http_route config");
+                http_route::init(gateway_config, http_route_configs).await.expect("[SG.Config] Failed to re-init http_route");
             }
         }
     });
@@ -312,7 +326,16 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             ));
         }
         if gateway_obj.spec.listeners.iter().any(|listener| {
-            listener.tls.is_some() && (listener.tls.as_ref().unwrap().certificate_refs.is_none() || listener.tls.as_ref().unwrap().certificate_refs.as_ref().unwrap().is_empty())
+            listener.tls.is_some()
+                && (listener.tls.as_ref().expect("[SG.Config] Unexpected none: listener.tls").certificate_refs.is_none()
+                    || listener
+                        .tls
+                        .as_ref()
+                        .expect("[SG.Config] Unexpected none: listener.tls")
+                        .certificate_refs
+                        .as_ref()
+                        .expect("[SG.Config] Unexpected none: listener.tls.certificate_refs")
+                        .is_empty())
         }) {
             return Err(TardisError::format_error(
                 "[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required when the tls field is enabled",
@@ -320,7 +343,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             ));
         }
         // Generate gateway configuration
-        let gateway_name_without_namespace = gateway_obj.metadata.name.as_ref().unwrap();
+        let gateway_name_without_namespace = gateway_obj.metadata.name.as_ref().ok_or(TardisError::format_error("[SG.Config] Gateway [metadata.name] is required", ""))?;
         let gateway_config = SgGateway {
             name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_name_without_namespace),
             parameters: SgParameters {
@@ -335,29 +358,28 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                     .map(|listener| async move {
                         let tls = match listener.tls {
                             Some(tls) => {
-                                let certificate_ref = tls.certificate_refs.as_ref().unwrap().get(0).unwrap();
+                                let certificate_ref = tls
+                                    .certificate_refs
+                                    .as_ref()
+                                    .ok_or(TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
+                                    .get(0)
+                                    .ok_or(TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
                                 let secret_api: Api<Secret> = if let Some(namespace) = &certificate_ref.namespace {
-                                    Api::namespaced(get_client().await.unwrap(), namespace)
+                                    Api::namespaced(get_client().await?, namespace)
                                 } else {
-                                    Api::all(get_client().await.unwrap())
+                                    Api::all(get_client().await?)
                                 };
-                                let secret_obj = secret_api
-                                    .get(&certificate_ref.name)
-                                    .await
-                                    .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                                    .unwrap();
+                                let secret_obj =
+                                    secret_api.get(&certificate_ref.name).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?;
                                 let secret_data = secret_obj
                                     .data
-                                    .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data is required", certificate_ref.name), ""))
-                                    .unwrap();
-                                let tls_crt = secret_data
-                                    .get("tls.crt")
-                                    .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.crt] is required", certificate_ref.name), ""))
-                                    .unwrap();
-                                let tls_key = secret_data
-                                    .get("tls.key")
-                                    .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), ""))
-                                    .unwrap();
+                                    .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data is required", certificate_ref.name), ""))?;
+                                let tls_crt = secret_data.get("tls.crt").ok_or_else(|| {
+                                    TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.crt] is required", certificate_ref.name), "")
+                                })?;
+                                let tls_key = secret_data.get("tls.key").ok_or_else(|| {
+                                    TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), "")
+                                })?;
                                 Some(SgTlsConfig {
                                     mode: SgTlsMode::from(tls.mode).unwrap_or_default(),
                                     key: serde_json::to_string(tls_key).unwrap(),
@@ -389,7 +411,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             )
             .await
             .into_iter()
-            .map(|listener| listener.unwrap())
+            .map(|listener| listener.expect("[SG.Config] Unexpected none: listener"))
             .collect(),
             filters: get_filters_from_cdr("gateway", gateway_name_without_namespace, &gateway_obj.metadata.namespace).await?,
         };
@@ -420,7 +442,15 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
                         .map(|backends| {
                             backends.iter().any(|backend| {
                                 backend.backend_ref.is_some()
-                                    && backend.backend_ref.as_ref().unwrap().inner.kind.as_ref().map(|kind| kind.to_lowercase() != "service").unwrap_or(false)
+                                    && backend
+                                        .backend_ref
+                                        .as_ref()
+                                        .expect("[SG.Config] unexpected none: http_route backendRef")
+                                        .inner
+                                        .kind
+                                        .as_ref()
+                                        .map(|kind| kind.to_lowercase() != "service")
+                                        .unwrap_or(false)
                             })
                         })
                         .unwrap_or(false)
@@ -440,12 +470,14 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
         // Generate gateway configuration
         let rel_gateway_name = format!(
             "{}.{}",
-            if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].namespace.as_ref() {
+            if let Some(namespaces) =
+                http_route_obj.spec.inner.parent_refs.as_ref().ok_or(TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].namespace.as_ref()
+            {
                 namespaces.to_string()
             } else {
                 http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
             },
-            http_route_obj.spec.inner.parent_refs.as_ref().unwrap()[0].name
+            http_route_obj.spec.inner.parent_refs.as_ref().ok_or(TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].name
         );
         let http_route_config = SgHttpRoute {
             gateway_name: rel_gateway_name,
@@ -522,11 +554,11 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
                                     .into_iter()
                                     .map(|backend| {
                                         let filters = convert_filters(backend.filters);
-                                        let backend = backend.backend_ref.unwrap();
+                                        let backend = backend.backend_ref.expect("[SG.Config] unexpected none: http_route backendRef");
                                         SgBackendRef {
                                             name_or_host: backend.inner.name,
                                             namespace: Some(backend.inner.namespace.unwrap_or("default".to_string())),
-                                            port: backend.inner.port.unwrap(),
+                                            port: backend.inner.port.expect("[SG.Config] unexpected none: http_route backend's port"),
                                             timeout_ms: None,
                                             protocol: None,
                                             weight: backend.weight,
