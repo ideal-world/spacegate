@@ -16,7 +16,17 @@ use tardis::{log, tokio, TardisFuns};
 use super::http_route::SgBackend;
 
 pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend: &SgBackend, mut request: Request<Body>) -> TardisResult<Response<Body>> {
-    if request.headers().get(CONNECTION).map(|v| !v.to_str().unwrap().to_lowercase().contains("upgrade")).unwrap_or(false) {
+    if request
+        .headers()
+        .get(CONNECTION)
+        .map(|v| {
+            let if_have_upgrade =
+                v.to_str().map_err(|e| TardisError::bad_request(&format!("[SG.Websocket] header {CONNECTION} value is illegal: {e}"), ""))?.to_lowercase().contains("upgrade");
+            Ok::<_, TardisError>(!if_have_upgrade)
+        })
+        .transpose()?
+        .unwrap_or(false)
+    {
         return Err(TardisError::bad_request(
             &format!("[SG.Websocket] Connection header must be upgrade , from {remote_addr} @ {gateway_name}"),
             "",

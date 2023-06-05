@@ -13,7 +13,7 @@ pub async fn init(name: &str, url: &str) -> TardisResult<()> {
         if CACHE_CLIENTS.is_none() {
             CACHE_CLIENTS = Some(HashMap::new());
         }
-        CACHE_CLIENTS.as_mut().unwrap().insert(name.to_string(), cache);
+        CACHE_CLIENTS.as_mut().expect("Unreachable code").insert(name.to_string(), cache);
     }
     Ok(())
 }
@@ -23,14 +23,14 @@ pub async fn remove(name: &str) -> TardisResult<()> {
         if CACHE_CLIENTS.is_none() {
             CACHE_CLIENTS = Some(HashMap::new());
         }
-        CACHE_CLIENTS.as_mut().unwrap().remove(name);
+        CACHE_CLIENTS.as_mut().expect("Unreachable code").remove(name);
     }
     Ok(())
 }
 
 pub fn get(name: &str) -> TardisResult<&'static TardisCacheClient> {
     unsafe {
-        if let Some(client) = CACHE_CLIENTS.as_ref().unwrap().get(name) {
+        if let Some(client) = CACHE_CLIENTS.as_ref().ok_or(TardisError::bad_request("[SG.server] Get client failed", ""))?.get(name) {
             Ok(client)
         } else {
             Err(TardisError::bad_request(&format!("[SG.server] Get client {name} failed"), ""))

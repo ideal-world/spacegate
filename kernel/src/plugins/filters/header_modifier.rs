@@ -82,7 +82,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
 }
 
 #[cfg(test)]
-#[ignore]
+
 mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};

@@ -72,10 +72,10 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
             log::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
             if SgTlsMode::Terminate == tls.mode {
                 let tls_cfg = {
-                    let certs = rustls_pemfile::certs(&mut tls_base64_decode(&tls.cert)?.as_bytes())
+                    let certs = rustls_pemfile::certs(&mut tls.cert.as_bytes())
                         .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
                     let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
-                    let key = rustls_pemfile::read_all(&mut tls_base64_decode(&tls.key)?.as_bytes())
+                    let key = rustls_pemfile::read_all(&mut tls.key.as_bytes())
                         .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
                     if key.is_empty() {
                         return Err(TardisError::bad_request(&format!("[SG.Server] not found Tls private key"), ""));
@@ -110,7 +110,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
                 let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Bind address error: {error}"), ""))?;
                 let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
                     let remote_addr = match &client.state {
-                        State::Handshaking(addr) => addr.get_ref().unwrap().remote_addr(),
+                        State::Handshaking(addr) => addr.get_ref().expect("[SG.server.init] can't get addr").remote_addr(),
                         State::Streaming(addr) => addr.get_ref().0.remote_addr(),
                     };
                     let gateway_name = gateway_name.clone();
@@ -148,20 +148,6 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     shutdown.insert(gateway_name.to_string(), shutdown_tx);
 
     Ok(server_insts)
-}
-
-fn tls_base64_decode(mut key: &str) -> TardisResult<String> {
-    if key.starts_with('"') {
-        key = &key[1..];
-    }
-    if key.ends_with('"') {
-        key = &key[..key.len() - 1];
-    }
-    if let Ok(key) = TardisFuns::crypto.base64.decode(key) {
-        Ok(key)
-    } else {
-        Ok(key.to_string())
-    }
 }
 
 async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
@@ -202,7 +188,7 @@ fn into_http_error(error: TardisError) -> Result<Response<Body>, hyper::Error> {
                 "code": error.code,
                 "msg": error.message,
             }))
-            .unwrap(),
+            .expect("TardisFuns.json_to_string error"),
     ));
     *response.status_mut() = status_code;
     response.headers_mut().insert("Content-Type", HeaderValue::from_static("application/json"));
