@@ -23,6 +23,7 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
+
       - name: Cache rust
         uses: Swatinem/rust-cache@v2
 
