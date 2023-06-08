@@ -209,7 +209,7 @@ fn get_encode_type(header_value: Option<&HeaderValue>) -> Option<CompressionType
 }
 
 #[cfg(test)]
-
+#[allow(clippy::unwrap_used)]
 mod tests {
 
     use super::*;

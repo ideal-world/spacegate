@@ -1,3 +1,4 @@
+use crate::helpers::url_helper::UrlToUri;
 use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -49,7 +50,7 @@ impl SgPluginFilter for SgFilterRewrite {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Rewrite] Host {hostname} parsing error"), ""))?;
-            ctx.set_req_uri(uri.as_str().parse().unwrap());
+            ctx.set_req_uri(uri.to_uri()?);
         }
         if let Some(new_url) = http_common_modify_path(ctx.get_req_uri(), &self.path, matched_match_inst)? {
             ctx.set_req_uri(new_url);
@@ -63,7 +64,7 @@ impl SgPluginFilter for SgFilterRewrite {
 }
 
 #[cfg(test)]
-
+#[allow(clippy::unwrap_used)]
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},

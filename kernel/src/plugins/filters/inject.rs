@@ -1,7 +1,10 @@
 use async_trait::async_trait;
 use http::Method;
 use serde::{Deserialize, Serialize};
-use tardis::{basic::result::TardisResult, TardisFuns};
+use tardis::{
+    basic::{error::TardisError, result::TardisResult},
+    TardisFuns,
+};
 
 use crate::functions::{http_client, http_route::SgHttpRouteMatchInst};
 
@@ -51,8 +54,24 @@ impl SgPluginFilter for SgFilterInject {
             ctx.set_req_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
             let mut resp = http_client::raw_request(None, Method::PUT, req_inject_url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), self.req_timeout_ms).await?;
             let new_req_headers = resp.headers_mut();
-            let new_req_method = new_req_headers.get(SG_INJECT_REAL_METHOD).map(|m| Method::from_bytes(m.to_str().unwrap().as_bytes()).unwrap()).unwrap_or(real_method);
-            let new_req_url = new_req_headers.get(SG_INJECT_REAL_URL).map(|m| m.to_str().unwrap().parse().unwrap()).unwrap_or(real_url);
+            let new_req_method = new_req_headers
+                .get(SG_INJECT_REAL_METHOD)
+                .map(|m| {
+                    Method::from_bytes(m.to_str().map_err(|e| TardisError::bad_request(&format!("[SG.Filter.Inject] parse method error:{}", e), ""))?.as_bytes())
+                        .map_err(|e| TardisError::bad_request(&format!("[SG.Filter.Inject] parse method error:{}", e), ""))
+                })
+                .transpose()?
+                .unwrap_or(real_method);
+            let new_req_url = new_req_headers
+                .get(SG_INJECT_REAL_URL)
+                .map(|m| {
+                    m.to_str()
+                        .map_err(|e| TardisError::bad_request(&format!("[SG.Filter.Inject] parse url error:{}", e), ""))?
+                        .parse()
+                        .map_err(|e| TardisError::bad_request(&format!("[SG.Filter.Inject] parse url error:{}", e), ""))
+                })
+                .transpose()?
+                .unwrap_or(real_url);
             new_req_headers.remove(SG_INJECT_REAL_METHOD);
             new_req_headers.remove(SG_INJECT_REAL_URL);
             ctx = SgRouteFilterContext::new(
@@ -82,7 +101,7 @@ impl SgPluginFilter for SgFilterInject {
 }
 
 #[cfg(test)]
-
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use http::{HeaderMap, StatusCode, Uri, Version};

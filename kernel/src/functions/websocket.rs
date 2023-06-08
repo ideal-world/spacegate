@@ -16,7 +16,7 @@ use tardis::{log, tokio, TardisFuns};
 use super::http_route::SgBackend;
 
 pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend: &SgBackend, mut request: Request<Body>) -> TardisResult<Response<Body>> {
-    if request
+    let have_upgrade = request
         .headers()
         .get(CONNECTION)
         .map(|v| {
@@ -25,8 +25,8 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
             Ok::<_, TardisError>(!if_have_upgrade)
         })
         .transpose()?
-        .unwrap_or(false)
-    {
+        .unwrap_or(false);
+    if have_upgrade {
         return Err(TardisError::bad_request(
             &format!("[SG.Websocket] Connection header must be upgrade , from {remote_addr} @ {gateway_name}"),
             "",
@@ -41,7 +41,7 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
         }
     }
     let request_key = if let Some(key) = request.headers().get(SEC_WEBSOCKET_KEY) {
-        key.to_str().unwrap().to_string()
+        key.to_str().map_err(|e| TardisError::bad_request(&format!("[SG.Websocket] header {SEC_WEBSOCKET_KEY} value is illegal: {e}"), ""))?.to_string()
     } else {
         return Err(TardisError::bad_request(
             &format!("[SG.Websocket] Websocket key missing , from {remote_addr} @ {gateway_name}"),
@@ -133,6 +133,6 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
 
     response.headers_mut().insert(UPGRADE, HeaderValue::from_static("websocket"));
     response.headers_mut().insert(CONNECTION, HeaderValue::from_static("Upgrade"));
-    response.headers_mut().insert(SEC_WEBSOCKET_ACCEPT, accept_key.parse().unwrap());
+    response.headers_mut().insert(SEC_WEBSOCKET_ACCEPT, accept_key.parse().map_err(|_| TardisError::bad_request("", ""))?);
     Ok(response)
 }
