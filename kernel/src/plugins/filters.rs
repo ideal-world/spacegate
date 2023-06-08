@@ -50,7 +50,7 @@ pub fn get_filter_def(code: &str) -> TardisResult<&Box<dyn SgPluginFilterDef>> {
         if FILTERS.is_none() {
             init_filter_defs();
         }
-        FILTERS.as_ref().expect("Unreachable code").get(code).ok_or(TardisError::format_error(&format!("[SG.FILTER] Filter code '{code}' not found"), ""))
+        FILTERS.as_ref().expect("Unreachable code").get(code).ok_or_else(|| TardisError::format_error(&format!("[SG.FILTER] Filter code '{code}' not found"), ""))
     }
 }
 
@@ -127,10 +127,12 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
                                 // Support only one capture group
                                 matched_path.regular.as_ref().expect("").captures(origin_path).map(|cap| cap.get(1).map_or("", |m| m.as_str())).unwrap_or("")
                             };
-                            let match_path_reduce = origin_path.strip_prefix(match_path).ok_or(TardisError::format_error(
-                                "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplacePrefixMatch] and match kind [Exact] failed",
-                                "",
-                            ))?;
+                            let match_path_reduce = origin_path.strip_prefix(match_path).ok_or_else(|| {
+                                TardisError::format_error(
+                                    "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplacePrefixMatch] and match kind [Exact] failed",
+                                    "",
+                                )
+                            })?;
                             let new_path = if match_path_reduce.is_empty() {
                                 modify_path.value.to_string()
                             } else if match_path_reduce.starts_with('/') && modify_path.value.ends_with('/') {

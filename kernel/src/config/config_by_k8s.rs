@@ -289,6 +289,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
     let mut gateway_configs = Vec::new();
 
     for gateway_obj in gateway_objs {
+        println!("======gateway_obj:{gateway_obj:?}");
         // Key configuration compatibility checks
         if gateway_obj.spec.addresses.is_some() {
             return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.addresses] not supported yet", ""));
@@ -342,7 +343,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             ));
         }
         // Generate gateway configuration
-        let gateway_name_without_namespace = gateway_obj.metadata.name.as_ref().ok_or(TardisError::format_error("[SG.Config] Gateway [metadata.name] is required", ""))?;
+        let gateway_name_without_namespace = gateway_obj.metadata.name.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [metadata.name] is required", ""))?;
         let gateway_config = SgGateway {
             name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_name_without_namespace),
             parameters: SgParameters {
@@ -360,9 +361,9 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                                 let certificate_ref = tls
                                     .certificate_refs
                                     .as_ref()
-                                    .ok_or(TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
+                                    .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
                                     .get(0)
-                                    .ok_or(TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
+                                    .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
                                 let secret_api: Api<Secret> = if let Some(namespace) = &certificate_ref.namespace {
                                     Api::namespaced(get_client().await?, namespace)
                                 } else {
@@ -470,13 +471,15 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
         let rel_gateway_name = format!(
             "{}.{}",
             if let Some(namespaces) =
-                http_route_obj.spec.inner.parent_refs.as_ref().ok_or(TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].namespace.as_ref()
+                http_route_obj.spec.inner.parent_refs.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0]
+                    .namespace
+                    .as_ref()
             {
                 namespaces.to_string()
             } else {
                 http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
             },
-            http_route_obj.spec.inner.parent_refs.as_ref().ok_or(TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].name
+            http_route_obj.spec.inner.parent_refs.as_ref().ok_or_else(||TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].name
         );
         let http_route_config = SgHttpRoute {
             gateway_name: rel_gateway_name,

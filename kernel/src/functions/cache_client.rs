@@ -30,7 +30,7 @@ pub async fn remove(name: &str) -> TardisResult<()> {
 
 pub fn get(name: &str) -> TardisResult<&'static TardisCacheClient> {
     unsafe {
-        if let Some(client) = CACHE_CLIENTS.as_ref().ok_or(TardisError::bad_request("[SG.server] Get client failed", ""))?.get(name) {
+        if let Some(client) = CACHE_CLIENTS.as_ref().ok_or_else(||TardisError::bad_request("[SG.server] Get client failed", ""))?.get(name) {
             Ok(client)
         } else {
             Err(TardisError::bad_request(&format!("[SG.server] Get client {name} failed"), ""))

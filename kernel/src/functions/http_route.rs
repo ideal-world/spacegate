@@ -211,7 +211,7 @@ pub async fn remove(name: &str) -> TardisResult<()> {
 
 fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
     unsafe {
-        if let Some(routes) = ROUTES.as_ref().ok_or(TardisError::bad_request("[SG.Route] Get routes failed", ""))?.get(name) {
+        if let Some(routes) = ROUTES.as_ref().ok_or_else(|| TardisError::bad_request("[SG.Route] Get routes failed", ""))?.get(name) {
             Ok(routes)
         } else {
             Err(TardisError::bad_request(&format!("[SG.Route] Get routes {name} failed"), ""))
@@ -227,7 +227,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
             request
                 .headers()
                 .get("Host")
-                .ok_or(TardisError::bad_request("[SG.Route] request get Host failed", ""))?
+                .ok_or_else(|| TardisError::bad_request("[SG.Route] request get Host failed", ""))?
                 .to_str()
                 .map_err(|_| TardisError::bad_request("[SG.Route] request host illegal: host is not ascii", ""))?,
             request.uri()
