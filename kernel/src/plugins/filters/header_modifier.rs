@@ -82,6 +82,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};

@@ -3,7 +3,7 @@ use std::{env, time::Duration, vec};
 use serde_json::{json, Value};
 use spacegate_kernel::{
     config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig},
+        gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
         http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
@@ -17,6 +17,7 @@ use tardis::{
 const HTTP_PORT: u16 = 8888;
 const HTTPS_PORT: u16 = 18443;
 #[tokio::test]
+
 async fn test_compression() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();
@@ -32,6 +33,7 @@ async fn test_compression() -> TardisResult<()> {
                     port: HTTPS_PORT,
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
+                        mode: SgTlsMode::Terminate,
                         key: TLS_KEY.to_string(),
                         cert: TLS_CERT.to_string(),
                     }),

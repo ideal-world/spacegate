@@ -1,3 +1,4 @@
+#![warn(clippy::unwrap_used)]
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
 use plugins::filters::{self, SgPluginFilterDef};
@@ -5,6 +6,7 @@ use tardis::{basic::result::TardisResult, log, tokio::signal};
 
 pub mod config;
 pub mod functions;
+pub mod helpers;
 pub mod plugins;
 
 pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<()> {
@@ -19,17 +21,18 @@ pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, chec
 pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> TardisResult<()> {
     // Initialize service instances
     let server_insts = server::init(&gateway).await?;
+    let gateway_name = &gateway.name.clone();
     #[cfg(feature = "cache")]
     {
         // Initialize cache instances
         if let Some(url) = &gateway.parameters.redis_url {
-            functions::cache_client::init(&gateway.name, url).await?;
+            functions::cache_client::init(gateway_name, url).await?;
         }
     }
     // Initialize route instances
     http_route::init(gateway, http_routes).await?;
     // Start service instances
-    server::startup(server_insts).await
+    server::startup(gateway_name, server_insts).await
 }
 
 pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {

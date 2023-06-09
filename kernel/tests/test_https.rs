@@ -2,7 +2,7 @@ use std::{env, time::Duration, vec};
 
 use serde_json::{json, Value};
 use spacegate_kernel::config::{
-    gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig},
+    gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
 use tardis::{
@@ -11,7 +11,7 @@ use tardis::{
     web::web_client::{TardisHttpResponse, TardisWebClient},
 };
 
-const TLS_KEY: &str = r#"
+const TLS_RSA_KEY: &str = r#"
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAqVYYdfxTT9qr1np22UoIWq4v1E4cHncp35xxu4HNyZsoJBHR
 K1gTvwh8x4LMe24lROW/LGWDRAyhaI8qDxxlitm0DPxU8p4iQoDQi3Z+oVKqsSwJ
@@ -68,22 +68,73 @@ FZygs8miAhWPzqnpmgTj1cPiU1M=
 -----END CERTIFICATE-----
 "#;
 
+const TLS_PKCS8_KEY: &str = r#"-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgRHa9BJGpo+H2vtsC
+zj86Jw9nZC2iiRWkm1DaV/hxrMihRANCAAT3RsSUTWywEVmi5PaZHT+AdbTSbfjy
+lZVZLARkWHAe7/O/rS1zYb995n93cQevTFxSZWRiC++QWfilebv+FiA5
+-----END PRIVATE KEY-----"#;
+
+const TLS_EC_KEY: &str = r#"-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIER2vQSRqaPh9r7bAs4/OicPZ2QtookVpJtQ2lf4cazIoAoGCCqGSM49
+AwEHoUQDQgAE90bElE1ssBFZouT2mR0/gHW00m348pWVWSwEZFhwHu/zv60tc2G/
+feZ/d3EHr0xcUmVkYgvvkFn4pXm7/hYgOQ==
+-----END EC PRIVATE KEY-----"#;
+
+const TLS_EC_CERT: &str = r#"-----BEGIN CERTIFICATE-----
+MIICKDCCAc2gAwIBAgIUdbUa6KZ5Hb0AnlSXkSsnK5t3Ok0wCgYIKoZIzj0EAwIw
+aTELMAkGA1UEBhMCQ04xETAPBgNVBAgMCEhhbmdaaG91MRMwEQYDVQQKDAppZGVh
+bHdvcmxkMRMwEQYDVQQLDAppZGVhbHdvcmxkMR0wGwYDVQQDDBR3d3cuaWRlYWx3
+b3JsZC5ncm91cDAeFw0yMzA1MTYxMDAzMjlaFw0yNDA1MTUxMDAzMjlaMGkxCzAJ
+BgNVBAYTAkNOMREwDwYDVQQIDAhIYW5nWmhvdTETMBEGA1UECgwKaWRlYWx3b3Js
+ZDETMBEGA1UECwwKaWRlYWx3b3JsZDEdMBsGA1UEAwwUd3d3LmlkZWFsd29ybGQu
+Z3JvdXAwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAT3RsSUTWywEVmi5PaZHT+A
+dbTSbfjylZVZLARkWHAe7/O/rS1zYb995n93cQevTFxSZWRiC++QWfilebv+FiA5
+o1MwUTAdBgNVHQ4EFgQUauvZuVgb2eFu0FpYamvIp3ysM2gwHwYDVR0jBBgwFoAU
+auvZuVgb2eFu0FpYamvIp3ysM2gwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
+AgNJADBGAiEA9FhsNuvAJaEFclqqY8CZPYzpsziyn1CILpjIrt8U8cACIQDeFQvs
+W0X+/YToWPeWivw3Kbo05oCob0NUi3fXtiTHng==
+-----END CERTIFICATE-----"#;
+
 #[tokio::test]
+
 async fn test_https() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),
-            listeners: vec![SgListener {
-                port: 8888,
-                protocol: SgProtocol::Https,
-                tls: Some(SgTlsConfig {
-                    key: TLS_KEY.to_string(),
-                    cert: TLS_CERT.to_string(),
-                }),
-                ..Default::default()
-            }],
+            listeners: vec![
+                SgListener {
+                    port: 8888,
+                    protocol: SgProtocol::Https,
+                    tls: Some(SgTlsConfig {
+                        mode: SgTlsMode::Terminate,
+                        key: TLS_RSA_KEY.to_string(),
+                        cert: TLS_CERT.to_string(),
+                    }),
+                    ..Default::default()
+                },
+                SgListener {
+                    port: 8889,
+                    protocol: SgProtocol::Https,
+                    tls: Some(SgTlsConfig {
+                        mode: SgTlsMode::Terminate,
+                        key: TLS_PKCS8_KEY.to_string(),
+                        cert: TLS_EC_CERT.to_string(),
+                    }),
+                    ..Default::default()
+                },
+                SgListener {
+                    port: 8890,
+                    protocol: SgProtocol::Https,
+                    tls: Some(SgTlsConfig {
+                        mode: SgTlsMode::Terminate,
+                        key: TLS_EC_KEY.to_string(),
+                        cert: TLS_EC_CERT.to_string(),
+                    }),
+                    ..Default::default()
+                },
+            ],
             ..Default::default()
         },
         vec![SgHttpRoute {
@@ -106,6 +157,32 @@ async fn test_https() -> TardisResult<()> {
     let resp: TardisHttpResponse<Value> = client
         .post(
             "https://localhost:8888/post?dd",
+            &json!({
+                "name":"星航",
+                "age":6
+            }),
+            None,
+        )
+        .await?;
+    assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+
+    let client = TardisWebClient::init(100)?;
+    let resp: TardisHttpResponse<Value> = client
+        .post(
+            "https://localhost:8889/post?dd",
+            &json!({
+                "name":"星航",
+                "age":6
+            }),
+            None,
+        )
+        .await?;
+    assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+
+    let client = TardisWebClient::init(100)?;
+    let resp: TardisHttpResponse<Value> = client
+        .post(
+            "https://localhost:8890/post?dd",
             &json!({
                 "name":"星航",
                 "age":6

@@ -3,6 +3,7 @@ pub mod header_modifier;
 mod inject;
 #[cfg(feature = "cache")]
 mod limit;
+pub mod maintenance;
 pub mod redirect;
 pub mod rewrite;
 use async_trait::async_trait;
@@ -41,16 +42,16 @@ pub fn register_filter_def(code: &str, filter_def: Box<dyn SgPluginFilterDef>) {
         if FILTERS.is_none() {
             init_filter_defs();
         }
-        FILTERS.as_mut().unwrap().insert(code.to_string(), filter_def);
+        FILTERS.as_mut().expect("Unreachable code").insert(code.to_string(), filter_def);
     }
 }
 
-pub fn get_filter_def(code: &str) -> &Box<dyn SgPluginFilterDef> {
+pub fn get_filter_def(code: &str) -> TardisResult<&Box<dyn SgPluginFilterDef>> {
     unsafe {
         if FILTERS.is_none() {
             init_filter_defs();
         }
-        FILTERS.as_ref().unwrap().get(code).unwrap()
+        FILTERS.as_ref().expect("Unreachable code").get(code).ok_or_else(|| TardisError::format_error(&format!("[SG.FILTER] Filter code '{code}' not found"), ""))
     }
 }
 
@@ -58,7 +59,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(Strin
     let mut plugin_filters: Vec<(String, BoxSgPluginFilter)> = Vec::new();
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
-        let filter_def = get_filter_def(&filter_conf.code);
+        let filter_def = get_filter_def(&filter_conf.code)?;
         let filter_inst = filter_def.inst(filter_conf.spec)?;
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
@@ -125,9 +126,14 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
                                 &matched_path.value
                             } else {
                                 // Support only one capture group
-                                matched_path.regular.as_ref().unwrap().captures(origin_path).map(|cap| cap.get(1).map_or("", |m| m.as_str())).unwrap_or("")
+                                matched_path.regular.as_ref().expect("").captures(origin_path).map(|cap| cap.get(1).map_or("", |m| m.as_str())).unwrap_or("")
                             };
-                            let match_path_reduce = origin_path.strip_prefix(match_path).unwrap();
+                            let match_path_reduce = origin_path.strip_prefix(match_path).ok_or_else(|| {
+                                TardisError::format_error(
+                                    "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplacePrefixMatch] and match kind [Exact] failed",
+                                    "",
+                                )
+                            })?;
                             let new_path = if match_path_reduce.is_empty() {
                                 modify_path.value.to_string()
                             } else if match_path_reduce.starts_with('/') && modify_path.value.ends_with('/') {
@@ -157,7 +163,9 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
                 }
             }
         }
-        return Ok(Some(uri.as_str().parse().unwrap()));
+        return Ok(Some(
+            uri.as_str().parse().map_err(|e| TardisError::internal_error(&format!("[SG.Plugin.Filter.Common] uri parse error: {}", e), ""))?,
+        ));
     }
     Ok(None)
 }
@@ -244,7 +252,7 @@ impl SgRouteFilterContext {
         if self.mod_req_method.is_none() {
             self.mod_req_method = Some(self.raw_req_method.clone());
         }
-        self.mod_req_method.as_ref().unwrap()
+        self.mod_req_method.as_ref().expect("Unreachable code")
     }
 
     pub fn set_req_method(&mut self, method: Method) {
@@ -259,7 +267,7 @@ impl SgRouteFilterContext {
         if self.mod_req_uri.is_none() {
             self.mod_req_uri = Some(self.raw_req_uri.clone());
         }
-        self.mod_req_uri.as_ref().unwrap()
+        self.mod_req_uri.as_ref().expect("Unreachable code")
     }
 
     pub fn set_req_uri(&mut self, uri: Uri) {
@@ -274,7 +282,7 @@ impl SgRouteFilterContext {
         if self.mod_req_version.is_none() {
             self.mod_req_version = Some(self.raw_req_version);
         }
-        self.mod_req_version.as_ref().unwrap()
+        self.mod_req_version.as_ref().expect("Unreachable code")
     }
 
     pub fn set_req_version(&mut self, version: Version) {
@@ -289,7 +297,7 @@ impl SgRouteFilterContext {
         if self.mod_req_headers.is_none() {
             self.mod_req_headers = Some(self.raw_req_headers.clone());
         }
-        self.mod_req_headers.as_ref().unwrap()
+        self.mod_req_headers.as_ref().expect("Unreachable code")
     }
 
     pub fn set_req_headers(&mut self, req_headers: HeaderMap<HeaderValue>) {
@@ -300,7 +308,7 @@ impl SgRouteFilterContext {
         if self.mod_req_headers.is_none() {
             self.mod_req_headers = Some(self.raw_req_headers.clone());
         }
-        let mod_req_headers = self.mod_req_headers.as_mut().unwrap();
+        let mod_req_headers = self.mod_req_headers.as_mut().expect("Unreachable code");
         mod_req_headers.insert(
             HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
@@ -327,7 +335,9 @@ impl SgRouteFilterContext {
         } else if self.raw_req_body.is_some() {
             let mut body = None;
             std::mem::swap(&mut body, &mut self.raw_req_body);
-            let body = hyper::body::to_bytes(body.unwrap()).await.map_err(|error| TardisError::format_error(&format!("[SG.Filter] Request Body parsing error:{error}"), ""))?;
+            let body = hyper::body::to_bytes(body.expect("Unreachable code"))
+                .await
+                .map_err(|error| TardisError::format_error(&format!("[SG.Filter] Request Body parsing error:{error}"), ""))?;
             let body = body.iter().cloned().collect::<Vec<u8>>();
             Ok(Some(body))
         } else {
@@ -363,7 +373,7 @@ impl SgRouteFilterContext {
         if self.mod_resp_status_code.is_none() {
             self.mod_resp_status_code = Some(self.raw_resp_status_code);
         }
-        self.mod_resp_status_code.as_ref().unwrap()
+        self.mod_resp_status_code.as_ref().expect("Unreachable code")
     }
 
     pub fn set_resp_status_code(&mut self, status_code: StatusCode) {
@@ -378,7 +388,7 @@ impl SgRouteFilterContext {
         if self.mod_resp_headers.is_none() {
             self.mod_resp_headers = Some(self.raw_resp_headers.clone());
         }
-        self.mod_resp_headers.as_ref().unwrap()
+        self.mod_resp_headers.as_ref().expect("Unreachable code")
     }
 
     pub fn set_resp_headers(&mut self, resp_headers: HeaderMap<HeaderValue>) {
@@ -389,7 +399,7 @@ impl SgRouteFilterContext {
         if self.mod_resp_headers.is_none() {
             self.mod_resp_headers = Some(self.raw_resp_headers.clone());
         }
-        let mod_resp_headers = self.mod_resp_headers.as_mut().unwrap();
+        let mod_resp_headers = self.mod_resp_headers.as_mut().expect("Unreachable code");
         mod_resp_headers.insert(
             HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
@@ -416,7 +426,9 @@ impl SgRouteFilterContext {
         } else if self.raw_resp_body.is_some() {
             let mut body = None;
             std::mem::swap(&mut body, &mut self.raw_resp_body);
-            let body = hyper::body::to_bytes(body.unwrap()).await.map_err(|error| TardisError::format_error(&format!("[SG.Filter] Response Body parsing error:{error}"), ""))?;
+            let body = hyper::body::to_bytes(body.expect("Unreachable code"))
+                .await
+                .map_err(|error| TardisError::format_error(&format!("[SG.Filter] Response Body parsing error:{error}"), ""))?;
             let body = body.iter().cloned().collect::<Vec<u8>>();
             Ok(Some(body))
         } else {
@@ -471,6 +483,7 @@ impl SgRouteFilterContext {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use tardis::{basic::result::TardisResult, regex::Regex};
 
