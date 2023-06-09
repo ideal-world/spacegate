@@ -16,6 +16,7 @@ readme = "../../README.md"
 spacegate-kernel = { version = "0.1.0-alpha.2", path = "../../kernel", features = [
     "ws",
     "cache",
+    "web",
 ] }
 
 tardis = { workspace = true }

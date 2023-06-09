@@ -6,6 +6,8 @@ mod limit;
 pub mod maintenance;
 pub mod redirect;
 pub mod rewrite;
+#[cfg(feature = "web")]
+pub mod status;
 use async_trait::async_trait;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version};
 use hyper::Body;
