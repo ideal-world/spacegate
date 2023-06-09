@@ -2,12 +2,12 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use crate::{
     config::{
-        gateway_dto::{SgGateway, SgProtocol},
+        gateway_dto::{SgGateway, SgListener, SgProtocol},
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
     plugins::filters::{self, BoxSgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
-use http::{header::UPGRADE, Request, Response};
+use http::{header::UPGRADE, uri::Scheme, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
 use hyper_rustls::HttpsConnector;
 use itertools::Itertools;
@@ -39,73 +39,90 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
             for rule in rules {
                 let rule_filters = if let Some(filters) = rule.filters { filters::init(filters).await? } else { Vec::new() };
 
-                let rule_matches_insts = rule.matches.map(|rule_matches| {
-                    rule_matches
-                        .into_iter()
-                        .map(|rule_match| {
-                            let path_inst = rule_match.path.map(|path| SgHttpPathMatchInst {
-                                regular: if path.kind == SgHttpPathMatchType::Regular {
-                                    Some(
-                                        Regex::new(&path.value)
-                                            .map_err(|_| TardisError::format_error(&format!("[SG.Route] Path Regular {} format error", path.value), ""))
-                                            .unwrap(),
-                                    )
-                                } else {
-                                    None
-                                },
-                                kind: path.kind,
-                                value: path.value,
-                            });
-
-                            let header_inst = rule_match.header.map(|header| {
-                                header
-                                    .into_iter()
-                                    .map(|header| SgHttpHeaderMatchInst {
-                                        regular: if header.kind == SgHttpHeaderMatchType::Regular {
-                                            Some(
-                                                Regex::new(&header.value)
-                                                    .map_err(|_| TardisError::format_error(&format!("[SG.Route] Header Regular {} format error", header.value), ""))
-                                                    .unwrap(),
-                                            )
+                let rule_matches_insts = rule
+                    .matches
+                    .map(|rule_matches| {
+                        rule_matches
+                            .into_iter()
+                            .map(|rule_match| {
+                                let path_inst = rule_match
+                                    .path
+                                    .map(|path| {
+                                        let regular = if path.kind == SgHttpPathMatchType::Regular {
+                                            Regex::new(&path.value)
+                                                .map_err(|_| TardisError::format_error(&format!("[SG.Route] Path Regular {} format error", path.value), ""))
+                                                .map(Some)?
                                         } else {
                                             None
-                                        },
-                                        kind: header.kind,
-                                        name: header.name.clone(),
-                                        value: header.value,
+                                        };
+                                        Ok::<_, TardisError>(SgHttpPathMatchInst {
+                                            regular,
+                                            kind: path.kind,
+                                            value: path.value,
+                                        })
                                     })
-                                    .collect()
-                            });
+                                    .transpose()?;
 
-                            let query_inst = rule_match.query.map(|query| {
-                                query
-                                    .into_iter()
-                                    .map(|query| SgHttpQueryMatchInst {
-                                        regular: if query.kind == SgHttpQueryMatchType::Regular {
-                                            Some(
-                                                Regex::new(&query.value)
-                                                    .map_err(|_| TardisError::format_error(&format!("[SG.Route] Query Regular {} format error", query.value), ""))
-                                                    .unwrap(),
-                                            )
-                                        } else {
-                                            None
-                                        },
-                                        kind: query.kind,
-                                        name: query.name.clone(),
-                                        value: query.value,
+                                let header_inst = rule_match
+                                    .header
+                                    .map(|header| {
+                                        header
+                                            .into_iter()
+                                            .map(|header| {
+                                                let regular = if header.kind == SgHttpHeaderMatchType::Regular {
+                                                    Some(
+                                                        Regex::new(&header.value)
+                                                            .map_err(|_| TardisError::format_error(&format!("[SG.Route] Header Regular {} format error", header.value), ""))?,
+                                                    )
+                                                } else {
+                                                    None
+                                                };
+                                                Ok(SgHttpHeaderMatchInst {
+                                                    regular,
+                                                    kind: header.kind,
+                                                    name: header.name.clone(),
+                                                    value: header.value,
+                                                })
+                                            })
+                                            .collect::<TardisResult<Vec<SgHttpHeaderMatchInst>>>()
                                     })
-                                    .collect()
-                            });
+                                    .transpose()?;
 
-                            SgHttpRouteMatchInst {
-                                path: path_inst,
-                                header: header_inst,
-                                query: query_inst,
-                                method: rule_match.method.map(|m| m.into_iter().map(|m| m.to_lowercase()).collect_vec()),
-                            }
-                        })
-                        .collect_vec()
-                });
+                                let query_inst = rule_match
+                                    .query
+                                    .map(|query| {
+                                        query
+                                            .into_iter()
+                                            .map(|query| {
+                                                let regular = if query.kind == SgHttpQueryMatchType::Regular {
+                                                    Some(
+                                                        Regex::new(&query.value)
+                                                            .map_err(|_| TardisError::format_error(&format!("[SG.Route] Query Regular {} format error", query.value), ""))?,
+                                                    )
+                                                } else {
+                                                    None
+                                                };
+                                                Ok(SgHttpQueryMatchInst {
+                                                    regular,
+                                                    kind: query.kind,
+                                                    name: query.name.clone(),
+                                                    value: query.value,
+                                                })
+                                            })
+                                            .collect::<TardisResult<Vec<SgHttpQueryMatchInst>>>()
+                                    })
+                                    .transpose()?;
+
+                                Ok(SgHttpRouteMatchInst {
+                                    path: path_inst,
+                                    header: header_inst,
+                                    query: query_inst,
+                                    method: rule_match.method.map(|m| m.into_iter().map(|m| m.to_lowercase()).collect_vec()),
+                                })
+                            })
+                            .collect::<TardisResult<Vec<SgHttpRouteMatchInst>>>()
+                    })
+                    .transpose()?;
 
                 rule_insts.push(SgHttpRouteRuleInst {
                     filters: rule_filters,
@@ -115,34 +132,35 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                             backend_refs
                                 .into_iter()
                                 .map(|backend_ref| async move {
-                                    SgBackend {
+                                    let filters = if let Some(filters) = backend_ref.filters {
+                                        filters::init(filters).await?
+                                    } else {
+                                        Vec::new()
+                                    };
+                                    Ok::<_, TardisError>(SgBackend {
                                         name_or_host: backend_ref.name_or_host,
                                         namespace: backend_ref.namespace,
                                         port: backend_ref.port,
                                         timeout_ms: backend_ref.timeout_ms,
                                         protocol: backend_ref.protocol,
                                         weight: backend_ref.weight,
-                                        filters: if let Some(filters) = backend_ref.filters {
-                                            filters::init(filters).await.unwrap()
-                                        } else {
-                                            Vec::new()
-                                        },
-                                    }
+                                        filters,
+                                    })
                                 })
                                 .collect_vec(),
                         )
                         .await;
-                        Some(backends)
+                        Some(backends.into_iter().collect::<Result<Vec<_>, _>>()?)
                     } else {
                         None
                     },
                     timeout_ms: rule.timeout_ms,
                 })
             }
-            Some(rule_insts)
+            Ok::<_, TardisError>(Some(rule_insts))
         } else {
-            None
-        };
+            Ok(None)
+        }?;
         route_insts.push(SgHttpRouteInst {
             hostnames: route.hostnames.map(|hostnames| hostnames.into_iter().map(|hostname| hostname.to_lowercase()).collect_vec()),
             filters: route_filters,
@@ -153,12 +171,13 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
         filters: global_filters,
         routes: route_insts,
         client: http_client::init()?,
+        listeners: gateway_conf.listeners,
     };
     unsafe {
         if ROUTES.is_none() {
             ROUTES = Some(HashMap::new());
         }
-        ROUTES.as_mut().unwrap().insert(gateway_conf.name.to_string(), route_inst);
+        ROUTES.as_mut().expect("Unreachable code").insert(gateway_conf.name.to_string(), route_inst);
     }
     Ok(())
 }
@@ -168,7 +187,7 @@ pub async fn remove(name: &str) -> TardisResult<()> {
         if ROUTES.is_none() {
             ROUTES = Some(HashMap::new());
         }
-        ROUTES.as_mut().unwrap().remove(name)
+        ROUTES.as_mut().expect("Unreachable code").remove(name)
     };
     if let Some(gateway_inst) = route {
         for (_, filter) in gateway_inst.filters {
@@ -192,7 +211,7 @@ pub async fn remove(name: &str) -> TardisResult<()> {
 
 fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
     unsafe {
-        if let Some(routes) = ROUTES.as_ref().unwrap().get(name) {
+        if let Some(routes) = ROUTES.as_ref().ok_or_else(|| TardisError::bad_request("[SG.Route] Get routes failed", ""))?.get(name) {
             Ok(routes)
         } else {
             Err(TardisError::bad_request(&format!("[SG.Route] Get routes {name} failed"), ""))
@@ -202,7 +221,19 @@ fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
 
 pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, mut request: Request<Body>) -> TardisResult<Response<Body>> {
     if request.uri().host().is_none() && request.headers().contains_key("Host") {
-        *request.uri_mut() = format!("{}://{}{}", req_scheme, request.headers().get("Host").unwrap().to_str().unwrap(), request.uri()).parse().unwrap();
+        *request.uri_mut() = format!(
+            "{}://{}{}",
+            req_scheme,
+            request
+                .headers()
+                .get("Host")
+                .ok_or_else(|| TardisError::bad_request("[SG.Route] request get Host failed", ""))?
+                .to_str()
+                .map_err(|_| TardisError::bad_request("[SG.Route] request host illegal: host is not ascii", ""))?,
+            request.uri()
+        )
+        .parse()
+        .map_err(|e| TardisError::bad_request(&format!("[SG.Route] request host rebuild illegal: {}", e), ""))?;
     }
     log::trace!(
         "[SG.Route] Request method {} url {} , from {} @ {}",
@@ -212,6 +243,22 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         gateway_name
     );
     let gateway_inst = get(&gateway_name)?;
+    if !match_listeners_hostname_and_port(
+        request.uri().host(),
+        request.uri().port().map_or_else(
+            || {
+                if request.uri().scheme().unwrap_or(&Scheme::HTTP) == &Scheme::HTTPS {
+                    443
+                } else {
+                    80
+                }
+            },
+            |p| p.as_u16(),
+        ),
+        &gateway_inst.listeners,
+    ) {
+        return Err(TardisError::not_found("[SG] Hostname Not found", ""));
+    }
 
     let matched_route_inst = match_route_insts_with_hostname_priority(request.uri().host(), &gateway_inst.routes);
     if matched_route_inst.is_none() {
@@ -220,7 +267,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         return Ok(not_found);
     }
 
-    let matched_route_inst = matched_route_inst.unwrap();
+    let matched_route_inst = matched_route_inst.expect("Unreachable code");
     let (matched_rule_inst, matched_match_inst) = if let Some(matched_rule_insts) = &matched_route_inst.rules {
         let mut _matched_rule_inst = None;
         let mut _matched_match_inst = None;
@@ -243,7 +290,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         None
     };
 
-    if request.headers().get(UPGRADE).map(|v| &v.to_str().unwrap().to_lowercase() == "websocket").unwrap_or(false) {
+    if request.headers().get(UPGRADE).map(|v| &v.to_str().expect("[SG.Websocket] Upgrade header value illegal:  is not ascii").to_lowercase() == "websocket").unwrap_or(false) {
         #[cfg(feature = "ws")]
         {
             if let Some(backend) = backend {
@@ -294,7 +341,10 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
 
     let mut resp = Response::builder();
     for (k, v) in ctx.get_resp_headers() {
-        resp = resp.header(k.as_str(), v.to_str().unwrap());
+        resp = resp.header(
+            k.as_str(),
+            v.to_str().map_err(|_| TardisError::bad_request(&format!("[SG.Route] header {k}'s value illegal: is not ascii"), ""))?.to_string(),
+        );
     }
     let resp = resp
         .body(Body::from(ctx.pop_resp_body().await?.unwrap_or_default()))
@@ -362,7 +412,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                         }
                     }
                     SgHttpPathMatchType::Regular => {
-                        if !&path.regular.as_ref().unwrap().is_match(req_path) {
+                        if !&path.regular.as_ref().expect("[SG.Route] Path regular is None").is_match(req_path) {
                             continue;
                         }
                     }
@@ -378,7 +428,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                         if req_header_value.is_err() {
                             return false;
                         }
-                        let req_header_value = req_header_value.unwrap();
+                        let req_header_value = req_header_value.expect("Unreachable code");
                         match header.kind {
                             SgHttpHeaderMatchType::Exact => {
                                 if req_header_value != header.value {
@@ -386,7 +436,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                                 }
                             }
                             SgHttpHeaderMatchType::Regular => {
-                                if !&header.regular.as_ref().unwrap().is_match(req_header_value) {
+                                if !&header.regular.as_ref().expect("Unreachable code").is_match(req_header_value) {
                                     return false;
                                 }
                             }
@@ -403,7 +453,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
             if let Some(queries) = &rule_match.query {
                 let matched = queries.iter().all(|query| {
                     if let Some(Some(req_query_value)) = req.uri().query().map(|q| {
-                        let q = urlencoding::decode(q).unwrap();
+                        let q = urlencoding::decode(q).expect("[SG.Route] urlencoding decode error");
                         let q = q.as_ref().split('&').collect_vec();
                         q.into_iter().map(|item| item.split('=').collect_vec()).find(|item| item.len() == 2 && item[0] == query.name).map(|item| item[1].to_string())
                     }) {
@@ -414,7 +464,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                                 }
                             }
                             SgHttpQueryMatchType::Regular => {
-                                if !&query.regular.as_ref().unwrap().is_match(&req_query_value) {
+                                if !&query.regular.as_ref().expect("[SG.Route] query regular is None").is_match(&req_query_value) {
                                     return false;
                                 }
                             }
@@ -433,6 +483,30 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
         (false, None)
     } else {
         (true, None)
+    }
+}
+
+fn match_listeners_hostname_and_port(hostname: Option<&str>, port: u16, listeners: &[SgListener]) -> bool {
+    if let Some(hostname) = hostname {
+        listeners
+            .iter()
+            .filter(|listener| {
+                (if let Some(listener_hostname) = listener.hostname.clone() {
+                    if listener_hostname == *hostname {
+                        true
+                    } else if let Some(stripped) = listener_hostname.strip_prefix("*.") {
+                        hostname.ends_with(stripped) && hostname != stripped
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }) && listener.port == port
+            })
+            .count()
+            > 0
+    } else {
+        true
     }
 }
 
@@ -568,7 +642,7 @@ fn choose_backend(backends: &Vec<SgBackend>) -> Option<&SgBackend> {
         backends.get(0)
     } else {
         let weights = backends.iter().map(|backend| backend.weight.unwrap_or(0)).collect_vec();
-        let dist = WeightedIndex::new(weights).unwrap();
+        let dist = WeightedIndex::new(weights).expect("Unreachable code");
         let mut rng = thread_rng();
         backends.get(dist.sample(&mut rng))
     }
@@ -578,6 +652,7 @@ struct SgGatewayInst {
     pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub routes: Vec<SgHttpRouteInst>,
     pub client: Client<HttpsConnector<HttpConnector>>,
+    pub listeners: Vec<SgListener>,
 }
 
 #[derive(Default)]
@@ -638,6 +713,7 @@ pub struct SgBackend {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use std::collections::HashMap;
 

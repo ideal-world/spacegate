@@ -14,7 +14,7 @@ use super::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref CHANGE_CACHE: Mutex<LruCache<String, bool>> = Mutex::new(LruCache::new(NonZeroUsize::new(100).unwrap()));
+    static ref CHANGE_CACHE: Mutex<LruCache<String, bool>> = Mutex::new(LruCache::new(NonZeroUsize::new(100).expect("NonZeroUsize::new failed")));
 }
 
 // hash: {gateway name} -> {gateway config}
@@ -32,10 +32,16 @@ pub async fn init(conf_url: &str, check_interval_sec: u64) -> TardisResult<Vec<(
     if gateway_configs.is_empty() {
         return Err(TardisError::not_found(&format!("[SG.Config] Gateway Config not found in {CONF_GATEWAY_KEY}"), ""));
     }
-    let gateway_configs = gateway_configs.into_values().map(|v| tardis::TardisFuns::json.str_to_obj::<SgGateway>(&v).unwrap()).collect::<Vec<SgGateway>>();
+    let gateway_configs = gateway_configs
+        .into_values()
+        .map(|v| tardis::TardisFuns::json.str_to_obj::<SgGateway>(&v).map_err(|e| TardisError::format_error(&format!("[SG.Config] Gateway Config parse error {}", e), "")))
+        .collect::<TardisResult<Vec<SgGateway>>>()?;
     for gateway_config in gateway_configs {
         let http_route_configs = cache_client.lrangeall(&format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_config.name)).await?;
-        let http_route_configs = http_route_configs.into_iter().map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
+        let http_route_configs = http_route_configs
+            .into_iter()
+            .map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).map_err(|e| TardisError::format_error(&format!("[SG.Config] Http Route Config parse error {}", e), "")))
+            .collect::<TardisResult<Vec<SgHttpRoute>>>()?;
         config.push((gateway_config, http_route_configs));
     }
     tardis::tokio::spawn(async move {
@@ -43,11 +49,11 @@ pub async fn init(conf_url: &str, check_interval_sec: u64) -> TardisResult<Vec<(
         loop {
             {
                 log::trace!("[SG.Config] Config change check");
-                let mut cache_cmd = cache_client.cmd().await.unwrap();
-                let mut key_iter: AsyncIter<String> = cache_cmd.scan_match(&format!("{}*", CONF_CHANGE_TRIGGER)).await.unwrap();
+                let mut cache_cmd = cache_client.cmd().await.expect("[SG.Config] cache_client cmd failed");
+                let mut key_iter: AsyncIter<String> = cache_cmd.scan_match(&format!("{}*", CONF_CHANGE_TRIGGER)).await.expect("[SG.Config] cache_client scan_match failed");
 
                 while let Some(changed_key) = key_iter.next_item().await {
-                    let changed_key = changed_key.strip_prefix(CONF_CHANGE_TRIGGER).unwrap();
+                    let changed_key = changed_key.strip_prefix(CONF_CHANGE_TRIGGER).expect("[SG.Config] strip_prefix failed");
                     let f = changed_key.split("##").collect::<Vec<_>>();
                     let unique = f[0];
                     let mut lock = CHANGE_CACHE.lock().await;
@@ -58,24 +64,27 @@ pub async fn init(conf_url: &str, check_interval_sec: u64) -> TardisResult<Vec<(
                     let changed_gateway_name = f[2];
                     log::trace!("[SG.Config] Config change found, {changed_obj}: {changed_gateway_name}");
 
-                    if let Some(gateway_config) = cache_client.hget(CONF_GATEWAY_KEY, changed_gateway_name).await.unwrap() {
+                    if let Some(gateway_config) = cache_client.hget(CONF_GATEWAY_KEY, changed_gateway_name).await.expect("[SG.Config] cache_client hget failed") {
                         // Added or modified
-                        let gateway_config = tardis::TardisFuns::json.str_to_obj::<SgGateway>(&gateway_config).unwrap();
-                        let http_route_configs = cache_client.lrangeall(&format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_config.name)).await.unwrap();
+                        let gateway_config = tardis::TardisFuns::json.str_to_obj::<SgGateway>(&gateway_config).expect("[SG.Config] Gateway Config parse error");
                         let http_route_configs =
-                            http_route_configs.into_iter().map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).unwrap()).collect::<Vec<SgHttpRoute>>();
+                            cache_client.lrangeall(&format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_config.name)).await.expect("[SG.Config] cache_client lrangeall failed");
+                        let http_route_configs = http_route_configs
+                            .into_iter()
+                            .map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).expect("[SG.config] Route config parse error"))
+                            .collect::<Vec<SgHttpRoute>>();
                         match changed_obj {
                             "gateway" => {
-                                shutdown(changed_gateway_name).await.unwrap();
-                                do_startup(gateway_config, http_route_configs).await.unwrap();
+                                shutdown(changed_gateway_name).await.expect("[SG.Config] shutdown failed");
+                                do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] re-startup failed");
                             }
-                            "httproute" => http_route::init(gateway_config, http_route_configs).await.unwrap(),
+                            "httproute" => http_route::init(gateway_config, http_route_configs).await.expect("[SG.Config] http_route re-init failed"),
                             _ => {}
                         }
                     } else {
                         // Removed
                         if changed_obj == "gateway" {
-                            shutdown(changed_gateway_name).await.unwrap();
+                            shutdown(changed_gateway_name).await.expect("[SG.Config] shutdown failed");
                         }
                     }
                 }

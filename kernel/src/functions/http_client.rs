@@ -33,7 +33,7 @@ fn do_init() -> TardisResult<Client<HttpsConnector<HttpConnector>>> {
 }
 
 fn default_client() -> &'static Client<HttpsConnector<HttpConnector>> {
-    unsafe { DEFAULT_CLIENT.as_ref().unwrap() }
+    unsafe { DEFAULT_CLIENT.as_ref().expect("DEFAULT_CLIENT not initialized") }
 }
 
 pub async fn request(
@@ -83,7 +83,10 @@ pub async fn raw_request(
     let mut req = Request::builder();
     req = req.method(method);
     for (k, v) in headers {
-        req = req.header(k.as_str(), v.to_str().unwrap());
+        req = req.header(
+            k.as_str(),
+            v.to_str().map_err(|_| TardisError::bad_request(&format!("Header {} value is illegal: is not ascii", k), ""))?,
+        );
     }
     req = req.uri(url);
     let req = req
@@ -96,12 +99,15 @@ pub async fn raw_request(
     };
     let response = match timeout(Duration::from_millis(timeout_ms), req).await {
         Ok(response) => response.map_err(|error: Error| TardisError::internal_error(&format!("[SG.Client] Request method {method_str} url {url_str} error: {error}"), "")),
-        Err(_) => Ok(Response::builder().status(StatusCode::GATEWAY_TIMEOUT).body(Body::empty()).unwrap()),
+        Err(_) => {
+            Response::builder().status(StatusCode::GATEWAY_TIMEOUT).body(Body::empty()).map_err(|e| TardisError::internal_error(&format!("[SG.Client] timeout error: {e}"), ""))
+        }
     }?;
     Ok(response)
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;

@@ -117,10 +117,15 @@ impl SgPluginFilter for SgFilterLimit {
                 // time window
                 .arg(self.time_window_ms.unwrap_or(1000))
                 // current timestamp
-                .arg(SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64)
+                .arg(
+                    SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Limit] invalid timestamp: {e}"), ""))?
+                        .as_millis() as u64,
+                )
                 .invoke_async(&mut ctx.cache()?.cmd().await?)
                 .await
-                .unwrap();
+                .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Limit] redis error : {e}"), ""))?;
             if !result {
                 return Err(TardisError::forbidden("[SG.Filter.Limit] too many requests", ""));
             }
@@ -134,6 +139,7 @@ impl SgPluginFilter for SgFilterLimit {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use std::time::Duration;
 

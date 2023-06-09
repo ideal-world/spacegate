@@ -27,20 +27,21 @@ pub async fn init(conf_path: &str, check_interval_sec: u64) -> TardisResult<Vec<
         loop {
             {
                 log::trace!("[SG.Config] Config change check");
-                let (config, gateway_config_changed, routes_config_changed) = fetch_configs(&gateway_config_path, &routes_config_path).await.unwrap();
+                let (config, gateway_config_changed, routes_config_changed) =
+                    fetch_configs(&gateway_config_path, &routes_config_path).await.expect("[SG.Config] init Failed to fetch configs");
                 if gateway_config_changed {
-                    let (gateway_config, http_route_configs) = config.unwrap();
-                    shutdown(&gateway_config.name).await.unwrap();
-                    do_startup(gateway_config, http_route_configs).await.unwrap();
+                    let (gateway_config, http_route_configs) = config.expect("[SG.Config] config is None");
+                    shutdown(&gateway_config.name).await.expect("[SG.Config] shutdown failed");
+                    do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] re-startup failed");
                 } else if routes_config_changed {
-                    let (gateway_config, http_route_configs) = config.unwrap();
-                    http_route::init(gateway_config, http_route_configs).await.unwrap()
+                    let (gateway_config, http_route_configs) = config.expect("[SG.Config] config is None");
+                    http_route::init(gateway_config, http_route_configs).await.expect("[SG.Config] route re-init failed");
                 }
             }
             interval.tick().await;
         }
     });
-    Ok(vec![config.unwrap()])
+    Ok(vec![config.expect("[SG.Config] config is None")])
 }
 
 async fn fetch_configs(gateway_config_path: &str, routes_config_path: &str) -> TardisResult<(Option<(SgGateway, Vec<SgHttpRoute>)>, bool, bool)> {
@@ -72,7 +73,10 @@ async fn fetch_configs(gateway_config_path: &str, routes_config_path: &str) -> T
 
     if gateway_config_changed || http_route_configs_changed {
         let gateway_config = tardis::TardisFuns::json.str_to_obj::<SgGateway>(&gateway_config_content)?;
-        let http_route_configs = routes_config_content.iter().map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(v).unwrap()).collect();
+        let http_route_configs = routes_config_content
+            .iter()
+            .map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(v).map_err(|e| TardisError::internal_error(&format!("[SG.Config] parse route config error: {e}"), "")))
+            .collect::<TardisResult<Vec<SgHttpRoute>>>()?;
         Ok((Some((gateway_config, http_route_configs)), gateway_config_changed, http_route_configs_changed))
     } else {
         Ok((None, gateway_config_changed, http_route_configs_changed))

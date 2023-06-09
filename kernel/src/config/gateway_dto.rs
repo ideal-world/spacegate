@@ -1,6 +1,7 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize};
+use tardis::basic::error::TardisError;
 
 use super::plugin_filter_dto::SgRouteFilter;
 
@@ -25,6 +26,8 @@ pub struct SgGateway {
 pub struct SgParameters {
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
+    // Gateway Log_Level
+    pub log_level: Option<String>,
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
@@ -41,6 +44,8 @@ pub struct SgListener {
     /// TLS is the TLS configuration for the Listener.
     /// This field is required if the Protocol field is “HTTPS” or “TLS”. It is invalid to set this field if the Protocol field is “HTTP”, “TCP”, or “UDP”.
     pub tls: Option<SgTlsConfig>,
+
+    pub hostname: Option<String>,
 }
 
 /// ProtocolType defines the application protocol accepted by a Listener.
@@ -71,6 +76,37 @@ impl Display for SgProtocol {
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SgTlsConfig {
+    pub mode: SgTlsMode,
     pub key: String,
     pub cert: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default)]
+pub enum SgTlsMode {
+    Terminate,
+    #[default]
+    Passthrough,
+}
+
+impl FromStr for SgTlsMode {
+    type Err = TardisError;
+    fn from_str(mode: &str) -> Result<SgTlsMode, Self::Err> {
+        let level = mode.to_lowercase();
+        match level.as_str() {
+            "terminate" => Ok(SgTlsMode::Terminate),
+            "passthrough" => Ok(SgTlsMode::Passthrough),
+            _ => Err(TardisError::bad_request("SgTlsMode parse error", "")),
+        }
+    }
+}
+
+impl SgTlsMode {
+    pub fn from(mode: Option<String>) -> Option<Self> {
+        if let Some(mode) = mode {
+            if let Ok(mode) = SgTlsMode::from_str(&mode) {
+                return Some(mode);
+            }
+        }
+        None
+    }
 }

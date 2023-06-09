@@ -37,6 +37,7 @@ lazy_static! {
 }
 
 #[tokio::test]
+
 async fn test_webscoket() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace,tardis=trace");
     TardisFuns::init_conf(TardisConfig {
