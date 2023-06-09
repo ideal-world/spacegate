@@ -3,6 +3,7 @@ pub mod header_modifier;
 mod inject;
 #[cfg(feature = "cache")]
 mod limit;
+pub mod maintenance;
 pub mod redirect;
 pub mod rewrite;
 use async_trait::async_trait;
