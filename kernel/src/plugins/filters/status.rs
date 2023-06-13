@@ -1,20 +1,23 @@
 use std::{mem::swap, sync::Arc};
 
 use async_trait::async_trait;
-use http::{header, HeaderValue};
+
+use poem::{get, middleware::AddData, EndpointExt};
 use serde::{Deserialize, Serialize};
 use tardis::{
-    basic::{error::TardisError, result::TardisResult},
+    basic::result::TardisResult,
     log,
     tokio::{
         self,
         sync::{watch::Sender, Mutex},
     },
-    web::poem::{handler, listener::TcpListener, web::Html, Route, Server},
+    web::poem::{listener::TcpListener, Route, Server},
     TardisFuns,
 };
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
+use self::status_plugin::update_status;
+
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 use crate::functions::http_route::SgHttpRouteMatchInst;
 use lazy_static::lazy_static;
 
@@ -38,6 +41,7 @@ impl SgPluginFilterDef for SgFilterStatusDef {
 pub struct SgFilterStatus {
     pub serv_addr: Option<String>,
     pub port: Option<u16>,
+    pub title: Option<String>,
 }
 
 #[async_trait]
@@ -46,25 +50,33 @@ impl SgPluginFilter for SgFilterStatus {
         super::SgPluginFilterKind::Http
     }
 
+    fn accept_error_response(&self) -> bool {
+        true
+    }
+
     async fn init(&self) -> TardisResult<()> {
         let server_add = &self.serv_addr.clone().unwrap_or("0.0.0.0".to_string());
-        let port = &self.port.clone().unwrap_or(8110);
+        let port = &self.port.unwrap_or(8110);
+        let title = self.title.clone().unwrap_or("System Status".to_string());
         let addr = format!("{server_add}:{port}");
-        let app = Route::new().at("/", status_plugin::create_status_html);
+        let app = Route::new().at("/", get(status_plugin::create_status_html.data(title)));
         let (shutdown_tx, _) = tokio::sync::watch::channel(());
         let mut shutdown_rx = shutdown_tx.subscribe();
-         Server::new(TcpListener::bind("127.0.0.1:3000"))
-            .run_with_graceful_shutdown(
-                app,
-                async move {
-                    shutdown_rx.changed().await.ok();
-                },
-                None,
-            )
-            .await;
+        tokio::spawn(async move {
+            log::info!("[SG.Filter.Status] Server started: {addr}");
+            let _ = Server::new(TcpListener::bind(addr))
+                .run_with_graceful_shutdown(
+                    app,
+                    async move {
+                        shutdown_rx.changed().await.ok();
+                    },
+                    None,
+                )
+                .await;
+        });
+
         let mut shutdown = SHUTDOWN_TX.lock().await;
         *shutdown = Some(shutdown_tx);
-        log::info!("[SG.Filter.Status] Server started: {addr}");
         Ok(())
     }
 
@@ -79,11 +91,17 @@ impl SgPluginFilter for SgFilterStatus {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         Ok((true, ctx))
     }
 
     async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+        // if ctx.is_resp_error() {
+        //     update_status(server_name, status)
+        // }
+        // else {
+        //     update_status("test1", Status::Good).await;
+        // }
         Ok((true, ctx))
     }
 }
@@ -91,8 +109,29 @@ impl SgPluginFilter for SgFilterStatus {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+
     use tardis::tokio;
 
+    use crate::plugins::filters::{
+        status::{
+            status_plugin::{update_status, Status},
+            SgFilterStatus,
+        },
+        SgPluginFilter,
+    };
+
     #[tokio::test]
-    async fn test_status() {}
+    async fn test_status() {
+        let stats = SgFilterStatus {
+            serv_addr: Some("0.0.0.0".to_string()),
+            port: Some(8110),
+            title: Some("System Status".to_string()),
+        };
+        stats.init().await.unwrap();
+        update_status("test1", Status::Minor).await;
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        update_status("test1", Status::Good).await;
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        println!("{:?}", stats);
+    }
 }

@@ -1,8 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use lazy_static::lazy_static;
+use poem::web::Data;
 use tardis::{
-    tokio::{self, sync::Mutex, task},
+    tokio::sync::Mutex,
     web::poem::{handler, web::Html},
 };
 lazy_static! {
@@ -27,12 +28,12 @@ impl Status {
 }
 
 #[handler]
-pub(crate) async fn create_status_html() -> Html<String> {
+pub(crate) async fn create_status_html(Data(title): Data<&String>) -> Html<String> {
     let status = SERVER_STATUS.lock().await;
-    let mut html = "".to_string();
+    let mut service_html = "".to_string();
     status.keys().for_each(|key| {
         let status = status.get(key).expect("");
-        html.push_str(
+        service_html.push_str(
             format!(
                 r##"<div class="service">
                         <div class="service-name">{}</div>
@@ -44,12 +45,15 @@ pub(crate) async fn create_status_html() -> Html<String> {
             .as_str(),
         );
     });
-    Html(STATUS_TEMPLATE.replace("{status}", &html))
+    let html = STATUS_TEMPLATE.replace("{title}", &title);
+    Html(html.replace("{status}", &service_html))
 }
+
 pub(crate) async fn update_status(server_name: &str, status: Status) {
     let mut server_status = SERVER_STATUS.lock().await;
     server_status.insert(server_name.to_string(), status);
 }
+
 pub(crate) async fn remove_status(server_name: &str) {
     let mut server_status = SERVER_STATUS.lock().await;
     server_status.remove(server_name);

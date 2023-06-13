@@ -9,7 +9,7 @@ pub mod rewrite;
 #[cfg(feature = "web")]
 pub mod status;
 use async_trait::async_trait;
-use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version};
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, StatusCode, Uri, Version};
 use hyper::Body;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -80,6 +80,22 @@ pub type BoxSgPluginFilter = Box<dyn SgPluginFilter>;
 #[async_trait]
 pub trait SgPluginFilter: Send + Sync + 'static {
     fn kind(&self) -> SgPluginFilterKind;
+
+    /// Whether to filter the response
+    fn before_resp_filter_check(&self, ctx: &SgRouteFilterContext) -> bool {
+        if ctx.is_resp_error() {
+            self.accept_error_response()
+        } else {
+            true
+        }
+    }
+
+    /// Whether to accept the error response, default is false .
+    ///
+    /// if filter can accept the error response, it should return true
+    fn accept_error_response(&self) -> bool {
+        false
+    }
 
     async fn init(&self) -> TardisResult<()>;
 
@@ -200,6 +216,7 @@ pub struct SgRouteFilterContext {
     raw_resp_status_code: StatusCode,
     raw_resp_headers: HeaderMap<HeaderValue>,
     raw_resp_body: Option<Body>,
+    raw_resp_err: Option<TardisError>,
     mod_resp_status_code: Option<StatusCode>,
     mod_resp_headers: Option<HeaderMap<HeaderValue>>,
     mod_resp_body: Option<Vec<u8>>,
@@ -234,6 +251,7 @@ impl SgRouteFilterContext {
             raw_resp_status_code: StatusCode::OK,
             raw_resp_headers: HeaderMap::new(),
             raw_resp_body: None,
+            raw_resp_err: None,
             mod_resp_status_code: None,
             mod_resp_headers: None,
             mod_resp_body: None,
@@ -248,6 +266,15 @@ impl SgRouteFilterContext {
         self.raw_resp_headers = headers;
         self.raw_resp_body = Some(body);
         self
+    }
+
+    pub fn resp_from_error(mut self, error: TardisError) -> Self {
+        self.raw_resp_err = Some(error);
+        self
+    }
+
+    pub fn is_resp_error(&self) -> bool {
+        self.raw_resp_err.is_some()
     }
 
     pub fn get_req_method(&mut self) -> &Method {
@@ -436,6 +463,23 @@ impl SgRouteFilterContext {
         } else {
             Ok(None)
         }
+    }
+    /// build response from Context
+    pub async fn build_response(&mut self) -> TardisResult<Response<Body>> {
+        if let Some(err) = &self.raw_resp_err {
+            return Err(err.clone());
+        }
+        let mut resp = Response::builder();
+        for (k, v) in self.get_resp_headers() {
+            resp = resp.header(
+                k.as_str(),
+                v.to_str().map_err(|_| TardisError::bad_request(&format!("[SG.Route] header {k}'s value illegal: is not ascii"), ""))?.to_string(),
+            );
+        }
+        let resp = resp
+            .body(Body::from(self.pop_resp_body().await?.unwrap_or_default()))
+            .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
+        Ok(resp)
     }
 
     pub fn set_resp_body(&mut self, body: Vec<u8>) -> TardisResult<()> {

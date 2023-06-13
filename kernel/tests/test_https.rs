@@ -96,7 +96,6 @@ W0X+/YToWPeWivw3Kbo05oCob0NUi3fXtiTHng==
 -----END CERTIFICATE-----"#;
 
 #[tokio::test]
-
 async fn test_https() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();

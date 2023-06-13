@@ -62,8 +62,10 @@ pub async fn request(
 }
 
 async fn do_request(client: &Client<HttpsConnector<HttpConnector>>, url: &str, timeout_ms: Option<u64>, mut ctx: SgRouteFilterContext) -> TardisResult<SgRouteFilterContext> {
-    let response = raw_request(Some(client), ctx.get_req_method().clone(), url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), timeout_ms).await?;
-    ctx = ctx.resp(response.status(), response.headers().clone(), response.into_body());
+    let ctx = match raw_request(Some(client), ctx.get_req_method().clone(), url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), timeout_ms).await {
+        Ok(response) => ctx.resp(response.status(), response.headers().clone(), response.into_body()),
+        Err(e) => ctx.resp_from_error(e),
+    };
     Ok(ctx)
 }
 

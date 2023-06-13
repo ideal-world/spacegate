@@ -58,7 +58,6 @@ impl SgPluginFilter for SgFilterAuth {
 }
 
 #[tokio::test]
-
 async fn test_custom_plugin() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();

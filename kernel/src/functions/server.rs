@@ -78,7 +78,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
                     let key = rustls_pemfile::read_all(&mut tls.key.as_bytes())
                         .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
                     if key.is_empty() {
-                        return Err(TardisError::bad_request(&format!("[SG.Server] not found Tls private key"), ""));
+                        return Err(TardisError::bad_request(&"[SG.Server] not found Tls private key".to_string(), ""));
                     }
                     let mut selected_key = None;
                     for k in key {
@@ -103,7 +103,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
                         cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
                         sync::Arc::new(cfg)
                     } else {
-                        return Err(TardisError::not_implemented(&format!("[SG.Server] Tls encoding not supported "), ""));
+                        return Err(TardisError::not_implemented(&"[SG.Server] Tls encoding not supported ".to_string(), ""));
                     }
                 };
 

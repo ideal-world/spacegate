@@ -339,17 +339,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
 
     let mut ctx = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
 
-    let mut resp = Response::builder();
-    for (k, v) in ctx.get_resp_headers() {
-        resp = resp.header(
-            k.as_str(),
-            v.to_str().map_err(|_| TardisError::bad_request(&format!("[SG.Route] header {k}'s value illegal: is not ascii"), ""))?.to_string(),
-        );
-    }
-    let resp = resp
-        .body(Body::from(ctx.pop_resp_body().await?.unwrap_or_default()))
-        .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
-    Ok(resp)
+    ctx.build_response().await
 }
 
 fn match_route_insts_with_hostname_priority<'a>(req_host: Option<&str>, routes: &'a Vec<SgHttpRouteInst>) -> Option<&'a SgHttpRouteInst> {
@@ -588,9 +578,10 @@ async fn process_resp_filters(
 ) -> TardisResult<SgRouteFilterContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
+
     if let Some(backend_filters) = backend_filters {
         for (id, filter) in backend_filters {
-            if !executed_filters.contains(&id) {
+            if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
                 (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
@@ -602,7 +593,7 @@ async fn process_resp_filters(
     }
     if let Some(rule_filters) = rule_filters {
         for (id, filter) in rule_filters {
-            if !executed_filters.contains(&id) {
+            if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
                 (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
@@ -613,7 +604,7 @@ async fn process_resp_filters(
         }
     }
     for (id, filter) in route_filters {
-        if !executed_filters.contains(&id) {
+        if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
             (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
@@ -623,7 +614,7 @@ async fn process_resp_filters(
         }
     }
     for (id, filter) in global_filters {
-        if !executed_filters.contains(&id) {
+        if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
             (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
