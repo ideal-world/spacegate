@@ -270,6 +270,7 @@ impl SgRouteFilterContext {
 
     pub fn resp_from_error(mut self, error: TardisError) -> Self {
         self.raw_resp_err = Some(error);
+        self.raw_resp_status_code = StatusCode::INTERNAL_SERVER_ERROR;
         self
     }
 
