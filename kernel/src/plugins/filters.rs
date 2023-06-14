@@ -57,7 +57,7 @@ pub fn get_filter_def(code: &str) -> TardisResult<&Box<dyn SgPluginFilterDef>> {
     }
 }
 
-pub async fn init(filter_configs: Vec<SgRouteFilter>, http_route_rules: &Vec<SgHttpRouteRule>) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
+pub async fn init(filter_configs: Vec<SgRouteFilter>, http_route_rules: &[SgHttpRouteRule]) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
     let mut plugin_filters: Vec<(String, BoxSgPluginFilter)> = Vec::new();
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
@@ -97,7 +97,7 @@ pub trait SgPluginFilter: Send + Sync + 'static {
         false
     }
 
-    async fn init(&self, http_route_rule: &Vec<SgHttpRouteRule>) -> TardisResult<()>;
+    async fn init(&self, http_route_rule: &[SgHttpRouteRule]) -> TardisResult<()>;
 
     async fn destroy(&self) -> TardisResult<()>;
 
@@ -270,6 +270,7 @@ impl SgRouteFilterContext {
         self.raw_resp_headers = headers;
         self.raw_resp_body = Some(body);
         self.choose_backend_name_or_host = backend.map(|b| b.name_or_host.clone());
+        self.raw_resp_err = None;
         self
     }
 

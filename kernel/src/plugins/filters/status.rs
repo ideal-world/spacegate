@@ -16,7 +16,7 @@ use tardis::{
     TardisFuns,
 };
 
-use self::status_plugin::{get_status, update_status};
+use self::status_plugin::{clean_status, get_status, update_status};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
@@ -45,7 +45,7 @@ pub struct SgFilterStatus {
     pub port: u16,
     pub title: String,
     /// Unhealthy threshold , if server error more than this, server will be tag as unhealthy
-    pub unhealth_threshold: u16,
+    pub unhealthy_threshold: u16,
     pub interval: u64,
 }
 
@@ -55,7 +55,7 @@ impl Default for SgFilterStatus {
             serv_addr: "0.0.0.0".to_string(),
             port: 8110,
             title: "System Status".to_string(),
-            unhealth_threshold: 3,
+            unhealthy_threshold: 3,
             interval: 5,
         }
     }
@@ -71,7 +71,7 @@ impl SgPluginFilter for SgFilterStatus {
         true
     }
 
-    async fn init(&self, http_route_rules: &Vec<SgHttpRouteRule>) -> TardisResult<()> {
+    async fn init(&self, http_route_rules: &[SgHttpRouteRule]) -> TardisResult<()> {
         let addr = format!("{}:{}", self.serv_addr, self.port);
         let app = Route::new().at("/", get(status_plugin::create_status_html.data(self.title.clone())));
         let (shutdown_tx, _) = tokio::sync::watch::channel(());
@@ -92,6 +92,7 @@ impl SgPluginFilter for SgFilterStatus {
         let mut shutdown = SHUTDOWN_TX.lock().await;
         *shutdown = Some(shutdown_tx);
 
+        clean_status().await;
         for http_route_rule in http_route_rules {
             if let Some(backends) = &http_route_rule.backends {
                 for backend in backends {
@@ -121,21 +122,24 @@ impl SgPluginFilter for SgFilterStatus {
         if let Some(backend_name) = ctx.get_backend_name() {
             if ctx.is_resp_error() {
                 let mut server_err = SERVER_ERR.lock().await;
-                if let Some((times, expire)) = server_err.get(&backend_name) {
-                    let now = Utc::now().timestamp();
+                let now = Utc::now().timestamp();
+                if let Some((times, expire)) = server_err.get_mut(&backend_name) {
+                    println!("[SG.Filter.Status] times:{times} expire:{expire} now:{now} unhealthy");
                     if *expire > now {
-                        if *times > self.unhealth_threshold {
+                        if *times >= self.unhealthy_threshold {
                             update_status(&backend_name, status_plugin::Status::Major).await;
                         } else {
-                            let new_times = *times + 1;
-                            server_err.insert(backend_name.clone(), (new_times, now + self.interval as i64));
                             update_status(&backend_name, status_plugin::Status::Minor).await;
                         }
+                        let new_times = *times + 1;
+                        server_err.insert(backend_name.clone(), (new_times, now + self.interval as i64));
                     } else {
                         server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
                     }
+                } else {
+                    update_status(&backend_name, status_plugin::Status::Minor).await;
+                    server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
                 }
-                update_status(&backend_name, status_plugin::Status::Major).await;
             } else if let Some(status) = get_status(&backend_name).await {
                 if status != status_plugin::Status::Good {
                     update_status(&backend_name, status_plugin::Status::Good).await;
@@ -150,24 +154,74 @@ impl SgPluginFilter for SgFilterStatus {
 #[allow(clippy::unwrap_used)]
 mod tests {
 
-    use tardis::tokio;
+    use http::{HeaderMap, Method, StatusCode, Uri, Version};
+    use hyper::Body;
+    use tardis::{basic::error::TardisError, tokio};
 
-    use crate::plugins::filters::{
-        status::{
-            status_plugin::{update_status, Status},
-            SgFilterStatus,
+    use crate::{
+        config::http_route_dto::{SgBackendRef, SgHttpRouteRule},
+        functions::http_route::SgBackend,
+        plugins::filters::{
+            status::{
+                status_plugin::{get_status, update_status, Status},
+                SgFilterStatus,
+            },
+            SgPluginFilter, SgRouteFilterContext,
         },
-        SgPluginFilter,
     };
 
     #[tokio::test]
     async fn test_status() {
         let stats = SgFilterStatus::default();
-        stats.init(&vec![]).await.unwrap();
-        update_status("test1", Status::Minor).await;
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-        update_status("test1", Status::Good).await;
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-        println!("{:?}", stats);
+        let mock_backend_ref = SgBackendRef {
+            name_or_host: "test1".to_string(),
+            namespace: None,
+            port: 80,
+            timeout_ms: None,
+            protocol: Some(crate::config::gateway_dto::SgProtocol::Http),
+            weight: None,
+            filters: None,
+        };
+        stats
+            .init(&[SgHttpRouteRule {
+                matches: None,
+                filters: None,
+                backends: Some(vec![mock_backend_ref.clone()]),
+                timeout_ms: None,
+            }])
+            .await
+            .unwrap();
+
+        let ctx = SgRouteFilterContext::new(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "127.0.0.1:8080".parse().unwrap(),
+            "".to_string(),
+        );
+        let mock_backend = SgBackend {
+            name_or_host: mock_backend_ref.name_or_host,
+            namespace: mock_backend_ref.namespace,
+            port: mock_backend_ref.port,
+            timeout_ms: mock_backend_ref.timeout_ms,
+            protocol: mock_backend_ref.protocol,
+            weight: mock_backend_ref.weight,
+            filters: vec![],
+        };
+        let ctx = ctx.resp_from_error(Some(&mock_backend), TardisError::bad_request("", ""));
+        let (is_ok, ctx) = stats.resp_filter("id1", ctx, None).await.unwrap();
+        assert_eq!(is_ok, true);
+        assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Minor);
+
+        let (_, ctx) = stats.resp_filter("id2", ctx, None).await.unwrap();
+        let (_, ctx) = stats.resp_filter("id3", ctx, None).await.unwrap();
+        let (_, ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
+        assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Major);
+
+        let ctx = ctx.resp(Some(&mock_backend), StatusCode::OK, HeaderMap::new(), Body::empty());
+        let (_, ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
+        assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Good);
     }
 }

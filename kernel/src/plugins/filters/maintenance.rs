@@ -33,7 +33,7 @@ impl SgPluginFilter for SgFilterMaintenance {
         super::SgPluginFilterKind::Http
     }
 
-    async fn init(&self, _: &Vec<SgHttpRouteRule>) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 

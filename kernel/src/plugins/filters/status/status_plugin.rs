@@ -12,7 +12,7 @@ lazy_static! {
 }
 const STATUS_TEMPLATE: &str = include_str!("status.html");
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Status {
     #[default]
     Good,
@@ -59,10 +59,10 @@ pub(crate) async fn update_status(server_name: &str, status: Status) {
 
 pub(crate) async fn get_status(server_name: &str) -> Option<Status> {
     let server_status = SERVER_STATUS.read().await;
-    server_status.get(server_name).map(|status| status.clone())
+    server_status.get(server_name).cloned()
 }
 
-pub(crate) async fn remove_status(server_name: &str) {
+pub(crate) async fn clean_status() {
     let mut server_status = SERVER_STATUS.write().await;
-    server_status.remove(server_name);
+    server_status.clear();
 }

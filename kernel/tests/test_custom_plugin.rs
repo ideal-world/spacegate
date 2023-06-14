@@ -37,7 +37,7 @@ impl SgPluginFilter for SgFilterAuth {
         SgPluginFilterKind::Http
     }
 
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 
