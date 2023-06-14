@@ -47,13 +47,14 @@ impl SgPluginFilter for SgFilterRewrite {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Rewrite] Host {hostname} parsing error"), ""))?;
             ctx.set_req_uri(uri.to_uri()?);
         }
-        if let Some(new_url) = http_common_modify_path(ctx.get_req_uri(), &self.path, matched_match_inst)? {
+        let matched_match_inst = ctx.get_rule_matched();
+        if let Some(new_url) = http_common_modify_path(ctx.get_req_uri(), &self.path, matched_match_inst.as_ref())? {
             ctx.set_req_uri(new_url);
         }
         Ok((true, ctx))
@@ -69,7 +70,8 @@ impl SgPluginFilter for SgFilterRewrite {
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
-        functions::http_route::SgHttpPathMatchInst,
+        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteRuleInst},
+        plugins::filters::ChoseHttpRouteRuleInst,
     };
 
     use super::*;
@@ -87,15 +89,6 @@ mod tests {
             }),
         };
 
-        let ctx = SgRouteFilterContext::new(
-            Method::POST,
-            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
-            Version::HTTP_11,
-            HeaderMap::new(),
-            Body::empty(),
-            "127.0.0.1:8080".parse().unwrap(),
-            "".to_string(),
-        );
         let matched = SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
@@ -104,6 +97,17 @@ mod tests {
             }),
             ..Default::default()
         };
+
+        let ctx = SgRouteFilterContext::new(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "127.0.0.1:8080".parse().unwrap(),
+            "".to_string(),
+            Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
+        );
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);

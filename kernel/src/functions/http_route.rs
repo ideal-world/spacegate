@@ -1,11 +1,11 @@
-use std::{collections::HashMap, net::SocketAddr, vec};
+use std::{collections::HashMap, net::SocketAddr};
 
 use crate::{
     config::{
         gateway_dto::{SgGateway, SgListener, SgProtocol},
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
-    plugins::filters::{self, BoxSgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
+    plugins::filters::{self, BoxSgPluginFilter, ChoseHttpRouteRuleInst, SgRouteFilterContext, SgRouteFilterRequestAction},
 };
 use http::{header::UPGRADE, uri::Scheme, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
@@ -43,7 +43,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
             let mut rule_insts = Vec::new();
             for rule in rules {
                 let rule_filters = if let Some(filters) = rule.filters.clone() {
-                    filters::init(filters, &vec![rule.clone()]).await?
+                    filters::init(filters, &[rule.clone()]).await?
                 } else {
                     Vec::new()
                 };
@@ -335,6 +335,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         rule_filters,
         &matched_route_inst.filters,
         &gateway_inst.filters,
+        matched_rule_inst,
         matched_match_inst,
     )
     .await?;
@@ -350,7 +351,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
-    let mut ctx = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
+    let mut ctx: SgRouteFilterContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
 
     ctx.build_response().await
 }
@@ -521,6 +522,7 @@ async fn process_req_filters(
     rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     route_filters: &Vec<(String, BoxSgPluginFilter)>,
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    matched_rule_inst: Option<&SgHttpRouteRuleInst>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
 ) -> TardisResult<SgRouteFilterContext> {
     let mut ctx = SgRouteFilterContext::new(
@@ -531,6 +533,7 @@ async fn process_req_filters(
         request.into_body(),
         remote_addr,
         gateway_name,
+        matched_rule_inst.map(|m| ChoseHttpRouteRuleInst::clone_from(m, matched_match_inst)),
     );
     let mut is_continue;
     let mut executed_filters = Vec::new();
@@ -667,21 +670,21 @@ struct SgHttpRouteInst {
 }
 
 #[derive(Default)]
-struct SgHttpRouteRuleInst {
+pub struct SgHttpRouteRuleInst {
     pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub matches: Option<Vec<SgHttpRouteMatchInst>>,
     pub backends: Option<Vec<SgBackend>>,
     pub timeout_ms: Option<u64>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct SgHttpRouteMatchInst {
     pub path: Option<SgHttpPathMatchInst>,
     pub header: Option<Vec<SgHttpHeaderMatchInst>>,
     pub query: Option<Vec<SgHttpQueryMatchInst>>,
     pub method: Option<Vec<String>>,
 }
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 
 pub struct SgHttpPathMatchInst {
     pub kind: SgHttpPathMatchType,
@@ -689,7 +692,7 @@ pub struct SgHttpPathMatchInst {
     pub regular: Option<Regex>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct SgHttpHeaderMatchInst {
     pub kind: SgHttpHeaderMatchType,
     pub name: String,
@@ -697,7 +700,7 @@ pub struct SgHttpHeaderMatchInst {
     pub regular: Option<Regex>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct SgHttpQueryMatchInst {
     pub kind: SgHttpQueryMatchType,
     pub name: String,

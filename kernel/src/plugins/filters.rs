@@ -5,6 +5,7 @@ mod inject;
 mod limit;
 pub mod maintenance;
 pub mod redirect;
+pub mod retry;
 pub mod rewrite;
 #[cfg(feature = "web")]
 pub mod status;
@@ -19,9 +20,10 @@ use tardis::basic::result::TardisResult;
 use tardis::url::Url;
 use tardis::{log, TardisFuns};
 
+use crate::config::gateway_dto::SgProtocol;
 use crate::config::http_route_dto::{SgHttpPathMatchType, SgHttpRouteRule};
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
-use crate::functions::http_route::{SgBackend, SgHttpRouteMatchInst};
+use crate::functions::http_route::{SgBackend, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
 
 static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
@@ -197,6 +199,47 @@ pub enum SgPluginFilterKind {
     Ws,
 }
 
+/// Chose http route rule
+#[derive(Default, Debug)]
+pub struct ChoseHttpRouteRuleInst {
+    matched_match: Option<SgHttpRouteMatchInst>,
+    available_backends: Vec<AvailableBackendInst>,
+    timeout_ms: Option<u64>,
+}
+
+impl ChoseHttpRouteRuleInst {
+    pub fn clone_from(chose_route_rule: &SgHttpRouteRuleInst, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> Self {
+        Self {
+            matched_match: matched_match_inst.cloned(),
+            available_backends: chose_route_rule.backends.as_ref().map(|bs| bs.iter().map(AvailableBackendInst::clone_from).collect::<Vec<_>>()).unwrap_or_default(),
+            timeout_ms: chose_route_rule.timeout_ms,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct AvailableBackendInst {
+    pub name_or_host: String,
+    pub namespace: Option<String>,
+    pub port: u16,
+    pub timeout_ms: Option<u64>,
+    pub protocol: Option<SgProtocol>,
+    pub weight: Option<u16>,
+}
+
+impl AvailableBackendInst {
+    fn clone_from(value: &SgBackend) -> Self {
+        Self {
+            name_or_host: value.name_or_host.clone(),
+            namespace: value.namespace.clone(),
+            port: value.port,
+            timeout_ms: value.timeout_ms,
+            protocol: value.protocol.clone(),
+            weight: value.weight,
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct SgRouteFilterContext {
@@ -221,7 +264,8 @@ pub struct SgRouteFilterContext {
     mod_resp_headers: Option<HeaderMap<HeaderValue>>,
     mod_resp_body: Option<Vec<u8>>,
 
-    choose_backend_name_or_host: Option<String>,
+    chose_route_rule: Option<ChoseHttpRouteRuleInst>,
+    chose_backend: Option<AvailableBackendInst>,
 
     ext: HashMap<String, String>,
     action: SgRouteFilterRequestAction,
@@ -237,7 +281,16 @@ pub enum SgRouteFilterRequestAction {
 
 #[allow(dead_code)]
 impl SgRouteFilterContext {
-    pub fn new(method: Method, uri: Uri, version: Version, headers: HeaderMap<HeaderValue>, body: Body, remote_addr: SocketAddr, gateway_name: String) -> Self {
+    pub fn new(
+        method: Method,
+        uri: Uri,
+        version: Version,
+        headers: HeaderMap<HeaderValue>,
+        body: Body,
+        remote_addr: SocketAddr,
+        gateway_name: String,
+        chose_route_rule: Option<ChoseHttpRouteRuleInst>,
+    ) -> Self {
         Self {
             raw_req_method: method,
             raw_req_uri: uri,
@@ -260,33 +313,28 @@ impl SgRouteFilterContext {
             ext: HashMap::new(),
             action: SgRouteFilterRequestAction::None,
             gateway_name,
-            choose_backend_name_or_host: None,
+            chose_route_rule,
+            chose_backend: None,
         }
     }
 
     ///The following two methods can only be used to fill in the context [resp] [resp_from_error]
-    pub fn resp(mut self, backend: Option<&SgBackend>, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
+    pub fn resp(mut self, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
         self.raw_resp_status_code = status_code;
         self.raw_resp_headers = headers;
         self.raw_resp_body = Some(body);
-        self.choose_backend_name_or_host = backend.map(|b| b.name_or_host.clone());
         self.raw_resp_err = None;
         self
     }
 
-    pub fn resp_from_error(mut self, backend: Option<&SgBackend>, error: TardisError) -> Self {
+    pub fn resp_from_error(mut self, error: TardisError) -> Self {
         self.raw_resp_err = Some(error);
         self.raw_resp_status_code = StatusCode::INTERNAL_SERVER_ERROR;
-        self.choose_backend_name_or_host = backend.map(|b| b.name_or_host.clone());
         self
     }
 
     pub fn is_resp_error(&self) -> bool {
         self.raw_resp_err.is_some()
-    }
-
-    pub fn get_backend_name(&self) -> Option<String> {
-        self.choose_backend_name_or_host.clone()
     }
 
     pub fn get_req_method(&mut self) -> &Method {
@@ -476,6 +524,7 @@ impl SgRouteFilterContext {
             Ok(None)
         }
     }
+
     /// build response from Context
     pub async fn build_response(&mut self) -> TardisResult<Response<Body>> {
         if let Some(err) = &self.raw_resp_err {
@@ -531,7 +580,22 @@ impl SgRouteFilterContext {
     }
 
     pub fn set_action(&mut self, action: SgRouteFilterRequestAction) {
+        if action == SgRouteFilterRequestAction::Redirect || action == SgRouteFilterRequestAction::Response {
+            self.chose_backend = None;
+        }
         self.action = action;
+    }
+
+    pub fn set_chose_backend(&mut self, chose_backend: &SgBackend) {
+        self.chose_backend = Some(AvailableBackendInst::clone_from(chose_backend));
+    }
+
+    pub fn get_chose_backend_name(&self) -> Option<String> {
+        self.chose_backend.clone().map(|b| b.name_or_host)
+    }
+
+    pub fn get_rule_matched(&self) -> Option<SgHttpRouteMatchInst> {
+        self.chose_route_rule.as_ref().and_then(|r| r.matched_match.clone())
     }
 
     #[cfg(feature = "cache")]

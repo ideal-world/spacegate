@@ -94,7 +94,8 @@ impl SgPluginFilter for SgFilterRedirect {
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
-        functions::http_route::SgHttpPathMatchInst,
+        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteRuleInst},
+        plugins::filters::ChoseHttpRouteRuleInst,
     };
 
     use super::*;
@@ -115,15 +116,6 @@ mod tests {
             status_code: Some(StatusCode::MOVED_PERMANENTLY.as_u16()),
         };
 
-        let ctx = SgRouteFilterContext::new(
-            Method::POST,
-            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
-            Version::HTTP_11,
-            HeaderMap::new(),
-            Body::empty(),
-            "127.0.0.1:8080".parse().unwrap(),
-            "".to_string(),
-        );
         let matched = SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
@@ -132,6 +124,17 @@ mod tests {
             }),
             ..Default::default()
         };
+
+        let ctx = SgRouteFilterContext::new(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "127.0.0.1:8080".parse().unwrap(),
+            "".to_string(),
+            Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
+        );
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);

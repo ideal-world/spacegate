@@ -117,6 +117,7 @@ mod tests {
             Body::empty(),
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
+            None,
         );
 
         let (is_continue, mut ctx) = filter_req.req_filter("", ctx, None).await.unwrap();

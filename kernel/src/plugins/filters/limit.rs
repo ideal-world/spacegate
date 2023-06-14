@@ -143,7 +143,7 @@ impl SgPluginFilter for SgFilterLimit {
 mod tests {
     use std::time::Duration;
 
-    use crate::functions::cache_client;
+    use crate::{functions::cache_client, plugins::filters::ChoseHttpRouteRuleInst};
 
     use super::*;
     use http::{HeaderMap, Method, Uri, Version};
@@ -176,6 +176,7 @@ mod tests {
                 Body::empty(),
                 "127.0.0.1:8080".parse().unwrap(),
                 "test_gate".to_string(),
+                None,
             )
         }
 

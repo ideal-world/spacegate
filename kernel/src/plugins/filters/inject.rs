@@ -85,6 +85,7 @@ impl SgPluginFilter for SgFilterInject {
                 resp.into_body(),
                 *ctx.get_req_remote_addr(),
                 ctx.gateway_name,
+                None,
             )
         }
         Ok((true, ctx))
@@ -97,7 +98,7 @@ impl SgPluginFilter for SgFilterInject {
             ctx.set_resp_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
             ctx.set_resp_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
             let resp = http_client::raw_request(None, Method::PUT, resp_inject_url, ctx.pop_resp_body_raw()?, ctx.get_resp_headers(), self.resp_timeout_ms).await?;
-            ctx = ctx.resp(None, resp.status(), resp.headers().clone(), resp.into_body());
+            ctx = ctx.resp(resp.status(), resp.headers().clone(), resp.into_body());
         }
         Ok((true, ctx))
     }
@@ -129,6 +130,7 @@ mod tests {
             Body::from("理想世界".as_bytes()),
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
+            None,
         );
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, None).await.unwrap();

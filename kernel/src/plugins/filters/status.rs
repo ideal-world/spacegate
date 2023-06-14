@@ -40,6 +40,7 @@ impl SgPluginFilterDef for SgFilterStatusDef {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct SgFilterStatus {
     pub serv_addr: String,
     pub port: u16,
@@ -119,7 +120,7 @@ impl SgPluginFilter for SgFilterStatus {
     }
 
     async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
-        if let Some(backend_name) = ctx.get_backend_name() {
+        if let Some(backend_name) = ctx.get_chose_backend_name() {
             if ctx.is_resp_error() {
                 let mut server_err = SERVER_ERR.lock().await;
                 let now = Utc::now().timestamp();
@@ -160,13 +161,13 @@ mod tests {
 
     use crate::{
         config::http_route_dto::{SgBackendRef, SgHttpRouteRule},
-        functions::http_route::SgBackend,
+        functions::http_route::{SgBackend, SgHttpRouteRuleInst},
         plugins::filters::{
             status::{
-                status_plugin::{get_status, update_status, Status},
+                status_plugin::{get_status, Status},
                 SgFilterStatus,
             },
-            SgPluginFilter, SgRouteFilterContext,
+            ChoseHttpRouteRuleInst, SgPluginFilter, SgRouteFilterContext,
         },
     };
 
@@ -192,15 +193,6 @@ mod tests {
             .await
             .unwrap();
 
-        let ctx = SgRouteFilterContext::new(
-            Method::POST,
-            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
-            Version::HTTP_11,
-            HeaderMap::new(),
-            Body::empty(),
-            "127.0.0.1:8080".parse().unwrap(),
-            "".to_string(),
-        );
         let mock_backend = SgBackend {
             name_or_host: mock_backend_ref.name_or_host,
             namespace: mock_backend_ref.namespace,
@@ -210,9 +202,22 @@ mod tests {
             weight: mock_backend_ref.weight,
             filters: vec![],
         };
-        let ctx = ctx.resp_from_error(Some(&mock_backend), TardisError::bad_request("", ""));
+        let mut ctx = SgRouteFilterContext::new(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "127.0.0.1:8080".parse().unwrap(),
+            "".to_string(),
+            Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst { ..Default::default() }, None)),
+        );
+
+        ctx.set_chose_backend(&mock_backend);
+
+        let ctx = ctx.resp_from_error(TardisError::bad_request("", ""));
         let (is_ok, ctx) = stats.resp_filter("id1", ctx, None).await.unwrap();
-        assert_eq!(is_ok, true);
+        assert!(is_ok);
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Minor);
 
         let (_, ctx) = stats.resp_filter("id2", ctx, None).await.unwrap();
@@ -220,7 +225,7 @@ mod tests {
         let (_, ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Major);
 
-        let ctx = ctx.resp(Some(&mock_backend), StatusCode::OK, HeaderMap::new(), Body::empty());
+        let ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), Body::empty());
         let (_, ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Good);
     }
