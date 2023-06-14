@@ -19,9 +19,9 @@ use tardis::basic::result::TardisResult;
 use tardis::url::Url;
 use tardis::{log, TardisFuns};
 
-use crate::config::http_route_dto::SgHttpPathMatchType;
+use crate::config::http_route_dto::{SgHttpPathMatchType, SgHttpRouteRule};
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::functions::http_route::{SgBackend, SgHttpRouteMatchInst};
 
 static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
@@ -57,7 +57,7 @@ pub fn get_filter_def(code: &str) -> TardisResult<&Box<dyn SgPluginFilterDef>> {
     }
 }
 
-pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
+pub async fn init(filter_configs: Vec<SgRouteFilter>, http_route_rules: &Vec<SgHttpRouteRule>) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
     let mut plugin_filters: Vec<(String, BoxSgPluginFilter)> = Vec::new();
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
@@ -66,7 +66,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>) -> TardisResult<Vec<(Strin
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
     for (_, plugin_filter) in &plugin_filters {
-        plugin_filter.init().await?;
+        plugin_filter.init(http_route_rules).await?;
     }
     Ok(plugin_filters)
 }
@@ -97,7 +97,7 @@ pub trait SgPluginFilter: Send + Sync + 'static {
         false
     }
 
-    async fn init(&self) -> TardisResult<()>;
+    async fn init(&self, http_route_rule: &Vec<SgHttpRouteRule>) -> TardisResult<()>;
 
     async fn destroy(&self) -> TardisResult<()>;
 
@@ -221,6 +221,8 @@ pub struct SgRouteFilterContext {
     mod_resp_headers: Option<HeaderMap<HeaderValue>>,
     mod_resp_body: Option<Vec<u8>>,
 
+    choose_backend_name_or_host: Option<String>,
+
     ext: HashMap<String, String>,
     action: SgRouteFilterRequestAction,
     gateway_name: String,
@@ -258,24 +260,32 @@ impl SgRouteFilterContext {
             ext: HashMap::new(),
             action: SgRouteFilterRequestAction::None,
             gateway_name,
+            choose_backend_name_or_host: None,
         }
     }
 
-    pub fn resp(mut self, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
+    ///The following two methods can only be used to fill in the context [resp] [resp_from_error]
+    pub fn resp(mut self, backend: Option<&SgBackend>, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
         self.raw_resp_status_code = status_code;
         self.raw_resp_headers = headers;
         self.raw_resp_body = Some(body);
+        self.choose_backend_name_or_host = backend.map(|b| b.name_or_host.clone());
         self
     }
 
-    pub fn resp_from_error(mut self, error: TardisError) -> Self {
+    pub fn resp_from_error(mut self, backend: Option<&SgBackend>, error: TardisError) -> Self {
         self.raw_resp_err = Some(error);
         self.raw_resp_status_code = StatusCode::INTERNAL_SERVER_ERROR;
+        self.choose_backend_name_or_host = backend.map(|b| b.name_or_host.clone());
         self
     }
 
     pub fn is_resp_error(&self) -> bool {
         self.raw_resp_err.is_some()
+    }
+
+    pub fn get_backend_name(&self) -> Option<String> {
+        self.choose_backend_name_or_host.clone()
     }
 
     pub fn get_req_method(&mut self) -> &Method {

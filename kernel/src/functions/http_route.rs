@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr, vec};
 
 use crate::{
     config::{
@@ -26,18 +26,27 @@ use super::http_client;
 static mut ROUTES: Option<HashMap<String, SgGatewayInst>> = None;
 
 pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisResult<()> {
+    let all_route_rules = routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>();
     let global_filters = if let Some(filters) = gateway_conf.filters {
-        filters::init(filters).await?
+        filters::init(filters, &all_route_rules).await?
     } else {
         Vec::new()
     };
     let mut route_insts = Vec::new();
-    for route in routes {
-        let route_filters = if let Some(filters) = route.filters { filters::init(filters).await? } else { Vec::new() };
+    for route in routes.clone() {
+        let route_filters = if let Some(filters) = route.filters {
+            filters::init(filters, &route.rules.clone().unwrap_or_default()).await?
+        } else {
+            Vec::new()
+        };
         let rule_insts = if let Some(rules) = route.rules {
             let mut rule_insts = Vec::new();
             for rule in rules {
-                let rule_filters = if let Some(filters) = rule.filters { filters::init(filters).await? } else { Vec::new() };
+                let rule_filters = if let Some(filters) = rule.filters.clone() {
+                    filters::init(filters, &vec![rule.clone()]).await?
+                } else {
+                    Vec::new()
+                };
 
                 let rule_matches_insts = rule
                     .matches
@@ -131,9 +140,10 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                         let backends = join_all(
                             backend_refs
                                 .into_iter()
-                                .map(|backend_ref| async move {
+                                .map(|backend_ref| (backend_ref, &all_route_rules))
+                                .map(|(backend_ref, read_only_routes)| async move {
                                     let filters = if let Some(filters) = backend_ref.filters {
-                                        filters::init(filters).await?
+                                        filters::init(filters, read_only_routes).await?
                                     } else {
                                         Vec::new()
                                     };
@@ -257,7 +267,10 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         ),
         &gateway_inst.listeners,
     ) {
-        return Err(TardisError::not_found("[SG] Hostname Not found", ""));
+        log::trace!("[SG.Route] Request hostname {} not match", request.uri().host().expect(""));
+        let mut not_found = Response::default();
+        *not_found.status_mut() = StatusCode::NOT_FOUND;
+        return Ok(not_found);
     }
 
     let matched_route_inst = match_route_insts_with_hostname_priority(request.uri().host(), &gateway_inst.routes);

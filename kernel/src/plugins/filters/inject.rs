@@ -6,7 +6,10 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::{http_client, http_route::SgHttpRouteMatchInst};
+use crate::{
+    config::http_route_dto::SgHttpRouteRule,
+    functions::{http_client, http_route::SgHttpRouteMatchInst},
+};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
@@ -38,7 +41,7 @@ impl SgPluginFilter for SgFilterInject {
         super::SgPluginFilterKind::Http
     }
 
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &Vec<SgHttpRouteRule>) -> TardisResult<()> {
         Ok(())
     }
 
@@ -94,7 +97,7 @@ impl SgPluginFilter for SgFilterInject {
             ctx.set_resp_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
             ctx.set_resp_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
             let resp = http_client::raw_request(None, Method::PUT, resp_inject_url, ctx.pop_resp_body_raw()?, ctx.get_resp_headers(), self.resp_timeout_ms).await?;
-            ctx = ctx.resp(resp.status(), resp.headers().clone(), resp.into_body());
+            ctx = ctx.resp(None, resp.status(), resp.headers().clone(), resp.into_body());
         }
         Ok((true, ctx))
     }

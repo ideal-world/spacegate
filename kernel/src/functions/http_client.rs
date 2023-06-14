@@ -44,7 +44,7 @@ pub async fn request(
     mut ctx: SgRouteFilterContext,
 ) -> TardisResult<SgRouteFilterContext> {
     if redirect {
-        ctx = do_request(client, &ctx.get_req_uri().to_string(), rule_timeout_ms, ctx).await?;
+        ctx = do_request(client, &ctx.get_req_uri().to_string(), rule_timeout_ms, ctx, None).await?;
     }
     if let Some(backend) = backend {
         let scheme = backend.protocol.as_ref().unwrap_or(&SgProtocol::Http);
@@ -56,15 +56,21 @@ pub async fn request(
         };
         let url = format!("{}://{}{}{}", scheme, host, port, ctx.get_req_uri().path_and_query().map(|p| p.as_str()).unwrap_or(""));
         let timeout_ms = if let Some(timeout_ms) = backend.timeout_ms { Some(timeout_ms) } else { rule_timeout_ms };
-        ctx = do_request(client, &url, timeout_ms, ctx).await?;
+        ctx = do_request(client, &url, timeout_ms, ctx, Some(backend)).await?;
     }
     Ok(ctx)
 }
 
-async fn do_request(client: &Client<HttpsConnector<HttpConnector>>, url: &str, timeout_ms: Option<u64>, mut ctx: SgRouteFilterContext) -> TardisResult<SgRouteFilterContext> {
+async fn do_request(
+    client: &Client<HttpsConnector<HttpConnector>>,
+    url: &str,
+    timeout_ms: Option<u64>,
+    mut ctx: SgRouteFilterContext,
+    backend: Option<&SgBackend>,
+) -> TardisResult<SgRouteFilterContext> {
     let ctx = match raw_request(Some(client), ctx.get_req_method().clone(), url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), timeout_ms).await {
-        Ok(response) => ctx.resp(response.status(), response.headers().clone(), response.into_body()),
-        Err(e) => ctx.resp_from_error(e),
+        Ok(response) => ctx.resp(backend, response.status(), response.headers().clone(), response.into_body()),
+        Err(e) => ctx.resp_from_error(backend, e),
     };
     Ok(ctx)
 }

@@ -3,15 +3,18 @@ use std::{collections::HashMap, sync::Arc};
 use lazy_static::lazy_static;
 use poem::web::Data;
 use tardis::{
-    tokio::sync::Mutex,
+    tokio::sync::RwLock,
     web::poem::{handler, web::Html},
 };
+//todo redis
 lazy_static! {
-    static ref SERVER_STATUS: Arc<Mutex<HashMap<String, Status>>> = <_>::default();
+    static ref SERVER_STATUS: Arc<RwLock<HashMap<String, Status>>> = <_>::default();
 }
 const STATUS_TEMPLATE: &str = include_str!("status.html");
 
+#[derive(Default, Clone, PartialEq, Eq)]
 pub(crate) enum Status {
+    #[default]
     Good,
     Minor,
     Major,
@@ -29,7 +32,7 @@ impl Status {
 
 #[handler]
 pub(crate) async fn create_status_html(Data(title): Data<&String>) -> Html<String> {
-    let status = SERVER_STATUS.lock().await;
+    let status = SERVER_STATUS.read().await;
     let mut service_html = "".to_string();
     status.keys().for_each(|key| {
         let status = status.get(key).expect("");
@@ -45,16 +48,21 @@ pub(crate) async fn create_status_html(Data(title): Data<&String>) -> Html<Strin
             .as_str(),
         );
     });
-    let html = STATUS_TEMPLATE.replace("{title}", &title);
+    let html = STATUS_TEMPLATE.replace("{title}", title);
     Html(html.replace("{status}", &service_html))
 }
 
 pub(crate) async fn update_status(server_name: &str, status: Status) {
-    let mut server_status = SERVER_STATUS.lock().await;
+    let mut server_status = SERVER_STATUS.write().await;
     server_status.insert(server_name.to_string(), status);
 }
 
+pub(crate) async fn get_status(server_name: &str) -> Option<Status> {
+    let server_status = SERVER_STATUS.read().await;
+    server_status.get(server_name).map(|status| status.clone())
+}
+
 pub(crate) async fn remove_status(server_name: &str) {
-    let mut server_status = SERVER_STATUS.lock().await;
+    let mut server_status = SERVER_STATUS.write().await;
     server_status.remove(server_name);
 }

@@ -11,7 +11,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
@@ -86,7 +86,7 @@ impl SgPluginFilter for SgFilterCompression {
         super::SgPluginFilterKind::Http
     }
 
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &Vec<SgHttpRouteRule>) -> TardisResult<()> {
         Ok(())
     }
 
@@ -252,7 +252,7 @@ mod tests {
 
         let body_str = "test 1 测试 1 ";
         let resp_body = Body::from(body_str);
-        ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), resp_body);
+        ctx = ctx.resp(None, StatusCode::OK, HeaderMap::new(), resp_body);
 
         let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);
@@ -294,7 +294,7 @@ mod tests {
         let resp_body = Body::from(dncoded_body);
         let mut mock_resp_header = HeaderMap::new();
         mock_resp_header.insert(header::CONTENT_ENCODING, CompressionType::Deflate.into());
-        ctx = ctx.resp(StatusCode::OK, mock_resp_header, resp_body);
+        ctx = ctx.resp(None, StatusCode::OK, mock_resp_header, resp_body);
 
         let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);

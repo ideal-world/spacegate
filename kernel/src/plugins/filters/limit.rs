@@ -8,7 +8,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 use lazy_static::lazy_static;
@@ -97,7 +97,7 @@ impl SgPluginFilter for SgFilterLimit {
         super::SgPluginFilterKind::Http
     }
 
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &Vec<SgHttpRouteRule>) -> TardisResult<()> {
         Ok(())
     }
 
