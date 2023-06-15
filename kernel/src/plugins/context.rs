@@ -64,9 +64,8 @@ impl AvailableBackendInst {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
-pub struct SgRouteFilterContext {
+pub struct SgRoutePluginContext {
     request_id: String,
 
     raw_req_method: Method,
@@ -106,7 +105,7 @@ pub enum SgRouteFilterRequestAction {
 }
 
 #[allow(dead_code)]
-impl SgRouteFilterContext {
+impl SgRoutePluginContext {
     pub fn new(
         method: Method,
         uri: Uri,

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{config::gateway_dto::SgProtocol, plugins::context::SgRouteFilterContext};
+use crate::{config::gateway_dto::SgProtocol, plugins::context::SgRoutePluginContext};
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
 use hyper::{client::HttpConnector, Body, Client, Error};
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
@@ -41,8 +41,8 @@ pub async fn request(
     backend: Option<&SgBackend>,
     rule_timeout_ms: Option<u64>,
     redirect: bool,
-    mut ctx: SgRouteFilterContext,
-) -> TardisResult<SgRouteFilterContext> {
+    mut ctx: SgRoutePluginContext,
+) -> TardisResult<SgRoutePluginContext> {
     if redirect {
         ctx = do_request(client, &ctx.get_req_uri().to_string(), rule_timeout_ms, ctx).await?;
     }
@@ -62,7 +62,7 @@ pub async fn request(
     Ok(ctx)
 }
 
-async fn do_request(client: &Client<HttpsConnector<HttpConnector>>, url: &str, timeout_ms: Option<u64>, mut ctx: SgRouteFilterContext) -> TardisResult<SgRouteFilterContext> {
+async fn do_request(client: &Client<HttpsConnector<HttpConnector>>, url: &str, timeout_ms: Option<u64>, mut ctx: SgRoutePluginContext) -> TardisResult<SgRoutePluginContext> {
     let ctx = match raw_request(Some(client), ctx.get_req_method().clone(), url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), timeout_ms).await {
         Ok(response) => ctx.resp(response.status(), response.headers().clone(), response.into_body()),
         Err(e) => ctx.resp_from_error(e),
@@ -122,7 +122,7 @@ mod tests {
             http_client::{init, request},
             http_route::SgBackend,
         },
-        plugins::context::SgRouteFilterContext,
+        plugins::context::SgRoutePluginContext,
     };
 
     #[tokio::test]
@@ -139,7 +139,7 @@ mod tests {
             }),
             None,
             false,
-            SgRouteFilterContext::new(
+            SgRoutePluginContext::new(
                 Method::GET,
                 Uri::from_static("http://sg.idealworld.group"),
                 Version::HTTP_11,
@@ -165,7 +165,7 @@ mod tests {
             }),
             Some(20000),
             false,
-            SgRouteFilterContext::new(
+            SgRoutePluginContext::new(
                 Method::GET,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
@@ -192,7 +192,7 @@ mod tests {
             }),
             Some(20000),
             false,
-            SgRouteFilterContext::new(
+            SgRoutePluginContext::new(
                 Method::POST,
                 Uri::from_static("http://sg.idealworld.group/post?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
@@ -219,7 +219,7 @@ mod tests {
             }),
             Some(5),
             false,
-            SgRouteFilterContext::new(
+            SgRoutePluginContext::new(
                 Method::GET,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
@@ -244,7 +244,7 @@ mod tests {
             }),
             Some(20000),
             false,
-            SgRouteFilterContext::new(
+            SgRoutePluginContext::new(
                 Method::GET,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
@@ -266,7 +266,7 @@ mod tests {
             None,
             Some(20000),
             true,
-            SgRouteFilterContext::new(
+            SgRoutePluginContext::new(
                 Method::GET,
                 Uri::from_static("http://postman-echo.com/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,

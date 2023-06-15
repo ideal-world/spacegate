@@ -6,7 +6,7 @@ use crate::{
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
     plugins::{
-        context::{ChoseHttpRouteRuleInst, SgRouteFilterContext, SgRouteFilterRequestAction},
+        context::{ChoseHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
         filters::{self, BoxSgPluginFilter},
     },
 };
@@ -354,7 +354,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
-    let mut ctx: SgRouteFilterContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
+    let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
 
     ctx.build_response().await
 }
@@ -527,8 +527,8 @@ async fn process_req_filters(
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
     matched_rule_inst: Option<&SgHttpRouteRuleInst>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
-) -> TardisResult<SgRouteFilterContext> {
-    let mut ctx = SgRouteFilterContext::new(
+) -> TardisResult<SgRoutePluginContext> {
+    let mut ctx = SgRoutePluginContext::new(
         request.method().clone(),
         request.uri().clone(),
         request.version(),
@@ -588,13 +588,13 @@ async fn process_req_filters(
 }
 
 async fn process_resp_filters(
-    mut ctx: SgRouteFilterContext,
+    mut ctx: SgRoutePluginContext,
     backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     route_filters: &Vec<(String, BoxSgPluginFilter)>,
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
-) -> TardisResult<SgRouteFilterContext> {
+) -> TardisResult<SgRoutePluginContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
 

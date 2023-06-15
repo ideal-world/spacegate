@@ -9,7 +9,7 @@ use tardis::{
     TardisFuns,
 };
 
-use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 pub const CODE: &str = "rewrite";
 
@@ -47,7 +47,7 @@ impl SgPluginFilter for SgFilterRewrite {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Rewrite] Host {hostname} parsing error"), ""))?;
@@ -60,7 +60,7 @@ impl SgPluginFilter for SgFilterRewrite {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }
@@ -98,7 +98,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new(
             Method::POST,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,

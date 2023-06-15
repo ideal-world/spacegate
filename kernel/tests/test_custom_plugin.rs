@@ -3,6 +3,7 @@ use std::{env, time::Duration, vec};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use spacegate_kernel::plugins::context::SgRoutePluginContext;
 use spacegate_kernel::{
     config::{
         gateway_dto::{SgGateway, SgListener},
@@ -18,7 +19,6 @@ use tardis::{
     web::web_client::TardisWebClient,
     TardisFuns,
 };
-use spacegate_kernel::plugins::context::SgRouteFilterContext;
 
 pub struct SgFilterAuthDef;
 
@@ -46,14 +46,14 @@ impl SgPluginFilter for SgFilterAuth {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.get_req_headers().contains_key("Authorization") {
             return Ok((true, ctx));
         }
         Err(TardisError::unauthorized("unauthorized", ""))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }

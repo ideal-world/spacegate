@@ -17,13 +17,14 @@ use crate::{
     functions::{http_client, http_route::SgHttpRouteMatchInst},
 };
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 lazy_static! {
     static ref REQUEST_BODY: Arc<Mutex<HashMap<String, Option<Vec<u8>>>>> = <_>::default();
 }
 
 pub const CODE: &str = "retry";
+
 pub struct SgFilterRetryDef;
 
 impl SgPluginFilterDef for SgFilterRetryDef {
@@ -91,7 +92,7 @@ impl SgPluginFilter for SgFilterRetry {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         let mut req_body_cache = REQUEST_BODY.lock().await;
         let req_body = ctx.pop_req_body().await?;
         req_body_cache.insert(ctx.get_request_id().to_string(), req_body.clone());
@@ -101,7 +102,7 @@ impl SgPluginFilter for SgFilterRetry {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.is_resp_error() {
             let mut req_body_cache = REQUEST_BODY.lock().await;
             let req_body = req_body_cache.remove(&ctx.get_request_id().to_string()).flatten();
@@ -134,7 +135,7 @@ impl SgPluginFilter for SgFilterRetry {
     }
 }
 
-fn choose_backend_url(ctx: &mut SgRouteFilterContext) -> String {
+fn choose_backend_url(ctx: &mut SgRoutePluginContext) -> String {
     let backend_name = ctx.get_chose_backend_name();
     let available_backend = ctx.get_available_backend();
     if backend_name.is_some() {
