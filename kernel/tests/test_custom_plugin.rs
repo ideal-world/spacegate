@@ -10,7 +10,7 @@ use spacegate_kernel::{
         plugin_filter_dto::SgRouteFilter,
     },
     functions::http_route::SgHttpRouteMatchInst,
-    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind, SgRouteFilterContext},
+    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind},
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -18,6 +18,7 @@ use tardis::{
     web::web_client::TardisWebClient,
     TardisFuns,
 };
+use spacegate_kernel::plugins::context::SgRouteFilterContext;
 
 pub struct SgFilterAuthDef;
 
