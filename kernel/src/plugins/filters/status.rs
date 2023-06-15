@@ -162,12 +162,15 @@ mod tests {
     use crate::{
         config::http_route_dto::{SgBackendRef, SgHttpRouteRule},
         functions::http_route::{SgBackend, SgHttpRouteRuleInst},
-        plugins::filters::{
-            status::{
-                status_plugin::{get_status, Status},
-                SgFilterStatus,
+        plugins::{
+            context::ChoseHttpRouteRuleInst,
+            filters::{
+                status::{
+                    status_plugin::{get_status, Status},
+                    SgFilterStatus,
+                },
+                SgPluginFilter, SgRouteFilterContext,
             },
-            ChoseHttpRouteRuleInst, SgPluginFilter, SgRouteFilterContext,
         },
     };
 
@@ -226,7 +229,7 @@ mod tests {
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Major);
 
         let ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), Body::empty());
-        let (_, ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
+        let (_, _ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Good);
     }
 }

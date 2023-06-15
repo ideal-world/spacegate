@@ -5,7 +5,10 @@ use crate::{
         gateway_dto::{SgGateway, SgListener, SgProtocol},
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
-    plugins::filters::{self, BoxSgPluginFilter, ChoseHttpRouteRuleInst, SgRouteFilterContext, SgRouteFilterRequestAction},
+    plugins::{
+        context::{ChoseHttpRouteRuleInst, SgRouteFilterContext, SgRouteFilterRequestAction},
+        filters::{self, BoxSgPluginFilter},
+    },
 };
 use http::{header::UPGRADE, uri::Scheme, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{config::gateway_dto::SgProtocol, plugins::filters::SgRouteFilterContext};
+use crate::{config::gateway_dto::SgProtocol, plugins::context::SgRouteFilterContext};
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
 use hyper::{client::HttpConnector, Body, Client, Error};
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
@@ -122,7 +122,7 @@ mod tests {
             http_client::{init, request},
             http_route::SgBackend,
         },
-        plugins::filters::{ChoseHttpRouteRuleInst, SgRouteFilterContext},
+        plugins::context::SgRouteFilterContext,
     };
 
     #[tokio::test]

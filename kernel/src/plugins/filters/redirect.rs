@@ -9,9 +9,10 @@ use tardis::{
 
 use crate::config::http_route_dto::SgHttpRouteRule;
 use crate::helpers::url_helper::UrlToUri;
+use crate::plugins::context::SgRouteFilterRequestAction;
 use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
+use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
 pub const CODE: &str = "redirect";
 
@@ -74,7 +75,7 @@ impl SgPluginFilter for SgFilterRedirect {
         if let Some(new_url) = http_common_modify_path(ctx.get_req_uri(), &self.path, matched_match_inst)? {
             ctx.set_req_uri(new_url);
         }
-        ctx.action = SgRouteFilterRequestAction::Redirect;
+        ctx.set_action(SgRouteFilterRequestAction::Redirect);
         Ok((true, ctx))
     }
 
@@ -95,7 +96,7 @@ mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
         functions::http_route::{SgHttpPathMatchInst, SgHttpRouteRuleInst},
-        plugins::filters::ChoseHttpRouteRuleInst,
+        plugins::context::ChoseHttpRouteRuleInst,
     };
 
     use super::*;

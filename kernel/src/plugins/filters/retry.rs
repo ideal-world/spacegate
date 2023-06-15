@@ -1,14 +1,26 @@
+use std::{collections::HashMap, sync::Arc, thread};
+
 use async_trait::async_trait;
+use hyper::Body;
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use tardis::{basic::result::TardisResult, TardisFuns};
+use tardis::{
+    basic::result::TardisResult,
+    rand::{self, distributions::WeightedIndex, prelude::Distribution, thread_rng, Rng},
+    tokio::sync::Mutex,
+    TardisFuns,
+};
 
-use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
+use crate::{
+    config::http_route_dto::SgHttpRouteRule,
+    functions::{http_client, http_route::SgHttpRouteMatchInst},
+};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
 
 lazy_static! {
-    // static ref SHUTDOWN_TX: Arc<Mutex<Option<Sender<()>>>> = <_>::default();
+    static ref REQUEST_BODY: Arc<Mutex<HashMap<String, Option<Vec<u8>>>>> = <_>::default();
 }
 
 pub const CODE: &str = "retry";
@@ -79,12 +91,63 @@ impl SgPluginFilter for SgFilterRetry {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+        let mut req_body_cache = REQUEST_BODY.lock().await;
+        let req_body = ctx.pop_req_body().await?;
+        req_body_cache.insert(ctx.get_request_id().to_string(), req_body.clone());
+        if let Some(req_body) = req_body {
+            ctx.set_req_body(req_body)?;
+        }
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
-        if let Some(_backend_name) = ctx.get_chose_backend_name() {}
+    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+        if ctx.is_resp_error() {
+            let mut req_body_cache = REQUEST_BODY.lock().await;
+            let req_body = req_body_cache.remove(&ctx.get_request_id().to_string()).flatten();
+            for i in 0..self.retries {
+                let retry_count = i + 1;
+                let backoff_interval = match self.backoff {
+                    BackOff::Fixed => self.base_interval,
+                    BackOff::Exponential => self.base_interval * 2u64.pow(retry_count as u32),
+                    BackOff::Random => {
+                        let mut rng = rand::thread_rng();
+                        rng.gen_range(self.base_interval..self.max_interval)
+                    }
+                };
+                let time_out = ctx.get_timeout_ms();
+                http_client::raw_request(
+                    None,
+                    ctx.get_req_method().clone(),
+                    &choose_backend_url(&mut ctx),
+                    req_body.clone().map(Body::from),
+                    ctx.get_req_headers(),
+                    time_out,
+                )
+                .await?;
+                // Wait for the backoff interval
+                thread::sleep(std::time::Duration::from_millis(backoff_interval));
+            }
+        }
+
         Ok((true, ctx))
+    }
+}
+
+fn choose_backend_url(ctx: &mut SgRouteFilterContext) -> String {
+    let backend_name = ctx.get_chose_backend_name();
+    let available_backend = ctx.get_available_backend();
+    if backend_name.is_some() {
+        let backend = if available_backend.len() > 1 {
+            let weights = available_backend.iter().map(|backend| backend.weight.unwrap_or(0)).collect_vec();
+            let dist = WeightedIndex::new(weights).expect("Unreachable code");
+            let mut rng = thread_rng();
+            available_backend.get(dist.sample(&mut rng))
+        } else {
+            available_backend.get(0)
+        };
+        backend.map(|backend| backend.get_base_url()).unwrap_or_else(|| "".to_string())
+    } else {
+        ctx.get_req_uri().to_string()
     }
 }

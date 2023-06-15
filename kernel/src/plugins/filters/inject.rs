@@ -84,7 +84,7 @@ impl SgPluginFilter for SgFilterInject {
                 new_req_headers.clone(),
                 resp.into_body(),
                 *ctx.get_req_remote_addr(),
-                ctx.gateway_name,
+                ctx.get_gateway_name(),
                 None,
             )
         }
