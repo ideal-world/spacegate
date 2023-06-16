@@ -151,3 +151,119 @@ fn choose_backend_url(ctx: &mut SgRouteFilterContext) -> String {
         ctx.get_req_uri().to_string()
     }
 }
+mod expiring_map {
+    use std::collections::{HashMap, VecDeque};
+
+    use tardis::chrono::{Duration, Utc};
+
+    struct ExpireMap<V, K = String> {
+        base: HashMap<K, V>,
+        expire_time: VecDeque<(K, u128)>,
+    }
+
+    impl<V> ExpireMap<V, String> {
+        pub fn remove(&mut self, k: &str) -> Option<V> {
+            self.remove_expired_items();
+            self.base.remove(k)
+        }
+
+        pub fn insert(&mut self, k: String, v: V, d: Duration) -> Option<V> {
+            let expire = d.num_nanoseconds().expect("overflow") as u128 + Utc::now().timestamp_nanos() as u128;
+            let a = self.expire_time.iter().position(|(_, x)| x <= &expire);
+            if let Some(index) = a {
+                if index < self.expire_time.len() {
+                    self.expire_time.insert(index + 1, (k.clone(), expire));
+                } else {
+                    self.expire_time.push_back((k.clone(), expire));
+                }
+            } else {
+                self.expire_time.push_back((k.clone(), expire));
+            }
+
+            self.base.insert(k, v)
+        }
+
+        pub fn remove_expired_items(&mut self) {
+            let now = Utc::now().timestamp_nanos() as u128;
+            while let Some((k, expire)) = self.expire_time.front() {
+                if *expire <= now {
+                    self.base.remove(k);
+                    self.expire_time.pop_front();
+                } else {
+                    break;
+                }
+            }
+        }
+        fn get(&mut self, k: &str) -> Option<&V> {
+            self.remove_expired_items();
+            self.base.get(k)
+        }
+        fn len(&mut self) -> usize {
+            self.remove_expired_items();
+            self.base.len()
+        }
+
+        fn new() -> Self {
+            Self {
+                base: HashMap::new(),
+                expire_time: VecDeque::new(),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used)]
+    mod tests {
+
+        use tardis::chrono::Duration;
+
+        use super::ExpireMap;
+
+        #[test]
+        fn test() {
+            let mut expire_map = ExpireMap::<Option<Vec<u8>>>::new();
+            expire_map.insert("a".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(1)).unwrap());
+            expire_map.insert("b".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(1)).unwrap());
+            expire_map.insert("c".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(2)).unwrap());
+            expire_map.insert("d".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(3)).unwrap());
+            assert!(expire_map.len() == 4);
+
+            std::thread::sleep(std::time::Duration::from_secs(2));
+
+            assert!(expire_map.get("a").is_none());
+            assert!(expire_map.remove("a").is_none());
+            assert!(expire_map.len() == 1);
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use http::{HeaderMap, Method, Uri, Version};
+    use hyper::Body;
+    use tardis::{basic::error::TardisError, tokio};
+
+    use crate::plugins::{context::SgRouteFilterContext, filters::SgPluginFilter};
+
+    use super::SgFilterRetry;
+
+    #[tokio::test]
+    async fn test_retry() {
+        let filter_retry = SgFilterRetry { ..Default::default() };
+
+        let ctx = SgRouteFilterContext::new(
+            Method::GET,
+            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::from(""),
+            "127.0.0.1:8080".parse().unwrap(),
+            "test_gate".to_string(),
+            None,
+        );
+        let ctx = ctx.resp_from_error(TardisError::internal_error("", ""));
+
+        filter_retry.resp_filter("", ctx, None).await.unwrap();
+    }
+}
