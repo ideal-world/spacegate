@@ -15,12 +15,13 @@ use tardis::{
 use crate::{
     config::http_route_dto::SgHttpRouteRule,
     functions::{http_client, http_route::SgHttpRouteMatchInst},
+    plugins::filters::retry::expiring_map::ExpireMap,
 };
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 lazy_static! {
-    static ref REQUEST_BODY: Arc<Mutex<HashMap<String, Option<Vec<u8>>>>> = <_>::default();
+    static ref REQUEST_BODY: Arc<Mutex<ExpireMap<Option<Vec<u8>>>>> = <_>::default();
 }
 
 pub const CODE: &str = "retry";
@@ -95,7 +96,7 @@ impl SgPluginFilter for SgFilterRetry {
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         let mut req_body_cache = REQUEST_BODY.lock().await;
         let req_body = ctx.pop_req_body().await?;
-        req_body_cache.insert(ctx.get_request_id().to_string(), req_body.clone());
+        req_body_cache.insert(ctx.get_request_id().to_string(), req_body.clone(), (self.retries as u64 * self.max_interval) as u128);
         if let Some(req_body) = req_body {
             ctx.set_req_body(req_body)?;
         }
@@ -105,7 +106,7 @@ impl SgPluginFilter for SgFilterRetry {
     async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.is_resp_error() {
             let mut req_body_cache = REQUEST_BODY.lock().await;
-            let req_body = req_body_cache.remove(&ctx.get_request_id().to_string()).flatten();
+            let req_body = req_body_cache.remove(&ctx.get_request_id()).flatten();
             for i in 0..self.retries {
                 let retry_count = i + 1;
                 let backoff_interval = match self.backoff {
@@ -155,11 +156,21 @@ fn choose_backend_url(ctx: &mut SgRoutePluginContext) -> String {
 mod expiring_map {
     use std::collections::{HashMap, VecDeque};
 
-    use tardis::chrono::{Duration, Utc};
+    use tardis::chrono::Utc;
 
-    struct ExpireMap<V, K = String> {
+    /// Expiration Unit of time is milliseconds
+    pub struct ExpireMap<V, K = String> {
         base: HashMap<K, V>,
         expire_time: VecDeque<(K, u128)>,
+    }
+
+    impl<V> Default for ExpireMap<V, String> {
+        fn default() -> Self {
+            Self {
+                base: Default::default(),
+                expire_time: Default::default(),
+            }
+        }
     }
 
     impl<V> ExpireMap<V, String> {
@@ -168,12 +179,12 @@ mod expiring_map {
             self.base.remove(k)
         }
 
-        pub fn insert(&mut self, k: String, v: V, d: Duration) -> Option<V> {
-            let expire = d.num_nanoseconds().expect("overflow") as u128 + Utc::now().timestamp_nanos() as u128;
-            let a = self.expire_time.iter().position(|(_, x)| x <= &expire);
+        pub fn insert(&mut self, k: String, v: V, millis: u128) -> Option<V> {
+            let expire = millis + Utc::now().timestamp_millis() as u128;
+            let a = self.expire_time.iter().position(|(_, x)| x >= &expire);
             if let Some(index) = a {
-                if index < self.expire_time.len() {
-                    self.expire_time.insert(index + 1, (k.clone(), expire));
+                if index <= self.expire_time.len() {
+                    self.expire_time.insert(index, (k.clone(), expire));
                 } else {
                     self.expire_time.push_back((k.clone(), expire));
                 }
@@ -185,7 +196,7 @@ mod expiring_map {
         }
 
         pub fn remove_expired_items(&mut self) {
-            let now = Utc::now().timestamp_nanos() as u128;
+            let now = Utc::now().timestamp_millis() as u128;
             while let Some((k, expire)) = self.expire_time.front() {
                 if *expire <= now {
                     self.base.remove(k);
@@ -216,17 +227,15 @@ mod expiring_map {
     #[allow(clippy::unwrap_used)]
     mod tests {
 
-        use tardis::chrono::Duration;
-
         use super::ExpireMap;
 
         #[test]
         fn test() {
             let mut expire_map = ExpireMap::<Option<Vec<u8>>>::new();
-            expire_map.insert("a".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(1)).unwrap());
-            expire_map.insert("b".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(1)).unwrap());
-            expire_map.insert("c".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(2)).unwrap());
-            expire_map.insert("d".to_string(), Some(vec![1, 2, 3]), Duration::from_std(std::time::Duration::from_secs(3)).unwrap());
+            expire_map.insert("a".to_string(), Some(vec![1, 2, 3]), std::time::Duration::from_secs(1).as_millis());
+            expire_map.insert("b".to_string(), Some(vec![1, 2, 3]), std::time::Duration::from_secs(1).as_millis());
+            expire_map.insert("c".to_string(), Some(vec![1, 2, 3]), std::time::Duration::from_secs(2).as_millis());
+            expire_map.insert("d".to_string(), Some(vec![1, 2, 3]), std::time::Duration::from_secs(3).as_millis());
             assert!(expire_map.len() == 4);
 
             std::thread::sleep(std::time::Duration::from_secs(2));
@@ -234,6 +243,18 @@ mod expiring_map {
             assert!(expire_map.get("a").is_none());
             assert!(expire_map.remove("a").is_none());
             assert!(expire_map.len() == 1);
+
+            let mut expire_map = ExpireMap::<Option<Vec<u8>>>::new();
+            expire_map.insert("a".to_string(), Some(vec![1, 2, 3]), 1);
+            expire_map.insert("b".to_string(), Some(vec![1, 2, 3]), 3);
+            expire_map.insert("c".to_string(), Some(vec![1, 2, 3]), 2);
+            expire_map.insert("d".to_string(), Some(vec![1, 2, 3]), 4);
+
+            std::thread::sleep(std::time::Duration::from_millis(2));
+
+            assert!(expire_map.get("a").is_none());
+            assert!(expire_map.remove("c").is_none());
+            assert!(expire_map.len() == 2);
         }
     }
 }
@@ -245,7 +266,7 @@ mod tests {
     use hyper::Body;
     use tardis::{basic::error::TardisError, tokio};
 
-    use crate::plugins::{context::SgRouteFilterContext, filters::SgPluginFilter};
+    use crate::plugins::{context::SgRoutePluginContext, filters::SgPluginFilter};
 
     use super::SgFilterRetry;
 
@@ -253,7 +274,7 @@ mod tests {
     async fn test_retry() {
         let filter_retry = SgFilterRetry { ..Default::default() };
 
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new(
             Method::GET,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
