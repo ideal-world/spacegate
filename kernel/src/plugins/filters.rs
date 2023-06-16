@@ -23,7 +23,7 @@ use crate::config::http_route_dto::{SgHttpPathMatchType, SgHttpRouteRule};
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
 use crate::functions::http_route::SgHttpRouteMatchInst;
 
-use super::context::SgRouteFilterContext;
+use super::context::SgRoutePluginContext;
 
 static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
@@ -84,7 +84,7 @@ pub trait SgPluginFilter: Send + Sync + 'static {
     fn kind(&self) -> SgPluginFilterKind;
 
     /// Whether to filter the response
-    fn before_resp_filter_check(&self, ctx: &SgRouteFilterContext) -> bool {
+    fn before_resp_filter_check(&self, ctx: &SgRoutePluginContext) -> bool {
         if ctx.is_resp_error() {
             self.accept_error_response()
         } else {
@@ -103,9 +103,9 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
-    async fn req_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn req_filter(&self, id: &str, mut ctx: SgRoutePluginContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)>;
 
-    async fn resp_filter(&self, id: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)>;
+    async fn resp_filter(&self, id: &str, mut ctx: SgRoutePluginContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)>;
 
     fn boxed(self) -> BoxSgPluginFilter
     where

@@ -18,7 +18,7 @@ use tardis::{
 
 use self::status_plugin::{clean_status, get_status, update_status};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 use lazy_static::lazy_static;
 
@@ -115,11 +115,11 @@ impl SgPluginFilter for SgFilterStatus {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(backend_name) = ctx.get_chose_backend_name() {
             if ctx.is_resp_error() {
                 let mut server_err = SERVER_ERR.lock().await;
@@ -169,7 +169,7 @@ mod tests {
                     status_plugin::{get_status, Status},
                     SgFilterStatus,
                 },
-                SgPluginFilter, SgRouteFilterContext,
+                SgPluginFilter, SgRoutePluginContext,
             },
         },
     };
@@ -205,7 +205,7 @@ mod tests {
             weight: mock_backend_ref.weight,
             filters: vec![],
         };
-        let mut ctx = SgRouteFilterContext::new(
+        let mut ctx = SgRoutePluginContext::new(
             Method::POST,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,

@@ -13,7 +13,7 @@ use tardis::{
 
 use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 pub const CODE: &str = "compression";
 pub struct SgFilterCompressionDef;
@@ -94,11 +94,11 @@ impl SgPluginFilter for SgFilterCompression {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         let resp_body = ctx.pop_resp_body().await?;
         if let Some(mut resp_body) = resp_body {
             let resp_encode_type = get_encode_type(ctx.get_resp_headers_raw().get(header::CONTENT_ENCODING));
@@ -236,7 +236,7 @@ mod tests {
 
         let mut header = HeaderMap::new();
         header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new(
             Method::POST,
             Uri::from_static("http://sg.idealworld.group/"),
             Version::HTTP_11,
@@ -274,7 +274,7 @@ mod tests {
 
         let mut header = HeaderMap::new();
         header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new(
             Method::POST,
             Uri::from_static("http://sg.idealworld.group/"),
             Version::HTTP_11,

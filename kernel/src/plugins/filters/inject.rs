@@ -11,7 +11,7 @@ use crate::{
     functions::{http_client, http_route::SgHttpRouteMatchInst},
 };
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 pub const CODE: &str = "inject";
 
@@ -49,7 +49,7 @@ impl SgPluginFilter for SgFilterInject {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(req_inject_url) = &self.req_inject_url {
             let real_method = ctx.get_req_method().clone();
             let real_url = ctx.get_req_uri().clone();
@@ -77,7 +77,7 @@ impl SgPluginFilter for SgFilterInject {
                 .unwrap_or(real_url);
             new_req_headers.remove(SG_INJECT_REAL_METHOD);
             new_req_headers.remove(SG_INJECT_REAL_URL);
-            ctx = SgRouteFilterContext::new(
+            ctx = SgRoutePluginContext::new(
                 new_req_method,
                 new_req_url,
                 *ctx.get_req_version(),
@@ -91,7 +91,7 @@ impl SgPluginFilter for SgFilterInject {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(resp_inject_url) = &self.resp_inject_url {
             let real_method = ctx.get_req_method().clone();
             let real_url = ctx.get_req_uri().clone();
@@ -122,7 +122,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new(
             Method::POST,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,

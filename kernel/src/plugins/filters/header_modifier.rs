@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tardis::{basic::result::TardisResult, TardisFuns};
@@ -46,7 +46,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.kind != SgFilterHeaderModifierKind::Request {
             return Ok((true, ctx));
         }
@@ -63,7 +63,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.kind != SgFilterHeaderModifierKind::Response {
             return Ok((true, ctx));
         }
@@ -109,7 +109,7 @@ mod tests {
         let mut req_headers = HeaderMap::new();
         req_headers.insert("X-Test1", "Hi".parse().unwrap());
         req_headers.insert("X-1", "Hi".parse().unwrap());
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new(
             Method::GET,
             Uri::from_static("http://sg.idealworld.group/spi/cache/1"),
             Version::HTTP_11,
