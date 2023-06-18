@@ -190,7 +190,7 @@ kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l
 kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis-service:6379"
 sleep 1
 
-cat>mult_listeners.hurl<<EOF 
+cat>redis.hurl<<EOF
 GET http://${cluster_ip}:9000/echo/get
 
 HTTP 200
@@ -198,7 +198,7 @@ HTTP 200
 jsonpath "$.url" == "http://${cluster_ip}:9000/get"
 
 EOF
-hurl --test mult_listeners.hurl -v
+hurl --test redis.hurl -v
 
 #TODO
 echo "============[websocket]no backend test============"
