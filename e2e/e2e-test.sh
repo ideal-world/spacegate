@@ -190,15 +190,18 @@ kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l
 kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis-service:6379"
 sleep 1
 
-cat>redis.hurl<<EOF
-GET http://${cluster_ip}:9000/echo/get
+sudo apt-get install redis-tools
 
-HTTP 200
-[Asserts]
-jsonpath "$.url" == "http://${cluster_ip}:9000/get"
+redis-cli
 
-EOF
-hurl --test redis.hurl -v
+client_count=$(redis-cli CLIENT LIST | wc -l)
+
+if [ "$client_count" -gt 1 ]; then
+    echo "客户端数量大于1"
+else
+    echo "客户端数量不大于1"
+    exit 1
+fi
 
 #TODO
 echo "============[websocket]no backend test============"
