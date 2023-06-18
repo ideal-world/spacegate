@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tardis::{
     basic::result::TardisResult,
+    log,
     rand::{self, distributions::WeightedIndex, prelude::Distribution, thread_rng, Rng},
     tokio::sync::Mutex,
     TardisFuns,
@@ -118,7 +119,8 @@ impl SgPluginFilter for SgFilterRetry {
                     }
                 };
                 let time_out = ctx.get_timeout_ms();
-                http_client::raw_request(
+                log::trace!("[SG.Filter.Retry] retry request retry_times:{} next_retry_backoff:{}", retry_count, backoff_interval);
+                match http_client::raw_request(
                     None,
                     ctx.get_req_method().clone(),
                     &choose_backend_url(&mut ctx),
@@ -126,7 +128,14 @@ impl SgPluginFilter for SgFilterRetry {
                     ctx.get_req_headers(),
                     time_out,
                 )
-                .await?;
+                .await
+                {
+                    Ok(response) => {
+                        ctx = ctx.resp(response.status(), response.headers().clone(), response.into_body());
+                        break;
+                    }
+                    Err(e) => ctx = ctx.resp_from_error(e),
+                };
                 // Wait for the backoff interval
                 thread::sleep(std::time::Duration::from_millis(backoff_interval));
             }
@@ -153,6 +162,7 @@ fn choose_backend_url(ctx: &mut SgRoutePluginContext) -> String {
         ctx.get_req_uri().to_string()
     }
 }
+
 mod expiring_map {
     use std::collections::{HashMap, VecDeque};
 
@@ -226,7 +236,6 @@ mod expiring_map {
     #[cfg(test)]
     #[allow(clippy::unwrap_used)]
     mod tests {
-
         use super::ExpireMap;
 
         #[test]
@@ -236,13 +245,13 @@ mod expiring_map {
             expire_map.insert("b".to_string(), Some(vec![1, 2, 3]), std::time::Duration::from_secs(1).as_millis());
             expire_map.insert("c".to_string(), Some(vec![1, 2, 3]), std::time::Duration::from_secs(2).as_millis());
             expire_map.insert("d".to_string(), Some(vec![1, 2, 3]), std::time::Duration::from_secs(3).as_millis());
-            assert!(expire_map.len() == 4);
+            assert_eq!(expire_map.len(), 4);
 
             std::thread::sleep(std::time::Duration::from_secs(2));
 
             assert!(expire_map.get("a").is_none());
             assert!(expire_map.remove("a").is_none());
-            assert!(expire_map.len() == 1);
+            assert_eq!(expire_map.len(), 1);
 
             let mut expire_map = ExpireMap::<Option<Vec<u8>>>::new();
             expire_map.insert("a".to_string(), Some(vec![1, 2, 3]), 1);
@@ -254,7 +263,7 @@ mod expiring_map {
 
             assert!(expire_map.get("a").is_none());
             assert!(expire_map.remove("c").is_none());
-            assert!(expire_map.len() == 2);
+            assert_eq!(expire_map.len(), 2);
         }
     }
 }
@@ -265,6 +274,7 @@ mod tests {
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;
     use tardis::{basic::error::TardisError, tokio};
+    use crate::functions::http_client;
 
     use crate::plugins::{context::SgRoutePluginContext, filters::SgPluginFilter};
 
@@ -273,7 +283,7 @@ mod tests {
     #[tokio::test]
     async fn test_retry() {
         let filter_retry = SgFilterRetry { ..Default::default() };
-
+        http_client::init().unwrap();
         let ctx = SgRoutePluginContext::new(
             Method::GET,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
