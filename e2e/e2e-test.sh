@@ -200,9 +200,28 @@ jsonpath "$.url" == "http://${cluster_ip}:9000/get"
 EOF
 hurl --test redis.hurl -v
 
-#TODO
+
 echo "============[websocket]no backend test============"
+sudo apt update && sudo apt install -y nodejs npm
+npm install -g wscat
+
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_test.yaml
+
+echo hi | wscat -c "ws://${cluster_ip}:9000"
+
+command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000")
+
+expected_output="Expected output"  # 设置预期的输出
+
+if [ "$command_output" = "$expected_output" ]; then
+    echo "Output matches the expected value."
+else
+    echo "Output does not match the expected value."
+    exit 1
+fi
+
 echo "============[websocket]basic test============"
+#TODO
 echo "============[httproute]hostnames test============"
 echo "============[httproute]rule match test============"
 echo "============[httproute]timeout test============"

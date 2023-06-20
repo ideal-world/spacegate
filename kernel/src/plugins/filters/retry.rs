@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, thread};
+use std::{sync::Arc, thread};
 
 use async_trait::async_trait;
 use hyper::Body;
@@ -107,7 +107,7 @@ impl SgPluginFilter for SgFilterRetry {
     async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.is_resp_error() {
             let mut req_body_cache = REQUEST_BODY.lock().await;
-            let req_body = req_body_cache.remove(&ctx.get_request_id()).flatten();
+            let req_body = req_body_cache.remove(ctx.get_request_id()).flatten();
             for i in 0..self.retries {
                 let retry_count = i + 1;
                 let backoff_interval = match self.backoff {
@@ -183,6 +183,7 @@ mod expiring_map {
         }
     }
 
+    #[allow(dead_code)]
     impl<V> ExpireMap<V, String> {
         pub fn remove(&mut self, k: &str) -> Option<V> {
             self.remove_expired_items();
