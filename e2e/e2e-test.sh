@@ -207,11 +207,12 @@ npm install -g wscat
 
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_test.yaml
 
+echo "wscat -c "
 echo hi | wscat -c "ws://${cluster_ip}:9000"
 
 command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000")
 
-expected_output="Expected output"  # 设置预期的输出
+expected_output=""
 
 if [ "$command_output" = "$expected_output" ]; then
     echo "Output matches the expected value."
