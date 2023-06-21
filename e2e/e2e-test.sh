@@ -207,9 +207,6 @@ npm install -g wscat
 
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_test.yaml
 
-echo "wscat -c "
-echo hi | wscat -c "ws://${cluster_ip}:9000"
-
 command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000")
 
 expected_output=""
@@ -222,6 +219,27 @@ else
 fi
 
 echo "============[websocket]basic test============"
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
+
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket_echo
+sleep 5
+
+echo "wscat:========="
+echo hi | wscat -c "ws://${cluster_ip}:9000/echo"
+echo hi | wscat -c "ws://${cluster_ip}:9000/echo"
+
+command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000/echo")
+
+expected_output="hi"
+
+if [ "$command_output" = "$expected_output" ]; then
+    echo "Output matches the expected value."
+else
+    echo "Output does not match the expected value."
+    exit 1
+fi
+
 #TODO
 echo "============[httproute]hostnames test============"
 echo "============[httproute]rule match test============"
