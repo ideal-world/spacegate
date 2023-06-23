@@ -21,6 +21,7 @@ impl SgPluginFilterDef for SgFilterMaintenanceDef {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct SgFilterMaintenance {
     is_enabled: bool,
     title: Option<String>,

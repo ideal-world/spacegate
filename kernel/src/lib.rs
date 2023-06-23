@@ -1,6 +1,8 @@
 #![warn(clippy::unwrap_used)]
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
+pub use http;
+pub use hyper;
 use plugins::filters::{self, SgPluginFilterDef};
 use tardis::{basic::result::TardisResult, log, tokio::signal};
 

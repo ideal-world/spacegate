@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, thread};
+use std::{sync::Arc, thread};
 
 use async_trait::async_trait;
 use hyper::Body;
@@ -107,7 +107,7 @@ impl SgPluginFilter for SgFilterRetry {
     async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.is_resp_error() {
             let mut req_body_cache = REQUEST_BODY.lock().await;
-            let req_body = req_body_cache.remove(&ctx.get_request_id()).flatten();
+            let req_body = req_body_cache.remove(ctx.get_request_id()).flatten();
             for i in 0..self.retries {
                 let retry_count = i + 1;
                 let backoff_interval = match self.backoff {
@@ -163,6 +163,8 @@ fn choose_backend_url(ctx: &mut SgRoutePluginContext) -> String {
     }
 }
 
+//TODO fix: Severe impact on performance .\
+// It is possible that high concurrency may drag down performance (Above 500k QPS)
 mod expiring_map {
     use std::collections::{HashMap, VecDeque};
 
@@ -183,6 +185,7 @@ mod expiring_map {
         }
     }
 
+    #[allow(dead_code)]
     impl<V> ExpireMap<V, String> {
         pub fn remove(&mut self, k: &str) -> Option<V> {
             self.remove_expired_items();
@@ -191,17 +194,8 @@ mod expiring_map {
 
         pub fn insert(&mut self, k: String, v: V, millis: u128) -> Option<V> {
             let expire = millis + Utc::now().timestamp_millis() as u128;
-            let a = self.expire_time.iter().position(|(_, x)| x >= &expire);
-            if let Some(index) = a {
-                if index <= self.expire_time.len() {
-                    self.expire_time.insert(index, (k.clone(), expire));
-                } else {
-                    self.expire_time.push_back((k.clone(), expire));
-                }
-            } else {
-                self.expire_time.push_back((k.clone(), expire));
-            }
-
+            let idx = self.expire_time.partition_point(|(_, x)| x < &expire);
+            self.expire_time.insert(idx, (k.clone(), expire));
             self.base.insert(k, v)
         }
 
@@ -236,8 +230,8 @@ mod expiring_map {
     #[cfg(test)]
     #[allow(clippy::unwrap_used)]
     mod tests {
-        use super::ExpireMap;
 
+        use super::ExpireMap;
         #[test]
         fn test() {
             let mut expire_map = ExpireMap::<Option<Vec<u8>>>::new();
@@ -254,10 +248,16 @@ mod expiring_map {
             assert_eq!(expire_map.len(), 1);
 
             let mut expire_map = ExpireMap::<Option<Vec<u8>>>::new();
-            expire_map.insert("a".to_string(), Some(vec![1, 2, 3]), 1);
-            expire_map.insert("b".to_string(), Some(vec![1, 2, 3]), 3);
+            for i in 0..50 {
+                let mut a = vec![1, 2, 3];
+                for _ in 0..i {
+                    a.push(1)
+                }
+                expire_map.insert(format!("a{}", i), Some(a), 1);
+            }
+            expire_map.insert("b".to_string(), Some(vec![1, 2, 3]), 4);
             expire_map.insert("c".to_string(), Some(vec![1, 2, 3]), 2);
-            expire_map.insert("d".to_string(), Some(vec![1, 2, 3]), 4);
+            expire_map.insert("d".to_string(), Some(vec![1, 2, 3]), 5);
 
             std::thread::sleep(std::time::Duration::from_millis(2));
 
