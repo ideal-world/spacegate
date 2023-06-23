@@ -1,7 +1,7 @@
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: HTTPRoute
 metadata:
-  name: websocket_echo
+  name: websocket-echo
 spec:
   parentRefs:
   - name: gateway
@@ -17,25 +17,25 @@ spec:
         type: PathPrefix
         value: /echo
     backendRefs:
-    - name: websocket_echo
+    - name: websocket-echo
       port: 80
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: websocket_echo
+  name: websocket-echo
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: websocket_echo
+      app: websocket-echo
   template:
     metadata:
       labels:
-        app: websocket_echo
+        app: websocket-echo
     spec:
       containers:
-      - name: websocket_echo
+      - name: websocket-echo
         image: pvtmert/websocketd
         ports:
         - containerPort: 80
@@ -44,12 +44,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: websocket_echo
+  name: websocket-echo
 spec:
   ports:
   - port: 80
     targetPort: 80
-    protocol: WS
+    protocol: TCP
     name: ws
   selector:
-    app: websocket_echo
+    app: websocket-echo
