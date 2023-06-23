@@ -194,6 +194,9 @@ sudo apt-get install redis-tools
 
 redis-cli
 
+echo "redis-cli CLIENT LIST "
+redis-cli CLIENT LIST
+
 client_count=$(redis-cli CLIENT LIST | wc -l)
 
 if [ "$client_count" -gt 1 ]; then
