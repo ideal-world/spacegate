@@ -185,7 +185,7 @@ hurl --test mult_listeners.hurl -v
 
 echo "============[gateway]redis connction test============"
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
-kubectl --kubeconfig /home/runner/.kube/config apply -f redis_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f gateway_redis_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=redis
 kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis-service:6379"
 sleep 1
@@ -205,7 +205,7 @@ echo "============[websocket]no backend test============"
 sudo apt update && sudo apt install -y nodejs npm
 npm install -g wscat
 
-kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 
 command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000")
 
@@ -219,7 +219,7 @@ else
 fi
 
 echo "============[websocket]basic test============"
-kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
 
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket_echo
@@ -247,6 +247,9 @@ echo "============[httproute]timeout test============"
 echo "============[httproute]backend with k8s service test============"
 echo "============[httproute]backend weight test============"
 echo "============[filter]backend level test============"
+kubectl --kubeconfig /home/runner/.kube/config apply -f filter_base_test.yaml
+
+
 echo "============[filter]rule level test============"
 echo "============[filter]routing level test============"
 echo "============[filter]global level test============"
