@@ -247,12 +247,22 @@ echo "============[httproute]timeout test============"
 echo "============[httproute]backend with k8s service test============"
 echo "============[httproute]backend weight test============"
 echo "============[filter]backend level test============"
-kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
-kubectl --kubeconfig /home/runner/.kube/config apply -f filter_base_test.yaml
-
-
-
 echo "============[filter]rule level test============"
 echo "============[filter]routing level test============"
 echo "============[filter]global level test============"
+kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
+sleep 1
+
+curl http://${cluster_ip}:8110
+
+cat>filter_global.hurl<<EOF
+GET http://${cluster_ip}:8110
+
+HTTP 200
+[Asserts]
+
+EOF
+hurl --test filter_global -v
+
 echo "============[filter]multiple levels test============"
