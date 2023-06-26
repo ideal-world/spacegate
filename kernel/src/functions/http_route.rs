@@ -305,7 +305,6 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
     } else {
         None
     };
-    
 
     let backend_filters = backend.map(|backend| &backend.filters);
     let rule_filters = matched_rule_inst.map(|rule| &rule.filters);
