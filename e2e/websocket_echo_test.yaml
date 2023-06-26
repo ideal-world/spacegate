@@ -39,7 +39,7 @@ spec:
         image: pvtmert/websocketd
         ports:
         - containerPort: 80
-        command: ["--port", "80","tee"]
+        args: ["--port", "80","tee"]
 ---
 apiVersion: v1
 kind: Service

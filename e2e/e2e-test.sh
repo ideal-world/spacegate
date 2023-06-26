@@ -247,7 +247,9 @@ echo "============[httproute]timeout test============"
 echo "============[httproute]backend with k8s service test============"
 echo "============[httproute]backend weight test============"
 echo "============[filter]backend level test============"
+kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f filter_base_test.yaml
+
 
 
 echo "============[filter]rule level test============"
