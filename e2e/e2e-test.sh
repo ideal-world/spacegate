@@ -202,6 +202,7 @@ hurl --test redis.hurl -v
 
 
 echo "============[websocket]no backend test============"
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
 sudo apt update && sudo apt install -y nodejs npm
 npm install -g wscat
 
@@ -222,7 +223,7 @@ echo "============[websocket]basic test============"
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
 
-kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket_echo
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
 sleep 5
 
 echo "wscat:========="

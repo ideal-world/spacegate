@@ -7,11 +7,11 @@ spec:
   - name: gateway
   rules:
   - filters:
-      - type: URLRewrite
-        urlRewrite:
-          path:
-            type: ReplacePrefixMatch
-            replacePrefixMatch: /
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
     matches:
     - path:
         type: PathPrefix

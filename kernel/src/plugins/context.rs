@@ -149,6 +149,45 @@ impl SgRoutePluginContext {
         }
     }
 
+    pub fn new_ws(
+        method: Method,
+        kind: SgPluginFilterKind,
+        uri: Uri,
+        version: Version,
+        headers: HeaderMap<HeaderValue>,
+        remote_addr: SocketAddr,
+        gateway_name: String,
+        chose_route_rule: Option<ChoseHttpRouteRuleInst>,
+    ) -> Self {
+        Self {
+            request_id: TardisFuns::field.nanoid(),
+            raw_req_method: method,
+            raw_req_uri: uri,
+            raw_req_version: version,
+            raw_req_body: None,
+            raw_req_headers: headers,
+            raw_req_remote_addr: remote_addr,
+            mod_req_method: None,
+            mod_req_uri: None,
+            mod_req_version: None,
+            mod_req_body: None,
+            mod_req_headers: None,
+            raw_resp_status_code: StatusCode::OK,
+            raw_resp_headers: HeaderMap::new(),
+            raw_resp_body: None,
+            raw_resp_err: None,
+            mod_resp_status_code: None,
+            mod_resp_headers: None,
+            mod_resp_body: None,
+            ext: HashMap::new(),
+            action: SgRouteFilterRequestAction::None,
+            gateway_name,
+            chose_route_rule,
+            chose_backend: None,
+            request_kind: kind,
+        }
+    }
+
     ///The following two methods can only be used to fill in the context [resp] [resp_from_error]
     pub fn resp(mut self, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
         self.raw_resp_status_code = status_code;
