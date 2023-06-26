@@ -241,9 +241,8 @@ mod tests {
 
         let mut header = HeaderMap::new();
         header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
-        let ctx = SgRoutePluginContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::POST,
-            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/"),
             Version::HTTP_11,
             header,
@@ -280,9 +279,8 @@ mod tests {
 
         let mut header = HeaderMap::new();
         header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
-        let ctx = SgRoutePluginContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::POST,
-            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/"),
             Version::HTTP_11,
             header,

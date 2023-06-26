@@ -284,9 +284,8 @@ mod tests {
     async fn test_retry() {
         let filter_retry = SgFilterRetry { ..Default::default() };
         http_client::init().unwrap();
-        let ctx = SgRoutePluginContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::GET,
-            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),

@@ -128,9 +128,8 @@ mod tests {
             ..Default::default()
         };
 
-        let ctx = SgRoutePluginContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::POST,
-            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),

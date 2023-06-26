@@ -28,6 +28,7 @@ pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> Ta
     {
         // Initialize cache instances
         if let Some(url) = &gateway.parameters.redis_url {
+            log::trace!("Initialize cache client...url:{url}");
             functions::cache_client::init(gateway_name, url).await?;
         }
     }

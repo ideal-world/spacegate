@@ -170,9 +170,8 @@ mod tests {
         };
 
         fn new_ctx() -> SgRoutePluginContext {
-            SgRoutePluginContext::new(
+            SgRoutePluginContext::new_http(
                 Method::GET,
-                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
                 Version::HTTP_11,
                 HeaderMap::new(),

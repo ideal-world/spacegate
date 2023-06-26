@@ -80,9 +80,8 @@ impl SgPluginFilter for SgFilterInject {
                 .unwrap_or(real_url);
             new_req_headers.remove(SG_INJECT_REAL_METHOD);
             new_req_headers.remove(SG_INJECT_REAL_URL);
-            ctx = SgRoutePluginContext::new(
+            ctx = SgRoutePluginContext::new_http(
                 new_req_method,
-                ctx.get_request_kind().clone(),
                 new_req_url,
                 *ctx.get_req_version(),
                 new_req_headers.clone(),
@@ -128,9 +127,8 @@ mod tests {
             ..Default::default()
         };
 
-        let ctx = SgRoutePluginContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::POST,
-            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),

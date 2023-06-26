@@ -119,9 +119,8 @@ mod tests {
         let mut req_headers = HeaderMap::new();
         req_headers.insert("X-Test1", "Hi".parse().unwrap());
         req_headers.insert("X-1", "Hi".parse().unwrap());
-        let ctx = SgRoutePluginContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::GET,
-            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/spi/cache/1"),
             Version::HTTP_11,
             HeaderMap::new(),

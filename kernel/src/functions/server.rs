@@ -25,7 +25,6 @@ use tardis::{
     futures_util::future::join_all,
     log::{self},
     tokio::{self, sync::watch::Sender, task::JoinHandle},
-    web::tokio_tungstenite::tungstenite::protocol,
     TardisFuns,
 };
 use tardis::{

@@ -139,9 +139,8 @@ mod tests {
             }),
             None,
             false,
-            SgRoutePluginContext::new(
+            SgRoutePluginContext::new_http(
                 Method::GET,
-                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -166,9 +165,8 @@ mod tests {
             }),
             Some(20000),
             false,
-            SgRoutePluginContext::new(
+            SgRoutePluginContext::new_http(
                 Method::GET,
-                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -194,9 +192,8 @@ mod tests {
             }),
             Some(20000),
             false,
-            SgRoutePluginContext::new(
+            SgRoutePluginContext::new_http(
                 Method::POST,
-                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/post?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -222,9 +219,8 @@ mod tests {
             }),
             Some(5),
             false,
-            SgRoutePluginContext::new(
+            SgRoutePluginContext::new_http(
                 Method::GET,
-                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -248,9 +244,8 @@ mod tests {
             }),
             Some(20000),
             false,
-            SgRoutePluginContext::new(
+            SgRoutePluginContext::new_http(
                 Method::GET,
-                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -271,9 +266,8 @@ mod tests {
             None,
             Some(20000),
             true,
-            SgRoutePluginContext::new(
+            SgRoutePluginContext::new_http(
                 Method::GET,
-                SgPluginFilterKind::Http,
                 Uri::from_static("http://postman-echo.com/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),

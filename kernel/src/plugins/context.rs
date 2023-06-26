@@ -109,9 +109,8 @@ pub enum SgRouteFilterRequestAction {
 
 #[allow(dead_code)]
 impl SgRoutePluginContext {
-    pub fn new(
+    pub fn new_http(
         method: Method,
-        kind: SgPluginFilterKind,
         uri: Uri,
         version: Version,
         headers: HeaderMap<HeaderValue>,
@@ -145,13 +144,12 @@ impl SgRoutePluginContext {
             gateway_name,
             chose_route_rule,
             chose_backend: None,
-            request_kind: kind,
+            request_kind: SgPluginFilterKind::Http,
         }
     }
 
     pub fn new_ws(
         method: Method,
-        kind: SgPluginFilterKind,
         uri: Uri,
         version: Version,
         headers: HeaderMap<HeaderValue>,
@@ -184,7 +182,7 @@ impl SgRoutePluginContext {
             gateway_name,
             chose_route_rule,
             chose_backend: None,
-            request_kind: kind,
+            request_kind: SgPluginFilterKind::Ws,
         }
     }
 

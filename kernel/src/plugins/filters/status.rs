@@ -205,9 +205,8 @@ mod tests {
             weight: mock_backend_ref.weight,
             filters: vec![],
         };
-        let mut ctx = SgRoutePluginContext::new(
+        let mut ctx = SgRoutePluginContext::new_http(
             Method::POST,
-            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),
