@@ -82,8 +82,11 @@ impl CompressionType {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterCompression {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
 
     async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
@@ -212,6 +215,8 @@ fn get_encode_type(header_value: Option<&HeaderValue>) -> Option<CompressionType
 #[allow(clippy::unwrap_used)]
 mod tests {
 
+    use crate::plugins::filters::SgPluginFilterKind;
+
     use super::*;
     use async_compression::tokio::bufread::GzipDecoder;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
@@ -238,6 +243,7 @@ mod tests {
         header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
         let ctx = SgRoutePluginContext::new(
             Method::POST,
+            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/"),
             Version::HTTP_11,
             header,
@@ -276,6 +282,7 @@ mod tests {
         header.insert(header::ACCEPT_ENCODING, CompressionType::Gzip.into());
         let ctx = SgRoutePluginContext::new(
             Method::POST,
+            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/"),
             Version::HTTP_11,
             header,

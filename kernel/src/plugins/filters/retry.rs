@@ -78,12 +78,12 @@ pub enum BackOff {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterRetry {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
-    }
-
-    fn accept_error_response(&self) -> bool {
-        true
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            accept_error_response: true,
+            ..Default::default()
+        }
     }
 
     async fn init(&self, _http_route_rules: &[SgHttpRouteRule]) -> TardisResult<()> {
@@ -271,7 +271,7 @@ mod expiring_map {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use crate::functions::http_client;
+    use crate::{functions::http_client, plugins::filters::SgPluginFilterKind};
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;
     use tardis::{basic::error::TardisError, tokio};
@@ -286,6 +286,7 @@ mod tests {
         http_client::init().unwrap();
         let ctx = SgRoutePluginContext::new(
             Method::GET,
+            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),

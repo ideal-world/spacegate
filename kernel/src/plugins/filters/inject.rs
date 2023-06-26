@@ -37,8 +37,11 @@ const SG_INJECT_REAL_URL: &str = "Sg_Inject_Real_Url";
 
 #[async_trait]
 impl SgPluginFilter for SgFilterInject {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
 
     async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
@@ -79,6 +82,7 @@ impl SgPluginFilter for SgFilterInject {
             new_req_headers.remove(SG_INJECT_REAL_URL);
             ctx = SgRoutePluginContext::new(
                 new_req_method,
+                ctx.get_request_kind().clone(),
                 new_req_url,
                 *ctx.get_req_version(),
                 new_req_headers.clone(),
@@ -107,6 +111,8 @@ impl SgPluginFilter for SgFilterInject {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use crate::plugins::filters::SgPluginFilterKind;
+
     use super::*;
     use http::{HeaderMap, StatusCode, Uri, Version};
     use hyper::Body;
@@ -124,6 +130,7 @@ mod tests {
 
         let ctx = SgRoutePluginContext::new(
             Method::POST,
+            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),

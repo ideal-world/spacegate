@@ -30,10 +30,12 @@ pub struct SgFilterMaintenance {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterMaintenance {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
-
     async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }

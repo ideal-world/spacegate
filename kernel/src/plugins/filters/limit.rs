@@ -93,10 +93,12 @@ lazy_static! {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterLimit {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
-
     async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
@@ -143,7 +145,7 @@ impl SgPluginFilter for SgFilterLimit {
 mod tests {
     use std::time::Duration;
 
-    use crate::functions::cache_client;
+    use crate::{functions::cache_client, plugins::filters::SgPluginFilterKind};
 
     use super::*;
     use http::{HeaderMap, Method, Uri, Version};
@@ -170,6 +172,7 @@ mod tests {
         fn new_ctx() -> SgRoutePluginContext {
             SgRoutePluginContext::new(
                 Method::GET,
+                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
                 Version::HTTP_11,
                 HeaderMap::new(),

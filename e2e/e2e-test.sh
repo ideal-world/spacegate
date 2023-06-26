@@ -227,7 +227,6 @@ sleep 5
 
 echo "wscat:========="
 echo hi | wscat -c "ws://${cluster_ip}:9000/echo"
-echo hi | wscat -c "ws://${cluster_ip}:9000/echo"
 
 command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000/echo")
 

@@ -12,6 +12,8 @@ use crate::config::gateway_dto::SgProtocol;
 
 use crate::functions::http_route::{SgBackend, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
 
+use super::filters::SgPluginFilterKind;
+
 /// Chose http route rule
 #[derive(Default, Debug)]
 pub struct ChoseHttpRouteRuleInst {
@@ -67,6 +69,7 @@ impl AvailableBackendInst {
 #[derive(Debug)]
 pub struct SgRoutePluginContext {
     request_id: String,
+    request_kind: SgPluginFilterKind,
 
     raw_req_method: Method,
     raw_req_uri: Uri,
@@ -108,6 +111,7 @@ pub enum SgRouteFilterRequestAction {
 impl SgRoutePluginContext {
     pub fn new(
         method: Method,
+        kind: SgPluginFilterKind,
         uri: Uri,
         version: Version,
         headers: HeaderMap<HeaderValue>,
@@ -141,6 +145,7 @@ impl SgRoutePluginContext {
             gateway_name,
             chose_route_rule,
             chose_backend: None,
+            request_kind: kind,
         }
     }
 
@@ -161,6 +166,10 @@ impl SgRoutePluginContext {
 
     pub fn get_request_id(&self) -> &str {
         &self.request_id
+    }
+
+    pub fn get_request_kind(&self) -> &SgPluginFilterKind {
+        &self.request_kind
     }
 
     pub fn is_resp_error(&self) -> bool {

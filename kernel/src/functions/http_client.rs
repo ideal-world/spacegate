@@ -122,7 +122,7 @@ mod tests {
             http_client::{init, request},
             http_route::SgBackend,
         },
-        plugins::context::SgRoutePluginContext,
+        plugins::{context::SgRoutePluginContext, filters::SgPluginFilterKind},
     };
 
     #[tokio::test]
@@ -141,6 +141,7 @@ mod tests {
             false,
             SgRoutePluginContext::new(
                 Method::GET,
+                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -167,6 +168,7 @@ mod tests {
             false,
             SgRoutePluginContext::new(
                 Method::GET,
+                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -194,6 +196,7 @@ mod tests {
             false,
             SgRoutePluginContext::new(
                 Method::POST,
+                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/post?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -221,6 +224,7 @@ mod tests {
             false,
             SgRoutePluginContext::new(
                 Method::GET,
+                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -246,6 +250,7 @@ mod tests {
             false,
             SgRoutePluginContext::new(
                 Method::GET,
+                SgPluginFilterKind::Http,
                 Uri::from_static("http://sg.idealworld.group/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
@@ -268,6 +273,7 @@ mod tests {
             true,
             SgRoutePluginContext::new(
                 Method::GET,
+                SgPluginFilterKind::Http,
                 Uri::from_static("http://postman-echo.com/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),

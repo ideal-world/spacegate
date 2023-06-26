@@ -38,8 +38,11 @@ pub enum SgFilterHeaderModifierKind {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterHeaderModifier {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
 
     async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
@@ -89,6 +92,8 @@ impl SgPluginFilter for SgFilterHeaderModifier {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use crate::plugins::filters::SgPluginFilterKind;
+
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
@@ -116,6 +121,7 @@ mod tests {
         req_headers.insert("X-1", "Hi".parse().unwrap());
         let ctx = SgRoutePluginContext::new(
             Method::GET,
+            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/spi/cache/1"),
             Version::HTTP_11,
             HeaderMap::new(),

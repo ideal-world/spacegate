@@ -44,10 +44,12 @@ pub struct SgFilterRedirect {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterRedirect {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
-
     async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
@@ -96,7 +98,7 @@ mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
         functions::http_route::{SgHttpPathMatchInst, SgHttpRouteRuleInst},
-        plugins::context::ChoseHttpRouteRuleInst,
+        plugins::{context::ChoseHttpRouteRuleInst, filters::SgPluginFilterKind},
     };
 
     use super::*;
@@ -128,6 +130,7 @@ mod tests {
 
         let ctx = SgRoutePluginContext::new(
             Method::POST,
+            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),

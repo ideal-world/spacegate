@@ -7,7 +7,7 @@ use crate::{
     },
     plugins::{
         context::{ChoseHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
-        filters::{self, BoxSgPluginFilter},
+        filters::{self, BoxSgPluginFilter, SgPluginFilterKind},
     },
 };
 use http::{header::UPGRADE, uri::Scheme, Request, Response};
@@ -306,6 +306,11 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         None
     };
 
+    let sg_plugin_filter_kind = match req_scheme {
+        "http" | "https" => SgPluginFilterKind::Http,
+        "ws" | "wss" => SgPluginFilterKind::Ws,
+        _ => unreachable!(),
+    };
     if request.headers().get(UPGRADE).map(|v| &v.to_str().expect("[SG.Websocket] Upgrade header value illegal:  is not ascii").to_lowercase() == "websocket").unwrap_or(false) {
         #[cfg(feature = "ws")]
         {
@@ -340,6 +345,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         &gateway_inst.filters,
         matched_rule_inst,
         matched_match_inst,
+        sg_plugin_filter_kind,
     )
     .await?;
 
@@ -527,9 +533,11 @@ async fn process_req_filters(
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
     matched_rule_inst: Option<&SgHttpRouteRuleInst>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
+    filter_kind: SgPluginFilterKind,
 ) -> TardisResult<SgRoutePluginContext> {
     let mut ctx = SgRoutePluginContext::new(
         request.method().clone(),
+        filter_kind,
         request.uri().clone(),
         request.version(),
         request.headers().clone(),

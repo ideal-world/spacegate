@@ -81,22 +81,20 @@ pub type BoxSgPluginFilter = Box<dyn SgPluginFilter>;
 
 #[async_trait]
 pub trait SgPluginFilter: Send + Sync + 'static {
-    fn kind(&self) -> SgPluginFilterKind;
+    /// Enable the filter to have a state that determines
+    /// whether to execute the filter at runtime
+    fn accept(&self) -> SgPluginFilterAccept {
+        SgPluginFilterAccept::default()
+    }
 
     /// Whether to filter the response
     fn before_resp_filter_check(&self, ctx: &SgRoutePluginContext) -> bool {
-        if ctx.is_resp_error() {
-            self.accept_error_response()
+        let accept_error_response = if ctx.is_resp_error() { self.accept().accept_error_response } else { true };
+        if accept_error_response {
+            self.accept().kind.contains(ctx.get_request_kind())
         } else {
-            true
+            false
         }
-    }
-
-    /// Whether to accept the error response, default is false .
-    ///
-    /// if filter can accept the error response, it should return true
-    fn accept_error_response(&self) -> bool {
-        false
     }
 
     async fn init(&self, http_route_rule: &[SgHttpRouteRule]) -> TardisResult<()>;
@@ -191,12 +189,28 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
 }
 
 // TODO
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SgPluginFilterKind {
     Http,
     Grpc,
     Ws,
+}
+#[derive(Debug, Clone)]
+pub struct SgPluginFilterAccept {
+    pub kind: Vec<SgPluginFilterKind>,
+    /// Whether to accept the error response, default is false .
+    ///
+    /// if filter can accept the error response, it should return true
+    pub accept_error_response: bool,
+}
+
+impl Default for SgPluginFilterAccept {
+    fn default() -> Self {
+        Self {
+            kind: vec![SgPluginFilterKind::Http],
+            accept_error_response: false,
+        }
+    }
 }
 
 #[cfg(test)]

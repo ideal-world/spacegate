@@ -11,7 +11,7 @@ use spacegate_kernel::{
         plugin_filter_dto::SgRouteFilter,
     },
     functions::http_route::SgHttpRouteMatchInst,
-    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind},
+    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef},
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -34,10 +34,6 @@ pub struct SgFilterAuth {}
 
 #[async_trait]
 impl SgPluginFilter for SgFilterAuth {
-    fn kind(&self) -> SgPluginFilterKind {
-        SgPluginFilterKind::Http
-    }
-
     async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }

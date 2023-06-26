@@ -64,12 +64,12 @@ impl Default for SgFilterStatus {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterStatus {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
-    }
-
-    fn accept_error_response(&self) -> bool {
-        true
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            accept_error_response: true,
+            ..Default::default()
+        }
     }
 
     async fn init(&self, http_route_rules: &[SgHttpRouteRule]) -> TardisResult<()> {
@@ -169,7 +169,7 @@ mod tests {
                     status_plugin::{get_status, Status},
                     SgFilterStatus,
                 },
-                SgPluginFilter, SgRoutePluginContext,
+                SgPluginFilter, SgPluginFilterKind, SgRoutePluginContext,
             },
         },
     };
@@ -207,6 +207,7 @@ mod tests {
         };
         let mut ctx = SgRoutePluginContext::new(
             Method::POST,
+            SgPluginFilterKind::Http,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
             HeaderMap::new(),
