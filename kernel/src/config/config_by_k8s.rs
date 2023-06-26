@@ -293,9 +293,14 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         if gateway_obj.spec.addresses.is_some() {
             return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.addresses] not supported yet", ""));
         }
-        if gateway_obj.spec.listeners.iter().any(|listener| listener.protocol.to_lowercase() != "https" && listener.protocol.to_lowercase() != "http") {
+        if gateway_obj
+            .spec
+            .listeners
+            .iter()
+            .any(|listener| listener.protocol.to_lowercase() != "https" && listener.protocol.to_lowercase() != "http" && listener.protocol.to_lowercase() != "ws")
+        {
             return Err(TardisError::not_implemented(
-                "[SG.Config] Gateway [spec.listener.protocol!=HTTPS|HTTP] not supported yet",
+                "[SG.Config] Gateway [spec.listener.protocol!=HTTPS|HTTP|ws] not supported yet",
                 "",
             ));
         }
@@ -394,6 +399,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                             protocol: match listener.protocol.to_lowercase().as_str() {
                                 "http" => SgProtocol::Http,
                                 "https" => SgProtocol::Https,
+                                "ws" => SgProtocol::Ws,
                                 _ => {
                                     return Err(TardisError::not_implemented(
                                         &format!("[SG.Config] Gateway [spec.listener.protocol={}] not supported yet", listener.protocol),

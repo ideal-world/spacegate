@@ -4,8 +4,12 @@ use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHt
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 use async_trait::async_trait;
+use http::HeaderName;
 use serde::{Deserialize, Serialize};
-use tardis::{basic::result::TardisResult, TardisFuns};
+use tardis::{
+    basic::{error::TardisError, result::TardisResult},
+    TardisFuns,
+};
 
 pub const CODE: &str = "header_modifier";
 
@@ -57,7 +61,8 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
         if let Some(remove) = &self.remove {
             for k in remove {
-                ctx.remove_req_header(k)?;
+                ctx.get_req_headers_mut()
+                    .remove(HeaderName::try_from(k).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {k} parsing error: {error}"), ""))?);
             }
         }
         Ok((true, ctx))

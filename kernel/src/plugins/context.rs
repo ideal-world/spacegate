@@ -219,6 +219,13 @@ impl SgRoutePluginContext {
         self.mod_req_headers.as_ref().expect("Unreachable code")
     }
 
+    pub fn get_req_headers_mut(&mut self) -> &mut HeaderMap<HeaderValue> {
+        if self.mod_req_headers.is_none() {
+            self.mod_req_headers = Some(self.raw_req_headers.clone());
+        }
+        self.mod_req_headers.as_mut().expect("Unreachable code")
+    }
+
     pub fn set_req_headers(&mut self, req_headers: HeaderMap<HeaderValue>) {
         self.mod_req_headers = Some(req_headers);
     }
@@ -232,13 +239,6 @@ impl SgRoutePluginContext {
             HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
         );
-        Ok(())
-    }
-
-    pub fn remove_req_header(&mut self, key: &str) -> TardisResult<()> {
-        if let Some(headers) = self.mod_req_headers.as_mut() {
-            headers.remove(HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?);
-        }
         Ok(())
     }
 
@@ -308,6 +308,13 @@ impl SgRoutePluginContext {
             self.mod_resp_headers = Some(self.raw_resp_headers.clone());
         }
         self.mod_resp_headers.as_ref().expect("Unreachable code")
+    }
+
+    pub fn get_resp_headers_mut(&mut self) -> &mut HeaderMap<HeaderValue> {
+        if self.mod_resp_headers.is_none() {
+            self.mod_resp_headers = Some(self.raw_resp_headers.clone());
+        }
+        self.mod_resp_headers.as_mut().expect("Unreachable code")
     }
 
     pub fn set_resp_headers(&mut self, resp_headers: HeaderMap<HeaderValue>) {
