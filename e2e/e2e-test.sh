@@ -302,28 +302,26 @@ echo "============[httproute]rule match test============"
 echo "============[httproute]timeout test============"
 echo "============[httproute]backend with k8s service test============"
 echo "============[httproute]backend weight test============"
-echo "============[filter]backend level test============"
+echo "============[filter]routing level test============"
 kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
-sleep 1
+sleep 5
 
-cat>filter_backend.hurl<<EOF
+cat>filter_routing.hurl<<EOF
 GET http://${cluster_ip}:8110
 
 HTTP 200
 [Asserts]
 
 EOF
-hurl --test filter_backend.hurl -v
-
-echo "============[filter]rule level test============"
-echo "============[filter]routing level test============"
+hurl --test filter_routing.hurl -v
 echo "============[filter]global level test============"
+kubectl --kubeconfig /home/runner/.kube/config delete sgfilters --all
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
-sleep 1
+sleep 5
 
 curl http://${cluster_ip}:8110
 
