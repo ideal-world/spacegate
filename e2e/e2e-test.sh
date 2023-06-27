@@ -131,8 +131,7 @@ GET http://testhosts2:9000/echo/get
 
 HTTP 404
 [Asserts]
-header "content-length" != "0"
-jsonpath "$.msg" == "[SG] Hostname Not found"
+header "content-length" == "0"
 EOF
 
 hurl --test hostname_test.hurl -v
@@ -145,8 +144,7 @@ GET http://testhosts2:9000/echo/get
 
 HTTP 404
 [Asserts]
-header "content-length" != "0"
-jsonpath "$.msg" == "[SG] Hostname Not found"
+header "content-length" == "0"
 
 GET http://app.testhosts2:9000/echo/get
 
@@ -263,8 +261,7 @@ GET http://testhosts2.httproute:9000/echo/get
 
 HTTP 404
 [Asserts]
-header "content-length" != "0"
-jsonpath "$.msg" == "[SG] Hostname Not found"
+header "content-length" == "0"
 EOF
 
 hurl --test hostname_test.hurl -v
@@ -277,8 +274,7 @@ GET http://testhosts2.httproute:9000/echo/get
 
 HTTP 404
 [Asserts]
-header "content-length" != "0"
-jsonpath "$.msg" == "[SG] Hostname Not found"
+header "content-length" == "0"
 
 GET http://app.testhosts2.httproute:9000/echo/get
 
