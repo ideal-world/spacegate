@@ -201,12 +201,15 @@ hurl --test redis.hurl -v
 
 echo "============[websocket]no backend test============"
 kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
-sudo apt update && sudo apt install -y nodejs npm
-npm install -g wscat
+wget https://github.com/vi/websocat/releases/download/v1.11.0/websocat.x86_64-unknown-linux-musl
+chmod 770 websocat.x86_64-unknown-linux-musl
 
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 
-command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000")
+echo ====echo hi
+echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000"
+
+command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000")
 
 expected_output=""
 
@@ -224,17 +227,19 @@ kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
 sleep 5
 
-## todo find a websocket clinet
-command_output=$(echo hi | wscat -c "ws://${cluster_ip}:9000/echo")
+echo ====echo hi
+echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000"
+
+command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000")
 
 expected_output="hi"
 
-# if [ "$command_output" = "$expected_output" ]; then
-#     echo "Output matches the expected value."
-# else
-#     echo "Output does not match the expected value."
-#     exit 1
-# fi
+ if [ "$command_output" = "$expected_output" ]; then
+     echo "Output matches the expected value."
+ else
+     echo "Output does not match the expected value."
+     exit 1
+ fi
 
 #TODO
 echo "============[httproute]hostnames test============"
@@ -247,8 +252,11 @@ ${cluster_ip} app.testhosts2.httproute
 EOF
 
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
-kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "replace", "path": "/spec/hostnames/0", "value": "testhosts1.httproute"}]'
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/spec/hostnames", "value": "testhosts1.httproute"}]'
 sleep 1
+
+echo =====
+kubectl --kubeconfig /home/runner/.kube/config describe httproute echo
 
 cat>hostname_test.hurl<<EOF
 GET http://testhosts1.httproute:9000/echo/get
@@ -310,6 +318,6 @@ HTTP 200
 [Asserts]
 
 EOF
-hurl --test filter_global -v
+hurl --test filter_global.hurl -v
 
 echo "============[filter]multiple levels test============"
