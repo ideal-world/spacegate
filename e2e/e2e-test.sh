@@ -205,9 +205,6 @@ chmod 770 websocat.x86_64-unknown-linux-musl
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 sleep 5
 
-echo ====echo hi
-echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo"
-
 command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo")
 
 expected_output=""
@@ -226,11 +223,6 @@ kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
 sleep 5
 
-echo ====echo hi
-echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo"
-
-echo "kubectl logs -l app=spacegate -n spacegate"
-kubectl --kubeconfig /home/runner/.kube/config logs -l app=spacegate -n spacegate
 
 command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo")
 
@@ -305,8 +297,8 @@ echo "============[httproute]backend weight test============"
 echo "============[filter]routing level test============"
 kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
-kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 sleep 5
 
 cat>filter_routing.hurl<<EOF
