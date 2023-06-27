@@ -182,7 +182,7 @@ echo "============[gateway]redis connction test============"
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
 kubectl --kubeconfig /home/runner/.kube/config apply -f gateway_redis_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=redis
-kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis://redis-service:6379"
+kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis://redis-service.default:6379"
 sleep 1
 
 cat>redis.hurl<<EOF
