@@ -36,6 +36,9 @@ fn init_filter_defs() {
     #[cfg(feature = "cache")]
     filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilterLimitDef));
     filters.insert(compression::CODE.to_string(), Box::new(compression::SgFilterCompressionDef));
+    filters.insert(status::CODE.to_string(), Box::new(status::SgFilterStatusDef));
+    filters.insert(maintenance::CODE.to_string(), Box::new(maintenance::SgFilterMaintenanceDef));
+    filters.insert(retry::CODE.to_string(), Box::new(retry::SgFilterRetryDef));
     unsafe {
         FILTERS = Some(filters);
     }

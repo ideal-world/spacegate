@@ -246,9 +246,6 @@ kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/spec/hostnames", "value": ["testhosts1.httproute"]}]'
 sleep 1
 
-echo =====
-kubectl --kubeconfig /home/runner/.kube/config describe httproute echo
-
 cat>hostname_test.hurl<<EOF
 GET http://testhosts1.httproute:9000/echo/get
 
@@ -293,7 +290,7 @@ echo "============[httproute]backend weight test============"
 echo "============[filter]routing level test============"
 kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
-kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f filter_httproute_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 sleep 5
 
