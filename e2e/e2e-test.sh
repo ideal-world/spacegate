@@ -206,12 +206,12 @@ kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 sleep 5
 
 echo ====echo hi
-echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000"
+echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo"
 
 echo "kubectl logs -l app=spacegate -n spacegate"
 kubectl --kubeconfig /home/runner/.kube/config logs -l app=spacegate -n spacegate
 
-command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000")
+command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo")
 
 expected_output=""
 
@@ -230,9 +230,9 @@ kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l
 sleep 5
 
 echo ====echo hi
-echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000"
+echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo"
 
-command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000")
+command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo")
 
 expected_output="hi"
 
