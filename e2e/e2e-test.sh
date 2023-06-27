@@ -266,7 +266,7 @@ EOF
 
 hurl --test hostname_test.hurl -v
 
-kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "*.testhosts2.httproute"}]'
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "replace", "path": "/spec/hostnames/0", "value": "*.testhosts2.httproute"}]'
 sleep 1
 
 cat>hostname_test2.hurl<<EOF
