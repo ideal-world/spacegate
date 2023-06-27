@@ -106,9 +106,6 @@ certificate "Subject" == "C=CN, ST=HangZhou, O=idealworld, OU=idealworld, CN=www
 EOF
 hurl --test tls-test2.hurl --insecure --verbose
 
-
-curl --insecure "https://${cluster_ip}:9001/hi/get" -v
-
 echo "============[gateway]hostname test============"
 cat>>/etc/hosts<<EOF
 # test hostname
@@ -120,7 +117,7 @@ EOF
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "testhosts1"}]'
-sleep 1
+sleep 5
 
 cat>hostname_test.hurl<<EOF
 GET http://testhosts1:9000/echo/get
@@ -200,14 +197,19 @@ hurl --test redis.hurl -v
 
 
 echo "============[websocket]no backend test============"
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
 kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
 wget https://github.com/vi/websocat/releases/download/v1.11.0/websocat.x86_64-unknown-linux-musl
 chmod 770 websocat.x86_64-unknown-linux-musl
 
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
+sleep 5
 
 echo ====echo hi
 echo hi|./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000"
+
+echo "kubectl logs -l app=spacegate -n spacegate"
+kubectl --kubeconfig /home/runner/.kube/config logs -l app=spacegate -n spacegate
 
 command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000")
 
@@ -241,7 +243,6 @@ expected_output="hi"
      exit 1
  fi
 
-#TODO
 echo "============[httproute]hostnames test============"
 kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
@@ -302,6 +303,21 @@ echo "============[httproute]timeout test============"
 echo "============[httproute]backend with k8s service test============"
 echo "============[httproute]backend weight test============"
 echo "============[filter]backend level test============"
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
+sleep 1
+
+cat>filter_backend.hurl<<EOF
+GET http://${cluster_ip}:8110
+
+HTTP 200
+[Asserts]
+
+EOF
+hurl --test filter_backend.hurl -v
+
 echo "============[filter]rule level test============"
 echo "============[filter]routing level test============"
 echo "============[filter]global level test============"

@@ -26,7 +26,7 @@ pub struct SgGateway {
 pub struct SgParameters {
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
-    // Gateway Log_Level
+    /// Gateway Log_Level
     pub log_level: Option<String>,
 }
 
