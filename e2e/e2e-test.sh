@@ -243,7 +243,7 @@ ${cluster_ip} app.testhosts2.httproute
 EOF
 
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
-kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/spec/hostnames", "value": "testhosts1.httproute"}]'
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/spec/hostnames", "value": ["testhosts1.httproute"]}]'
 sleep 1
 
 echo =====
