@@ -20,6 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::vec::Vec;
 use std::{io, sync};
+use tardis::basic::tracing::TardisTracing;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
@@ -31,7 +32,6 @@ use tardis::{
     futures_util::{ready, FutureExt},
     tokio::sync::Mutex,
 };
-use tardis::basic::tracing::TardisTracing;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use super::http_route;
@@ -49,7 +49,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
         return Err(TardisError::bad_request("[SG.Server] Non-Http(s) protocols are not supported yet", ""));
     }
     if let Some(log_level) = gateway_conf.parameters.log_level.clone() {
-        TardisTracing::update_log_level_by_domain_code(crate::constants::DOMAIN_CODE,&log_level)?;
+        TardisTracing::update_log_level_by_domain_code(crate::constants::DOMAIN_CODE, &log_level)?;
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 

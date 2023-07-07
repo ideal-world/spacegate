@@ -7,10 +7,10 @@ use plugins::filters::{self, SgPluginFilterDef};
 use tardis::{basic::result::TardisResult, log, tokio::signal};
 
 pub mod config;
+pub mod constants;
 pub mod functions;
 pub mod helpers;
 pub mod plugins;
-pub mod constants;
 
 pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<()> {
     // Initialize configuration according to different modes
