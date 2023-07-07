@@ -31,6 +31,7 @@ use tardis::{
     futures_util::{ready, FutureExt},
     tokio::sync::Mutex,
 };
+use tardis::basic::tracing::TardisTracing;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use super::http_route;
@@ -47,9 +48,8 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https && l.protocol != SgProtocol::Ws) {
         return Err(TardisError::bad_request("[SG.Server] Non-Http(s) protocols are not supported yet", ""));
     }
-    if let Some(_log_level) = gateway_conf.parameters.log_level.clone() {
-        //TODO update log level
-        // TardisTracing::update_log_level();
+    if let Some(log_level) = gateway_conf.parameters.log_level.clone() {
+        TardisTracing::update_log_level_by_domain_code(crate::constants::DOMAIN_CODE,&log_level)?;
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
