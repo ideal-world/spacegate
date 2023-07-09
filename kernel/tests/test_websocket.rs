@@ -15,6 +15,7 @@ use spacegate_kernel::config::{
     gateway_dto::{SgGateway, SgListener},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
+use tardis::web::web_server::WebServerModule;
 use tardis::{
     basic::result::TardisResult,
     config::config_dto::{CacheConfig, DBConfig, FrameworkConfig, MQConfig, MailConfig, OSConfig, SearchConfig, TardisConfig, WebServerConfig},
@@ -77,7 +78,7 @@ async fn test_webscoket() -> TardisResult<()> {
         },
     })
     .await?;
-    tokio::spawn(async { TardisFuns::web_server().add_route_with_ws(WsApi, 100).await.start().await });
+    tokio::spawn(async { TardisFuns::web_server().add_route(WebServerModule::from(WsApi).with_ws(100)).await.start().await });
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),
@@ -282,6 +283,7 @@ async fn test_webscoket() -> TardisResult<()> {
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct WsApi;
 
 #[poem_openapi::OpenApi]

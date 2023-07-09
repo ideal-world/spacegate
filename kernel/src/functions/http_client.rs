@@ -122,7 +122,7 @@ mod tests {
             http_client::{init, request},
             http_route::SgBackend,
         },
-        plugins::{context::SgRoutePluginContext, filters::SgPluginFilterKind},
+        plugins::context::SgRoutePluginContext,
     };
 
     #[tokio::test]

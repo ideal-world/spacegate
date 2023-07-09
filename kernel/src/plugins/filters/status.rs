@@ -169,7 +169,7 @@ mod tests {
                     status_plugin::{get_status, Status},
                     SgFilterStatus,
                 },
-                SgPluginFilter, SgPluginFilterKind, SgRoutePluginContext,
+                SgPluginFilter, SgRoutePluginContext,
             },
         },
     };

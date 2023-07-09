@@ -215,8 +215,6 @@ fn get_encode_type(header_value: Option<&HeaderValue>) -> Option<CompressionType
 #[allow(clippy::unwrap_used)]
 mod tests {
 
-    use crate::plugins::filters::SgPluginFilterKind;
-
     use super::*;
     use async_compression::tokio::bufread::GzipDecoder;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};

@@ -145,7 +145,7 @@ impl SgPluginFilter for SgFilterLimit {
 mod tests {
     use std::time::Duration;
 
-    use crate::{functions::cache_client, plugins::filters::SgPluginFilterKind};
+    use crate::functions::cache_client;
 
     use super::*;
     use http::{HeaderMap, Method, Uri, Version};

@@ -271,7 +271,7 @@ mod expiring_map {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use crate::{functions::http_client, plugins::filters::SgPluginFilterKind};
+    use crate::functions::http_client;
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;
     use tardis::{basic::error::TardisError, tokio};

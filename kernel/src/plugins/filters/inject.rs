@@ -110,7 +110,6 @@ impl SgPluginFilter for SgFilterInject {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use crate::plugins::filters::SgPluginFilterKind;
 
     use super::*;
     use http::{HeaderMap, StatusCode, Uri, Version};
