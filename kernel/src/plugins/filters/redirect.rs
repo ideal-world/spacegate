@@ -7,10 +7,12 @@ use tardis::{
     TardisFuns,
 };
 
+use crate::config::http_route_dto::SgHttpRouteRule;
 use crate::helpers::url_helper::UrlToUri;
+use crate::plugins::context::SgRouteFilterRequestAction;
 use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
+use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 pub const CODE: &str = "redirect";
 
@@ -42,11 +44,13 @@ pub struct SgFilterRedirect {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterRedirect {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
-
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 
@@ -54,7 +58,7 @@ impl SgPluginFilter for SgFilterRedirect {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Host {hostname} parsing error"), ""))?;
@@ -73,11 +77,11 @@ impl SgPluginFilter for SgFilterRedirect {
         if let Some(new_url) = http_common_modify_path(ctx.get_req_uri(), &self.path, matched_match_inst)? {
             ctx.set_req_uri(new_url);
         }
-        ctx.action = SgRouteFilterRequestAction::Redirect;
+        ctx.set_action(SgRouteFilterRequestAction::Redirect);
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(status_code) = self.status_code {
             ctx.set_resp_status_code(
                 StatusCode::from_u16(status_code)
@@ -93,7 +97,8 @@ impl SgPluginFilter for SgFilterRedirect {
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
-        functions::http_route::SgHttpPathMatchInst,
+        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteRuleInst},
+        plugins::context::ChoseHttpRouteRuleInst,
     };
 
     use super::*;
@@ -114,15 +119,6 @@ mod tests {
             status_code: Some(StatusCode::MOVED_PERMANENTLY.as_u16()),
         };
 
-        let ctx = SgRouteFilterContext::new(
-            Method::POST,
-            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
-            Version::HTTP_11,
-            HeaderMap::new(),
-            Body::empty(),
-            "127.0.0.1:8080".parse().unwrap(),
-            "".to_string(),
-        );
         let matched = SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
@@ -131,6 +127,17 @@ mod tests {
             }),
             ..Default::default()
         };
+
+        let ctx = SgRoutePluginContext::new_http(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "127.0.0.1:8080".parse().unwrap(),
+            "".to_string(),
+            Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
+        );
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);

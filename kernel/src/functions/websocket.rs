@@ -53,7 +53,7 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
     let client_url = format!(
         "{}://{}{}{}",
         scheme,
-        format_args!("{}{}", backend.namespace.as_ref().map(|n| format!("{n}.")).unwrap_or("".to_string()), backend.name_or_host),
+        format_args!("{}{}", backend.name_or_host, backend.namespace.as_ref().map(|n| format!(".{n}")).unwrap_or("".to_string())),
         if (backend.port == 0 || backend.port == 80) && scheme == &SgProtocol::Http || (backend.port == 0 || backend.port == 443) && scheme == &SgProtocol::Https {
             "".to_string()
         } else {

@@ -6,9 +6,12 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::{http_client, http_route::SgHttpRouteMatchInst};
+use crate::{
+    config::http_route_dto::SgHttpRouteRule,
+    functions::{http_client, http_route::SgHttpRouteMatchInst},
+};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 pub const CODE: &str = "inject";
 
@@ -34,11 +37,14 @@ const SG_INJECT_REAL_URL: &str = "Sg_Inject_Real_Url";
 
 #[async_trait]
 impl SgPluginFilter for SgFilterInject {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
 
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 
@@ -46,7 +52,7 @@ impl SgPluginFilter for SgFilterInject {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(req_inject_url) = &self.req_inject_url {
             let real_method = ctx.get_req_method().clone();
             let real_url = ctx.get_req_uri().clone();
@@ -74,20 +80,21 @@ impl SgPluginFilter for SgFilterInject {
                 .unwrap_or(real_url);
             new_req_headers.remove(SG_INJECT_REAL_METHOD);
             new_req_headers.remove(SG_INJECT_REAL_URL);
-            ctx = SgRouteFilterContext::new(
+            ctx = SgRoutePluginContext::new_http(
                 new_req_method,
                 new_req_url,
                 *ctx.get_req_version(),
                 new_req_headers.clone(),
                 resp.into_body(),
                 *ctx.get_req_remote_addr(),
-                ctx.gateway_name,
+                ctx.get_gateway_name(),
+                None,
             )
         }
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(resp_inject_url) = &self.resp_inject_url {
             let real_method = ctx.get_req_method().clone();
             let real_url = ctx.get_req_uri().clone();
@@ -103,6 +110,7 @@ impl SgPluginFilter for SgFilterInject {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+
     use super::*;
     use http::{HeaderMap, StatusCode, Uri, Version};
     use hyper::Body;
@@ -118,7 +126,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::POST,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
@@ -126,6 +134,7 @@ mod tests {
             Body::from("理想世界".as_bytes()),
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
+            None,
         );
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, None).await.unwrap();

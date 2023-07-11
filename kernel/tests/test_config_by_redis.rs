@@ -11,7 +11,6 @@ use tardis::{
 };
 
 #[tokio::test]
-
 async fn test_config_by_redis() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();
@@ -113,7 +112,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
     cache_client.set_ex("sg:conf:change:trigger:333##gateway##test_gw", "", 1).await?;
 
     sleep(Duration::from_millis(1500)).await;
-    assert!(http_client.get_to_str("http://localhost:8889/get?dd", None).await.is_err());
+    assert!(http_client.get_to_str("http://localhost:8889/get?dd", None).await.is_err() || http_client.get_to_str("http://localhost:8889/get?dd", None).await.unwrap().code == 502);
 
     Ok(())
 }

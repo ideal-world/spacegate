@@ -293,9 +293,14 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         if gateway_obj.spec.addresses.is_some() {
             return Err(TardisError::not_implemented("[SG.Config] Gateway [spec.addresses] not supported yet", ""));
         }
-        if gateway_obj.spec.listeners.iter().any(|listener| listener.protocol.to_lowercase() != "https" && listener.protocol.to_lowercase() != "http") {
+        if gateway_obj
+            .spec
+            .listeners
+            .iter()
+            .any(|listener| listener.protocol.to_lowercase() != "https" && listener.protocol.to_lowercase() != "http" && listener.protocol.to_lowercase() != "ws")
+        {
             return Err(TardisError::not_implemented(
-                "[SG.Config] Gateway [spec.listener.protocol!=HTTPS|HTTP] not supported yet",
+                "[SG.Config] Gateway [spec.listener.protocol!=HTTPS|HTTP|ws] not supported yet",
                 "",
             ));
         }
@@ -394,6 +399,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                             protocol: match listener.protocol.to_lowercase().as_str() {
                                 "http" => SgProtocol::Http,
                                 "https" => SgProtocol::Https,
+                                "ws" => SgProtocol::Ws,
                                 _ => {
                                     return Err(TardisError::not_implemented(
                                         &format!("[SG.Config] Gateway [spec.listener.protocol={}] not supported yet", listener.protocol),
@@ -583,7 +589,7 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
 
 async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
     let filter_api: Api<SgFilter> = Api::all(get_client().await?);
-
+    let namespace = namespace.clone().unwrap_or("default".to_string());
     let filter_objs: Vec<SgRouteFilter> = filter_api
         .list(&ListParams::default())
         .await
@@ -593,7 +599,7 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
             filter_obj.spec.target_refs.iter().any(|target_ref| {
                 target_ref.kind.to_lowercase() == kind.to_lowercase()
                     && target_ref.name.to_lowercase() == name.to_lowercase()
-                    && target_ref.namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase() == namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase()
+                    && target_ref.namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase() == namespace.to_lowercase()
             })
         })
         .flat_map(|filter_obj| {
@@ -604,6 +610,11 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
             })
         })
         .collect();
+
+    log::trace!(
+        "[SG.Config] {namespace}.{kind}.{name} filter found: {:?}",
+        filter_objs.clone().into_iter().map(|filter| format!("Filter{{code: {},name:{}}}", filter.code, filter.name.unwrap_or("None".to_string()))).collect_vec()
+    );
     if filter_objs.is_empty() {
         Ok(None)
     } else {

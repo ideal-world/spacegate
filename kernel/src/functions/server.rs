@@ -20,6 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::vec::Vec;
 use std::{io, sync};
+use tardis::basic::tracing::TardisTracing;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
@@ -44,12 +45,12 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     if gateway_conf.listeners.is_empty() {
         return Err(TardisError::bad_request("[SG.Server] Missing Listeners", ""));
     }
-    if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https) {
+    if gateway_conf.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https && l.protocol != SgProtocol::Ws) {
         return Err(TardisError::bad_request("[SG.Server] Non-Http(s) protocols are not supported yet", ""));
     }
-    if let Some(_log_level) = gateway_conf.parameters.log_level.clone() {
-        //TODO update log level
-        // TardisTracing::update_log_level();
+    if let Some(log_level) = gateway_conf.parameters.log_level.clone() {
+        log::debug!("[SG.Server] change log level to {log_level}");
+        TardisTracing::update_log_level_by_domain_code(crate::constants::DOMAIN_CODE, &log_level)?;
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
@@ -68,6 +69,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
         let mut shutdown_rx = shutdown_tx.subscribe();
 
         let gateway_name = gateway_name.clone();
+        let protocol = listener.protocol.to_string();
         if let Some(tls) = &listener.tls {
             log::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
             if SgTlsMode::Terminate == tls.mode {
@@ -78,7 +80,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
                     let key = rustls_pemfile::read_all(&mut tls.key.as_bytes())
                         .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
                     if key.is_empty() {
-                        return Err(TardisError::bad_request(&format!("[SG.Server] not found Tls private key"), ""));
+                        return Err(TardisError::bad_request("[SG.Server] not found Tls private key", ""));
                     }
                     let mut selected_key = None;
                     for k in key {
@@ -103,18 +105,22 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
                         cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
                         sync::Arc::new(cfg)
                     } else {
-                        return Err(TardisError::not_implemented(&format!("[SG.Server] Tls encoding not supported "), ""));
+                        return Err(TardisError::not_implemented("[SG.Server] Tls encoding not supported ", ""));
                     }
                 };
 
                 let incoming = AddrIncoming::bind(&addr).map_err(|error| TardisError::bad_request(&format!("[SG.Server] Bind address error: {error}"), ""))?;
                 let server = Server::builder(TlsAcceptor::new(tls_cfg, incoming)).serve(make_service_fn(move |client: &TlsStream| {
-                    let remote_addr = match &client.state {
-                        State::Handshaking(addr) => addr.get_ref().expect("[SG.server.init] can't get addr").remote_addr(),
-                        State::Streaming(addr) => addr.get_ref().0.remote_addr(),
+                    let protocol = Arc::new(protocol.clone());
+                    let remote_and_local_addr = match &client.state {
+                        State::Handshaking(addr) => (
+                            addr.get_ref().expect("[SG.server.init] can't get addr").remote_addr(),
+                            addr.get_ref().expect("[SG.server.init] can't get addr").local_addr(),
+                        ),
+                        State::Streaming(addr) => (addr.get_ref().0.remote_addr(), addr.get_ref().0.local_addr()),
                     };
                     let gateway_name = gateway_name.clone();
-                    async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "https", remote_addr, req))) }
+                    async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), protocol.clone(), remote_and_local_addr, req))) }
                 }));
                 let server = server.with_graceful_shutdown(async move {
                     shutdown_rx.changed().await.ok();
@@ -122,9 +128,11 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
                 server_insts.push(SgServerInst { addr, server: server.boxed() });
             } else {
                 let server = Server::bind(&addr).serve(make_service_fn(move |client: &AddrStream| {
+                    let protocol = Arc::new(protocol.clone());
                     let remote_addr = client.remote_addr();
+                    let local_addr = client.local_addr();
                     let gateway_name = gateway_name.clone();
-                    async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "http", remote_addr, req))) }
+                    async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), protocol.clone(), (remote_addr, local_addr), req))) }
                 }));
                 let server = server.with_graceful_shutdown(async move {
                     shutdown_rx.changed().await.ok();
@@ -133,9 +141,10 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
             }
         } else {
             let server = Server::bind(&addr).serve(make_service_fn(move |client: &AddrStream| {
-                let remote_addr = client.remote_addr();
+                let protocol = Arc::new(protocol.clone());
+                let remote_and_local_addr = (client.remote_addr(), client.local_addr());
                 let gateway_name = gateway_name.clone();
-                async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), "http", remote_addr, req))) }
+                async move { Ok::<_, Infallible>(service_fn(move |req| process(gateway_name.clone(), protocol.clone(), remote_and_local_addr, req))) }
             }));
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
@@ -150,8 +159,13 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     Ok(server_insts)
 }
 
-async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    let response = http_route::process(gateway_name, req_scheme, remote_addr, request).await;
+async fn process(
+    gateway_name: Arc<String>,
+    req_scheme: Arc<String>,
+    (remote_addr, local_addr): (SocketAddr, SocketAddr),
+    request: Request<Body>,
+) -> Result<Response<Body>, hyper::Error> {
+    let response = http_route::process(gateway_name, req_scheme.as_str(), (remote_addr, local_addr), request).await;
     match response {
         Ok(result) => Ok(result),
         Err(error) => into_http_error(error),

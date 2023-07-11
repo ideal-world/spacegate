@@ -3,6 +3,7 @@ use std::{env, time::Duration, vec};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use spacegate_kernel::plugins::context::SgRoutePluginContext;
 use spacegate_kernel::{
     config::{
         gateway_dto::{SgGateway, SgListener},
@@ -10,7 +11,7 @@ use spacegate_kernel::{
         plugin_filter_dto::SgRouteFilter,
     },
     functions::http_route::SgHttpRouteMatchInst,
-    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterKind, SgRouteFilterContext},
+    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef},
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -33,11 +34,7 @@ pub struct SgFilterAuth {}
 
 #[async_trait]
 impl SgPluginFilter for SgFilterAuth {
-    fn kind(&self) -> SgPluginFilterKind {
-        SgPluginFilterKind::Http
-    }
-
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 
@@ -45,20 +42,19 @@ impl SgPluginFilter for SgFilterAuth {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.get_req_headers().contains_key("Authorization") {
             return Ok((true, ctx));
         }
         Err(TardisError::unauthorized("unauthorized", ""))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }
 
 #[tokio::test]
-
 async fn test_custom_plugin() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();

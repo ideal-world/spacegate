@@ -6,9 +6,9 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst, plugins::context::SgRouteFilterRequestAction};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext, SgRouteFilterRequestAction};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 
 pub const CODE: &str = "maintenance";
 pub struct SgFilterMaintenanceDef;
@@ -21,6 +21,7 @@ impl SgPluginFilterDef for SgFilterMaintenanceDef {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct SgFilterMaintenance {
     is_enabled: bool,
     title: Option<String>,
@@ -29,11 +30,13 @@ pub struct SgFilterMaintenance {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterMaintenance {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
-
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 
@@ -41,7 +44,7 @@ impl SgPluginFilter for SgFilterMaintenance {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.is_enabled {
             ctx.set_action(SgRouteFilterRequestAction::Response);
             let default_content_type = HeaderValue::from_static("text/html");
@@ -103,7 +106,7 @@ impl SgPluginFilter for SgFilterMaintenance {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }

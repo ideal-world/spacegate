@@ -159,9 +159,9 @@ spec:
       - name: spacegate
         image: ecfront/spacegate:0.1.0-alpha.2
         imagePullPolicy: IfNotPresent
-        # env:
-        # - name: RUST_LOG
-        #   value: info,spacegate_kernel=trace
+#        env:
+#        - name: RUST_LOG
+#          value: info,spacegate_kernel=trace
 # ---        
 # apiVersion: apps/v1
 # kind: Deployment

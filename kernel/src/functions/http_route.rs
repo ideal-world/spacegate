@@ -5,9 +5,12 @@ use crate::{
         gateway_dto::{SgGateway, SgListener, SgProtocol},
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
-    plugins::filters::{self, BoxSgPluginFilter, SgRouteFilterContext, SgRouteFilterRequestAction},
+    plugins::{
+        context::{ChoseHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
+        filters::{self, BoxSgPluginFilter},
+    },
 };
-use http::{header::UPGRADE, uri::Scheme, Request, Response};
+use http::{header::UPGRADE, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
 use hyper_rustls::HttpsConnector;
 use itertools::Itertools;
@@ -26,18 +29,27 @@ use super::http_client;
 static mut ROUTES: Option<HashMap<String, SgGatewayInst>> = None;
 
 pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisResult<()> {
+    let all_route_rules = routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>();
     let global_filters = if let Some(filters) = gateway_conf.filters {
-        filters::init(filters).await?
+        filters::init(filters, &all_route_rules).await?
     } else {
         Vec::new()
     };
     let mut route_insts = Vec::new();
-    for route in routes {
-        let route_filters = if let Some(filters) = route.filters { filters::init(filters).await? } else { Vec::new() };
+    for route in routes.clone() {
+        let route_filters = if let Some(filters) = route.filters {
+            filters::init(filters, &route.rules.clone().unwrap_or_default()).await?
+        } else {
+            Vec::new()
+        };
         let rule_insts = if let Some(rules) = route.rules {
             let mut rule_insts = Vec::new();
             for rule in rules {
-                let rule_filters = if let Some(filters) = rule.filters { filters::init(filters).await? } else { Vec::new() };
+                let rule_filters = if let Some(filters) = rule.filters.clone() {
+                    filters::init(filters, &[rule.clone()]).await?
+                } else {
+                    Vec::new()
+                };
 
                 let rule_matches_insts = rule
                     .matches
@@ -131,9 +143,10 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                         let backends = join_all(
                             backend_refs
                                 .into_iter()
-                                .map(|backend_ref| async move {
+                                .map(|backend_ref| (backend_ref, &all_route_rules))
+                                .map(|(backend_ref, read_only_routes)| async move {
                                     let filters = if let Some(filters) = backend_ref.filters {
-                                        filters::init(filters).await?
+                                        filters::init(filters, read_only_routes).await?
                                     } else {
                                         Vec::new()
                                     };
@@ -219,7 +232,7 @@ fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
     }
 }
 
-pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, mut request: Request<Body>) -> TardisResult<Response<Body>> {
+pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, local_addr): (SocketAddr, SocketAddr), mut request: Request<Body>) -> TardisResult<Response<Body>> {
     if request.uri().host().is_none() && request.headers().contains_key("Host") {
         *request.uri_mut() = format!(
             "{}://{}{}",
@@ -236,28 +249,19 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         .map_err(|e| TardisError::bad_request(&format!("[SG.Route] request host rebuild illegal: {}", e), ""))?;
     }
     log::trace!(
-        "[SG.Route] Request method {} url {} , from {} @ {}",
+        "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
         request.method(),
         request.uri(),
+        local_addr,
         remote_addr,
         gateway_name
     );
     let gateway_inst = get(&gateway_name)?;
-    if !match_listeners_hostname_and_port(
-        request.uri().host(),
-        request.uri().port().map_or_else(
-            || {
-                if request.uri().scheme().unwrap_or(&Scheme::HTTP) == &Scheme::HTTPS {
-                    443
-                } else {
-                    80
-                }
-            },
-            |p| p.as_u16(),
-        ),
-        &gateway_inst.listeners,
-    ) {
-        return Err(TardisError::not_found("[SG] Hostname Not found", ""));
+    if !match_listeners_hostname_and_port(request.uri().host(), local_addr.port(), &gateway_inst.listeners) {
+        log::trace!("[SG.Route] Request hostname {} not match", request.uri().host().expect(""));
+        let mut not_found = Response::default();
+        *not_found.status_mut() = StatusCode::NOT_FOUND;
+        return Ok(not_found);
     }
 
     let matched_route_inst = match_route_insts_with_hostname_priority(request.uri().host(), &gateway_inst.routes);
@@ -290,10 +294,27 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         None
     };
 
+    let backend_filters = backend.map(|backend| &backend.filters);
+    let rule_filters = matched_rule_inst.map(|rule| &rule.filters);
+
     if request.headers().get(UPGRADE).map(|v| &v.to_str().expect("[SG.Websocket] Upgrade header value illegal:  is not ascii").to_lowercase() == "websocket").unwrap_or(false) {
         #[cfg(feature = "ws")]
         {
             if let Some(backend) = backend {
+                log::trace!("[SG.Route] Backend: {:?}", backend.name_or_host);
+                let mut ctx = process_req_filters_ws(
+                    gateway_name.to_string(),
+                    remote_addr,
+                    &request,
+                    backend_filters,
+                    rule_filters,
+                    &matched_route_inst.filters,
+                    &gateway_inst.filters,
+                    matched_rule_inst,
+                    matched_match_inst,
+                )
+                .await?;
+                *request.uri_mut() = ctx.get_req_uri().clone();
                 return crate::functions::websocket::process(gateway_name, remote_addr, backend, request).await;
             } else {
                 return Err(TardisError::bad_request(
@@ -311,10 +332,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         }
     }
 
-    let backend_filters = backend.map(|backend| &backend.filters);
-    let rule_filters = matched_rule_inst.map(|rule| &rule.filters);
-
-    let ctx = process_req_filters(
+    let ctx = process_req_filters_http(
         gateway_name.to_string(),
         remote_addr,
         request,
@@ -322,6 +340,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         rule_filters,
         &matched_route_inst.filters,
         &gateway_inst.filters,
+        matched_rule_inst,
         matched_match_inst,
     )
     .await?;
@@ -337,19 +356,9 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
-    let mut ctx = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
+    let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
 
-    let mut resp = Response::builder();
-    for (k, v) in ctx.get_resp_headers() {
-        resp = resp.header(
-            k.as_str(),
-            v.to_str().map_err(|_| TardisError::bad_request(&format!("[SG.Route] header {k}'s value illegal: is not ascii"), ""))?.to_string(),
-        );
-    }
-    let resp = resp
-        .body(Body::from(ctx.pop_resp_body().await?.unwrap_or_default()))
-        .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
-    Ok(resp)
+    ctx.build_response().await
 }
 
 fn match_route_insts_with_hostname_priority<'a>(req_host: Option<&str>, routes: &'a Vec<SgHttpRouteInst>) -> Option<&'a SgHttpRouteInst> {
@@ -510,7 +519,7 @@ fn match_listeners_hostname_and_port(hostname: Option<&str>, port: u16, listener
     }
 }
 
-async fn process_req_filters(
+async fn process_req_filters_http(
     gateway_name: String,
     remote_addr: SocketAddr,
     request: Request<Body>,
@@ -518,9 +527,10 @@ async fn process_req_filters(
     rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     route_filters: &Vec<(String, BoxSgPluginFilter)>,
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    matched_rule_inst: Option<&SgHttpRouteRuleInst>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
-) -> TardisResult<SgRouteFilterContext> {
-    let mut ctx = SgRouteFilterContext::new(
+) -> TardisResult<SgRoutePluginContext> {
+    let ctx = SgRoutePluginContext::new_http(
         request.method().clone(),
         request.uri().clone(),
         request.version(),
@@ -528,12 +538,47 @@ async fn process_req_filters(
         request.into_body(),
         remote_addr,
         gateway_name,
+        matched_rule_inst.map(|m| ChoseHttpRouteRuleInst::clone_from(m, matched_match_inst)),
     );
+    process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters, matched_match_inst).await
+}
+
+async fn process_req_filters_ws(
+    gateway_name: String,
+    remote_addr: SocketAddr,
+    request: &Request<Body>,
+    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    route_filters: &Vec<(String, BoxSgPluginFilter)>,
+    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    matched_rule_inst: Option<&SgHttpRouteRuleInst>,
+    matched_match_inst: Option<&SgHttpRouteMatchInst>,
+) -> TardisResult<SgRoutePluginContext> {
+    let ctx = SgRoutePluginContext::new_ws(
+        request.method().clone(),
+        request.uri().clone(),
+        request.version(),
+        request.headers().clone(),
+        remote_addr,
+        gateway_name,
+        matched_rule_inst.map(|m| ChoseHttpRouteRuleInst::clone_from(m, matched_match_inst)),
+    );
+    process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters, matched_match_inst).await
+}
+
+async fn process_req_filters(
+    mut ctx: SgRoutePluginContext,
+    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
+    route_filters: &Vec<(String, BoxSgPluginFilter)>,
+    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    matched_match_inst: Option<&SgHttpRouteMatchInst>,
+) -> TardisResult<SgRoutePluginContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
     if let Some(backend_filters) = backend_filters {
         for (id, filter) in backend_filters {
-            if !executed_filters.contains(&id) {
+            if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
                 (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
@@ -545,7 +590,7 @@ async fn process_req_filters(
     }
     if let Some(rule_filters) = rule_filters {
         for (id, filter) in rule_filters {
-            if !executed_filters.contains(&id) {
+            if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
                 (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
@@ -556,7 +601,7 @@ async fn process_req_filters(
         }
     }
     for (id, filter) in route_filters {
-        if !executed_filters.contains(&id) {
+        if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
             (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
@@ -566,7 +611,7 @@ async fn process_req_filters(
         }
     }
     for (id, filter) in global_filters {
-        if !executed_filters.contains(&id) {
+        if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
             (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
@@ -579,18 +624,19 @@ async fn process_req_filters(
 }
 
 async fn process_resp_filters(
-    mut ctx: SgRouteFilterContext,
+    mut ctx: SgRoutePluginContext,
     backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     route_filters: &Vec<(String, BoxSgPluginFilter)>,
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
-) -> TardisResult<SgRouteFilterContext> {
+) -> TardisResult<SgRoutePluginContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
+
     if let Some(backend_filters) = backend_filters {
         for (id, filter) in backend_filters {
-            if !executed_filters.contains(&id) {
+            if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
                 (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
@@ -602,7 +648,7 @@ async fn process_resp_filters(
     }
     if let Some(rule_filters) = rule_filters {
         for (id, filter) in rule_filters {
-            if !executed_filters.contains(&id) {
+            if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
                 (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
                 if !is_continue {
@@ -613,7 +659,7 @@ async fn process_resp_filters(
         }
     }
     for (id, filter) in route_filters {
-        if !executed_filters.contains(&id) {
+        if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
             (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
@@ -623,7 +669,7 @@ async fn process_resp_filters(
         }
     }
     for (id, filter) in global_filters {
-        if !executed_filters.contains(&id) {
+        if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
             (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
             if !is_continue {
@@ -663,21 +709,21 @@ struct SgHttpRouteInst {
 }
 
 #[derive(Default)]
-struct SgHttpRouteRuleInst {
+pub struct SgHttpRouteRuleInst {
     pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub matches: Option<Vec<SgHttpRouteMatchInst>>,
     pub backends: Option<Vec<SgBackend>>,
     pub timeout_ms: Option<u64>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct SgHttpRouteMatchInst {
     pub path: Option<SgHttpPathMatchInst>,
     pub header: Option<Vec<SgHttpHeaderMatchInst>>,
     pub query: Option<Vec<SgHttpQueryMatchInst>>,
     pub method: Option<Vec<String>>,
 }
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 
 pub struct SgHttpPathMatchInst {
     pub kind: SgHttpPathMatchType,
@@ -685,7 +731,7 @@ pub struct SgHttpPathMatchInst {
     pub regular: Option<Regex>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct SgHttpHeaderMatchInst {
     pub kind: SgHttpHeaderMatchType,
     pub name: String,
@@ -693,7 +739,7 @@ pub struct SgHttpHeaderMatchInst {
     pub regular: Option<Regex>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct SgHttpQueryMatchInst {
     pub kind: SgHttpQueryMatchType,
     pub name: String,

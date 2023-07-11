@@ -8,9 +8,9 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 use lazy_static::lazy_static;
 pub const CODE: &str = "limit";
 
@@ -93,11 +93,13 @@ lazy_static! {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterLimit {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
-
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 
@@ -105,7 +107,7 @@ impl SgPluginFilter for SgFilterLimit {
         Ok(())
     }
 
-    async fn req_filter(&self, id: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, id: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(max_request_number) = &self.max_request_number {
             let result: &bool = &SCRIPT
                 // counter key
@@ -133,7 +135,7 @@ impl SgPluginFilter for SgFilterLimit {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }
@@ -167,8 +169,8 @@ mod tests {
             ..Default::default()
         };
 
-        fn new_ctx() -> SgRouteFilterContext {
-            SgRouteFilterContext::new(
+        fn new_ctx() -> SgRoutePluginContext {
+            SgRoutePluginContext::new_http(
                 Method::GET,
                 Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
                 Version::HTTP_11,
@@ -176,6 +178,7 @@ mod tests {
                 Body::empty(),
                 "127.0.0.1:8080".parse().unwrap(),
                 "test_gate".to_string(),
+                None,
             )
         }
 

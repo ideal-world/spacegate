@@ -17,7 +17,6 @@ use tardis::{
 const HTTP_PORT: u16 = 8888;
 const HTTPS_PORT: u16 = 18443;
 #[tokio::test]
-
 async fn test_compression() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();

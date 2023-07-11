@@ -20,6 +20,7 @@ pub mod k8s_crd;
 pub mod plugin_filter_dto;
 
 #[allow(unreachable_code)]
+#[allow(unused_variables)]
 pub async fn init(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     log::info!(
         "[SG.Config] Config initialization mode: {}",
