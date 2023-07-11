@@ -17,7 +17,6 @@ spacegate-kernel = { version = "0.1.0-alpha.2", path = "../../kernel", features 
     "ws",
     "cache",
     "k8s",
-    "web",
 ] }
 
 tardis = { workspace = true }

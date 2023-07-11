@@ -589,7 +589,7 @@ async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisRes
 
 async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
     let filter_api: Api<SgFilter> = Api::all(get_client().await?);
-
+    let namespace = namespace.clone().unwrap_or("default".to_string());
     let filter_objs: Vec<SgRouteFilter> = filter_api
         .list(&ListParams::default())
         .await
@@ -599,7 +599,7 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
             filter_obj.spec.target_refs.iter().any(|target_ref| {
                 target_ref.kind.to_lowercase() == kind.to_lowercase()
                     && target_ref.name.to_lowercase() == name.to_lowercase()
-                    && target_ref.namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase() == namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase()
+                    && target_ref.namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase() == namespace.to_lowercase()
             })
         })
         .flat_map(|filter_obj| {
@@ -610,6 +610,11 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
             })
         })
         .collect();
+
+    log::trace!(
+        "[SG.Config] {namespace}.{kind}.{name} filter found: {:?}",
+        filter_objs.clone().into_iter().map(|filter| format!("Filter{{code: {},name:{}}}", filter.code, filter.name.unwrap_or("None".to_string()))).collect_vec()
+    );
     if filter_objs.is_empty() {
         Ok(None)
     } else {

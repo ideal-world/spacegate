@@ -6,7 +6,7 @@ spec:
   filters:
     - code: status
       config:
-        title: Status
+        title: SystemStatus
   targetRefs:
     - kind: httproute
       name: echo

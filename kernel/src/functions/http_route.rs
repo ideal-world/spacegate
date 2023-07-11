@@ -10,7 +10,7 @@ use crate::{
         filters::{self, BoxSgPluginFilter},
     },
 };
-use http::{header::UPGRADE, uri::Scheme, Request, Response};
+use http::{header::UPGRADE, Request, Response};
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
 use hyper_rustls::HttpsConnector;
 use itertools::Itertools;
@@ -232,7 +232,7 @@ fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
     }
 }
 
-pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: SocketAddr, mut request: Request<Body>) -> TardisResult<Response<Body>> {
+pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, local_addr): (SocketAddr, SocketAddr), mut request: Request<Body>) -> TardisResult<Response<Body>> {
     if request.uri().host().is_none() && request.headers().contains_key("Host") {
         *request.uri_mut() = format!(
             "{}://{}{}",
@@ -249,27 +249,15 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, remote_addr: S
         .map_err(|e| TardisError::bad_request(&format!("[SG.Route] request host rebuild illegal: {}", e), ""))?;
     }
     log::trace!(
-        "[SG.Route] Request method {} url {} , from {} @ {}",
+        "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
         request.method(),
         request.uri(),
+        local_addr,
         remote_addr,
         gateway_name
     );
     let gateway_inst = get(&gateway_name)?;
-    if !match_listeners_hostname_and_port(
-        request.uri().host(),
-        request.uri().port().map_or_else(
-            || {
-                if request.uri().scheme().unwrap_or(&Scheme::HTTP) == &Scheme::HTTPS {
-                    443
-                } else {
-                    80
-                }
-            },
-            |p| p.as_u16(),
-        ),
-        &gateway_inst.listeners,
-    ) {
+    if !match_listeners_hostname_and_port(request.uri().host(), local_addr.port(), &gateway_inst.listeners) {
         log::trace!("[SG.Route] Request hostname {} not match", request.uri().host().expect(""));
         let mut not_found = Response::default();
         *not_found.status_mut() = StatusCode::NOT_FOUND;

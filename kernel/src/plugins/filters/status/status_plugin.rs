@@ -1,11 +1,10 @@
+use http::{Request, Response};
+use hyper::Body;
 use std::{collections::HashMap, sync::Arc};
 
 use lazy_static::lazy_static;
-use poem::web::Data;
-use tardis::{
-    tokio::sync::RwLock,
-    web::poem::{handler, web::Html},
-};
+
+use tardis::tokio::sync::{Mutex, RwLock};
 //todo redis
 lazy_static! {
     static ref SERVER_STATUS: Arc<RwLock<HashMap<String, Status>>> = <_>::default();
@@ -30,8 +29,7 @@ impl Status {
     }
 }
 
-#[handler]
-pub(crate) async fn create_status_html(Data(title): Data<&String>) -> Html<String> {
+pub(crate) async fn create_status_html(_: Request<Body>, title: Arc<Mutex<String>>) -> Result<Response<Body>, hyper::Error> {
     let status = SERVER_STATUS.read().await;
     let mut service_html = "".to_string();
     status.keys().for_each(|key| {
@@ -40,7 +38,7 @@ pub(crate) async fn create_status_html(Data(title): Data<&String>) -> Html<Strin
             format!(
                 r##"<div class="service">
                         <div class="service-name">{}</div>
-                        <div class="service-status {}">状态</div>
+                        <div class="service-status {}">Status</div>
                     </div>"##,
                 key,
                 status.to_html_css_class()
@@ -48,8 +46,10 @@ pub(crate) async fn create_status_html(Data(title): Data<&String>) -> Html<Strin
             .as_str(),
         );
     });
-    let html = STATUS_TEMPLATE.replace("{title}", title);
-    Html(html.replace("{status}", &service_html))
+    let title = &title.lock().await;
+    let html = STATUS_TEMPLATE.replace("{title}", title).replace("{status}", &service_html);
+
+    Ok(Response::new(Body::from(html)))
 }
 
 pub(crate) async fn update_status(server_name: &str, status: Status) {

@@ -7,7 +7,6 @@ pub mod maintenance;
 pub mod redirect;
 pub mod retry;
 pub mod rewrite;
-#[cfg(feature = "web")]
 pub mod status;
 use async_trait::async_trait;
 

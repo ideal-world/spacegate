@@ -1,1 +1,1 @@
-pub const DOMAIN_CODE: &str = "spacegate-kernel";
+pub const DOMAIN_CODE: &str = "spacegate_kernel";

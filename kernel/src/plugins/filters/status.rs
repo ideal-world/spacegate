@@ -1,9 +1,12 @@
+use std::net::IpAddr;
 use std::{collections::HashMap, mem::swap, sync::Arc};
 
 use async_trait::async_trait;
+use http::Request;
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Server};
 
 use k8s_openapi::chrono::Utc;
-use poem::{get, EndpointExt};
 use serde::{Deserialize, Serialize};
 use tardis::{
     basic::result::TardisResult,
@@ -12,7 +15,6 @@ use tardis::{
         self,
         sync::{watch::Sender, Mutex},
     },
-    web::poem::{listener::TcpListener, Route, Server},
     TardisFuns,
 };
 
@@ -21,6 +23,7 @@ use self::status_plugin::{clean_status, get_status, update_status};
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 use lazy_static::lazy_static;
+use tardis::basic::error::TardisError;
 
 lazy_static! {
     static ref SHUTDOWN_TX: Arc<Mutex<Option<Sender<()>>>> = <_>::default();
@@ -73,21 +76,25 @@ impl SgPluginFilter for SgFilterStatus {
     }
 
     async fn init(&self, http_route_rules: &[SgHttpRouteRule]) -> TardisResult<()> {
-        let addr = format!("{}:{}", self.serv_addr, self.port);
-        let app = Route::new().at("/", get(status_plugin::create_status_html.data(self.title.clone())));
         let (shutdown_tx, _) = tokio::sync::watch::channel(());
         let mut shutdown_rx = shutdown_tx.subscribe();
+
+        let addr_ip: IpAddr = self.serv_addr.parse().map_err(|e| TardisError::conflict(&format!("[SG.Filter.Status] serv_addr parse error: {e}"), ""))?;
+        let addr = (addr_ip, self.port).into();
+        let title = Arc::new(Mutex::new(self.title.clone()));
+        let make_svc = make_service_fn(move |_conn| {
+            let title = title.clone();
+            async move { Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| status_plugin::create_status_html(request, title.clone()))) }
+        });
+
+        let server = Server::bind(&addr).serve(make_svc);
+
         tokio::spawn(async move {
             log::info!("[SG.Filter.Status] Server started: {addr}");
-            let _ = Server::new(TcpListener::bind(addr))
-                .run_with_graceful_shutdown(
-                    app,
-                    async move {
-                        shutdown_rx.changed().await.ok();
-                    },
-                    None,
-                )
-                .await;
+            let server = server.with_graceful_shutdown(async move {
+                shutdown_rx.changed().await.ok();
+            });
+            server.await
         });
 
         let mut shutdown = SHUTDOWN_TX.lock().await;
@@ -154,9 +161,9 @@ impl SgPluginFilter for SgFilterStatus {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
+
     use tardis::{basic::error::TardisError, tokio};
 
     use crate::{
@@ -176,6 +183,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status() {
+        tracing_subscriber::fmt::init();
         let stats = SgFilterStatus::default();
         let mock_backend_ref = SgBackendRef {
             name_or_host: "test1".to_string(),
@@ -195,7 +203,6 @@ mod tests {
             }])
             .await
             .unwrap();
-
         let mock_backend = SgBackend {
             name_or_host: mock_backend_ref.name_or_host,
             namespace: mock_backend_ref.namespace,
