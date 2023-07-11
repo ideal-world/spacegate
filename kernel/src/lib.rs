@@ -1,10 +1,13 @@
 #![warn(clippy::unwrap_used)]
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
+pub use http;
+pub use hyper;
 use plugins::filters::{self, SgPluginFilterDef};
 use tardis::{basic::result::TardisResult, log, tokio::signal};
 
 pub mod config;
+pub mod constants;
 pub mod functions;
 pub mod helpers;
 pub mod plugins;
@@ -26,6 +29,7 @@ pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> Ta
     {
         // Initialize cache instances
         if let Some(url) = &gateway.parameters.redis_url {
+            log::trace!("Initialize cache client...url:{url}");
             functions::cache_client::init(gateway_name, url).await?;
         }
     }

@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRouteFilterContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
 use async_trait::async_trait;
+use http::HeaderName;
 use serde::{Deserialize, Serialize};
-use tardis::{basic::result::TardisResult, TardisFuns};
+use tardis::{
+    basic::{error::TardisError, result::TardisResult},
+    TardisFuns,
+};
 
 pub const CODE: &str = "header_modifier";
 
@@ -34,11 +38,14 @@ pub enum SgFilterHeaderModifierKind {
 
 #[async_trait]
 impl SgPluginFilter for SgFilterHeaderModifier {
-    fn kind(&self) -> super::SgPluginFilterKind {
-        super::SgPluginFilterKind::Http
+    fn accept(&self) -> super::SgPluginFilterAccept {
+        super::SgPluginFilterAccept {
+            kind: vec![super::SgPluginFilterKind::Http],
+            ..Default::default()
+        }
     }
 
-    async fn init(&self) -> TardisResult<()> {
+    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
         Ok(())
     }
 
@@ -46,7 +53,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.kind != SgFilterHeaderModifierKind::Request {
             return Ok((true, ctx));
         }
@@ -57,13 +64,14 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
         if let Some(remove) = &self.remove {
             for k in remove {
-                ctx.remove_req_header(k)?;
+                ctx.get_req_headers_mut()
+                    .remove(HeaderName::try_from(k).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {k} parsing error: {error}"), ""))?);
             }
         }
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRouteFilterContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRouteFilterContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.kind != SgFilterHeaderModifierKind::Response {
             return Ok((true, ctx));
         }
@@ -84,6 +92,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
@@ -109,7 +118,7 @@ mod tests {
         let mut req_headers = HeaderMap::new();
         req_headers.insert("X-Test1", "Hi".parse().unwrap());
         req_headers.insert("X-1", "Hi".parse().unwrap());
-        let ctx = SgRouteFilterContext::new(
+        let ctx = SgRoutePluginContext::new_http(
             Method::GET,
             Uri::from_static("http://sg.idealworld.group/spi/cache/1"),
             Version::HTTP_11,
@@ -117,6 +126,7 @@ mod tests {
             Body::empty(),
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
+            None,
         );
 
         let (is_continue, mut ctx) = filter_req.req_filter("", ctx, None).await.unwrap();

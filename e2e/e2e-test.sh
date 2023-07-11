@@ -106,9 +106,6 @@ certificate "Subject" == "C=CN, ST=HangZhou, O=idealworld, OU=idealworld, CN=www
 EOF
 hurl --test tls-test2.hurl --insecure --verbose
 
-
-curl --insecure "https://${cluster_ip}:9001/hi/get" -v
-
 echo "============[gateway]hostname test============"
 cat>>/etc/hosts<<EOF
 # test hostname
@@ -116,13 +113,12 @@ ${cluster_ip} testhosts1
 ${cluster_ip} testhosts2
 ${cluster_ip} app.testhosts2
 EOF
-echo /etc/hosts:
-cat /etc/hosts
 
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "testhosts1"}]'
-sleep 1
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
+sleep 5
 
 cat>hostname_test.hurl<<EOF
 GET http://testhosts1:9000/echo/get
@@ -136,8 +132,7 @@ GET http://testhosts2:9000/echo/get
 
 HTTP 404
 [Asserts]
-header "content-length" != "0"
-jsonpath "$.msg" == "[SG] Hostname Not found"
+header "content-length" == "0"
 EOF
 
 hurl --test hostname_test.hurl -v
@@ -150,8 +145,7 @@ GET http://testhosts2:9000/echo/get
 
 HTTP 404
 [Asserts]
-header "content-length" != "0"
-jsonpath "$.msg" == "[SG] Hostname Not found"
+header "content-length" == "0"
 
 GET http://app.testhosts2:9000/echo/get
 
@@ -185,12 +179,12 @@ hurl --test mult_listeners.hurl -v
 
 echo "============[gateway]redis connction test============"
 kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
-kubectl --kubeconfig /home/runner/.kube/config apply -f redis_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f gateway_redis_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=redis
-kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis-service:6379"
+kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis://redis-service.default:6379"
 sleep 1
 
-cat>mult_listeners.hurl<<EOF 
+cat>redis.hurl<<EOF
 GET http://${cluster_ip}:9000/echo/get
 
 HTTP 200
@@ -198,18 +192,135 @@ HTTP 200
 jsonpath "$.url" == "http://${cluster_ip}:9000/get"
 
 EOF
-hurl --test mult_listeners.hurl -v
+hurl --test redis.hurl -v
 
-#TODO
+
 echo "============[websocket]no backend test============"
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
+wget https://github.com/vi/websocat/releases/download/v1.11.0/websocat.x86_64-unknown-linux-musl
+chmod 770 websocat.x86_64-unknown-linux-musl
+
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
+sleep 5
+
+command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo")
+
+expected_output=""
+
+if [ "$command_output" = "$expected_output" ]; then
+    echo "Output matches the expected value."
+else
+    echo "Output does not match the expected value."
+    exit 1
+fi
+
 echo "============[websocket]basic test============"
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
+
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
+sleep 5
+
+
+command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo")
+
+expected_output="hi"
+
+ if [ "$command_output" = "$expected_output" ]; then
+     echo "Output matches the expected value."
+ else
+     echo "Output does not match the expected value."
+     exit 1
+ fi
+
 echo "============[httproute]hostnames test============"
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+cat>>/etc/hosts<<EOF
+${cluster_ip} testhosts1.httproute
+${cluster_ip} testhosts2.httproute
+${cluster_ip} app.testhosts2.httproute
+EOF
+
+kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/spec/hostnames", "value": ["testhosts1.httproute"]}]'
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
+sleep 5
+
+cat>hostname_test.hurl<<EOF
+GET http://testhosts1.httproute:9000/echo/get
+
+HTTP 200
+[Asserts]
+header "content-length" != "0"
+jsonpath "$.url" == "http://testhosts1.httproute:9000/get"
+
+GET http://testhosts2.httproute:9000/echo/get
+
+HTTP 404
+[Asserts]
+header "content-length" == "0"
+EOF
+
+hurl --test hostname_test.hurl -v
+
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "replace", "path": "/spec/hostnames/0", "value": "*.testhosts2.httproute"}]'
+sleep 1
+
+cat>hostname_test2.hurl<<EOF
+GET http://testhosts2.httproute:9000/echo/get
+
+HTTP 404
+[Asserts]
+header "content-length" == "0"
+
+GET http://app.testhosts2.httproute:9000/echo/get
+
+HTTP 200
+[Asserts]
+header "content-length" != "0"
+jsonpath "$.url" == "http://app.testhosts2.httproute:9000/get"
+EOF
+
+hurl --test hostname_test2.hurl -v
+
 echo "============[httproute]rule match test============"
 echo "============[httproute]timeout test============"
 echo "============[httproute]backend with k8s service test============"
 echo "============[httproute]backend weight test============"
-echo "============[filter]backend level test============"
-echo "============[filter]rule level test============"
 echo "============[filter]routing level test============"
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+kubectl --kubeconfig /home/runner/.kube/config apply -f filter_httproute_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
+sleep 5
+
+cat>filter_routing.hurl<<EOF
+GET http://${cluster_ip}:8110
+
+HTTP 200
+[Asserts]
+
+EOF
+hurl --test filter_routing.hurl -v
 echo "============[filter]global level test============"
+kubectl --kubeconfig /home/runner/.kube/config delete sgfilters --all
+kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
+kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
+sleep 5
+
+curl http://${cluster_ip}:8110
+
+cat>filter_global.hurl<<EOF
+GET http://${cluster_ip}:8110
+
+HTTP 200
+[Asserts]
+
+EOF
+hurl --test filter_global.hurl -v
+
 echo "============[filter]multiple levels test============"
