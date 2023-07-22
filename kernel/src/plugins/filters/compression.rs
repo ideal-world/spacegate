@@ -11,9 +11,9 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
+use crate::functions::http_route::SgHttpRouteMatchInst;
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
 pub const CODE: &str = "compression";
 pub struct SgFilterCompressionDef;
@@ -89,7 +89,7 @@ impl SgPluginFilter for SgFilterCompression {
         }
     }
 
-    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
+    async fn init(&self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
         Ok(())
     }
 

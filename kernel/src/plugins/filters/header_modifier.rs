@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
+use crate::functions::http_route::SgHttpRouteMatchInst;
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 use async_trait::async_trait;
 use http::HeaderName;
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
     }
 
-    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
+    async fn init(&self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
         Ok(())
     }
 

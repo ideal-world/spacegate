@@ -66,6 +66,26 @@ impl AvailableBackendInst {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum SgRouteFilterRequestAction {
+    None,
+    Redirect,
+    Response,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SGCertInfo {
+    pub account_id: String,
+    pub account_name: Option<String>,
+    pub roles: Vec<SGRoleInfo>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SGRoleInfo {
+    pub id: String,
+    pub name: Option<String>,
+}
+
 #[derive(Debug)]
 pub struct SgRoutePluginContext {
     request_id: String,
@@ -96,15 +116,10 @@ pub struct SgRoutePluginContext {
     chose_backend: Option<AvailableBackendInst>,
 
     ext: HashMap<String, String>,
+    /// Describe user information
+    cert_info: Option<SGCertInfo>,
     action: SgRouteFilterRequestAction,
     gateway_name: String,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum SgRouteFilterRequestAction {
-    None,
-    Redirect,
-    Response,
 }
 
 #[allow(dead_code)]
@@ -145,6 +160,7 @@ impl SgRoutePluginContext {
             chose_route_rule,
             chose_backend: None,
             request_kind: SgPluginFilterKind::Http,
+            cert_info: None,
         }
     }
 
@@ -183,6 +199,7 @@ impl SgRoutePluginContext {
             chose_route_rule,
             chose_backend: None,
             request_kind: SgPluginFilterKind::Ws,
+            cert_info: None,
         }
     }
 
@@ -495,6 +512,14 @@ impl SgRoutePluginContext {
 
     pub fn get_gateway_name(&self) -> String {
         self.gateway_name.clone()
+    }
+
+    pub fn cert_info(&self) -> Option<&SGCertInfo> {
+        self.cert_info.as_ref()
+    }
+
+    pub fn set_cert_info(&mut self, cert_info: SGCertInfo) {
+        self.cert_info = Some(cert_info);
     }
 
     #[cfg(feature = "cache")]

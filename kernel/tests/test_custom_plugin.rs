@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use spacegate_kernel::plugins::context::SgRoutePluginContext;
+use spacegate_kernel::plugins::filters::SgPluginFilterInitDto;
 use spacegate_kernel::{
     config::{
         gateway_dto::{SgGateway, SgListener},
@@ -34,7 +35,7 @@ pub struct SgFilterAuth {}
 
 #[async_trait]
 impl SgPluginFilter for SgFilterAuth {
-    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
+    async fn init(&self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
         Ok(())
     }
 

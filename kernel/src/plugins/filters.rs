@@ -18,7 +18,8 @@ use tardis::basic::result::TardisResult;
 use tardis::url::Url;
 use tardis::{log, TardisFuns};
 
-use crate::config::http_route_dto::{SgHttpPathMatchType, SgHttpRouteRule};
+use crate::config::gateway_dto::{SgGateway, SgParameters};
+use crate::config::http_route_dto::{SgBackendRef, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteRule};
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
 use crate::functions::http_route::SgHttpRouteMatchInst;
 
@@ -61,7 +62,7 @@ pub fn get_filter_def(code: &str) -> TardisResult<&Box<dyn SgPluginFilterDef>> {
     }
 }
 
-pub async fn init(filter_configs: Vec<SgRouteFilter>, http_route_rules: &[SgHttpRouteRule]) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
+pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterInitDto) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
     let mut plugin_filters: Vec<(String, BoxSgPluginFilter)> = Vec::new();
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
@@ -70,7 +71,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>, http_route_rules: &[SgHttp
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
     for (_, plugin_filter) in &plugin_filters {
-        plugin_filter.init(http_route_rules).await?;
+        plugin_filter.init(&init_dto).await?;
     }
     Ok(plugin_filters)
 }
@@ -99,7 +100,7 @@ pub trait SgPluginFilter: Send + Sync + 'static {
         }
     }
 
-    async fn init(&self, http_route_rule: &[SgHttpRouteRule]) -> TardisResult<()>;
+    async fn init(&self, init_dto: &SgPluginFilterInitDto) -> TardisResult<()>;
 
     async fn destroy(&self) -> TardisResult<()>;
 
@@ -197,6 +198,44 @@ pub enum SgPluginFilterKind {
     Grpc,
     Ws,
 }
+
+/// Encapsulation filter initialization parameters.
+///
+#[derive(Debug, Clone)]
+pub struct SgPluginFilterInitDto {
+    pub gateway_parameters: SgParameters,
+    pub http_route_rules: Vec<SgHttpRouteRule>,
+}
+impl SgPluginFilterInitDto {
+    pub fn from_global(gateway_conf: &SgGateway, routes: &[SgHttpRoute]) -> Self {
+        Self {
+            gateway_parameters: gateway_conf.parameters.clone(),
+            http_route_rules: routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>(),
+        }
+    }
+    pub fn from_route(gateway_conf: &SgGateway, route: &SgHttpRoute) -> Self {
+        Self {
+            gateway_parameters: gateway_conf.parameters.clone(),
+            http_route_rules: route.rules.clone().unwrap_or_default(),
+        }
+    }
+    pub fn from_rule_or_backend(gateway_conf: &SgGateway, rule: &SgHttpRouteRule) -> Self {
+        Self {
+            gateway_parameters: gateway_conf.parameters.clone(),
+            http_route_rules: vec![rule.clone()],
+        }
+    }
+
+    pub fn from_backend(gateway_conf: &SgGateway, rule: &SgHttpRouteRule, backend: &SgBackendRef) -> Self {
+        let mut rule = rule.clone();
+        rule.backends = Some(vec![backend.clone()]);
+        Self {
+            gateway_parameters: gateway_conf.parameters.clone(),
+            http_route_rules: vec![rule],
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SgPluginFilterAccept {
     pub kind: Vec<SgPluginFilterKind>,
