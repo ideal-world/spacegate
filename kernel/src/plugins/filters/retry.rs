@@ -14,12 +14,11 @@ use tardis::{
 };
 
 use crate::{
-    config::http_route_dto::SgHttpRouteRule,
     functions::{http_client, http_route::SgHttpRouteMatchInst},
     plugins::filters::retry::expiring_map::ExpireMap,
 };
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
 lazy_static! {
     static ref REQUEST_BODY: Arc<Mutex<ExpireMap<Option<Vec<u8>>>>> = <_>::default();
@@ -86,7 +85,7 @@ impl SgPluginFilter for SgFilterRetry {
         }
     }
 
-    async fn init(&self, _http_route_rules: &[SgHttpRouteRule]) -> TardisResult<()> {
+    async fn init(&self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
         Ok(())
     }
 

@@ -6,9 +6,9 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst, plugins::context::SgRouteFilterRequestAction};
+use crate::{functions::http_route::SgHttpRouteMatchInst, plugins::context::SgRouteFilterRequestAction};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
 pub const CODE: &str = "maintenance";
 pub struct SgFilterMaintenanceDef;
@@ -36,7 +36,7 @@ impl SgPluginFilter for SgFilterMaintenance {
             ..Default::default()
         }
     }
-    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
+    async fn init(&self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
         Ok(())
     }
 

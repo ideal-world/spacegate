@@ -20,8 +20,8 @@ use tardis::{
 
 use self::status_plugin::{clean_status, get_status, update_status};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
-use crate::{config::http_route_dto::SgHttpRouteRule, functions::http_route::SgHttpRouteMatchInst};
+use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use crate::functions::http_route::SgHttpRouteMatchInst;
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 
@@ -75,7 +75,7 @@ impl SgPluginFilter for SgFilterStatus {
         }
     }
 
-    async fn init(&self, http_route_rules: &[SgHttpRouteRule]) -> TardisResult<()> {
+    async fn init(&self, init_dto: &SgPluginFilterInitDto) -> TardisResult<()> {
         let (shutdown_tx, _) = tokio::sync::watch::channel(());
         let mut shutdown_rx = shutdown_tx.subscribe();
 
@@ -101,7 +101,7 @@ impl SgPluginFilter for SgFilterStatus {
         *shutdown = Some(shutdown_tx);
 
         clean_status().await;
-        for http_route_rule in http_route_rules {
+        for http_route_rule in init_dto.http_route_rules.clone() {
             if let Some(backends) = &http_route_rule.backends {
                 for backend in backends {
                     update_status(&backend.name_or_host, status_plugin::Status::default()).await;
@@ -167,7 +167,10 @@ mod tests {
     use tardis::{basic::error::TardisError, tokio};
 
     use crate::{
-        config::http_route_dto::{SgBackendRef, SgHttpRouteRule},
+        config::{
+            gateway_dto::SgParameters,
+            http_route_dto::{SgBackendRef, SgHttpRouteRule},
+        },
         functions::http_route::{SgBackend, SgHttpRouteRuleInst},
         plugins::{
             context::ChoseHttpRouteRuleInst,
@@ -176,7 +179,7 @@ mod tests {
                     status_plugin::{get_status, Status},
                     SgFilterStatus,
                 },
-                SgPluginFilter, SgRoutePluginContext,
+                SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext,
             },
         },
     };
@@ -195,12 +198,15 @@ mod tests {
             filters: None,
         };
         stats
-            .init(&[SgHttpRouteRule {
-                matches: None,
-                filters: None,
-                backends: Some(vec![mock_backend_ref.clone()]),
-                timeout_ms: None,
-            }])
+            .init(&SgPluginFilterInitDto {
+                gateway_parameters: SgParameters::default(),
+                http_route_rules: vec![SgHttpRouteRule {
+                    matches: None,
+                    filters: None,
+                    backends: Some(vec![mock_backend_ref.clone()]),
+                    timeout_ms: None,
+                }],
+            })
             .await
             .unwrap();
         let mock_backend = SgBackend {

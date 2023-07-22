@@ -7,7 +7,7 @@ use crate::{
     },
     plugins::{
         context::{ChoseHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
-        filters::{self, BoxSgPluginFilter},
+        filters::{self, BoxSgPluginFilter, SgPluginFilterInitDto},
     },
 };
 use http::{header::UPGRADE, Request, Response};
@@ -29,16 +29,16 @@ use super::http_client;
 static mut ROUTES: Option<HashMap<String, SgGatewayInst>> = None;
 
 pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisResult<()> {
-    let all_route_rules = routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>();
-    let global_filters = if let Some(filters) = gateway_conf.filters {
-        filters::init(filters, &all_route_rules).await?
+    let _all_route_rules = routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>();
+    let global_filters = if let Some(filters) = gateway_conf.clone().filters {
+        filters::init(filters, SgPluginFilterInitDto::from_global(&gateway_conf, &routes)).await?
     } else {
         Vec::new()
     };
     let mut route_insts = Vec::new();
     for route in routes.clone() {
-        let route_filters = if let Some(filters) = route.filters {
-            filters::init(filters, &route.rules.clone().unwrap_or_default()).await?
+        let route_filters = if let Some(filters) = route.clone().filters {
+            filters::init(filters, SgPluginFilterInitDto::from_route(&gateway_conf, &route)).await?
         } else {
             Vec::new()
         };
@@ -46,12 +46,13 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
             let mut rule_insts = Vec::new();
             for rule in rules {
                 let rule_filters = if let Some(filters) = rule.filters.clone() {
-                    filters::init(filters, &[rule.clone()]).await?
+                    filters::init(filters, SgPluginFilterInitDto::from_rule_or_backend(&gateway_conf, &rule)).await?
                 } else {
                     Vec::new()
                 };
 
                 let rule_matches_insts = rule
+                    .clone()
                     .matches
                     .map(|rule_matches| {
                         rule_matches
@@ -135,30 +136,33 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                             .collect::<TardisResult<Vec<SgHttpRouteMatchInst>>>()
                     })
                     .transpose()?;
-
+                let gateway_conf_clone = Arc::new(gateway_conf.clone());
                 rule_insts.push(SgHttpRouteRuleInst {
                     filters: rule_filters,
                     matches: rule_matches_insts,
-                    backends: if let Some(backend_refs) = rule.backends {
+                    backends: if let Some(backend_refs) = rule.clone().backends {
                         let backends = join_all(
                             backend_refs
                                 .into_iter()
-                                .map(|backend_ref| (backend_ref, &all_route_rules))
-                                .map(|(backend_ref, read_only_routes)| async move {
-                                    let filters = if let Some(filters) = backend_ref.filters {
-                                        filters::init(filters, read_only_routes).await?
-                                    } else {
-                                        Vec::new()
-                                    };
-                                    Ok::<_, TardisError>(SgBackend {
-                                        name_or_host: backend_ref.name_or_host,
-                                        namespace: backend_ref.namespace,
-                                        port: backend_ref.port,
-                                        timeout_ms: backend_ref.timeout_ms,
-                                        protocol: backend_ref.protocol,
-                                        weight: backend_ref.weight,
-                                        filters,
-                                    })
+                                .map(|backend_ref| (backend_ref, &rule))
+                                .map(move |(backend_ref, read_only_route)| {
+                                    let gateway_conf_clone = gateway_conf_clone.clone();
+                                    async move {
+                                        let filters = if let Some(filters) = backend_ref.clone().filters {
+                                            filters::init(filters, SgPluginFilterInitDto::from_backend(&gateway_conf_clone, read_only_route, &backend_ref)).await?
+                                        } else {
+                                            Vec::new()
+                                        };
+                                        Ok::<_, TardisError>(SgBackend {
+                                            name_or_host: backend_ref.name_or_host,
+                                            namespace: backend_ref.namespace,
+                                            port: backend_ref.port,
+                                            timeout_ms: backend_ref.timeout_ms,
+                                            protocol: backend_ref.protocol,
+                                            weight: backend_ref.weight,
+                                            filters,
+                                        })
+                                    }
                                 })
                                 .collect_vec(),
                         )

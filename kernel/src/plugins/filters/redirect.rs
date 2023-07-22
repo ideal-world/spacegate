@@ -7,12 +7,11 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::config::http_route_dto::SgHttpRouteRule;
 use crate::helpers::url_helper::UrlToUri;
 use crate::plugins::context::SgRouteFilterRequestAction;
 use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
 
-use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgRoutePluginContext};
+use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
 pub const CODE: &str = "redirect";
 
@@ -50,7 +49,7 @@ impl SgPluginFilter for SgFilterRedirect {
             ..Default::default()
         }
     }
-    async fn init(&self, _: &[SgHttpRouteRule]) -> TardisResult<()> {
+    async fn init(&self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
         Ok(())
     }
 
