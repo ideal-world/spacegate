@@ -1,6 +1,6 @@
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, StatusCode, Uri, Version};
 use hyper::Body;
-
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tardis::basic::error::TardisError;
@@ -73,14 +73,14 @@ pub enum SgRouteFilterRequestAction {
     Response,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct SGCertInfo {
     pub account_id: String,
     pub account_name: Option<String>,
     pub roles: Vec<SGRoleInfo>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct SGRoleInfo {
     pub id: String,
     pub name: Option<String>,
@@ -514,7 +514,7 @@ impl SgRoutePluginContext {
         self.gateway_name.clone()
     }
 
-    pub fn cert_info(&self) -> Option<&SGCertInfo> {
+    pub fn get_cert_info(&self) -> Option<&SGCertInfo> {
         self.cert_info.as_ref()
     }
 
