@@ -352,7 +352,8 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_name_without_namespace),
             parameters: SgParameters {
                 redis_url: gateway_obj.metadata.annotations.clone().and_then(|ann| ann.get("redis_url").map(|v| v.to_string())),
-                log_level: gateway_obj.metadata.annotations.and_then(|ann: std::collections::BTreeMap<String, String>| ann.get("log_level").map(|v| v.to_string())),
+                log_level: gateway_obj.metadata.annotations.clone().and_then(|ann: std::collections::BTreeMap<String, String>| ann.get("log_level").map(|v| v.to_string())),
+                lang: gateway_obj.metadata.annotations.and_then(|ann: std::collections::BTreeMap<String, String>| ann.get("lang").map(|v| v.to_string())),
             },
             listeners: join_all(
                 gateway_obj
