@@ -49,7 +49,7 @@ impl SgPluginFilter for SgFilterRedirect {
             ..Default::default()
         }
     }
-    async fn init(&self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
+    async fn init(&mut self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
         Ok(())
     }
 

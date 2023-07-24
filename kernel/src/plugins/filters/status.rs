@@ -75,7 +75,7 @@ impl SgPluginFilter for SgFilterStatus {
         }
     }
 
-    async fn init(&self, init_dto: &SgPluginFilterInitDto) -> TardisResult<()> {
+    async fn init(&mut self, init_dto: &SgPluginFilterInitDto) -> TardisResult<()> {
         let (shutdown_tx, _) = tokio::sync::watch::channel(());
         let mut shutdown_rx = shutdown_tx.subscribe();
 
@@ -187,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn test_status() {
         tracing_subscriber::fmt::init();
-        let stats = SgFilterStatus::default();
+        let mut stats = SgFilterStatus::default();
         let mock_backend_ref = SgBackendRef {
             name_or_host: "test1".to_string(),
             namespace: None,

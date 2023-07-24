@@ -29,7 +29,7 @@ pub struct SgParameters {
     /// Gateway Log_Level
     pub log_level: Option<String>,
     /// Gateway language
-    pub lang:Option<String>,
+    pub lang: Option<String>,
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.

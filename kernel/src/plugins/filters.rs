@@ -70,7 +70,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterIn
         let filter_inst = filter_def.inst(filter_conf.spec)?;
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
-    for (_, plugin_filter) in &plugin_filters {
+    for (_, plugin_filter) in &mut plugin_filters {
         plugin_filter.init(&init_dto).await?;
     }
     Ok(plugin_filters)
@@ -100,7 +100,7 @@ pub trait SgPluginFilter: Send + Sync + 'static {
         }
     }
 
-    async fn init(&self, init_dto: &SgPluginFilterInitDto) -> TardisResult<()>;
+    async fn init(&mut self, init_dto: &SgPluginFilterInitDto) -> TardisResult<()>;
 
     async fn destroy(&self) -> TardisResult<()>;
 
