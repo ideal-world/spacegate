@@ -547,6 +547,7 @@ async fn process_req_filters_http(
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters, matched_match_inst).await
 }
 
+#[cfg(feature = "ws")]
 async fn process_req_filters_ws(
     gateway_name: String,
     remote_addr: SocketAddr,
