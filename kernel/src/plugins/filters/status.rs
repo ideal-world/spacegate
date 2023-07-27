@@ -171,7 +171,7 @@ mod tests {
             gateway_dto::SgParameters,
             http_route_dto::{SgBackendRef, SgHttpRouteRule},
         },
-        functions::http_route::{SgBackend, SgHttpRouteRuleInst},
+        functions::http_route::{SgBackendInst, SgHttpRouteRuleInst},
         plugins::{
             context::ChoseHttpRouteRuleInst,
             filters::{
@@ -209,7 +209,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let mock_backend = SgBackend {
+        let mock_backend = SgBackendInst {
             name_or_host: mock_backend_ref.name_or_host,
             namespace: mock_backend_ref.namespace,
             port: mock_backend_ref.port,
