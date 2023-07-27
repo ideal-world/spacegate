@@ -10,6 +10,7 @@ pub mod config;
 pub mod constants;
 pub mod functions;
 pub mod helpers;
+pub mod instance;
 pub mod plugins;
 
 pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<()> {
