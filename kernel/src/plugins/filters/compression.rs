@@ -11,7 +11,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::instance::SgHttpRouteMatchInst;
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 

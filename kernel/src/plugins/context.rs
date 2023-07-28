@@ -10,7 +10,7 @@ use tardis::TardisFuns;
 
 use crate::config::gateway_dto::SgProtocol;
 
-use crate::functions::http_route::{SgBackendInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
+use crate::instance::{SgBackendInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
 
 use super::filters::SgPluginFilterKind;
 

@@ -1,18 +1,20 @@
 use std::{collections::HashMap, net::SocketAddr};
 
+use crate::instance::{SgBackendInst, SgGatewayInst, SgHttpHeaderMatchInst, SgHttpQueryMatchInst};
 use crate::{
     config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocol},
+        gateway_dto::{SgGateway, SgListener},
         http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
     },
+    instance::{SgHttpPathMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     plugins::{
         context::{ChoseHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
         filters::{self, BoxSgPluginFilter, SgPluginFilterInitDto},
     },
 };
 use http::{header::UPGRADE, Request, Response};
-use hyper::{client::HttpConnector, Body, Client, StatusCode};
-use hyper_rustls::HttpsConnector;
+use hyper::{Body, StatusCode};
+
 use itertools::Itertools;
 use std::sync::Arc;
 use std::vec::Vec;
@@ -186,24 +188,8 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     }
 
     log::trace!(
-        "[SG.Route] Init matched rule {:?} by  {}",
-        route_insts
-            .iter()
-            .map(|route| route
-                .rules
-                .as_ref()
-                .map(|r| r
-                    .iter()
-                    .map(|r| if let Some(matchs) = r.matches.as_ref() {
-                        matchs.iter().map(|m| format!("{:?}", m)).collect::<Vec<_>>().join(", ")
-                    } else {
-                        "None".to_string()
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", "))
-                .unwrap_or_default())
-            .collect::<Vec<_>>()
-            .join(", "),
+        "[SG.Route] Init route:[{}] by  {}",
+        route_insts.iter().map(|route| format!("{}", route)).collect::<Vec<_>>().join(", "),
         gateway_conf.name
     );
 
@@ -294,6 +280,11 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 
     let (matched_route_inst, matched_rule_inst, matched_match_inst) = match_route_process(&request, &gateway_inst.routes);
 
+    match matched_match_inst {
+        Some(matched_match) => log::trace!("[SG.Route] Matched rule {}", matched_match),
+        None => log::info!("[SG.Route] Not matched rule"),
+    }
+
     if matched_route_inst.is_none() {
         let mut not_found = Response::default();
         *not_found.status_mut() = StatusCode::NOT_FOUND;
@@ -368,15 +359,11 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
             None
         };
 
-        log::trace!(
-            "[SG.Request] matched rule: {}, backend: {:?}",
-            if let Some(matched_rule) = matched_rule_inst.and_then(|r| r.matches.as_ref()) {
-                matched_rule.iter().map(|r| format!("{:?}", r)).collect::<Vec<_>>().join(", ")
-            } else {
-                "None".to_string()
-            },
-            backend.map(|b| b.name_or_host.clone())
-        );
+        match backend {
+            Some(b) => log::trace!("[SG.Request] matched  backend: {}", b),
+            None => log::info!("[SG.Request] matched no backend"),
+        }
+
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
@@ -804,70 +791,6 @@ fn choose_backend(backends: &Vec<SgBackendInst>) -> Option<&SgBackendInst> {
     }
 }
 
-struct SgGatewayInst {
-    pub filters: Vec<(String, BoxSgPluginFilter)>,
-    pub routes: Vec<SgHttpRouteInst>,
-    pub client: Client<HttpsConnector<HttpConnector>>,
-    pub listeners: Vec<SgListener>,
-}
-
-#[derive(Default)]
-struct SgHttpRouteInst {
-    pub hostnames: Option<Vec<String>>,
-    pub filters: Vec<(String, BoxSgPluginFilter)>,
-    pub rules: Option<Vec<SgHttpRouteRuleInst>>,
-}
-
-#[derive(Default)]
-pub struct SgHttpRouteRuleInst {
-    pub filters: Vec<(String, BoxSgPluginFilter)>,
-    pub matches: Option<Vec<SgHttpRouteMatchInst>>,
-    pub backends: Option<Vec<SgBackendInst>>,
-    pub timeout_ms: Option<u64>,
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct SgHttpRouteMatchInst {
-    pub path: Option<SgHttpPathMatchInst>,
-    pub header: Option<Vec<SgHttpHeaderMatchInst>>,
-    pub query: Option<Vec<SgHttpQueryMatchInst>>,
-    pub method: Option<Vec<String>>,
-}
-#[derive(Default, Debug, Clone)]
-
-pub struct SgHttpPathMatchInst {
-    pub kind: SgHttpPathMatchType,
-    pub value: String,
-    pub regular: Option<Regex>,
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct SgHttpHeaderMatchInst {
-    pub kind: SgHttpHeaderMatchType,
-    pub name: String,
-    pub value: String,
-    pub regular: Option<Regex>,
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct SgHttpQueryMatchInst {
-    pub kind: SgHttpQueryMatchType,
-    pub name: String,
-    pub value: String,
-    pub regular: Option<Regex>,
-}
-
-#[derive(Default)]
-pub struct SgBackendInst {
-    pub name_or_host: String,
-    pub namespace: Option<String>,
-    pub port: u16,
-    pub timeout_ms: Option<u64>,
-    pub protocol: Option<SgProtocol>,
-    pub weight: Option<u16>,
-    pub filters: Vec<(String, BoxSgPluginFilter)>,
-}
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -879,12 +802,11 @@ mod tests {
 
     use crate::{
         config::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
-        functions::http_route::{
-            choose_backend, match_route_insts_with_hostname_priority, SgBackendInst, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst, SgHttpRouteRuleInst,
-        },
+        functions::http_route::{choose_backend, match_route_insts_with_hostname_priority},
+        instance::{SgBackendInst, SgHttpHeaderMatchInst, SgHttpPathMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     };
 
-    use super::{match_route_process, match_rule_inst, SgHttpPathMatchInst, SgHttpRouteMatchInst};
+    use super::{match_route_process, match_rule_inst};
 
     #[test]
     fn test_match_rule_inst() {
