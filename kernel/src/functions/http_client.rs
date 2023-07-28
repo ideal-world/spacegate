@@ -10,7 +10,7 @@ use tardis::{
     tokio::time::timeout,
 };
 
-use super::http_route::SgBackend;
+use super::http_route::SgBackendInst;
 
 const DEFAULT_TIMEOUT_MS: u64 = 5000;
 
@@ -38,7 +38,7 @@ fn default_client() -> &'static Client<HttpsConnector<HttpConnector>> {
 
 pub async fn request(
     client: &Client<HttpsConnector<HttpConnector>>,
-    backend: Option<&SgBackend>,
+    backend: Option<&SgBackendInst>,
     rule_timeout_ms: Option<u64>,
     redirect: bool,
     mut ctx: SgRoutePluginContext,
@@ -135,7 +135,7 @@ mod tests {
         config::gateway_dto::SgProtocol,
         functions::{
             http_client::{init, request},
-            http_route::SgBackend,
+            http_route::SgBackendInst,
         },
         plugins::context::SgRoutePluginContext,
     };
@@ -147,7 +147,7 @@ mod tests {
         // test simple
         let mut resp = request(
             &client,
-            Some(&SgBackend {
+            Some(&SgBackendInst {
                 name_or_host: "www.baidu.com".to_string(),
                 port: 80,
                 ..Default::default()
@@ -173,7 +173,7 @@ mod tests {
         // test get
         let mut resp = request(
             &client,
-            Some(&SgBackend {
+            Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 80,
                 ..Default::default()
@@ -199,7 +199,7 @@ mod tests {
         // test post with tls
         let mut resp = request(
             &client,
-            Some(&SgBackend {
+            Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
                 protocol: Some(SgProtocol::Https),
                 port: 443,
@@ -227,7 +227,7 @@ mod tests {
         // test timeout
         let mut resp = request(
             &client,
-            Some(&SgBackend {
+            Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 80,
                 ..Default::default()
@@ -251,7 +251,7 @@ mod tests {
 
         let mut resp = request(
             &client,
-            Some(&SgBackend {
+            Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 80,
                 timeout_ms: Some(20000),

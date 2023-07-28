@@ -10,7 +10,7 @@ use tardis::TardisFuns;
 
 use crate::config::gateway_dto::SgProtocol;
 
-use crate::functions::http_route::{SgBackend, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
+use crate::functions::http_route::{SgBackendInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
 
 use super::filters::SgPluginFilterKind;
 
@@ -43,7 +43,7 @@ pub struct AvailableBackendInst {
 }
 
 impl AvailableBackendInst {
-    fn clone_from(value: &SgBackend) -> Self {
+    fn clone_from(value: &SgBackendInst) -> Self {
         Self {
             name_or_host: value.name_or_host.clone(),
             namespace: value.namespace.clone(),
@@ -496,7 +496,7 @@ impl SgRoutePluginContext {
         self.action = action;
     }
 
-    pub fn set_chose_backend(&mut self, chose_backend: &SgBackend) {
+    pub fn set_chose_backend(&mut self, chose_backend: &SgBackendInst) {
         self.chose_backend = Some(AvailableBackendInst::clone_from(chose_backend));
     }
 
