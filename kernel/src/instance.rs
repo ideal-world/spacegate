@@ -1,30 +1,18 @@
-use std::{collections::HashMap, fmt, net::SocketAddr, path::Display};
-
 use crate::{
     config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocol},
-        http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
+        gateway_dto::{SgListener, SgProtocol},
+        http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
     },
-    plugins::{
-        context::{ChoseHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
-        filters::{self, BoxSgPluginFilter, SgPluginFilterInitDto},
-    },
-};
-use http::{header::UPGRADE, Request, Response};
-use hyper::{client::HttpConnector, Body, Client, StatusCode};
-use hyper_rustls::HttpsConnector;
-use itertools::Itertools;
-use std::sync::Arc;
-use std::vec::Vec;
-use tardis::{
-    basic::{error::TardisError, result::TardisResult},
-    futures_util::future::join_all,
-    log,
-    rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng},
-    regex::Regex,
+    plugins::filters::BoxSgPluginFilter,
 };
 
-struct SgGatewayInst {
+use hyper::{client::HttpConnector, Client};
+use hyper_rustls::HttpsConnector;
+
+use std::vec::Vec;
+use tardis::regex::Regex;
+
+pub(crate) struct SgGatewayInst {
     pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub routes: Vec<SgHttpRouteInst>,
     pub client: Client<HttpsConnector<HttpConnector>>,
@@ -32,7 +20,7 @@ struct SgGatewayInst {
 }
 
 #[derive(Default)]
-struct SgHttpRouteInst {
+pub struct SgHttpRouteInst {
     pub hostnames: Option<Vec<String>>,
     pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub rules: Option<Vec<SgHttpRouteRuleInst>>,

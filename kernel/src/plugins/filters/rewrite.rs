@@ -1,5 +1,5 @@
 use crate::helpers::url_helper::UrlToUri;
-use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
+use crate::{config::plugin_filter_dto::SgHttpPathModifier, instance::SgHttpRouteMatchInst};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tardis::url::Url;
@@ -72,7 +72,7 @@ impl SgPluginFilter for SgFilterRewrite {
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
-        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteRuleInst},
+        instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
         plugins::context::ChoseHttpRouteRuleInst,
     };
 

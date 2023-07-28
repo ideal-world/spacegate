@@ -9,7 +9,7 @@ use tardis::{
 
 use crate::helpers::url_helper::UrlToUri;
 use crate::plugins::context::SgRouteFilterRequestAction;
-use crate::{config::plugin_filter_dto::SgHttpPathModifier, functions::http_route::SgHttpRouteMatchInst};
+use crate::{config::plugin_filter_dto::SgHttpPathModifier, instance::SgHttpRouteMatchInst};
 
 use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
@@ -96,7 +96,7 @@ impl SgPluginFilter for SgFilterRedirect {
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
-        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteRuleInst},
+        instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
         plugins::context::ChoseHttpRouteRuleInst,
     };
 
