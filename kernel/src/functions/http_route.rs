@@ -188,24 +188,8 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     }
 
     log::trace!(
-        "[SG.Route] Init matched rule {:?} by  {}",
-        route_insts
-            .iter()
-            .map(|route| route
-                .rules
-                .as_ref()
-                .map(|r| r
-                    .iter()
-                    .map(|r| if let Some(matchs) = r.matches.as_ref() {
-                        matchs.iter().map(|m| format!("{:?}", m)).collect::<Vec<_>>().join(", ")
-                    } else {
-                        "None".to_string()
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", "))
-                .unwrap_or_default())
-            .collect::<Vec<_>>()
-            .join(", "),
+        "[SG.Route] Init route:[{}] by  {}",
+        route_insts.iter().map(|route| format!("{}", route)).collect::<Vec<_>>().join(", "),
         gateway_conf.name
     );
 
