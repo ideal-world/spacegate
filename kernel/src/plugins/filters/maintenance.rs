@@ -48,12 +48,12 @@ impl SgPluginFilter for SgFilterMaintenance {
         if self.is_enabled {
             ctx.set_action(SgRouteFilterRequestAction::Response);
             let default_content_type = HeaderValue::from_static("text/html");
-            let content_type = ctx.get_req_headers().get(header::CONTENT_TYPE).unwrap_or(&default_content_type).to_str().unwrap_or("");
+            let content_type = ctx.request.get_req_headers().get(header::CONTENT_TYPE).unwrap_or(&default_content_type).to_str().unwrap_or("");
             match content_type {
                 "text/html" => {
                     let title = self.title.clone().unwrap_or("System Maintenance".to_string());
                     let msg = self.msg.clone().map(|x| x.replace("/n", "<br>")).unwrap_or("We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly.<br> Thank you for your patience, understanding, and support.".to_string());
-                    ctx.set_resp_body(
+                    ctx.response.set_resp_body(
                         format!(
                             r##"<!DOCTYPE html>
                     <html>
@@ -99,7 +99,7 @@ impl SgPluginFilter for SgFilterMaintenance {
                     return Err(TardisError::forbidden(&msg, ""));
                 }
                 _ => {
-                    ctx.set_resp_body("<h1>Maintenance</h1>".to_string().into_bytes())?;
+                    ctx.response.set_resp_body("<h1>Maintenance</h1>".to_string().into_bytes())?;
                 }
             }
         }
