@@ -10,7 +10,7 @@ use tardis::{
     tokio::time::timeout,
 };
 
-use super::http_route::SgBackendInst;
+use crate::instance::SgBackendInst;
 
 const DEFAULT_TIMEOUT_MS: u64 = 5000;
 
@@ -133,10 +133,8 @@ mod tests {
 
     use crate::{
         config::gateway_dto::SgProtocol,
-        functions::{
-            http_client::{init, request},
-            http_route::SgBackendInst,
-        },
+        functions::http_client::{init, request},
+        instance::SgBackendInst,
         plugins::context::SgRoutePluginContext,
     };
 

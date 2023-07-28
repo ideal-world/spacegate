@@ -165,11 +165,18 @@ async fn process(
     (remote_addr, local_addr): (SocketAddr, SocketAddr),
     request: Request<Body>,
 ) -> Result<Response<Body>, hyper::Error> {
+    let method = request.method().to_string().clone();
+    let uri = request.uri().to_string().clone();
     let response = http_route::process(gateway_name, req_scheme.as_str(), (remote_addr, local_addr), request).await;
-    match response {
+    let result = match response {
         Ok(result) => Ok(result),
         Err(error) => into_http_error(error),
+    };
+    match &result {
+        Ok(resp) => log::info!("[SG.server] response: code {} => {} {}", resp.status(), method, uri),
+        Err(e) => log::info!("[SG.server] response: error {} => {} {}", e.message(), method, uri),
     }
+    result
 }
 
 fn into_http_error(error: TardisError) -> Result<Response<Body>, hyper::Error> {

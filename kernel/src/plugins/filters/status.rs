@@ -21,7 +21,7 @@ use tardis::{
 use self::status_plugin::{clean_status, get_status, update_status};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::instance::SgHttpRouteMatchInst;
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 
@@ -171,7 +171,7 @@ mod tests {
             gateway_dto::SgParameters,
             http_route_dto::{SgBackendRef, SgHttpRouteRule},
         },
-        functions::http_route::{SgBackendInst, SgHttpRouteRuleInst},
+        instance::{SgBackendInst, SgHttpRouteRuleInst},
         plugins::{
             context::ChoseHttpRouteRuleInst,
             filters::{

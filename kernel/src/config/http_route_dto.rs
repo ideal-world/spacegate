@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use super::{gateway_dto::SgProtocol, plugin_filter_dto::SgRouteFilter};
@@ -66,6 +68,16 @@ pub enum SgHttpPathMatchType {
     Regular,
 }
 
+impl fmt::Display for SgHttpPathMatchType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SgHttpPathMatchType::Exact => write!(f, "exact"),
+            SgHttpPathMatchType::Prefix => write!(f, "prefix"),
+            SgHttpPathMatchType::Regular => write!(f, "regular"),
+        }
+    }
+}
+
 /// HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request headers.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgHttpHeaderMatch {
@@ -88,6 +100,15 @@ pub enum SgHttpHeaderMatchType {
     Regular,
 }
 
+impl fmt::Display for SgHttpHeaderMatchType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SgHttpHeaderMatchType::Exact => write!(f, "exact"),
+            SgHttpHeaderMatchType::Regular => write!(f, "regular"),
+        }
+    }
+}
+
 /// HTTPQueryMatch describes how to select a HTTP route by matching HTTP query parameters.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgHttpQueryMatch {
@@ -108,6 +129,15 @@ pub enum SgHttpQueryMatchType {
     Exact,
     /// Matches if the Http query parameter matches the given regular expression with case sensitivity.
     Regular,
+}
+
+impl fmt::Display for SgHttpQueryMatchType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SgHttpQueryMatchType::Exact => write!(f, "exact"),
+            SgHttpQueryMatchType::Regular => write!(f, "regular"),
+        }
+    }
 }
 
 /// BackendRef defines how a HTTPRoute should forward an HTTP request.

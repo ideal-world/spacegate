@@ -11,7 +11,7 @@ use spacegate_kernel::{
         http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
-    functions::http_route::SgHttpRouteMatchInst,
+    instance::SgHttpRouteMatchInst,
     plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef},
 };
 use tardis::{

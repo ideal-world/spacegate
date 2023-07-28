@@ -624,10 +624,13 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
         })
         .collect();
 
-    log::trace!(
-        "[SG.Config] {namespace}.{kind}.{name} filter found: {:?}",
-        filter_objs.clone().into_iter().map(|filter| format!("Filter{{code: {},name:{}}}", filter.code, filter.name.unwrap_or("None".to_string()))).collect_vec()
-    );
+    if !filter_objs.is_empty() {
+        log::trace!(
+            "[SG.Config.SgFilter] {namespace}.{kind}.{name} filter found: {:?}",
+            filter_objs.clone().into_iter().map(|filter| format!("Filter{{code: {},name:{}}}", filter.code, filter.name.unwrap_or("None".to_string()))).collect_vec()
+        );
+    }
+
     if filter_objs.is_empty() {
         Ok(None)
     } else {

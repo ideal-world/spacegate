@@ -21,7 +21,7 @@ use tardis::{log, TardisFuns};
 use crate::config::gateway_dto::{SgGateway, SgParameters};
 use crate::config::http_route_dto::{SgBackendRef, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteRule};
 use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
-use crate::functions::http_route::SgHttpRouteMatchInst;
+use crate::instance::SgHttpRouteMatchInst;
 
 use super::context::SgRoutePluginContext;
 
@@ -237,6 +237,7 @@ impl SgPluginFilterInitDto {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SgPluginFilterAccept {
     pub kind: Vec<SgPluginFilterKind>,
     /// Whether to accept the error response, default is false .
@@ -264,7 +265,7 @@ mod tests {
             http_route_dto::SgHttpPathMatchType,
             plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType},
         },
-        functions::http_route::{SgHttpPathMatchInst, SgHttpRouteMatchInst},
+        instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst},
         plugins::filters::http_common_modify_path,
     };
 
