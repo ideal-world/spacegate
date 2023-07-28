@@ -153,7 +153,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                                         } else {
                                             Vec::new()
                                         };
-                                        Ok::<_, TardisError>(SgBackend {
+                                        Ok::<_, TardisError>(SgBackendInst {
                                             name_or_host: backend_ref.name_or_host,
                                             namespace: backend_ref.namespace,
                                             port: backend_ref.port,
@@ -184,6 +184,29 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
             rules: rule_insts,
         })
     }
+
+    log::trace!(
+        "[SG.Route] Init matched rule {:?} by  {}",
+        route_insts
+            .iter()
+            .map(|route| route
+                .rules
+                .as_ref()
+                .map(|r| r
+                    .iter()
+                    .map(|r| if let Some(matchs) = r.matches.as_ref() {
+                        matchs.iter().map(|m| format!("{:?}", m)).collect::<Vec<_>>().join(", ")
+                    } else {
+                        "None".to_string()
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "))
+                .unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(", "),
+        gateway_conf.name
+    );
+
     let route_inst = SgGatewayInst {
         filters: global_filters,
         routes: route_insts,
@@ -195,7 +218,8 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
             ROUTES = Some(HashMap::new());
         }
         ROUTES.as_mut().expect("Unreachable code").insert(gateway_conf.name.to_string(), route_inst);
-    }
+    };
+
     Ok(())
 }
 
@@ -268,29 +292,15 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         return Ok(not_found);
     }
 
-    let matched_route_inst = match_route_insts_with_hostname_priority(request.uri().host(), &gateway_inst.routes);
+    let (matched_route_inst, matched_rule_inst, matched_match_inst) = match_route_process(&request, &gateway_inst.routes);
+
     if matched_route_inst.is_none() {
         let mut not_found = Response::default();
         *not_found.status_mut() = StatusCode::NOT_FOUND;
         return Ok(not_found);
-    }
+    };
 
     let matched_route_inst = matched_route_inst.expect("Unreachable code");
-    let (matched_rule_inst, matched_match_inst) = if let Some(matched_rule_insts) = &matched_route_inst.rules {
-        let mut _matched_rule_inst = None;
-        let mut _matched_match_inst = None;
-        for matched_rule_inst in matched_rule_insts {
-            let (matched, matched_match_inst) = match_rule_inst(&request, matched_rule_inst.matches.as_ref());
-            if !matched {
-                continue;
-            }
-            _matched_rule_inst = Some(matched_rule_inst);
-            _matched_match_inst = matched_match_inst;
-        }
-        (_matched_rule_inst, _matched_match_inst)
-    } else {
-        (None, None)
-    };
 
     let backend = if let Some(Some(backends)) = matched_rule_inst.map(|rule| &rule.backends) {
         choose_backend(backends)
@@ -357,6 +367,16 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         } else {
             None
         };
+
+        log::trace!(
+            "[SG.Request] matched rule: {}, backend: {:?}",
+            if let Some(matched_rule) = matched_rule_inst.and_then(|r| r.matches.as_ref()) {
+                matched_rule.iter().map(|r| format!("{:?}", r)).collect::<Vec<_>>().join(", ")
+            } else {
+                "None".to_string()
+            },
+            backend.map(|b| b.name_or_host.clone())
+        );
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
@@ -365,16 +385,105 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
     ctx.build_response().await
 }
 
-fn match_route_insts_with_hostname_priority<'a>(req_host: Option<&str>, routes: &'a Vec<SgHttpRouteInst>) -> Option<&'a SgHttpRouteInst> {
+///Match route by SgHttpRouteInst list
+/// First, we perform route matching based on the hostname. Hostname matching can fall into three categories:
+/// exact domain name match, wildcard domain match, and unspecified domain name match.
+/// The priority of matching rules decreases in the following order: exact > wildcard > unspecified.
+/// If there are higher-priority domain name matching rules, the routing will always be matched from those rules.
+/// For example, if we have the following matching rules
+///  - "a.example.com" /
+///  - "a.example.com" /iam
+///  - "*.example.com" /iam/b
+///  The path to be matched: "a.example.com/iam/b"
+///  only the second rule will be considered, because it has a higher priority than the others.
+///
+/// List of hostname matching rules
+/// 1. Exact domain match: "example.com" -> Handles exact hostname "example.com"
+/// 2. Wildcard domain match: "*.example.com" -> Handles any subdomain of "example.com"
+/// 3. Unspecified domain match: "*" -> Handles any hostname not matched by the above rules
+fn match_route_process<'a>(
+    req: &Request<Body>,
+    routes: &'a Vec<SgHttpRouteInst>,
+) -> (Option<&'a SgHttpRouteInst>, Option<&'a SgHttpRouteRuleInst>, Option<&'a SgHttpRouteMatchInst>) {
+    let (highest, second, lowest) = match_route_insts_with_hostname_priority(req.uri().host(), routes);
+    let matched_hostname_route_priorities = vec![highest, second, lowest];
+
+    let mut matched_route_inst = None;
+    let mut matched_rule_inst = None;
+    let mut matched_match_inst = None;
+    let mut matched = false;
+    for matched_hostname_route_priority in matched_hostname_route_priorities {
+        let mut first_matched_route_inst = None;
+        let mut first_matched_rule_inst = None;
+        for matched_hostname_route in matched_hostname_route_priority {
+            if let Some(rule_insts) = &matched_hostname_route.rules {
+                for rule_inst in rule_insts {
+                    (matched, matched_match_inst) = match_rule_inst(req, rule_inst.matches.as_ref());
+                    if matched {
+                        if matched_match_inst.is_some() {
+                            matched_rule_inst = Some(rule_inst);
+                            break;
+                        };
+                        if first_matched_rule_inst.is_none() {
+                            first_matched_rule_inst = Some(rule_inst);
+                        }
+                    }
+                }
+                if matched_rule_inst.is_none() {
+                    matched_rule_inst = first_matched_rule_inst;
+                }
+                if matched {
+                    if matched_match_inst.is_some() {
+                        matched_route_inst = Some(matched_hostname_route);
+                        break;
+                    };
+                    if first_matched_route_inst.is_none() {
+                        first_matched_route_inst = Some(matched_hostname_route);
+                    }
+                }
+            } else if first_matched_route_inst.is_none() {
+                first_matched_route_inst = Some(matched_hostname_route);
+            };
+            if matched && matched_match_inst.is_some() {
+                matched_route_inst = Some(matched_hostname_route);
+                break;
+            }
+        }
+        if first_matched_route_inst.is_some() && matched_route_inst.is_none() {
+            matched_route_inst = first_matched_route_inst;
+        }
+        if matched_route_inst.is_some() {
+            break;
+        }
+    }
+
+    (matched_route_inst, matched_rule_inst, matched_match_inst)
+}
+
+///Filter according to the hostname of route, and return with priority in sequence.
+/// first return is the highest priority, only exact match sequence
+/// second return is the second priority, only wildcard match sequence
+/// last return is the lowest priority, only no hostname specified sequence
+fn match_route_insts_with_hostname_priority<'a>(
+    req_host: Option<&str>,
+    routes: &'a Vec<SgHttpRouteInst>,
+) -> (Vec<&'a SgHttpRouteInst>, Vec<&'a SgHttpRouteInst>, Vec<&'a SgHttpRouteInst>) {
     if let Some(req_host) = req_host {
-        let mut matched_route_by_wildcard: Option<&SgHttpRouteInst> = None;
-        let mut matched_route_by_no_set = None;
+        let mut highest_priority_route = Vec::new();
+        let mut matched_route_by_wildcard = Vec::new();
+        let mut matched_route_by_no_set = Vec::new();
         for route_inst in routes {
             if let Some(hostnames) = &route_inst.hostnames {
                 if hostnames.iter().any(|hostname| hostname == req_host) {
                     // Exact match, highest priority
-                    return Some(route_inst);
-                } else if matched_route_by_wildcard.is_none() {
+                    highest_priority_route.push(route_inst);
+                } else {
+                    //start fuzzy match
+                    if hostnames.iter().any(|hostname| hostname == &"*".to_string()) {
+                        // hostname = * ,equal to No Hostname specified , lowest priority
+                        matched_route_by_no_set.push(route_inst);
+                        continue;
+                    }
                     let req_host_item = req_host.split('.').collect::<Vec<&str>>();
                     if hostnames.iter().any(|hostname| {
                         let hostname_item = hostname.split('.').collect::<Vec<&str>>();
@@ -385,21 +494,17 @@ fn match_route_insts_with_hostname_priority<'a>(req_host: Option<&str>, routes: 
                         }
                     }) {
                         // Fuzzy match, the second priority
-                        matched_route_by_wildcard = Some(route_inst);
+                        matched_route_by_wildcard.push(route_inst);
                     }
                 }
-            } else if matched_route_by_no_set.is_none() {
+            } else {
                 // No Hostname specified, equal to *, lowest priority
-                matched_route_by_no_set = Some(route_inst)
+                matched_route_by_no_set.push(route_inst)
             }
         }
-        if matched_route_by_wildcard.is_some() {
-            matched_route_by_wildcard
-        } else {
-            matched_route_by_no_set
-        }
+        (highest_priority_route, matched_route_by_wildcard, matched_route_by_no_set)
     } else {
-        routes.iter().find(|route_inst| route_inst.hostnames.is_none())
+        (Vec::new(), Vec::new(), routes.iter().filter(|route_inst| route_inst.hostnames.is_none()).collect())
     }
 }
 
@@ -686,7 +791,7 @@ async fn process_resp_filters(
     Ok(ctx)
 }
 
-fn choose_backend(backends: &Vec<SgBackend>) -> Option<&SgBackend> {
+fn choose_backend(backends: &Vec<SgBackendInst>) -> Option<&SgBackendInst> {
     if backends.is_empty() {
         None
     } else if backends.len() == 1 {
@@ -717,7 +822,7 @@ struct SgHttpRouteInst {
 pub struct SgHttpRouteRuleInst {
     pub filters: Vec<(String, BoxSgPluginFilter)>,
     pub matches: Option<Vec<SgHttpRouteMatchInst>>,
-    pub backends: Option<Vec<SgBackend>>,
+    pub backends: Option<Vec<SgBackendInst>>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -753,7 +858,7 @@ pub struct SgHttpQueryMatchInst {
 }
 
 #[derive(Default)]
-pub struct SgBackend {
+pub struct SgBackendInst {
     pub name_or_host: String,
     pub namespace: Option<String>,
     pub port: u16,
@@ -774,10 +879,12 @@ mod tests {
 
     use crate::{
         config::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
-        functions::http_route::{choose_backend, match_route_insts_with_hostname_priority, SgBackend, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst},
+        functions::http_route::{
+            choose_backend, match_route_insts_with_hostname_priority, SgBackendInst, SgHttpHeaderMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst, SgHttpRouteRuleInst,
+        },
     };
 
-    use super::{match_rule_inst, SgHttpPathMatchInst, SgHttpRouteMatchInst};
+    use super::{match_route_process, match_rule_inst, SgHttpPathMatchInst, SgHttpRouteMatchInst};
 
     #[test]
     fn test_match_rule_inst() {
@@ -811,6 +918,21 @@ mod tests {
         assert!(matched_match_inst.is_some());
 
         // Match prefix path
+        assert!(
+            match_rule_inst(
+                &Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+                Some(&vec![SgHttpRouteMatchInst {
+                    path: Some(SgHttpPathMatchInst {
+                        kind: SgHttpPathMatchType::Prefix,
+                        value: "/".to_string(),
+                        regular: None,
+                    }),
+                    ..Default::default()
+                }])
+            )
+            .0
+        );
+
         let match_conds = vec![SgHttpRouteMatchInst {
             path: Some(SgHttpPathMatchInst {
                 kind: SgHttpPathMatchType::Prefix,
@@ -1101,22 +1223,33 @@ mod tests {
     #[test]
     fn test_match_route_insts_with_hostname_priority() {
         // Match all hostname
-        assert!(match_route_insts_with_hostname_priority(
+        assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.com"),
             &vec![SgHttpRouteInst {
                 hostnames: None,
                 ..Default::default()
             }]
         )
-        .is_some());
-        assert!(match_route_insts_with_hostname_priority(
+        .2
+        .is_empty());
+        assert!(!match_route_insts_with_hostname_priority(
+            Some("sg.idealworld.com"),
+            &vec![SgHttpRouteInst {
+                hostnames: Some(vec!["*".to_string()]),
+                ..Default::default()
+            }]
+        )
+        .2
+        .is_empty());
+        assert!(!match_route_insts_with_hostname_priority(
             None,
             &vec![SgHttpRouteInst {
                 hostnames: None,
                 ..Default::default()
             }]
         )
-        .is_some());
+        .2
+        .is_empty());
         // Match exact hostname
         assert!(match_route_insts_with_hostname_priority(
             Some("sg.idealworld.com"),
@@ -1125,15 +1258,17 @@ mod tests {
                 ..Default::default()
             }]
         )
-        .is_none());
-        assert!(match_route_insts_with_hostname_priority(
+        .0
+        .is_empty());
+        assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.group"),
             &vec![SgHttpRouteInst {
                 hostnames: Some(vec!["sg.idealworld.group".to_string()]),
                 ..Default::default()
             }]
         )
-        .is_some());
+        .0
+        .is_empty());
         // Match wildcard hostname
         assert!(match_route_insts_with_hostname_priority(
             Some("sg.idealworld.com"),
@@ -1142,23 +1277,26 @@ mod tests {
                 ..Default::default()
             }]
         )
-        .is_none());
-        assert!(match_route_insts_with_hostname_priority(
+        .1
+        .is_empty());
+        assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.group"),
             &vec![SgHttpRouteInst {
                 hostnames: Some(vec!["*.idealworld.group".to_string()]),
                 ..Default::default()
             }]
         )
-        .is_some());
-        assert!(match_route_insts_with_hostname_priority(
+        .1
+        .is_empty());
+        assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.group"),
             &vec![SgHttpRouteInst {
                 hostnames: Some(vec!["*.idealworld.*".to_string()]),
                 ..Default::default()
             }]
         )
-        .is_some());
+        .1
+        .is_empty());
 
         // Match with priority
         let match_conds = vec![
@@ -1174,34 +1312,266 @@ mod tests {
                 hostnames: Some(vec!["www.idealworld.group".to_string(), "idealworld.group".to_string()]),
                 ..Default::default()
             },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["*".to_string()]),
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: None,
+                ..Default::default()
+            },
         ];
-        assert!(match_route_insts_with_hostname_priority(Some("sg.idealworld.com"), &match_conds).is_none());
-        assert!(match_route_insts_with_hostname_priority(Some("sg.idealworld.group"), &match_conds)
-            .unwrap()
-            .hostnames
-            .as_ref()
-            .unwrap()
-            .contains(&"sg.idealworld.group".to_string()));
-        assert!(match_route_insts_with_hostname_priority(Some("spacegate.idealworld.group"), &match_conds)
-            .unwrap()
-            .hostnames
-            .as_ref()
-            .unwrap()
-            .contains(&"sg.idealworld.group".to_string()));
-        assert!(match_route_insts_with_hostname_priority(Some("api.idealworld.group"), &match_conds)
-            .unwrap()
-            .hostnames
-            .as_ref()
-            .unwrap()
-            .contains(&"*.idealworld.group".to_string()));
-        assert!(match_route_insts_with_hostname_priority(Some("idealworld.group"), &match_conds).unwrap().hostnames.as_ref().unwrap().contains(&"idealworld.group".to_string()));
+        let (highest, second, lowest) = match_route_insts_with_hostname_priority(Some("sg.idealworld.com"), &match_conds);
+        assert!(highest.is_empty() && second.is_empty() && lowest.len() == 2);
+        let (highest, second, lowest) = match_route_insts_with_hostname_priority(Some("sg.idealworld.group"), &match_conds);
+        assert!(
+            highest.len() == 1
+                && highest.iter().any(|route| route.hostnames.as_ref().unwrap().contains(&"sg.idealworld.group".to_string()))
+                && second.len() == 1
+                && second.iter().any(|route| route.hostnames.as_ref().unwrap().contains(&"*.idealworld.group".to_string()))
+                && lowest.len() == 2
+        );
+        let (highest, second, lowest) = match_route_insts_with_hostname_priority(Some("spacegate.idealworld.group"), &match_conds);
+        assert!(
+            highest.len() == 1
+                && highest.iter().any(|route| route.hostnames.as_ref().unwrap().contains(&"spacegate.idealworld.group".to_string()))
+                && second.len() == 1
+                && second.iter().any(|route| route.hostnames.as_ref().unwrap().contains(&"*.idealworld.group".to_string()))
+                && lowest.len() == 2
+        );
+        let (highest, second, lowest) = match_route_insts_with_hostname_priority(Some("api.idealworld.group"), &match_conds);
+        assert!(
+            highest.is_empty()
+                && second.len() == 1
+                && second.iter().any(|route| route.hostnames.as_ref().unwrap().contains(&"*.idealworld.group".to_string()))
+                && lowest.len() == 2
+        );
+        let (highest, second, lowest) = match_route_insts_with_hostname_priority(Some("idealworld.group"), &match_conds);
+        assert!(
+            highest.len() == 1 && highest.iter().any(|route| route.hostnames.as_ref().unwrap().contains(&"idealworld.group".to_string())) && second.is_empty() && lowest.len() == 2
+        );
+    }
+
+    #[test]
+    fn test_match_route_process() {
+        // Match all hostname
+        let test_routes = vec![SgHttpRouteInst {
+            hostnames: None,
+            ..Default::default()
+        }];
+        let (matched_route, matched_rule, matched_match) = match_route_process(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_none() && matched_match.is_none());
+
+        let test_routes = vec![SgHttpRouteInst {
+            hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+            ..Default::default()
+        }];
+        let (matched_route, matched_rule, matched_match) = match_route_process(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_none() && matched_match.is_none());
+
+        let test_routes = vec![SgHttpRouteInst {
+            hostnames: None,
+            rules: Some(vec![SgHttpRouteRuleInst { ..Default::default() }]),
+            ..Default::default()
+        }];
+        let (matched_route, matched_rule, matched_match) = match_route_process(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_some() && matched_match.is_none());
+
+        let test_routes = vec![SgHttpRouteInst {
+            hostnames: None,
+            rules: Some(vec![
+                SgHttpRouteRuleInst { ..Default::default() },
+                SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Exact,
+                            value: "/iam".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                },
+            ]),
+            ..Default::default()
+        }];
+        let (matched_route, matched_rule, matched_match) =
+            match_route_process(&Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_some() && matched_match.is_some());
+
+        let test_routes = vec![SgHttpRouteInst {
+            hostnames: None,
+            rules: Some(vec![SgHttpRouteRuleInst {
+                matches: Some(vec![SgHttpRouteMatchInst {
+                    path: Some(SgHttpPathMatchInst {
+                        kind: SgHttpPathMatchType::Prefix,
+                        value: "/".to_string(),
+                        regular: None,
+                    }),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        }];
+        let (matched_route, matched_rule, matched_match) = match_route_process(&Request::builder().uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_some() && matched_match.is_some());
+
+        //Multiple route matching test
+        let test_routes = vec![
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst { ..Default::default() }]),
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst { ..Default::default() }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Exact,
+                            value: "/iam".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+        ];
+        let (matched_route, matched_rule, matched_match) =
+            match_route_process(&Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_some() && matched_match.is_some());
+
+        let test_routes = vec![
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: None,
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Exact,
+                            value: "/iam".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+        ];
+        let (matched_route, matched_rule, matched_match) =
+            match_route_process(&Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_some() && matched_match.is_some());
+
+        // Although the second match is more consistent, the order of matching is still the first one to be matched
+        let test_routes = vec![
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Prefix,
+                            value: "/iam".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Prefix,
+                            value: "/iam/a".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+        ];
+        let (matched_route, matched_rule, matched_match) =
+            match_route_process(&Request::builder().uri("https://sg.idealworld.group/iam/a").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_some() && matched_match.is_some());
+        assert!(matched_match.unwrap().path.as_ref().unwrap().value == "/iam");
+
+        let test_routes = vec![
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: None,
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["*.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Exact,
+                            value: "/iam".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+        ];
+        let (matched_route, matched_rule, matched_match) =
+            match_route_process(&Request::builder().uri("https://sg.idealworld.group/iam").body(Body::empty()).unwrap(), &test_routes);
+        assert!(matched_route.is_some() && matched_rule.is_none() && matched_match.is_none());
+
+        //mix match test
+        let _test_routes = vec![
+            SgHttpRouteInst {
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
+                rules: None,
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: Some(vec!["*.idealworld.group".to_string()]),
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Exact,
+                            value: "/iam".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+        ];
     }
 
     #[test]
     fn test_choose_backend() {
         // Only one backend
         assert!(
-            choose_backend(&vec![SgBackend {
+            choose_backend(&vec![SgBackendInst {
                 name_or_host: "iam1".to_string(),
                 weight: None,
                 ..Default::default()
@@ -1213,12 +1583,12 @@ mod tests {
 
         // Check weight
         let backends = vec![
-            SgBackend {
+            SgBackendInst {
                 name_or_host: "iam1".to_string(),
                 weight: Some(30),
                 ..Default::default()
             },
-            SgBackend {
+            SgBackendInst {
                 name_or_host: "iam2".to_string(),
                 weight: Some(70),
                 ..Default::default()

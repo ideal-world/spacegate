@@ -13,9 +13,9 @@ use tardis::web::tokio_tungstenite::tungstenite::protocol;
 use tardis::web::tokio_tungstenite::{connect_async, WebSocketStream};
 use tardis::{log, tokio, TardisFuns};
 
-use super::http_route::SgBackend;
+use super::http_route::SgBackendInst;
 
-pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend: &SgBackend, mut request: Request<Body>) -> TardisResult<Response<Body>> {
+pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend: &SgBackendInst, mut request: Request<Body>) -> TardisResult<Response<Body>> {
     let have_upgrade = request
         .headers()
         .get(CONNECTION)

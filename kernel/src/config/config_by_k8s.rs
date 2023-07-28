@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
 use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
@@ -16,7 +16,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{do_startup, functions::http_route, shutdown};
+use crate::{constants, do_startup, functions::http_route, shutdown};
 
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
@@ -88,6 +88,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 .unwrap_or(false)
         })
         .collect::<Vec<HttpRoute>>();
+
     let http_route_objs_generation = http_route_objs
         .iter()
         .map(|http_route_obj| {
@@ -97,6 +98,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             )
         })
         .collect::<HashMap<String, i64>>();
+
     let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect()).await?;
 
     let config = gateway_configs
@@ -426,8 +428,18 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
     Ok(gateway_configs)
 }
 
-async fn process_http_route_config(http_route_objs: Vec<HttpRoute>) -> TardisResult<Vec<SgHttpRoute>> {
+async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> TardisResult<Vec<SgHttpRoute>> {
     let mut http_route_configs = Vec::new();
+    http_route_objs.sort_by(|http_route_a, http_route_b| {
+        let (a_priority, b_priority) = (
+            http_route_a.annotations().get(constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
+            http_route_b.annotations().get(constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
+        );
+        match b_priority.cmp(&a_priority) {
+            Ordering::Equal => http_route_a.metadata.creation_timestamp.cmp(&http_route_b.metadata.creation_timestamp),
+            _other => _other,
+        }
+    });
 
     for http_route_obj in http_route_objs {
         // Key configuration compatibility checks
