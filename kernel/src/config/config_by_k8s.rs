@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
 use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
@@ -16,7 +16,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{do_startup, functions::http_route, shutdown};
+use crate::{constants, do_startup, functions::http_route, shutdown};
 
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
@@ -61,7 +61,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let gateway_configs = process_gateway_config(gateway_objs.into_iter().collect()).await?;
     let gateway_names = gateway_configs.iter().map(|gateway_config| gateway_config.name.clone()).collect::<Vec<String>>();
 
-    let http_route_objs: Vec<HttpRoute> = http_route_api
+    let mut http_route_objs: Vec<HttpRoute> = http_route_api
         .list(&ListParams::default())
         .await
         .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
@@ -88,6 +88,18 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 .unwrap_or(false)
         })
         .collect::<Vec<HttpRoute>>();
+    http_route_objs.sort_by(|http_route_a, http_route_b| {
+        match (
+            http_route_a.annotations().get(constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()),
+            http_route_b.annotations().get(constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()),
+        ) {
+            (Some(a), Some(b)) => b.cmp(&a),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => http_route_b.metadata.creation_timestamp.cmp(&http_route_a.metadata.creation_timestamp),
+        }
+    });
+
     let http_route_objs_generation = http_route_objs
         .iter()
         .map(|http_route_obj| {
@@ -712,3 +724,4 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
 async fn get_client() -> TardisResult<Client> {
     Client::try_default().await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
 }
+

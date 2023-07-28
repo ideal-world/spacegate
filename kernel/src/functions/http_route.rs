@@ -520,7 +520,6 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
             }
             if let Some(path) = &rule_match.path {
                 let req_path = req.uri().path();
-                log::trace!("[SG.Route]======== req_path: {:?} path.value:{:?} and req_kind:{:?}", req_path, path.value, path.kind);
                 match path.kind {
                     SgHttpPathMatchType::Exact => {
                         if req_path != path.value {
