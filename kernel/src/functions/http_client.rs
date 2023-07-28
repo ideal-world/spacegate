@@ -44,7 +44,7 @@ pub async fn request(
     mut ctx: SgRoutePluginContext,
 ) -> TardisResult<SgRoutePluginContext> {
     if redirect {
-        ctx = do_request(client, &ctx.get_req_uri().to_string(), rule_timeout_ms, ctx).await?;
+        ctx = do_request(client, &ctx.request.get_req_uri().to_string(), rule_timeout_ms, ctx).await?;
     }
     if let Some(backend) = backend {
         let scheme = backend.protocol.as_ref().unwrap_or(&SgProtocol::Http);
@@ -54,7 +54,13 @@ pub async fn request(
         } else {
             format!(":{}", backend.port)
         };
-        let url = format!("{}://{}{}{}", scheme, host, port, ctx.get_req_uri().path_and_query().map(|p| p.as_str()).unwrap_or(""));
+        let url = format!(
+            "{}://{}{}{}",
+            scheme,
+            host,
+            port,
+            ctx.request.get_req_uri().path_and_query().map(|p| p.as_str()).unwrap_or("")
+        );
         let timeout_ms = if let Some(timeout_ms) = backend.timeout_ms { Some(timeout_ms) } else { rule_timeout_ms };
         ctx = do_request(client, &url, timeout_ms, ctx).await?;
         ctx.set_chose_backend(backend);
@@ -63,7 +69,16 @@ pub async fn request(
 }
 
 async fn do_request(client: &Client<HttpsConnector<HttpConnector>>, url: &str, timeout_ms: Option<u64>, mut ctx: SgRoutePluginContext) -> TardisResult<SgRoutePluginContext> {
-    let ctx = match raw_request(Some(client), ctx.get_req_method().clone(), url, ctx.pop_req_body_raw()?, ctx.get_req_headers(), timeout_ms).await {
+    let ctx = match raw_request(
+        Some(client),
+        ctx.request.get_req_method().clone(),
+        url,
+        ctx.request.pop_req_body_raw()?,
+        ctx.request.get_req_headers(),
+        timeout_ms,
+    )
+    .await
+    {
         Ok(response) => ctx.resp(response.status(), response.headers().clone(), response.into_body()),
         Err(e) => ctx.resp_from_error(e),
     };
@@ -149,8 +164,8 @@ mod tests {
             ),
         )
         .await?;
-        assert_eq!(resp.get_resp_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.pop_resp_body().await?.unwrap()).unwrap();
+        assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
+        let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
         assert!(body.contains("百度一下"));
 
         // test get
@@ -175,8 +190,8 @@ mod tests {
             ),
         )
         .await?;
-        assert_eq!(resp.get_resp_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.pop_resp_body().await?.unwrap()).unwrap();
+        assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
+        let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
         assert!(body.contains(r#""url": "http://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         // test post with tls
@@ -202,8 +217,8 @@ mod tests {
             ),
         )
         .await?;
-        assert_eq!(resp.get_resp_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.pop_resp_body().await?.unwrap()).unwrap();
+        assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
+        let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/post?foo1=bar1&foo2=bar2""#));
         assert!(body.contains(r#""data": "星航""#));
 
@@ -230,7 +245,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(resp.get_resp_status_code().as_u16(), 504);
+        assert_eq!(resp.response.get_resp_status_code().as_u16(), 504);
 
         let mut resp = request(
             &client,
@@ -254,8 +269,8 @@ mod tests {
             ),
         )
         .await?;
-        assert_eq!(resp.get_resp_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.pop_resp_body().await?.unwrap()).unwrap();
+        assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
+        let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
         assert!(body.contains(r#""url": "http://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         // test redirect
@@ -277,8 +292,8 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(resp.get_resp_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.pop_resp_body().await?.unwrap()).unwrap();
+        assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
+        let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
         assert!(body.contains(r#""url": "http://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         Ok(())
