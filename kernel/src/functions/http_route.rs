@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, net::SocketAddr, path::Display};
+use std::{collections::HashMap, net::SocketAddr};
 
 use crate::{
     config::{
@@ -195,7 +195,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                 .map(|r| r
                     .iter()
                     .map(|r| if let Some(matchs) = r.matches.as_ref() {
-                        matchs.into_iter().map(|m| format!("{:?}", m)).collect::<Vec<_>>().join(", ")
+                        matchs.iter().map(|m| format!("{:?}", m)).collect::<Vec<_>>().join(", ")
                     } else {
                         "None".to_string()
                     })
@@ -418,7 +418,7 @@ fn match_route_process<'a>(
         for matched_hostname_route in matched_hostname_route_priority {
             if let Some(rule_insts) = &matched_hostname_route.rules {
                 for rule_inst in rule_insts {
-                    (matched, matched_match_inst) = match_rule_inst(&req, rule_inst.matches.as_ref());
+                    (matched, matched_match_inst) = match_rule_inst(req, rule_inst.matches.as_ref());
                     if matched {
                         if matched_match_inst.is_some() {
                             matched_rule_inst = Some(rule_inst);
@@ -441,10 +441,8 @@ fn match_route_process<'a>(
                         first_matched_route_inst = Some(matched_hostname_route);
                     }
                 }
-            } else {
-                if first_matched_route_inst.is_none() {
-                    first_matched_route_inst = Some(matched_hostname_route);
-                }
+            } else if first_matched_route_inst.is_none() {
+                first_matched_route_inst = Some(matched_hostname_route);
             };
             if matched && matched_match_inst.is_some() {
                 matched_route_inst = Some(matched_hostname_route);
@@ -1545,7 +1543,7 @@ mod tests {
         assert!(matched_route.is_some() && matched_rule.is_none() && matched_match.is_none());
 
         //mix match test
-        let test_routes = vec![
+        let _test_routes = vec![
             SgHttpRouteInst {
                 hostnames: Some(vec!["sg.idealworld.group".to_string()]),
                 rules: None,
