@@ -318,7 +318,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
                     matched_match_inst,
                 )
                 .await?;
-                *request.uri_mut() = ctx.get_req_uri().clone();
+                *request.uri_mut() = ctx.request.get_req_uri().clone();
                 return crate::functions::websocket::process(gateway_name, remote_addr, backend, request).await;
             } else {
                 return Err(TardisError::bad_request(

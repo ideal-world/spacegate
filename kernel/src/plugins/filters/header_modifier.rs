@@ -59,12 +59,13 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
         if let Some(set) = &self.sets {
             for (k, v) in set.iter() {
-                ctx.set_req_header(k, v)?;
+                ctx.request.set_req_header(k, v)?;
             }
         }
         if let Some(remove) = &self.remove {
             for k in remove {
-                ctx.get_req_headers_mut()
+                ctx.request
+                    .get_req_headers_mut()
                     .remove(HeaderName::try_from(k).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {k} parsing error: {error}"), ""))?);
             }
         }
@@ -77,12 +78,12 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
         if let Some(set) = &self.sets {
             for (k, v) in set.iter() {
-                ctx.set_resp_header(k, v)?;
+                ctx.response.set_resp_header(k, v)?;
             }
         }
         if let Some(remove) = &self.remove {
             for k in remove {
-                ctx.remove_resp_header(k)?;
+                ctx.response.remove_resp_header(k)?;
             }
         }
         Ok((true, ctx))
@@ -131,24 +132,24 @@ mod tests {
 
         let (is_continue, mut ctx) = filter_req.req_filter("", ctx, None).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
-        assert_eq!(ctx.get_req_headers().len(), 2);
-        assert_eq!(ctx.get_req_headers().get("X-Test1").as_ref().unwrap().to_str().unwrap(), "test1");
-        assert_eq!(ctx.get_req_headers().get("X-Test2").as_ref().unwrap().to_str().unwrap(), "test2");
-        assert_eq!(ctx.get_req_uri().host().unwrap(), "sg.idealworld.group");
-        assert_eq!(ctx.get_resp_status_code(), &StatusCode::OK);
+        assert_eq!(ctx.request.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
+        assert_eq!(ctx.request.get_req_headers().len(), 2);
+        assert_eq!(ctx.request.get_req_headers().get("X-Test1").as_ref().unwrap().to_str().unwrap(), "test1");
+        assert_eq!(ctx.request.get_req_headers().get("X-Test2").as_ref().unwrap().to_str().unwrap(), "test2");
+        assert_eq!(ctx.request.get_req_uri().host().unwrap(), "sg.idealworld.group");
+        assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
 
-        let mock_resp_headers = ctx.get_req_headers().clone();
-        ctx.set_resp_headers(mock_resp_headers);
+        let mock_resp_headers = ctx.request.get_req_headers().clone();
+        ctx.response.set_resp_headers(mock_resp_headers);
         let (is_continue, mut ctx) = filter_resp.resp_filter("", ctx, None).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
-        assert_eq!(ctx.get_req_headers().len(), 2);
-        assert_eq!(ctx.get_req_headers().get("X-Test1").as_ref().unwrap().to_str().unwrap(), "test1");
-        assert_eq!(ctx.get_req_headers().get("X-Test2").as_ref().unwrap().to_str().unwrap(), "test2");
-        assert_eq!(ctx.get_req_uri().host().unwrap(), "sg.idealworld.group");
-        assert_eq!(ctx.get_resp_headers().len(), 1);
-        assert_eq!(ctx.get_resp_headers().get("X-Test1").as_ref().unwrap().to_str().unwrap(), "test1");
-        assert_eq!(ctx.get_resp_status_code(), &StatusCode::OK);
+        assert_eq!(ctx.request.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
+        assert_eq!(ctx.request.get_req_headers().len(), 2);
+        assert_eq!(ctx.request.get_req_headers().get("X-Test1").as_ref().unwrap().to_str().unwrap(), "test1");
+        assert_eq!(ctx.request.get_req_headers().get("X-Test2").as_ref().unwrap().to_str().unwrap(), "test2");
+        assert_eq!(ctx.request.get_req_uri().host().unwrap(), "sg.idealworld.group");
+        assert_eq!(ctx.response.get_resp_headers().len(), 1);
+        assert_eq!(ctx.response.get_resp_headers().get("X-Test1").as_ref().unwrap().to_str().unwrap(), "test1");
+        assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
     }
 }
