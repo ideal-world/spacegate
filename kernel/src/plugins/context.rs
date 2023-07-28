@@ -73,24 +73,8 @@ pub enum SgRouteFilterRequestAction {
     Response,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct SGCertInfo {
-    pub account_id: String,
-    pub account_name: Option<String>,
-    pub roles: Vec<SGRoleInfo>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct SGRoleInfo {
-    pub id: String,
-    pub name: Option<String>,
-}
-
 #[derive(Debug)]
-pub struct SgRoutePluginContext {
-    request_id: String,
-    request_kind: SgPluginFilterKind,
-
+pub struct SgCtxRequest {
     raw_req_method: Method,
     raw_req_uri: Uri,
     raw_req_version: Version,
@@ -103,43 +87,15 @@ pub struct SgRoutePluginContext {
     mod_req_version: Option<Version>,
     mod_req_body: Option<Vec<u8>>,
     mod_req_headers: Option<HeaderMap<HeaderValue>>,
-
-    raw_resp_status_code: StatusCode,
-    raw_resp_headers: HeaderMap<HeaderValue>,
-    raw_resp_body: Option<Body>,
-    raw_resp_err: Option<TardisError>,
-    mod_resp_status_code: Option<StatusCode>,
-    mod_resp_headers: Option<HeaderMap<HeaderValue>>,
-    mod_resp_body: Option<Vec<u8>>,
-
-    chose_route_rule: Option<ChoseHttpRouteRuleInst>,
-    chose_backend: Option<AvailableBackendInst>,
-
-    ext: HashMap<String, String>,
-    /// Describe user information
-    cert_info: Option<SGCertInfo>,
-    action: SgRouteFilterRequestAction,
-    gateway_name: String,
 }
 
-#[allow(dead_code)]
-impl SgRoutePluginContext {
-    pub fn new_http(
-        method: Method,
-        uri: Uri,
-        version: Version,
-        headers: HeaderMap<HeaderValue>,
-        body: Body,
-        remote_addr: SocketAddr,
-        gateway_name: String,
-        chose_route_rule: Option<ChoseHttpRouteRuleInst>,
-    ) -> Self {
+impl SgCtxRequest {
+    pub fn new(method: Method, uri: Uri, version: Version, headers: HeaderMap<HeaderValue>, body: Option<Body>, remote_addr: SocketAddr) -> Self {
         Self {
-            request_id: TardisFuns::field.nanoid(),
             raw_req_method: method,
             raw_req_uri: uri,
             raw_req_version: version,
-            raw_req_body: Some(body),
+            raw_req_body: body,
             raw_req_headers: headers,
             raw_req_remote_addr: remote_addr,
             mod_req_method: None,
@@ -147,87 +103,7 @@ impl SgRoutePluginContext {
             mod_req_version: None,
             mod_req_body: None,
             mod_req_headers: None,
-            raw_resp_status_code: StatusCode::OK,
-            raw_resp_headers: HeaderMap::new(),
-            raw_resp_body: None,
-            raw_resp_err: None,
-            mod_resp_status_code: None,
-            mod_resp_headers: None,
-            mod_resp_body: None,
-            ext: HashMap::new(),
-            action: SgRouteFilterRequestAction::None,
-            gateway_name,
-            chose_route_rule,
-            chose_backend: None,
-            request_kind: SgPluginFilterKind::Http,
-            cert_info: None,
         }
-    }
-
-    pub fn new_ws(
-        method: Method,
-        uri: Uri,
-        version: Version,
-        headers: HeaderMap<HeaderValue>,
-        remote_addr: SocketAddr,
-        gateway_name: String,
-        chose_route_rule: Option<ChoseHttpRouteRuleInst>,
-    ) -> Self {
-        Self {
-            request_id: TardisFuns::field.nanoid(),
-            raw_req_method: method,
-            raw_req_uri: uri,
-            raw_req_version: version,
-            raw_req_body: None,
-            raw_req_headers: headers,
-            raw_req_remote_addr: remote_addr,
-            mod_req_method: None,
-            mod_req_uri: None,
-            mod_req_version: None,
-            mod_req_body: None,
-            mod_req_headers: None,
-            raw_resp_status_code: StatusCode::OK,
-            raw_resp_headers: HeaderMap::new(),
-            raw_resp_body: None,
-            raw_resp_err: None,
-            mod_resp_status_code: None,
-            mod_resp_headers: None,
-            mod_resp_body: None,
-            ext: HashMap::new(),
-            action: SgRouteFilterRequestAction::None,
-            gateway_name,
-            chose_route_rule,
-            chose_backend: None,
-            request_kind: SgPluginFilterKind::Ws,
-            cert_info: None,
-        }
-    }
-
-    ///The following two methods can only be used to fill in the context [resp] [resp_from_error]
-    pub fn resp(mut self, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
-        self.raw_resp_status_code = status_code;
-        self.raw_resp_headers = headers;
-        self.raw_resp_body = Some(body);
-        self.raw_resp_err = None;
-        self
-    }
-
-    pub fn resp_from_error(mut self, error: TardisError) -> Self {
-        self.raw_resp_err = Some(error);
-        self.raw_resp_status_code = StatusCode::INTERNAL_SERVER_ERROR;
-        self
-    }
-
-    pub fn get_request_id(&self) -> &str {
-        &self.request_id
-    }
-
-    pub fn get_request_kind(&self) -> &SgPluginFilterKind {
-        &self.request_kind
-    }
-
-    pub fn is_resp_error(&self) -> bool {
-        self.raw_resp_err.is_some()
     }
 
     pub fn get_req_method(&mut self) -> &Method {
@@ -350,6 +226,34 @@ impl SgRoutePluginContext {
     pub fn get_req_remote_addr(&self) -> &SocketAddr {
         &self.raw_req_remote_addr
     }
+}
+
+#[derive(Debug)]
+pub struct SgCtxResponse {
+    raw_resp_status_code: StatusCode,
+    raw_resp_headers: HeaderMap<HeaderValue>,
+    raw_resp_body: Option<Body>,
+    raw_resp_err: Option<TardisError>,
+    mod_resp_status_code: Option<StatusCode>,
+    mod_resp_headers: Option<HeaderMap<HeaderValue>>,
+    mod_resp_body: Option<Vec<u8>>,
+}
+
+impl SgCtxResponse {
+    pub fn new() -> Self {
+        Self {
+            raw_resp_status_code: StatusCode::OK,
+            raw_resp_headers: HeaderMap::new(),
+            raw_resp_body: None,
+            raw_resp_err: None,
+            mod_resp_status_code: None,
+            mod_resp_headers: None,
+            mod_resp_body: None,
+        }
+    }
+    pub fn is_resp_error(&self) -> bool {
+        self.raw_resp_err.is_some()
+    }
 
     pub fn get_resp_status_code(&mut self) -> &StatusCode {
         if self.mod_resp_status_code.is_none() {
@@ -424,25 +328,6 @@ impl SgRoutePluginContext {
             Ok(None)
         }
     }
-
-    /// build response from Context
-    pub async fn build_response(&mut self) -> TardisResult<Response<Body>> {
-        if let Some(err) = &self.raw_resp_err {
-            return Err(err.clone());
-        }
-        let mut resp = Response::builder();
-        for (k, v) in self.get_resp_headers() {
-            resp = resp.header(
-                k.as_str(),
-                v.to_str().map_err(|_| TardisError::bad_request(&format!("[SG.Route] header {k}'s value illegal: is not ascii"), ""))?.to_string(),
-            );
-        }
-        let resp = resp
-            .body(Body::from(self.pop_resp_body().await?.unwrap_or_default()))
-            .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
-        Ok(resp)
-    }
-
     pub fn set_resp_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
         self.set_resp_header("Content-Length", body.len().to_string().as_str())?;
         self.mod_resp_body = Some(body);
@@ -461,6 +346,131 @@ impl SgRoutePluginContext {
         } else {
             Ok(None)
         }
+    }
+}
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct SGCertInfo {
+    pub account_id: String,
+    pub account_name: Option<String>,
+    pub roles: Vec<SGRoleInfo>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct SGRoleInfo {
+    pub id: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct SgRoutePluginContext {
+    request_id: String,
+    request_kind: SgPluginFilterKind,
+
+    pub request: SgCtxRequest,
+    pub response: SgCtxResponse,
+
+    chose_route_rule: Option<ChoseHttpRouteRuleInst>,
+    chose_backend: Option<AvailableBackendInst>,
+
+    ext: HashMap<String, String>,
+    /// Describe user information
+    cert_info: Option<SGCertInfo>,
+    action: SgRouteFilterRequestAction,
+    gateway_name: String,
+}
+
+#[allow(dead_code)]
+impl SgRoutePluginContext {
+    pub fn new_http(
+        method: Method,
+        uri: Uri,
+        version: Version,
+        headers: HeaderMap<HeaderValue>,
+        body: Body,
+        remote_addr: SocketAddr,
+        gateway_name: String,
+        chose_route_rule: Option<ChoseHttpRouteRuleInst>,
+    ) -> Self {
+        Self {
+            request_id: TardisFuns::field.nanoid(),
+            request: SgCtxRequest::new(method, uri, version, headers, Some(body), remote_addr),
+            response: SgCtxResponse::new(),
+            ext: HashMap::new(),
+            action: SgRouteFilterRequestAction::None,
+            gateway_name,
+            chose_route_rule,
+            chose_backend: None,
+            request_kind: SgPluginFilterKind::Http,
+            cert_info: None,
+        }
+    }
+
+    pub fn new_ws(
+        method: Method,
+        uri: Uri,
+        version: Version,
+        headers: HeaderMap<HeaderValue>,
+        remote_addr: SocketAddr,
+        gateway_name: String,
+        chose_route_rule: Option<ChoseHttpRouteRuleInst>,
+    ) -> Self {
+        Self {
+            request_id: TardisFuns::field.nanoid(),
+            request: SgCtxRequest::new(method, uri, version, headers, None, remote_addr),
+            response: SgCtxResponse::new(),
+            ext: HashMap::new(),
+            action: SgRouteFilterRequestAction::None,
+            gateway_name,
+            chose_route_rule,
+            chose_backend: None,
+            request_kind: SgPluginFilterKind::Ws,
+            cert_info: None,
+        }
+    }
+
+    ///The following two methods can only be used to fill in the context [resp] [resp_from_error]
+    pub fn resp(mut self, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
+        self.response.raw_resp_status_code = status_code;
+        self.response.raw_resp_headers = headers;
+        self.response.raw_resp_body = Some(body);
+        self.response.raw_resp_err = None;
+        self
+    }
+
+    pub fn resp_from_error(mut self, error: TardisError) -> Self {
+        self.response.raw_resp_err = Some(error);
+        self.response.raw_resp_status_code = StatusCode::INTERNAL_SERVER_ERROR;
+        self
+    }
+
+    pub fn is_resp_error(&self) -> bool {
+        self.response.is_resp_error()
+    }
+
+    pub fn get_request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    pub fn get_request_kind(&self) -> &SgPluginFilterKind {
+        &self.request_kind
+    }
+
+    /// build response from Context
+    pub async fn build_response(&mut self) -> TardisResult<Response<Body>> {
+        if let Some(err) = &self.response.raw_resp_err {
+            return Err(err.clone());
+        }
+        let mut resp = Response::builder();
+        for (k, v) in self.response.get_resp_headers() {
+            resp = resp.header(
+                k.as_str(),
+                v.to_str().map_err(|_| TardisError::bad_request(&format!("[SG.Route] header {k}'s value illegal: is not ascii"), ""))?.to_string(),
+            );
+        }
+        let resp = resp
+            .body(Body::from(self.response.pop_resp_body().await?.unwrap_or_default()))
+            .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
+        Ok(resp)
     }
 
     pub fn get_ext(&self, key: &str) -> Option<String> {

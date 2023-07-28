@@ -51,13 +51,13 @@ impl SgPluginFilter for SgFilterRewrite {
 
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(hostname) = &self.hostname {
-            let mut uri = Url::parse(&ctx.get_req_uri().to_string())?;
+            let mut uri = Url::parse(&ctx.request.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Rewrite] Host {hostname} parsing error"), ""))?;
-            ctx.set_req_uri(uri.to_uri()?);
+            ctx.request.set_req_uri(uri.to_uri()?);
         }
         let matched_match_inst = ctx.get_rule_matched();
-        if let Some(new_url) = http_common_modify_path(ctx.get_req_uri(), &self.path, matched_match_inst.as_ref())? {
-            ctx.set_req_uri(new_url);
+        if let Some(new_url) = http_common_modify_path(ctx.request.get_req_uri(), &self.path, matched_match_inst.as_ref())? {
+            ctx.request.set_req_uri(new_url);
         }
         Ok((true, ctx))
     }
@@ -113,11 +113,11 @@ mod tests {
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.get_req_uri().to_string(), "http://sg_new.idealworld.group/new_iam/ct/001?name=sg");
-        assert_eq!(ctx.get_resp_status_code(), &StatusCode::OK);
+        assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg_new.idealworld.group/new_iam/ct/001?name=sg");
+        assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
 
         let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.get_resp_status_code(), &StatusCode::OK);
+        assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
     }
 }
