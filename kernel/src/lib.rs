@@ -12,9 +12,8 @@
 //! [https://doc.rust-lang.org/std/primitive.i64.html#associatedconstant.MAX] and
 //! (i64::MIN)[https://doc.rust-lang.org/std/primitive.i64.html#associatedconstant.MIN] respectively.
 //!
-//! If the priority field is not present in an httproute, its priority will be lower than all httproutes that have
-//! a priority field, and the default priority will be determined based on the creation order (earlier routes will
-//! have higher priority).
+//! If the priority field is not present in an httproute, its priority will be default to 0, and the default priority
+//! will be determined based on the creation order (earlier routes will have higher priority).
 #![warn(clippy::unwrap_used)]
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
