@@ -296,6 +296,11 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 
     let (matched_route_inst, matched_rule_inst, matched_match_inst) = match_route_process(&request, &gateway_inst.routes);
 
+    match matched_match_inst {
+        Some(matched_match) => log::trace!("[SG.Route] Matched rule {}", matched_match),
+        None => log::info!("[SG.Route] Not matched rule"),
+    }
+
     if matched_route_inst.is_none() {
         let mut not_found = Response::default();
         *not_found.status_mut() = StatusCode::NOT_FOUND;
@@ -370,15 +375,11 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
             None
         };
 
-        log::trace!(
-            "[SG.Request] matched rule: {}, backend: {:?}",
-            if let Some(matched_rule) = matched_rule_inst.and_then(|r| r.matches.as_ref()) {
-                matched_rule.iter().map(|r| format!("{:?}", r)).collect::<Vec<_>>().join(", ")
-            } else {
-                "None".to_string()
-            },
-            backend.map(|b| b.name_or_host.clone())
-        );
+        match backend {
+            Some(b) => log::trace!("[SG.Request] matched  backend: {}", b),
+            None => log::info!("[SG.Request] matched no backend"),
+        }
+
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
@@ -818,7 +819,7 @@ mod tests {
     use crate::{
         config::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
         functions::http_route::{choose_backend, match_route_insts_with_hostname_priority},
-        instance::{SgBackendInst, SgHttpHeaderMatchInst, SgHttpPathMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst, SgHttpQueryMatchInst},
+        instance::{SgBackendInst, SgHttpHeaderMatchInst, SgHttpPathMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     };
 
     use super::{match_route_process, match_rule_inst};
