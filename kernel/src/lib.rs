@@ -1,3 +1,19 @@
+//! **A library-first, lightweight, high-performance, cloud-native supported API gateway🪐**
+//!
+//! ## 🚀 Installation
+//!
+//! see [installation.md](https://github.com/ideal-world/spacegate/blob/master/docs/k8s/installation.md)
+//!
+//! ## Special instructions for configuration
+//! ### Setting HTTP Route Priority
+//! You can specify the priority of an httproute by adding a priority field in the annotations section of the route.
+//! A higher value for the priority field indicates a higher priority. The httproute library stores the priority
+//! value using the i64 data type, so the maximum and minimum values for the priority are (i64::MAX)
+//! [https://doc.rust-lang.org/std/primitive.i64.html#associatedconstant.MAX] and
+//! (i64::MIN)[https://doc.rust-lang.org/std/primitive.i64.html#associatedconstant.MIN] respectively.
+//!
+//! If the priority field is not present in an httproute, its priority will be default to 0, and the default priority
+//! will be determined based on the creation order (earlier routes will have higher priority).
 #![warn(clippy::unwrap_used)]
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
