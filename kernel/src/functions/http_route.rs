@@ -367,7 +367,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
-    let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters, matched_match_inst).await?;
+    let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
 
     ctx.build_response().await
 }
@@ -636,7 +636,7 @@ async fn process_req_filters_http(
         gateway_name,
         matched_rule_inst.map(|m| ChoseHttpRouteRuleInst::clone_from(m, matched_match_inst)),
     );
-    process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters, matched_match_inst).await
+    process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
 
 #[cfg(feature = "ws")]
@@ -660,7 +660,7 @@ async fn process_req_filters_ws(
         gateway_name,
         matched_rule_inst.map(|m| ChoseHttpRouteRuleInst::clone_from(m, matched_match_inst)),
     );
-    process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters, matched_match_inst).await
+    process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
 
 async fn process_req_filters(
@@ -669,7 +669,6 @@ async fn process_req_filters(
     rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     route_filters: &Vec<(String, BoxSgPluginFilter)>,
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
-    matched_match_inst: Option<&SgHttpRouteMatchInst>,
 ) -> TardisResult<SgRoutePluginContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
@@ -677,7 +676,7 @@ async fn process_req_filters(
         for (id, filter) in backend_filters {
             if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
-                (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
+                (is_continue, ctx) = filter.req_filter(id, ctx).await?;
                 if !is_continue {
                     return Ok(ctx);
                 }
@@ -689,7 +688,7 @@ async fn process_req_filters(
         for (id, filter) in rule_filters {
             if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
-                (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
+                (is_continue, ctx) = filter.req_filter(id, ctx).await?;
                 if !is_continue {
                     return Ok(ctx);
                 }
@@ -700,7 +699,7 @@ async fn process_req_filters(
     for (id, filter) in route_filters {
         if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
-            (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
+            (is_continue, ctx) = filter.req_filter(id, ctx).await?;
             if !is_continue {
                 return Ok(ctx);
             }
@@ -710,7 +709,7 @@ async fn process_req_filters(
     for (id, filter) in global_filters {
         if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in request");
-            (is_continue, ctx) = filter.req_filter(id, ctx, matched_match_inst).await?;
+            (is_continue, ctx) = filter.req_filter(id, ctx).await?;
             if !is_continue {
                 return Ok(ctx);
             }
@@ -726,7 +725,6 @@ async fn process_resp_filters(
     rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
     route_filters: &Vec<(String, BoxSgPluginFilter)>,
     global_filters: &Vec<(String, BoxSgPluginFilter)>,
-    matched_match_inst: Option<&SgHttpRouteMatchInst>,
 ) -> TardisResult<SgRoutePluginContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
@@ -735,7 +733,7 @@ async fn process_resp_filters(
         for (id, filter) in backend_filters {
             if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
-                (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
+                (is_continue, ctx) = filter.resp_filter(id, ctx).await?;
                 if !is_continue {
                     return Ok(ctx);
                 }
@@ -747,7 +745,7 @@ async fn process_resp_filters(
         for (id, filter) in rule_filters {
             if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
                 log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
-                (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
+                (is_continue, ctx) = filter.resp_filter(id, ctx).await?;
                 if !is_continue {
                     return Ok(ctx);
                 }
@@ -758,7 +756,7 @@ async fn process_resp_filters(
     for (id, filter) in route_filters {
         if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
-            (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
+            (is_continue, ctx) = filter.resp_filter(id, ctx).await?;
             if !is_continue {
                 return Ok(ctx);
             }
@@ -768,7 +766,7 @@ async fn process_resp_filters(
     for (id, filter) in global_filters {
         if !executed_filters.contains(&id) && filter.before_resp_filter_check(&ctx) {
             log::trace!("[SG.Plugin.Filter] Hit id {id} in response");
-            (is_continue, ctx) = filter.resp_filter(id, ctx, matched_match_inst).await?;
+            (is_continue, ctx) = filter.resp_filter(id, ctx).await?;
             if !is_continue {
                 return Ok(ctx);
             }

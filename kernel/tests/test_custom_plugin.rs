@@ -43,14 +43,14 @@ impl SgPluginFilter for SgFilterAuth {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.request.get_req_headers().contains_key("Authorization") {
             return Ok((true, ctx));
         }
         Err(TardisError::unauthorized("unauthorized", ""))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }
