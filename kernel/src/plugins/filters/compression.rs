@@ -11,8 +11,6 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::instance::SgHttpRouteMatchInst;
-
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
 pub const CODE: &str = "compression";
@@ -97,11 +95,11 @@ impl SgPluginFilter for SgFilterCompression {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         let resp_body = ctx.response.pop_resp_body().await?;
         if let Some(mut resp_body) = resp_body {
             let resp_encode_type = get_encode_type(ctx.response.get_resp_headers_raw().get(header::CONTENT_ENCODING));
@@ -249,16 +247,15 @@ mod tests {
             "".to_string(),
             None,
         );
-        let matched = SgHttpRouteMatchInst { ..Default::default() };
 
-        let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
 
         let body_str = "test 1 测试 1 ";
         let resp_body = Body::from(body_str);
         ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), resp_body);
 
-        let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         let resp_body = ctx.response.pop_resp_body().await.unwrap().unwrap();
         let mut decode = GzipDecoder::new(BufReader::new(&resp_body[..]));
@@ -287,9 +284,8 @@ mod tests {
             "".to_string(),
             None,
         );
-        let matched = SgHttpRouteMatchInst { ..Default::default() };
 
-        let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
 
         let body_str = "test 1 测试 1 ";
@@ -301,7 +297,7 @@ mod tests {
         mock_resp_header.insert(header::CONTENT_ENCODING, CompressionType::Deflate.into());
         ctx = ctx.resp(StatusCode::OK, mock_resp_header, resp_body);
 
-        let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
 
         let resp_body = ctx.response.pop_resp_body().await.unwrap().unwrap();

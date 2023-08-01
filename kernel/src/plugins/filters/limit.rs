@@ -8,8 +8,6 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::instance::SgHttpRouteMatchInst;
-
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 use lazy_static::lazy_static;
 pub const CODE: &str = "limit";
@@ -107,7 +105,7 @@ impl SgPluginFilter for SgFilterLimit {
         Ok(())
     }
 
-    async fn req_filter(&self, id: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, id: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(max_request_number) = &self.max_request_number {
             let result: &bool = &SCRIPT
                 // counter key
@@ -135,7 +133,7 @@ impl SgPluginFilter for SgFilterLimit {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }
@@ -182,30 +180,30 @@ mod tests {
             )
         }
 
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_err());
-        assert!(filter.req_filter("limit_002", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_err());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_err());
+        assert!(filter.req_filter("limit_002", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_err());
 
         sleep(Duration::from_millis(1100)).await;
 
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_err());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_err());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_err());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_err());
 
         sleep(Duration::from_millis(1100)).await;
 
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_ok());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_err());
-        assert!(filter.req_filter("limit_001", new_ctx(), None).await.is_err());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_ok());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_err());
+        assert!(filter.req_filter("limit_001", new_ctx()).await.is_err());
     }
 }

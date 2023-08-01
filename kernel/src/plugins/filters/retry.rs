@@ -13,7 +13,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{functions::http_client, instance::SgHttpRouteMatchInst, plugins::filters::retry::expiring_map::ExpireMap};
+use crate::{functions::http_client, plugins::filters::retry::expiring_map::ExpireMap};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
@@ -90,7 +90,7 @@ impl SgPluginFilter for SgFilterRetry {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         let mut req_body_cache = REQUEST_BODY.lock().await;
         let req_body = ctx.request.pop_req_body().await?;
         req_body_cache.insert(ctx.get_request_id().to_string(), req_body.clone(), (self.retries as u64 * self.max_interval) as u128);
@@ -100,7 +100,7 @@ impl SgPluginFilter for SgFilterRetry {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.is_resp_error() {
             let mut req_body_cache = REQUEST_BODY.lock().await;
             let req_body = req_body_cache.remove(ctx.get_request_id()).flatten();
@@ -292,6 +292,6 @@ mod tests {
         );
         let ctx = ctx.resp_from_error(TardisError::internal_error("", ""));
 
-        filter_retry.resp_filter("", ctx, None).await.unwrap();
+        filter_retry.resp_filter("", ctx).await.unwrap();
     }
 }

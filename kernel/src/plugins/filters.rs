@@ -104,9 +104,9 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
-    async fn req_filter(&self, id: &str, mut ctx: SgRoutePluginContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)>;
+    async fn req_filter(&self, id: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)>;
 
-    async fn resp_filter(&self, id: &str, mut ctx: SgRoutePluginContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)>;
+    async fn resp_filter(&self, id: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)>;
 
     fn boxed(self) -> BoxSgPluginFilter
     where
