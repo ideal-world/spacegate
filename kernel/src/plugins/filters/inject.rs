@@ -6,7 +6,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{functions::http_client, instance::SgHttpRouteMatchInst};
+use crate::functions::http_client;
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
@@ -49,7 +49,7 @@ impl SgPluginFilter for SgFilterInject {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(req_inject_url) = &self.req_inject_url {
             let real_method = ctx.request.get_req_method().clone();
             let real_url = ctx.request.get_req_uri().clone();
@@ -99,7 +99,7 @@ impl SgPluginFilter for SgFilterInject {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(resp_inject_url) = &self.resp_inject_url {
             let real_method = ctx.request.get_req_method().clone();
             let real_url = ctx.request.get_req_uri().clone();
@@ -150,7 +150,7 @@ mod tests {
             None,
         );
 
-        let (is_continue, mut ctx) = filter.req_filter("", ctx, None).await.unwrap();
+        let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
         let body = String::from_utf8(ctx.request.pop_req_body().await.unwrap().unwrap()).unwrap();
@@ -158,7 +158,7 @@ mod tests {
         assert!(body.contains(r#""data": "理想世界""#));
 
         ctx.response.set_resp_body("idealworld".as_bytes().to_vec()).unwrap();
-        let (is_continue, mut ctx) = filter.resp_filter("", ctx, None).await.unwrap();
+        let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
         assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");

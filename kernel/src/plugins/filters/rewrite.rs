@@ -1,5 +1,5 @@
+use crate::config::plugin_filter_dto::SgHttpPathModifier;
 use crate::helpers::url_helper::UrlToUri;
-use crate::{config::plugin_filter_dto::SgHttpPathModifier, instance::SgHttpRouteMatchInst};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tardis::url::Url;
@@ -49,7 +49,7 @@ impl SgPluginFilter for SgFilterRewrite {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.request.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Rewrite] Host {hostname} parsing error"), ""))?;
@@ -62,7 +62,7 @@ impl SgPluginFilter for SgFilterRewrite {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }
@@ -111,12 +111,12 @@ mod tests {
             Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
         );
 
-        let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg_new.idealworld.group/new_iam/ct/001?name=sg");
         assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
 
-        let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
     }

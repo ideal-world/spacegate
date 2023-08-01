@@ -7,9 +7,9 @@ use tardis::{
     TardisFuns,
 };
 
+use crate::config::plugin_filter_dto::SgHttpPathModifier;
 use crate::helpers::url_helper::UrlToUri;
 use crate::plugins::context::SgRouteFilterRequestAction;
-use crate::{config::plugin_filter_dto::SgHttpPathModifier, instance::SgHttpRouteMatchInst};
 
 use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
@@ -57,7 +57,7 @@ impl SgPluginFilter for SgFilterRedirect {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(hostname) = &self.hostname {
             let mut uri = Url::parse(&ctx.request.get_req_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Host {hostname} parsing error"), ""))?;
@@ -73,14 +73,15 @@ impl SgPluginFilter for SgFilterRedirect {
             uri.set_port(Some(port)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Port {port} parsing error"), ""))?;
             ctx.request.set_req_uri(uri.to_uri()?);
         }
-        if let Some(new_url) = http_common_modify_path(ctx.request.get_req_uri(), &self.path, matched_match_inst)? {
+        let matched_match_inst = ctx.get_rule_matched();
+        if let Some(new_url) = http_common_modify_path(ctx.request.get_req_uri(), &self.path, matched_match_inst.as_ref())? {
             ctx.request.set_req_uri(new_url);
         }
         ctx.set_action(SgRouteFilterRequestAction::Redirect);
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(status_code) = self.status_code {
             ctx.response.set_resp_status_code(
                 StatusCode::from_u16(status_code)
@@ -138,12 +139,12 @@ mod tests {
             Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
         );
 
-        let (is_continue, mut ctx) = filter.req_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_req_uri().to_string(), "https://sg_new.idealworld.group/new_iam/ct/001?name=sg");
         assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
 
-        let (is_continue, mut ctx) = filter.resp_filter("", ctx, Some(&matched)).await.unwrap();
+        let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::MOVED_PERMANENTLY);
     }

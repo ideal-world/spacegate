@@ -6,7 +6,7 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{instance::SgHttpRouteMatchInst, plugins::context::SgRouteFilterRequestAction};
+use crate::plugins::context::SgRouteFilterRequestAction;
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
@@ -44,7 +44,7 @@ impl SgPluginFilter for SgFilterMaintenance {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.is_enabled {
             ctx.set_action(SgRouteFilterRequestAction::Response);
             let default_content_type = HeaderValue::from_static("text/html");
@@ -106,7 +106,7 @@ impl SgPluginFilter for SgFilterMaintenance {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 }

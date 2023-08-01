@@ -348,6 +348,13 @@ impl SgCtxResponse {
         }
     }
 }
+
+impl Default for SgCtxResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct SGCertInfo {
     pub account_id: String,

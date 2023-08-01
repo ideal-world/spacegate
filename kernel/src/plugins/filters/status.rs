@@ -21,7 +21,6 @@ use tardis::{
 use self::status_plugin::{clean_status, get_status, update_status};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
-use crate::instance::SgHttpRouteMatchInst;
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 
@@ -122,11 +121,11 @@ impl SgPluginFilter for SgFilterStatus {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext, _matched_match_inst: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(backend_name) = ctx.get_chose_backend_name() {
             if ctx.is_resp_error() {
                 let mut server_err = SERVER_ERR.lock().await;
@@ -232,17 +231,17 @@ mod tests {
         ctx.set_chose_backend(&mock_backend);
 
         let ctx = ctx.resp_from_error(TardisError::bad_request("", ""));
-        let (is_ok, ctx) = stats.resp_filter("id1", ctx, None).await.unwrap();
+        let (is_ok, ctx) = stats.resp_filter("id1", ctx).await.unwrap();
         assert!(is_ok);
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Minor);
 
-        let (_, ctx) = stats.resp_filter("id2", ctx, None).await.unwrap();
-        let (_, ctx) = stats.resp_filter("id3", ctx, None).await.unwrap();
-        let (_, ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
+        let (_, ctx) = stats.resp_filter("id2", ctx).await.unwrap();
+        let (_, ctx) = stats.resp_filter("id3", ctx).await.unwrap();
+        let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Major);
 
         let ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), Body::empty());
-        let (_, _ctx) = stats.resp_filter("id4", ctx, None).await.unwrap();
+        let (_, _ctx) = stats.resp_filter("id4", ctx).await.unwrap();
         assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Good);
     }
 }

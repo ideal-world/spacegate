@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use crate::instance::SgHttpRouteMatchInst;
-
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 use async_trait::async_trait;
 use http::HeaderName;
@@ -53,7 +51,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.kind != SgFilterHeaderModifierKind::Request {
             return Ok((true, ctx));
         }
@@ -72,7 +70,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         Ok((true, ctx))
     }
 
-    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext, _: Option<&SgHttpRouteMatchInst>) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.kind != SgFilterHeaderModifierKind::Response {
             return Ok((true, ctx));
         }
@@ -130,7 +128,7 @@ mod tests {
             None,
         );
 
-        let (is_continue, mut ctx) = filter_req.req_filter("", ctx, None).await.unwrap();
+        let (is_continue, mut ctx) = filter_req.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
         assert_eq!(ctx.request.get_req_headers().len(), 2);
@@ -141,7 +139,7 @@ mod tests {
 
         let mock_resp_headers = ctx.request.get_req_headers().clone();
         ctx.response.set_resp_headers(mock_resp_headers);
-        let (is_continue, mut ctx) = filter_resp.resp_filter("", ctx, None).await.unwrap();
+        let (is_continue, mut ctx) = filter_resp.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_req_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
         assert_eq!(ctx.request.get_req_headers().len(), 2);
