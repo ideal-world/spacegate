@@ -110,6 +110,10 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
+      - name: Install openssl
+        run: |
+          apt update && apt install -y libssl-dev
+
       - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
@@ -196,6 +200,9 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
+      - name: Install openssl
+        run: |
+          brew install openssl
 
       - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
