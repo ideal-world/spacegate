@@ -98,6 +98,8 @@ jobs:
             x86_64-unknown-linux-gnu,
             aarch64-unknown-linux-musl,
           ]
+    env:
+      OPENSSL_DIR: /opt/openssl
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -109,10 +111,6 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
-
-      - name: Install openssl
-        run: |
-          apt update && apt install -y libssl-dev
 
       - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
@@ -303,6 +301,8 @@ jobs:
       #     export OPENSSL_NO_VENDOR=1
       #     export OPENSSL_DIR=$PWD/packages/openssl_x64-windows-static
 
+      - run: vcpkg install openssl:x64-windows-static-md
+      
       - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
