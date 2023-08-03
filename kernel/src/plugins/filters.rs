@@ -237,7 +237,6 @@ impl SgPluginFilterInitDto {
 }
 
 #[derive(Debug, Clone)]
-#[non_exhaustive]
 pub struct SgPluginFilterAccept {
     pub kind: Vec<SgPluginFilterKind>,
     /// Whether to accept the error response, default is false .
