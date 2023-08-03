@@ -76,7 +76,6 @@ pub enum BackOff {
 impl SgPluginFilter for SgFilterRetry {
     fn accept(&self) -> super::SgPluginFilterAccept {
         super::SgPluginFilterAccept {
-            kind: vec![super::SgPluginFilterKind::Http],
             accept_error_response: true,
             ..Default::default()
         }

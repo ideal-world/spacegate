@@ -70,7 +70,6 @@ impl SgPluginFilter for SgFilterStatus {
         super::SgPluginFilterAccept {
             kind: vec![super::SgPluginFilterKind::Http],
             accept_error_response: true,
-            ..Default::default()
         }
     }
 
