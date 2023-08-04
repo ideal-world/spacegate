@@ -72,13 +72,12 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterIn
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
     for (i, (_, plugin_filter)) in plugin_filters.iter_mut().enumerate() {
-        plugin_filter.destroy().await?;
         if plugin_filter.init(&init_dto).await.is_err() {
             elements_to_remove.push(i);
         }
     }
     for &i in elements_to_remove.iter().rev() {
-        plugin_filters.remove(i);
+        log::info!("[SG.Filter] Remove filter: {}", plugin_filters.remove(i).0);
     }
     Ok(plugin_filters)
 }
