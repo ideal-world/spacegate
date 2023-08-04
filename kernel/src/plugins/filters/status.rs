@@ -20,7 +20,7 @@ use tardis::{
 
 use self::status_plugin::{clean_status, get_status, update_status};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{BoxSgPluginFilter, SgAttachedLevel, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 
@@ -74,6 +74,10 @@ impl SgPluginFilter for SgFilterStatus {
     }
 
     async fn init(&mut self, init_dto: &SgPluginFilterInitDto) -> TardisResult<()> {
+        if !init_dto.attached_level.eq(&SgAttachedLevel::Gateway) {
+            log::error!("[SG.Filter.Status] init filter is only can attached to gateway");
+            return Ok(());
+        }
         let (shutdown_tx, _) = tokio::sync::watch::channel(());
         let mut shutdown_rx = shutdown_tx.subscribe();
 
@@ -85,7 +89,10 @@ impl SgPluginFilter for SgFilterStatus {
             async move { Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| status_plugin::create_status_html(request, title.clone()))) }
         });
 
-        let server = Server::bind(&addr).serve(make_svc);
+        let server = match Server::try_bind(&addr) {
+            Ok(server) => server.serve(make_svc),
+            Err(e) => return Err(TardisError::conflict(&format!("[SG.Filter.Status] bind error: {e}"), "")),
+        };
 
         tokio::spawn(async move {
             log::info!("[SG.Filter.Status] Server started: {addr}");
@@ -204,6 +211,7 @@ mod tests {
                     backends: Some(vec![mock_backend_ref.clone()]),
                     timeout_ms: None,
                 }],
+                attached_level: crate::plugins::filters::SgAttachedLevel::Gateway,
             })
             .await
             .unwrap();

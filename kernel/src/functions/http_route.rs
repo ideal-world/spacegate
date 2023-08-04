@@ -48,7 +48,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
             let mut rule_insts = Vec::new();
             for rule in rules {
                 let rule_filters = if let Some(filters) = rule.filters.clone() {
-                    filters::init(filters, SgPluginFilterInitDto::from_rule_or_backend(&gateway_conf, &rule)).await?
+                    filters::init(filters, SgPluginFilterInitDto::from_rule(&gateway_conf, &rule)).await?
                 } else {
                     Vec::new()
                 };

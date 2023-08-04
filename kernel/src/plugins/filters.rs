@@ -64,14 +64,21 @@ pub fn get_filter_def(code: &str) -> TardisResult<&Box<dyn SgPluginFilterDef>> {
 
 pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterInitDto) -> TardisResult<Vec<(String, BoxSgPluginFilter)>> {
     let mut plugin_filters: Vec<(String, BoxSgPluginFilter)> = Vec::new();
+    let mut elements_to_remove = vec![];
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
         let filter_def = get_filter_def(&filter_conf.code)?;
         let filter_inst = filter_def.inst(filter_conf.spec)?;
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
-    for (_, plugin_filter) in &mut plugin_filters {
-        plugin_filter.init(&init_dto).await?;
+    for (i, (_, plugin_filter)) in plugin_filters.iter_mut().enumerate() {
+        plugin_filter.destroy().await?;
+        if plugin_filter.init(&init_dto).await.is_err() {
+            elements_to_remove.push(i);
+        }
+    }
+    for &i in elements_to_remove.iter().rev() {
+        plugin_filters.remove(i);
     }
     Ok(plugin_filters)
 }
@@ -199,30 +206,44 @@ pub enum SgPluginFilterKind {
     Ws,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SgAttachedLevel {
+    Gateway,
+    HttpRoute,
+    Rule,
+    Backend,
+}
+
 /// Encapsulation filter initialization parameters.
 ///
 #[derive(Debug, Clone)]
 pub struct SgPluginFilterInitDto {
+    /// Provide gateway-level public configuration
     pub gateway_parameters: SgParameters,
     pub http_route_rules: Vec<SgHttpRouteRule>,
+    /// Identifies the level to which the filter is attached
+    pub attached_level: SgAttachedLevel,
 }
 impl SgPluginFilterInitDto {
     pub fn from_global(gateway_conf: &SgGateway, routes: &[SgHttpRoute]) -> Self {
         Self {
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>(),
+            attached_level: SgAttachedLevel::Gateway,
         }
     }
     pub fn from_route(gateway_conf: &SgGateway, route: &SgHttpRoute) -> Self {
         Self {
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: route.rules.clone().unwrap_or_default(),
+            attached_level: SgAttachedLevel::HttpRoute,
         }
     }
-    pub fn from_rule_or_backend(gateway_conf: &SgGateway, rule: &SgHttpRouteRule) -> Self {
+    pub fn from_rule(gateway_conf: &SgGateway, rule: &SgHttpRouteRule) -> Self {
         Self {
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: vec![rule.clone()],
+            attached_level: SgAttachedLevel::Rule,
         }
     }
 
@@ -232,6 +253,7 @@ impl SgPluginFilterInitDto {
         Self {
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: vec![rule],
+            attached_level: SgAttachedLevel::Backend,
         }
     }
 }
