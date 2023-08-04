@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use http::{header, HeaderValue};
+use http::header;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -20,12 +21,22 @@ impl SgPluginFilterDef for SgFilterMaintenanceDef {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct SgFilterMaintenance {
     is_enabled: bool,
-    title: Option<String>,
-    msg: Option<String>,
+    title: String,
+    msg: String,
+}
+
+impl Default for SgFilterMaintenance {
+    fn default() -> Self {
+        Self {
+            is_enabled: false,
+            title: "System Maintenance".to_string(),
+            msg: "We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly./n Thank you for your patience, understanding, and support.".to_string(),
+        }
+    }
 }
 
 #[async_trait]
@@ -47,15 +58,17 @@ impl SgPluginFilter for SgFilterMaintenance {
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.is_enabled {
             ctx.set_action(SgRouteFilterRequestAction::Response);
-            let default_content_type = HeaderValue::from_static("text/html");
-            let content_type = ctx.request.get_req_headers().get(header::CONTENT_TYPE).unwrap_or(&default_content_type).to_str().unwrap_or("");
-            match content_type {
-                "text/html" => {
-                    let title = self.title.clone().unwrap_or("System Maintenance".to_string());
-                    let msg = self.msg.clone().map(|x| x.replace("/n", "<br>")).unwrap_or("We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly.<br> Thank you for your patience, understanding, and support.".to_string());
-                    ctx.response.set_resp_body(
-                        format!(
-                            r##"<!DOCTYPE html>
+            let request_headers = ctx.request.get_req_headers();
+            let content_type = request_headers.get(header::CONTENT_TYPE).map(|content_type| content_type.to_str().unwrap_or("").split(",").collect_vec()).unwrap_or_default();
+            let accept_type = request_headers.get(header::ACCEPT).map(|accept| accept.to_str().unwrap_or("").split(",").collect_vec()).unwrap_or_default();
+
+            if content_type.contains(&"text/html") || accept_type.contains(&"text/html") {
+                let title = self.title.clone();
+                let msg = self.msg.clone().replace("/n", "<br>");
+                ctx.response.set_resp_header(&header::CONTENT_TYPE.to_string(), "text/html")?;
+                ctx.response.set_resp_body(
+                    format!(
+                        r##"<!DOCTYPE html>
                     <html>
                     <head>
                         <title>{title}</title>
@@ -90,17 +103,14 @@ impl SgPluginFilter for SgFilterMaintenance {
                     </body>
                     </html>
                     "##
-                        )
-                        .into_bytes(),
-                    )?;
-                }
-                "application/json" => {
-                    let msg = self.msg.clone().unwrap_or("We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly.Thank you for your patience, understanding, and support.".to_string());
-                    return Err(TardisError::forbidden(&msg, ""));
-                }
-                _ => {
-                    ctx.response.set_resp_body("<h1>Maintenance</h1>".to_string().into_bytes())?;
-                }
+                    )
+                    .into_bytes(),
+                )?;
+            } else if content_type.contains(&"application/json") || accept_type.contains(&"application/json") {
+                let msg = self.msg.clone();
+                return Err(TardisError::forbidden(&msg, ""));
+            } else {
+                ctx.response.set_resp_body("<h1>Maintenance</h1>".to_string().into_bytes())?;
             }
         }
         Ok((true, ctx))
