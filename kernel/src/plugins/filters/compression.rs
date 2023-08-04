@@ -23,7 +23,6 @@ impl SgPluginFilterDef for SgFilterCompressionDef {
     }
 }
 
-///
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilterCompression {}
 
