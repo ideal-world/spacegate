@@ -8,6 +8,7 @@ use hyper::{Body, Server};
 
 use serde::{Deserialize, Serialize};
 use tardis::chrono::Utc;
+use tardis::tokio::task::JoinHandle;
 use tardis::{
     basic::result::TardisResult,
     log,
@@ -25,7 +26,7 @@ use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 
 lazy_static! {
-    static ref SHUTDOWN_TX: Arc<Mutex<HashMap<u16, Sender<()>>>> = <_>::default();
+    static ref SHUTDOWN_TX: Arc<Mutex<HashMap<u16, (Sender<()>, JoinHandle<Result<(), hyper::Error>>)>>> = <_>::default();
     static ref SERVER_ERR: Arc<Mutex<HashMap<String, (u16, i64)>>> = <_>::default();
 }
 
@@ -82,11 +83,11 @@ impl SgPluginFilter for SgFilterStatus {
         let mut shutdown_rx = shutdown_tx.subscribe();
 
         let mut shutdown = SHUTDOWN_TX.lock().await;
-        if let Some(old_shutdown_tx) = shutdown.remove(&self.port) {
-            old_shutdown_tx.send(()).ok();
+        if let Some(old_shutdown) = shutdown.remove(&self.port) {
+            old_shutdown.0.send(()).ok();
+            let _ = old_shutdown.1.await;
             log::trace!("[SG.Filter.Status] init stop old service.");
         }
-        (*shutdown).insert(self.port, shutdown_tx);
 
         let addr_ip: IpAddr = self.serv_addr.parse().map_err(|e| TardisError::conflict(&format!("[SG.Filter.Status] serv_addr parse error: {e}"), ""))?;
         let addr = (addr_ip, self.port).into();
@@ -101,13 +102,14 @@ impl SgPluginFilter for SgFilterStatus {
             Err(e) => return Err(TardisError::conflict(&format!("[SG.Filter.Status] bind error: {e}"), "")),
         };
 
-        tokio::spawn(async move {
+        let join = tokio::spawn(async move {
             log::info!("[SG.Filter.Status] Server started: {addr}");
             let server = server.with_graceful_shutdown(async move {
                 shutdown_rx.changed().await.ok();
             });
             server.await
         });
+        (*shutdown).insert(self.port, (shutdown_tx, join));
 
         clean_status().await;
         for http_route_rule in init_dto.http_route_rules.clone() {
@@ -124,7 +126,8 @@ impl SgPluginFilter for SgFilterStatus {
         let mut shutdown = SHUTDOWN_TX.lock().await;
 
         if let Some(shutdown) = shutdown.remove(&self.port) {
-            shutdown.send(()).ok();
+            shutdown.0.send(()).ok();
+            let _ = shutdown.1.await;
             log::info!("[SG.Filter.Status] Server stopped");
         };
         Ok(())
