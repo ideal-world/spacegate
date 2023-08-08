@@ -1,5 +1,5 @@
 use std::net::IpAddr;
-use std::{collections::HashMap, mem::swap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use http::Request;
@@ -25,7 +25,7 @@ use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 
 lazy_static! {
-    static ref SHUTDOWN_TX: Arc<Mutex<Option<Sender<()>>>> = <_>::default();
+    static ref SHUTDOWN_TX: Arc<Mutex<HashMap<u16, Sender<()>>>> = <_>::default();
     static ref SERVER_ERR: Arc<Mutex<HashMap<String, (u16, i64)>>> = <_>::default();
 }
 
@@ -81,6 +81,13 @@ impl SgPluginFilter for SgFilterStatus {
         let (shutdown_tx, _) = tokio::sync::watch::channel(());
         let mut shutdown_rx = shutdown_tx.subscribe();
 
+        let mut shutdown = SHUTDOWN_TX.lock().await;
+        if let Some(old_shutdown_tx) = shutdown.remove(&self.port) {
+            old_shutdown_tx.send(()).ok();
+            log::trace!("[SG.Filter.Status] init stop old service.");
+        }
+        (*shutdown).insert(self.port, shutdown_tx);
+
         let addr_ip: IpAddr = self.serv_addr.parse().map_err(|e| TardisError::conflict(&format!("[SG.Filter.Status] serv_addr parse error: {e}"), ""))?;
         let addr = (addr_ip, self.port).into();
         let title = Arc::new(Mutex::new(self.title.clone()));
@@ -102,9 +109,6 @@ impl SgPluginFilter for SgFilterStatus {
             server.await
         });
 
-        let mut shutdown = SHUTDOWN_TX.lock().await;
-        *shutdown = Some(shutdown_tx);
-
         clean_status().await;
         for http_route_rule in init_dto.http_route_rules.clone() {
             if let Some(backends) = &http_route_rule.backends {
@@ -118,9 +122,8 @@ impl SgPluginFilter for SgFilterStatus {
 
     async fn destroy(&self) -> TardisResult<()> {
         let mut shutdown = SHUTDOWN_TX.lock().await;
-        let mut swap_shutdown: Option<Sender<()>> = None;
-        swap(&mut *shutdown, &mut swap_shutdown);
-        if let Some(shutdown) = swap_shutdown {
+
+        if let Some(shutdown) = shutdown.remove(&self.port) {
             shutdown.send(()).ok();
             log::info!("[SG.Filter.Status] Server stopped");
         };

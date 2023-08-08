@@ -475,6 +475,7 @@ impl SgRoutePluginContext {
             );
         }
         let resp = resp
+            .status(self.response.get_resp_status_code())
             .body(Body::from(self.response.pop_resp_body().await?.unwrap_or_default()))
             .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
         Ok(resp)
