@@ -149,8 +149,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let ew = watcher(http_route_api_clone, ListParams::default()).touched_objects();
         pin_mut!(ew);
         while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
-            if http_route_objs_generation.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &http_route_obj.metadata.generation.unwrap_or(0) {
+            if http_route_objs_generation.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &http_route_obj.metadata.generation.unwrap_or(0)
+                && http_route_api.get_metadata_opt(&http_route_obj.name_any()).await.ok().is_some()
+            {
                 // ignore the original object
+                // ignore if obj is some(it's means obj is not deleted)
                 continue;
             }
             if http_route_obj.spec.inner.parent_refs.is_none() {
@@ -190,8 +193,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
             if sg_filter_objs_generation.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &filter_obj.metadata.generation.unwrap_or(0) {
-                // ignore the original object
-                continue;
+                // Do not ignore the deletion event
+                if filter_api.get_opt(&filter_obj.name_any()).await.ok().is_some() {
+                    // ignore the original object
+                    continue;
+                }
             }
             if filter_obj.spec.target_refs.is_empty() {
                 continue;
@@ -725,10 +731,9 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
         .collect();
 
     if !filter_objs.is_empty() {
-        log::trace!(
-            "[SG.Config.SgFilter] {namespace}.{kind}.{name} filter found: {:?}",
-            filter_objs.clone().into_iter().map(|filter| format!("Filter{{code: {},name:{}}}", filter.code, filter.name.unwrap_or("None".to_string()))).collect_vec()
-        );
+        let mut filter_vec = String::new();
+        filter_objs.clone().into_iter().for_each(|filter| filter_vec.push_str(&format!("Filter{{code: {},name:{}}}", filter.code, filter.name.unwrap_or("None".to_string()))));
+        log::trace!("[SG.Config.SgFilter] {namespace}.{kind}.{name} filter found: {filter_vec}");
     }
 
     if filter_objs.is_empty() {
