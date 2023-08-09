@@ -446,7 +446,7 @@ impl SgRoutePluginContext {
 
     pub fn resp_from_error(mut self, error: TardisError) -> Self {
         self.response.raw_resp_err = Some(error);
-        self.response.raw_resp_status_code = StatusCode::INTERNAL_SERVER_ERROR;
+        self.response.raw_resp_status_code = StatusCode::BAD_GATEWAY;
         self
     }
 

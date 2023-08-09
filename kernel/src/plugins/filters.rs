@@ -7,6 +7,7 @@ pub mod maintenance;
 pub mod redirect;
 pub mod retry;
 pub mod rewrite;
+#[cfg(feature = "cache")]
 pub mod status;
 use async_trait::async_trait;
 
@@ -36,6 +37,7 @@ fn init_filter_defs() {
     #[cfg(feature = "cache")]
     filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilterLimitDef));
     filters.insert(compression::CODE.to_string(), Box::new(compression::SgFilterCompressionDef));
+    #[cfg(feature = "cache")]
     filters.insert(status::CODE.to_string(), Box::new(status::SgFilterStatusDef));
     filters.insert(maintenance::CODE.to_string(), Box::new(maintenance::SgFilterMaintenanceDef));
     filters.insert(retry::CODE.to_string(), Box::new(retry::SgFilterRetryDef));
@@ -217,6 +219,7 @@ pub enum SgAttachedLevel {
 ///
 #[derive(Debug, Clone)]
 pub struct SgPluginFilterInitDto {
+    pub gateway_name: String,
     /// Provide gateway-level public configuration
     pub gateway_parameters: SgParameters,
     pub http_route_rules: Vec<SgHttpRouteRule>,
@@ -226,6 +229,7 @@ pub struct SgPluginFilterInitDto {
 impl SgPluginFilterInitDto {
     pub fn from_global(gateway_conf: &SgGateway, routes: &[SgHttpRoute]) -> Self {
         Self {
+            gateway_name: gateway_conf.name.clone(),
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>(),
             attached_level: SgAttachedLevel::Gateway,
@@ -233,6 +237,7 @@ impl SgPluginFilterInitDto {
     }
     pub fn from_route(gateway_conf: &SgGateway, route: &SgHttpRoute) -> Self {
         Self {
+            gateway_name: gateway_conf.name.clone(),
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: route.rules.clone().unwrap_or_default(),
             attached_level: SgAttachedLevel::HttpRoute,
@@ -240,6 +245,7 @@ impl SgPluginFilterInitDto {
     }
     pub fn from_rule(gateway_conf: &SgGateway, rule: &SgHttpRouteRule) -> Self {
         Self {
+            gateway_name: gateway_conf.name.clone(),
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: vec![rule.clone()],
             attached_level: SgAttachedLevel::Rule,
@@ -250,6 +256,7 @@ impl SgPluginFilterInitDto {
         let mut rule = rule.clone();
         rule.backends = Some(vec![backend.clone()]);
         Self {
+            gateway_name: gateway_conf.name.clone(),
             gateway_parameters: gateway_conf.parameters.clone(),
             http_route_rules: vec![rule],
             attached_level: SgAttachedLevel::Backend,
