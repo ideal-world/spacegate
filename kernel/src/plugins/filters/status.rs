@@ -19,6 +19,8 @@ use tardis::{
     TardisFuns,
 };
 
+use crate::functions::cache_client;
+
 use self::status_plugin::{clean_status, get_status, update_status};
 
 use super::{BoxSgPluginFilter, SgAttachedLevel, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
@@ -51,6 +53,7 @@ pub struct SgFilterStatus {
     /// Unhealthy threshold , if server error more than this, server will be tag as unhealthy
     pub unhealthy_threshold: u16,
     pub interval: u64,
+    pub cache_key: String,
 }
 
 impl Default for SgFilterStatus {
@@ -61,6 +64,7 @@ impl Default for SgFilterStatus {
             title: "System Status".to_string(),
             unhealthy_threshold: 3,
             interval: 5,
+            cache_key: "spacegate:cache:plugin:status".to_string(),
         }
     }
 }
@@ -92,9 +96,17 @@ impl SgPluginFilter for SgFilterStatus {
         let addr_ip: IpAddr = self.serv_addr.parse().map_err(|e| TardisError::conflict(&format!("[SG.Filter.Status] serv_addr parse error: {e}"), ""))?;
         let addr = (addr_ip, self.port).into();
         let title = Arc::new(Mutex::new(self.title.clone()));
+        let gateway_name = Arc::new(Mutex::new(init_dto.gateway_name.clone()));
+        let cache_key = Arc::new(Mutex::new(get_cache_key(&self.cache_key, &init_dto.gateway_name)));
         let make_svc = make_service_fn(move |_conn| {
             let title = title.clone();
-            async move { Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| status_plugin::create_status_html(request, title.clone()))) }
+            let gateway_name = gateway_name.clone();
+            let cache_key = cache_key.clone();
+            async move {
+                Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
+                    status_plugin::create_status_html(request, gateway_name.clone(), cache_key.clone(), title.clone())
+                }))
+            }
         });
 
         let server = match Server::try_bind(&addr) {
@@ -111,11 +123,19 @@ impl SgPluginFilter for SgFilterStatus {
         });
         (*shutdown).insert(self.port, (shutdown_tx, join));
 
-        clean_status().await;
+        let cache_client = cache_client::get(&init_dto.gateway_name)?;
+
+        clean_status(&get_cache_key(&self.cache_key, &init_dto.gateway_name), cache_client).await?;
         for http_route_rule in init_dto.http_route_rules.clone() {
             if let Some(backends) = &http_route_rule.backends {
                 for backend in backends {
-                    update_status(&backend.name_or_host, status_plugin::Status::default()).await;
+                    update_status(
+                        &backend.name_or_host,
+                        &get_cache_key(&self.cache_key, &init_dto.gateway_name),
+                        cache_client,
+                        status_plugin::Status::default(),
+                    )
+                    .await?;
                 }
             }
         }
@@ -146,9 +166,21 @@ impl SgPluginFilter for SgFilterStatus {
                     println!("[SG.Filter.Status] times:{times} expire:{expire} now:{now} unhealthy");
                     if *expire > now {
                         if *times >= self.unhealthy_threshold {
-                            update_status(&backend_name, status_plugin::Status::Major).await;
+                            update_status(
+                                &backend_name,
+                                &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
+                                ctx.cache()?,
+                                status_plugin::Status::Major,
+                            )
+                            .await?;
                         } else {
-                            update_status(&backend_name, status_plugin::Status::Minor).await;
+                            update_status(
+                                &backend_name,
+                                &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
+                                ctx.cache()?,
+                                status_plugin::Status::Minor,
+                            )
+                            .await?;
                         }
                         let new_times = *times + 1;
                         server_err.insert(backend_name.clone(), (new_times, now + self.interval as i64));
@@ -156,37 +188,61 @@ impl SgPluginFilter for SgFilterStatus {
                         server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
                     }
                 } else {
-                    update_status(&backend_name, status_plugin::Status::Minor).await;
+                    update_status(
+                        &backend_name,
+                        &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
+                        ctx.cache()?,
+                        status_plugin::Status::Minor,
+                    )
+                    .await?;
                     server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
                 }
-            } else if let Some(status) = get_status(&backend_name).await {
+            } else if let Some(status) = get_status(&backend_name, &get_cache_key(&self.cache_key, &ctx.get_gateway_name()), ctx.cache()?).await? {
                 if status != status_plugin::Status::Good {
-                    update_status(&backend_name, status_plugin::Status::Good).await;
+                    update_status(
+                        &backend_name,
+                        &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
+                        ctx.cache()?,
+                        status_plugin::Status::Good,
+                    )
+                    .await?;
                 }
             }
         }
         Ok((true, ctx))
     }
 }
+fn get_cache_key(cache_key: &str, gateway_name: &str) -> String {
+    format!("{}:{}", cache_key, gateway_name)
+}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use std::env;
+
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
 
-    use tardis::{basic::error::TardisError, tokio};
+    use tardis::{
+        basic::{error::TardisError, result::TardisResult},
+        test::test_container::TardisTestContainer,
+        testcontainers::{self, clients::Cli, images::redis::Redis, Container},
+        tokio,
+    };
 
     use crate::{
         config::{
             gateway_dto::SgParameters,
             http_route_dto::{SgBackendRef, SgHttpRouteRule},
         },
+        functions,
         instance::{SgBackendInst, SgHttpRouteRuleInst},
         plugins::{
             context::ChoseHttpRouteRuleInst,
             filters::{
                 status::{
+                    get_cache_key,
                     status_plugin::{get_status, Status},
                     SgFilterStatus,
                 },
@@ -208,8 +264,14 @@ mod tests {
             weight: None,
             filters: None,
         };
+        let docker = testcontainers::clients::Cli::default();
+        let _x = docker_init(&docker).await.unwrap();
+        let gateway_name = "gateway_name1".to_string();
+        functions::cache_client::init(&gateway_name, &env::var("TARDIS_FW.CACHE.URL").unwrap()).await.unwrap();
+
         stats
             .init(&SgPluginFilterInitDto {
+                gateway_name: gateway_name.clone(),
                 gateway_parameters: SgParameters::default(),
                 http_route_rules: vec![SgHttpRouteRule {
                     matches: None,
@@ -237,7 +299,7 @@ mod tests {
             HeaderMap::new(),
             Body::empty(),
             "127.0.0.1:8080".parse().unwrap(),
-            "".to_string(),
+            gateway_name.clone(),
             Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst { ..Default::default() }, None)),
         );
 
@@ -246,15 +308,37 @@ mod tests {
         let ctx = ctx.resp_from_error(TardisError::bad_request("", ""));
         let (is_ok, ctx) = stats.resp_filter("id1", ctx).await.unwrap();
         assert!(is_ok);
-        assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Minor);
+        assert_eq!(
+            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap(),
+            Status::Minor
+        );
 
         let (_, ctx) = stats.resp_filter("id2", ctx).await.unwrap();
         let (_, ctx) = stats.resp_filter("id3", ctx).await.unwrap();
         let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
-        assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Major);
+        assert_eq!(
+            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap(),
+            Status::Major
+        );
 
         let ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), Body::empty());
-        let (_, _ctx) = stats.resp_filter("id4", ctx).await.unwrap();
-        assert_eq!(get_status(&mock_backend.name_or_host).await.unwrap(), Status::Good);
+        let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
+        assert_eq!(
+            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap(),
+            Status::Good
+        );
+    }
+
+    pub struct LifeHold<'a> {
+        pub redis: Container<'a, Redis>,
+    }
+
+    async fn docker_init(docker: &Cli) -> TardisResult<LifeHold<'_>> {
+        let redis_container = TardisTestContainer::redis_custom(docker);
+        let port = redis_container.get_host_port_ipv4(6379);
+        let url = format!("redis://127.0.0.1:{port}/0",);
+        env::set_var("TARDIS_FW.CACHE.URL", url);
+
+        Ok(LifeHold { redis: redis_container })
     }
 }
