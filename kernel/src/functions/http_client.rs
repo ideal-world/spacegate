@@ -116,7 +116,7 @@ pub async fn raw_request(
         default_client().request(req)
     };
     let response = match timeout(Duration::from_millis(timeout_ms), req).await {
-        Ok(response) => response.map_err(|error: Error| TardisError::internal_error(&format!("[SG.Client] Request method {method_str} url {url_str} error: {error}"), "")),
+        Ok(response) => response.map_err(|error: Error| TardisError::custom("502", &format!("[SG.Client] Request method {method_str} url {url_str} error: {error}"), "")),
         Err(_) => {
             Response::builder().status(StatusCode::GATEWAY_TIMEOUT).body(Body::empty()).map_err(|e| TardisError::internal_error(&format!("[SG.Client] timeout error: {e}"), ""))
         }
