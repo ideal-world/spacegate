@@ -227,7 +227,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                         continue;
                     };
                     gateway_obj_map.insert(
-                        format!("{}/{}", target_ref.namespace.as_ref().unwrap_or(&"default".to_string()), target_ref.name),
+                        format!("{}/{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_obj.name_any()),
                         gateway_obj,
                     );
                 };
@@ -259,8 +259,8 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    let key = format!("{}/{}", target_ref.namespace.as_ref().unwrap_or(&"default".to_string()), target_ref.name);
-                    if gateway_obj_map.get(&key).is_none() {
+                    let key = format!("{}/{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_obj.name_any());
+                    if gateway_obj_map.get(&key).is_none() && http_route_rel_gateway_map.get(&key).is_none() {
                         http_route_rel_gateway_map.insert(key, gateway_obj);
                     }
                 }
