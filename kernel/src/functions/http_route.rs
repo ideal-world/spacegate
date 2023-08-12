@@ -1463,19 +1463,53 @@ mod tests {
         assert!(matched_route.is_some() && matched_rule.is_none() && matched_match.is_none());
 
         //mix match test
-        let _test_routes = vec![
+        let test_routes = vec![
+            SgHttpRouteInst {
+                hostnames: None,
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Exact,
+                            value: "/backendApi/apis".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+            SgHttpRouteInst {
+                hostnames: None,
+                rules: Some(vec![SgHttpRouteRuleInst {
+                    matches: Some(vec![SgHttpRouteMatchInst {
+                        path: Some(SgHttpPathMatchInst {
+                            kind: SgHttpPathMatchType::Prefix,
+                            value: "/".to_string(),
+                            regular: None,
+                        }),
+                        ..Default::default()
+                    }]),
+                    backends: Some(vec![SgBackendInst {
+                        name_or_host: "https://sg.idealworld.group".to_string(),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
             SgHttpRouteInst {
                 hostnames: Some(vec!["sg.idealworld.group".to_string()]),
                 rules: None,
                 ..Default::default()
             },
             SgHttpRouteInst {
-                hostnames: Some(vec!["*.idealworld.group".to_string()]),
+                hostnames: Some(vec!["sg.idealworld.group".to_string()]),
                 rules: Some(vec![SgHttpRouteRuleInst {
                     matches: Some(vec![SgHttpRouteMatchInst {
                         path: Some(SgHttpPathMatchInst {
-                            kind: SgHttpPathMatchType::Exact,
-                            value: "/iam".to_string(),
+                            kind: SgHttpPathMatchType::Regular,
+                            value: "/iam/[0-9]+/".to_string(),
                             regular: None,
                         }),
                         ..Default::default()
@@ -1485,6 +1519,12 @@ mod tests {
                 ..Default::default()
             },
         ];
+        let (matched_route, matched_rule, matched_match) = match_route_process(
+            &Request::builder().uri("http://192.168.1.1:9000/backendApi/apis").body(Body::empty()).unwrap(),
+            &test_routes,
+        );
+        assert!(matched_route.is_some() && matched_rule.is_some() && matched_match.is_some());
+        assert!(matched_match.as_ref().unwrap().path.as_ref().unwrap().value == "/backendApi/apis")
     }
 
     #[test]
