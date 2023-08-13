@@ -19,6 +19,7 @@ use tardis::{
     web::web_client::TardisWebClient,
     TardisFuns,
 };
+use spacegate_kernel::config::gateway_dto::SgProtocol::Https;
 
 pub struct SgFilterAuthDef;
 
@@ -75,6 +76,7 @@ async fn test_custom_plugin() -> TardisResult<()> {
             rules: Some(vec![SgHttpRouteRule {
                 backends: Some(vec![SgBackendRef {
                     name_or_host: "postman-echo.com".to_string(),
+                    protocol:Some(Https),
                     ..Default::default()
                 }]),
                 ..Default::default()
@@ -90,6 +92,6 @@ async fn test_custom_plugin() -> TardisResult<()> {
 
     let resp = client.get::<Value>("http://localhost:8888/get?dd", Some(vec![("Authorization".to_string(), "xxxxx".to_string())])).await?;
     assert_eq!(resp.code, 200);
-    assert!(resp.body.unwrap().get("url").unwrap().as_str().unwrap().contains("http://localhost/get?dd"));
+    assert!(resp.body.unwrap().get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
     Ok(())
 }
