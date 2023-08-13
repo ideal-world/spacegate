@@ -204,7 +204,8 @@ impl SgCtxRequest {
     }
 
     pub fn set_req_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
-        self.set_req_header("Content-Length", body.len().to_string().as_str())?;
+        self.get_req_headers_mut().remove(http::header::TRANSFER_ENCODING.as_str());
+        self.set_req_header(http::header::CONTENT_LENGTH.as_str(), body.len().to_string().as_str())?;
         self.mod_req_body = Some(body);
         Ok(())
     }
@@ -251,6 +252,7 @@ impl SgCtxResponse {
             mod_resp_body: None,
         }
     }
+
     pub fn is_resp_error(&self) -> bool {
         self.raw_resp_err.is_some()
     }
@@ -328,8 +330,10 @@ impl SgCtxResponse {
             Ok(None)
         }
     }
+
     pub fn set_resp_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
-        self.set_resp_header("Content-Length", body.len().to_string().as_str())?;
+        self.get_resp_headers_mut().remove(http::header::TRANSFER_ENCODING.as_str());
+        self.set_resp_header(http::header::CONTENT_LENGTH.as_str(), body.len().to_string().as_str())?;
         self.mod_resp_body = Some(body);
         Ok(())
     }
