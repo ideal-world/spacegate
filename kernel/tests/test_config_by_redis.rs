@@ -43,7 +43,8 @@ async fn test_config_by_redis() -> TardisResult<()> {
             "rules":[{
                 "backends":[{
                     "name_or_host":"postman-echo.com",
-                    "port":80
+                    "protocol":"https",
+                    "port":443
                 }]
             }]
         }"#,
@@ -57,7 +58,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
     let resp = http_client.get::<Value>("http://localhost:8888/get?dd", None).await?;
     let resp = resp.body.unwrap();
     println!("resp: {:?}", resp);
-    assert!(resp.get("url").unwrap().as_str().unwrap().contains("http://localhost/get?dd"));
+    assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
 
     // Modify gateway
     cache_client
@@ -80,7 +81,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
     sleep(Duration::from_millis(1500)).await;
     let resp = http_client.get::<Value>("http://localhost:8889/get?dd", None).await?;
     let resp = resp.body.unwrap();
-    assert!(resp.get("url").unwrap().as_str().unwrap().contains("http://localhost/get?dd"));
+    assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
 
     // Modify route
     cache_client
