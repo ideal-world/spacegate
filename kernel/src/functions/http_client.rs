@@ -172,7 +172,7 @@ mod tests {
         let mut resp = request(
             &client,
             Some(&SgBackendInst {
-                name_or_host: "postman-echo.com".to_string(),
+                name_or_host: "httpbin.org".to_string(),
                 port: 80,
                 ..Default::default()
             }),
@@ -192,7 +192,7 @@ mod tests {
         .await?;
         assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
         let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
-        assert!(body.contains(r#""url": "http://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
+        assert!(body.contains(r#""url": "http://httpbin.org/get?foo1=bar1&foo2=bar2""#));
 
         // test post with tls
         let mut resp = request(
@@ -251,7 +251,8 @@ mod tests {
             &client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
-                port: 80,
+                port: 443,
+                protocol: Some(SgProtocol::Https),
                 timeout_ms: Some(20000),
                 ..Default::default()
             }),
@@ -271,7 +272,7 @@ mod tests {
         .await?;
         assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
         let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
-        assert!(body.contains(r#""url": "http://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
+        assert!(body.contains(r#""url": "https://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         // test redirect
         let mut resp = request(
@@ -281,7 +282,7 @@ mod tests {
             true,
             SgRoutePluginContext::new_http(
                 Method::GET,
-                Uri::from_static("http://postman-echo.com/get?foo1=bar1&foo2=bar2"),
+                Uri::from_static("https://postman-echo.com/get?foo1=bar1&foo2=bar2"),
                 Version::HTTP_11,
                 HeaderMap::new(),
                 Body::empty(),
@@ -294,7 +295,7 @@ mod tests {
         .unwrap();
         assert_eq!(resp.response.get_resp_status_code().as_u16(), 200);
         let body = String::from_utf8(resp.response.pop_resp_body().await?.unwrap()).unwrap();
-        assert!(body.contains(r#""url": "http://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
+        assert!(body.contains(r#""url": "https://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         Ok(())
     }

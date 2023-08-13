@@ -134,8 +134,8 @@ mod tests {
         http_client::init().unwrap();
 
         let filter = SgFilterInject {
-            req_inject_url: Some("http://postman-echo.com/put".to_string()),
-            resp_inject_url: Some("http://postman-echo.com/put".to_string()),
+            req_inject_url: Some("https://postman-echo.com/put".to_string()),
+            resp_inject_url: Some("https://postman-echo.com/put".to_string()),
             ..Default::default()
         };
 
@@ -154,7 +154,7 @@ mod tests {
         assert!(is_continue);
         assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
         let body = String::from_utf8(ctx.request.pop_req_body().await.unwrap().unwrap()).unwrap();
-        assert!(body.contains(r#""url": "http://postman-echo.com/put""#));
+        assert!(body.contains(r#""url": "https://postman-echo.com/put""#));
         assert!(body.contains(r#""data": "理想世界""#));
 
         ctx.response.set_resp_body("idealworld".as_bytes().to_vec()).unwrap();
@@ -163,7 +163,7 @@ mod tests {
         assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
         assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
         let body = String::from_utf8(ctx.response.pop_resp_body().await.unwrap().unwrap()).unwrap();
-        assert!(body.contains(r#""url": "http://postman-echo.com/put""#));
+        assert!(body.contains(r#""url": "https://postman-echo.com/put""#));
         assert!(body.contains(r#""data": "idealworld""#));
     }
 }
