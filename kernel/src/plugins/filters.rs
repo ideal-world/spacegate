@@ -129,7 +129,7 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
         let mut uri = Url::parse(&uri.to_string())?;
         match modify_path.kind {
             SgHttpPathModifierType::ReplaceFullPath => {
-                log::trace!(
+                log::debug!(
                     "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplaceFullPath], form {} to  {}",
                     uri.path(),
                     modify_path.value
@@ -142,7 +142,7 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
                         SgHttpPathMatchType::Exact => {
                             // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
                             // https://cloud.yandex.com/en/docs/application-load-balancer/k8s-ref/http-route
-                            log::trace!(
+                            log::debug!(
                                 "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplacePrefixMatch] and match kind [Exact], form {} to {}",
                                 uri.path(),
                                 modify_path.value
@@ -172,7 +172,7 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
                             } else {
                                 format!("{}/{}", modify_path.value, &match_path_reduce.to_string())
                             };
-                            log::trace!(
+                            log::debug!(
                                 "[SG.Plugin.Filter.Common] Modify path with modify kind [ReplacePrefixMatch] and match kind [Prefix/Regular], form {} to {}",
                                 origin_path,
                                 new_path,
@@ -183,7 +183,7 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
                 } else {
                     // TODO
                     // equivalent to ` SgHttpPathModifierType::ReplaceFullPath`
-                    log::trace!(
+                    log::debug!(
                         "[SG.Plugin.Filter.Common] Modify path with modify kind [None], form {} to {}",
                         uri.path(),
                         modify_path.value,
