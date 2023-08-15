@@ -53,10 +53,15 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .into_iter()
         .filter(|gateway_obj| gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME)
         .collect::<Vec<Gateway>>();
-    let gateway_objs_generation = gateway_objs
+    let gateway_objs_version = gateway_objs
         .iter()
-        .map(|gateway_obj| (gateway_obj.metadata.uid.clone().unwrap_or("".to_string()), gateway_obj.metadata.generation.unwrap_or(0)))
-        .collect::<HashMap<String, i64>>();
+        .map(|gateway_obj| {
+            (
+                gateway_obj.metadata.uid.clone().unwrap_or("".to_string()),
+                gateway_obj.metadata.resource_version.clone().unwrap_or_default(),
+            )
+        })
+        .collect::<HashMap<String, String>>();
     let mut gateway_objs_param = gateway_objs
         .iter()
         .map(|gateway_obj| (gateway_obj.metadata.uid.clone().unwrap_or("".to_string()), gateway_obj.metadata.annotations.clone()))
@@ -93,15 +98,15 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         })
         .collect::<Vec<HttpRoute>>();
 
-    let http_route_objs_generation = http_route_objs
+    let http_route_objs_version = http_route_objs
         .iter()
         .map(|http_route_obj| {
             (
                 http_route_obj.metadata.uid.clone().unwrap_or("".to_string()),
-                http_route_obj.metadata.generation.unwrap_or(0),
+                http_route_obj.metadata.resource_version.clone().unwrap_or_default(),
             )
         })
-        .collect::<HashMap<String, i64>>();
+        .collect::<HashMap<String, String>>();
 
     let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect()).await?;
 
@@ -127,7 +132,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
             let default_uid = "".to_string();
             let gateway_uid = gateway_obj.metadata.uid.as_ref().unwrap_or(&default_uid);
-            if gateway_objs_generation.get(gateway_uid).unwrap_or(&0) == &gateway_obj.metadata.generation.unwrap_or(0)
+            if gateway_objs_version.get(gateway_uid).unwrap_or(&"".to_string()) == &gateway_obj.metadata.resource_version.clone().unwrap_or_default()
                 && (gateway_objs_param.get(gateway_uid).unwrap_or(&None) == &gateway_obj.metadata.annotations)
             {
                 // ignore the original object
@@ -149,12 +154,14 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let ew = watcher(http_route_api_clone, ListParams::default()).touched_objects();
         pin_mut!(ew);
         while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
-            if http_route_objs_generation.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &http_route_obj.metadata.generation.unwrap_or(0) {
+            if http_route_objs_version.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
+                == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
+            {
                 let named_http_route_api: Api<HttpRoute> = Api::namespaced(
                     get_client().await.expect("[SG.Config] Failed to get client"),
                     http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
                 );
-                if named_http_route_api.get_metadata_opt(&http_route_obj.name_any()).await.ok().is_some() {
+                if named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
                     // ignore the original object
                     // ignore if obj is some(it's means obj is not deleted)
                     continue;
@@ -189,20 +196,29 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let sg_filter_objs: Vec<SgFilter> =
         filter_api.list(&ListParams::default()).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?.into_iter().collect();
 
-    let sg_filter_objs_generation =
-        sg_filter_objs.iter().map(|filter| (filter.metadata.uid.clone().unwrap_or("".to_string()), filter.metadata.generation.unwrap_or(0))).collect::<HashMap<String, i64>>();
+    let sg_filter_objs_version = sg_filter_objs
+        .iter()
+        .map(|filter| {
+            (
+                filter.metadata.uid.clone().unwrap_or("".to_string()),
+                filter.metadata.resource_version.clone().unwrap_or_default(),
+            )
+        })
+        .collect::<HashMap<String, String>>();
 
     tardis::tokio::spawn(async move {
         let ew = watcher(filter_api.clone(), ListParams::default()).touched_objects();
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
-            if sg_filter_objs_generation.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&0) == &filter_obj.metadata.generation.unwrap_or(0) {
+            if sg_filter_objs_version.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
+                == filter_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
+            {
                 let named_filter_api: Api<SgFilter> = Api::namespaced(
                     get_client().await.expect("[SG.Config] Failed to get client"),
                     filter_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
                 );
                 // Do not ignore the deletion event
-                if named_filter_api.get_opt(&filter_obj.name_any()).await.ok().is_some() {
+                if named_filter_api.get(&filter_obj.name_any()).await.ok().is_some() {
                     // ignore the original object
                     continue;
                 }
@@ -355,6 +371,7 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_clone: &Api<HttpR
 }
 
 async fn overload_http_route(gateway_obj: Gateway, http_route_api: &Api<HttpRoute>) {
+    let gateway_namespace = gateway_obj.namespace().unwrap_or("default".to_string());
     let gateway_config = process_gateway_config(vec![gateway_obj])
         .await
         .expect("[SG.Config] Failed to process gateway config for http_route parent ref")
@@ -378,15 +395,12 @@ async fn overload_http_route(gateway_obj: Gateway, http_route_api: &Api<HttpRout
                 .as_ref()
                 .map(|parent_refs| {
                     parent_refs.iter().any(|parent_ref| {
-                        gateway_names_guard.contains(&format!(
-                            "{}.{}",
-                            if let Some(namespaces) = parent_ref.namespace.as_ref() {
-                                namespaces.to_string()
-                            } else {
-                                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
-                            },
-                            parent_ref.name
-                        ))
+                        let namespace = if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                            namespaces.to_string()
+                        } else {
+                            http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
+                        };
+                        gateway_namespace == namespace && gateway_names_guard.contains(&format!("{}.{}", namespace, parent_ref.name))
                     })
                 })
                 .unwrap_or(false)
