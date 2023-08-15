@@ -173,8 +173,8 @@ async fn process(
         Err(error) => into_http_error(error),
     };
     match &result {
-        Ok(resp) => log::info!("[SG.server] response: code {} => {} {}", resp.status(), method, uri),
-        Err(e) => log::info!("[SG.server] response: error {} => {} {}", e.message(), method, uri),
+        Ok(resp) => log::info!("[SG.server] Response: code {} => {} {}", resp.status(), method, uri),
+        Err(e) => log::info!("[SG.server] Response: error {} => {} {}", e.message(), method, uri),
     }
     result
 }

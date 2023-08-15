@@ -262,7 +262,8 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         .parse()
         .map_err(|e| TardisError::bad_request(&format!("[SG.Route] request host rebuild illegal: {}", e), ""))?;
     }
-    log::trace!(
+    log::info!("[SG.server] Request <= {} {}", request.method(), request.uri());
+    log::debug!(
         "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
         request.method(),
         request.uri(),
