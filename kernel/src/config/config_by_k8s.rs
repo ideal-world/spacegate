@@ -127,7 +127,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_route_api_clone = http_route_api.clone();
 
     tardis::tokio::spawn(async move {
-        let ew = watcher(gateway_api.clone(), ListParams::default()).touched_objects();
+        let ew = watcher(gateway_api.clone(), Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
             let default_uid = "".to_string();
@@ -154,6 +154,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let ew = watcher(http_route_api_clone, ListParams::default()).touched_objects();
         pin_mut!(ew);
         while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
+            log::trace!("[SG.Config] http_route config watch tiger");
             if http_route_objs_version.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
@@ -207,9 +208,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .collect::<HashMap<String, String>>();
 
     tardis::tokio::spawn(async move {
-        let ew = watcher(filter_api.clone(), ListParams::default()).touched_objects();
+        let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
+            log::trace!("[SG.Config] filter_api config watch tiger");
             if sg_filter_objs_version.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == filter_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
