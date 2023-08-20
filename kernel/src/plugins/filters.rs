@@ -11,6 +11,7 @@ pub mod rewrite;
 pub mod status;
 use async_trait::async_trait;
 
+use core::fmt;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -73,7 +74,8 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterIn
         let filter_inst = filter_def.inst(filter_conf.spec)?;
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
     }
-    for (i, (_, plugin_filter)) in plugin_filters.iter_mut().enumerate() {
+    for (i, (id, plugin_filter)) in plugin_filters.iter_mut().enumerate() {
+        log::trace!("[SG.Filter] init {id} from {} .....", init_dto.attached_level);
         if plugin_filter.init(&init_dto).await.is_err() {
             elements_to_remove.push(i);
         }
@@ -213,6 +215,17 @@ pub enum SgAttachedLevel {
     HttpRoute,
     Rule,
     Backend,
+}
+
+impl fmt::Display for SgAttachedLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SgAttachedLevel::Gateway => write!(f, "GateWay"),
+            SgAttachedLevel::HttpRoute => write!(f, "HttpRoute"),
+            SgAttachedLevel::Rule => write!(f, "Rule"),
+            SgAttachedLevel::Backend => write!(f, "Backend"),
+        }
+    }
 }
 
 /// Encapsulation filter initialization parameters.
