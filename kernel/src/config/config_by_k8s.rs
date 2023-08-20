@@ -806,7 +806,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                                 })?,
                             }
                         }
-                        k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier {response_header_modifier } => {
+                        k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
                             let mut sg_sets = HashMap::new();
                             if let Some(adds) = response_header_modifier.add {
                                 for add in adds {
