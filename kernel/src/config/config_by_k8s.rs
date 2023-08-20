@@ -127,7 +127,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_route_api_clone = http_route_api.clone();
 
     tardis::tokio::spawn(async move {
-        let ew = watcher(gateway_api.clone(), Config::default()).touched_objects();
+        let ew = watcher::watcher(gateway_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
             let default_uid = "".to_string();
@@ -151,7 +151,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
     tardis::tokio::spawn(async move {
         let http_route_api_clone = http_route_api.clone();
-        let ew = watcher(http_route_api_clone, ListParams::default()).touched_objects();
+        let ew = watcher::watcher(http_route_api_clone, watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
             log::trace!("[SG.Config] http_route config watch tiger");
@@ -803,6 +803,28 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                                     kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Request,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: request_header_modifier.remove,
+                                })?,
+                            }
+                        }
+                        k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier {response_header_modifier } => {
+                            let mut sg_sets = HashMap::new();
+                            if let Some(adds) = response_header_modifier.add {
+                                for add in adds {
+                                    sg_sets.insert(add.name, add.value);
+                                }
+                            }
+                            if let Some(sets) = response_header_modifier.set {
+                                for set in sets {
+                                    sg_sets.insert(set.name, set.value);
+                                }
+                            }
+                            SgRouteFilter {
+                                code: crate::plugins::filters::header_modifier::CODE.to_string(),
+                                name: None,
+                                spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::header_modifier::SgFilterHeaderModifier {
+                                    kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Response,
+                                    sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
+                                    remove: response_header_modifier.remove,
                                 })?,
                             }
                         }
