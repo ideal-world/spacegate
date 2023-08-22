@@ -29,6 +29,18 @@ pub mod helpers;
 pub mod instance;
 pub mod plugins;
 
+pub async fn startup_k8s(namespace: Option<String>) -> TardisResult<()> {
+    startup(true, namespace, None).await
+}
+
+pub async fn startup_native(conf_uri: String, check_interval_sec: u64) -> TardisResult<()> {
+    startup(false, Some(conf_uri), Some(check_interval_sec)).await
+}
+
+pub async fn startup_simplify(conf_path: String, check_interval_sec: u64) -> TardisResult<()> {
+    startup(false, Some(conf_path), Some(check_interval_sec)).await
+}
+
 pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<()> {
     // Initialize configuration according to different modes
     let configs = config::init(k8s_mode, namespace_or_conf_uri, check_interval_sec).await?;

@@ -59,23 +59,23 @@ impl SgPluginFilter for SgFilterRedirect {
 
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(hostname) = &self.hostname {
-            let mut uri = Url::parse(&ctx.request.get_req_uri().to_string())?;
+            let mut uri = Url::parse(&ctx.request.get_uri().to_string())?;
             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Host {hostname} parsing error"), ""))?;
-            ctx.request.set_req_uri(uri.to_uri()?);
+            ctx.request.set_uri(uri.to_uri()?);
         }
         if let Some(scheme) = &self.scheme {
-            let mut uri = Url::parse(&ctx.request.get_req_uri().to_string())?;
+            let mut uri = Url::parse(&ctx.request.get_uri().to_string())?;
             uri.set_scheme(scheme).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Scheme {scheme} parsing error"), ""))?;
-            ctx.request.set_req_uri(uri.to_uri()?);
+            ctx.request.set_uri(uri.to_uri()?);
         }
         if let Some(port) = self.port {
-            let mut uri = Url::parse(&ctx.request.get_req_uri().to_string())?;
+            let mut uri = Url::parse(&ctx.request.get_uri().to_string())?;
             uri.set_port(Some(port)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Redirect] Port {port} parsing error"), ""))?;
-            ctx.request.set_req_uri(uri.to_uri()?);
+            ctx.request.set_uri(uri.to_uri()?);
         }
         let matched_match_inst = ctx.get_rule_matched();
-        if let Some(new_url) = http_common_modify_path(ctx.request.get_req_uri(), &self.path, matched_match_inst.as_ref())? {
-            ctx.request.set_req_uri(new_url);
+        if let Some(new_url) = http_common_modify_path(ctx.request.get_uri(), &self.path, matched_match_inst.as_ref())? {
+            ctx.request.set_uri(new_url);
         }
         ctx.set_action(SgRouteFilterRequestAction::Redirect);
         Ok((true, ctx))
@@ -83,7 +83,7 @@ impl SgPluginFilter for SgFilterRedirect {
 
     async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(status_code) = self.status_code {
-            ctx.response.set_resp_status_code(
+            ctx.response.set_status_code(
                 StatusCode::from_u16(status_code)
                     .map_err(|error| TardisError::format_error(&format!("[SG.Filter.Redirect] Status code {status_code} parsing error: {error} "), ""))?,
             );
@@ -98,7 +98,7 @@ mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
         instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
-        plugins::context::ChoseHttpRouteRuleInst,
+        plugins::context::ChosenHttpRouteRuleInst,
     };
 
     use super::*;
@@ -136,16 +136,16 @@ mod tests {
             Body::empty(),
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
-            Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
+            Some(ChosenHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
         );
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.request.get_req_uri().to_string(), "https://sg_new.idealworld.group/new_iam/ct/001?name=sg");
-        assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
+        assert_eq!(ctx.request.get_uri().to_string(), "https://sg_new.idealworld.group/new_iam/ct/001?name=sg");
+        assert_eq!(ctx.response.get_status_code(), &StatusCode::OK);
 
         let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::MOVED_PERMANENTLY);
+        assert_eq!(ctx.response.get_status_code(), &StatusCode::MOVED_PERMANENTLY);
     }
 }

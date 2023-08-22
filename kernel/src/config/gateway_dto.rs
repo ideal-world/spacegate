@@ -46,7 +46,7 @@ pub struct SgListener {
     /// TLS is the TLS configuration for the Listener.
     /// This field is required if the Protocol field is “HTTPS” or “TLS”. It is invalid to set this field if the Protocol field is “HTTP”, “TCP”, or “UDP”.
     pub tls: Option<SgTlsConfig>,
-
+    /// `HostName` is used to define the host on which the listener accepts requests.
     pub hostname: Option<String>,
 }
 

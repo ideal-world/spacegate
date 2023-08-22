@@ -27,6 +27,7 @@ use super::{
     k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
 };
+use crate::constants::{BANCKEND_KIND_EXTERNAL_SERVICE, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -53,7 +54,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .into_iter()
         .filter(|gateway_obj| gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME)
         .collect::<Vec<Gateway>>();
-    let gateway_objs_version = gateway_objs
+    let gateway_objs_versions = gateway_objs
         .iter()
         .map(|gateway_obj| {
             (
@@ -62,7 +63,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             )
         })
         .collect::<HashMap<String, String>>();
-    let mut gateway_objs_param = gateway_objs
+    let mut gateway_objs_params = gateway_objs
         .iter()
         .map(|gateway_obj| (gateway_obj.metadata.uid.clone().unwrap_or("".to_string()), gateway_obj.metadata.annotations.clone()))
         .collect::<HashMap<String, Option<_>>>();
@@ -98,7 +99,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         })
         .collect::<Vec<HttpRoute>>();
 
-    let http_route_objs_version = http_route_objs
+    let http_route_objs_versions = http_route_objs
         .iter()
         .map(|http_route_obj| {
             (
@@ -132,8 +133,8 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
             let default_uid = "".to_string();
             let gateway_uid = gateway_obj.metadata.uid.as_ref().unwrap_or(&default_uid);
-            if gateway_objs_version.get(gateway_uid).unwrap_or(&"".to_string()) == &gateway_obj.metadata.resource_version.clone().unwrap_or_default()
-                && (gateway_objs_param.get(gateway_uid).unwrap_or(&None) == &gateway_obj.metadata.annotations)
+            if gateway_objs_versions.get(gateway_uid).unwrap_or(&"".to_string()) == &gateway_obj.metadata.resource_version.clone().unwrap_or_default()
+                && (gateway_objs_params.get(gateway_uid).unwrap_or(&None) == &gateway_obj.metadata.annotations)
             {
                 // ignore the original object
                 continue;
@@ -141,7 +142,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
                 continue;
             }
-            gateway_objs_param.insert(gateway_uid.to_string(), gateway_obj.metadata.annotations.clone());
+            gateway_objs_params.insert(gateway_uid.to_string(), gateway_obj.metadata.annotations.clone());
 
             log::trace!("[SG.Config] Gateway config change found");
 
@@ -155,7 +156,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         pin_mut!(ew);
         while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
             log::trace!("[SG.Config] http_route config watch tiger");
-            if http_route_objs_version.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
+            if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
                 let named_http_route_api: Api<HttpRoute> = Api::namespaced(
@@ -197,7 +198,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let sg_filter_objs: Vec<SgFilter> =
         filter_api.list(&ListParams::default()).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?.into_iter().collect();
 
-    let sg_filter_objs_version = sg_filter_objs
+    let sg_filter_objs_versions = sg_filter_objs
         .iter()
         .map(|filter| {
             (
@@ -212,7 +213,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
             log::trace!("[SG.Config] filter_api config watch tiger");
-            if sg_filter_objs_version.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
+            if sg_filter_objs_versions.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == filter_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
                 let named_filter_api: Api<SgFilter> = Api::namespaced(
@@ -483,9 +484,13 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         let gateway_config = SgGateway {
             name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_name_without_namespace),
             parameters: SgParameters {
-                redis_url: gateway_obj.metadata.annotations.clone().and_then(|ann| ann.get("redis_url").map(|v| v.to_string())),
-                log_level: gateway_obj.metadata.annotations.clone().and_then(|ann: std::collections::BTreeMap<String, String>| ann.get("log_level").map(|v| v.to_string())),
-                lang: gateway_obj.metadata.annotations.and_then(|ann: std::collections::BTreeMap<String, String>| ann.get("lang").map(|v| v.to_string())),
+                redis_url: gateway_obj.metadata.annotations.clone().and_then(|ann| ann.get(GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string())),
+                log_level: gateway_obj
+                    .metadata
+                    .annotations
+                    .clone()
+                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string())),
+                lang: gateway_obj.metadata.annotations.and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string())),
             },
             listeners: join_all(
                 gateway_obj
@@ -597,7 +602,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                         .inner
                                         .kind
                                         .as_ref()
-                                        .map(|kind| kind.to_lowercase() != "service" && kind.to_lowercase() != "externalservice")
+                                        .map(|kind| kind.to_lowercase() != "service" && kind.to_lowercase() != BANCKEND_KIND_EXTERNAL_SERVICE.to_lowercase())
                                         .unwrap_or(false)
                             })
                         })
@@ -707,7 +712,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                         let backend = backend.backend_ref.expect("[SG.Config] unexpected none: http_route backendRef");
                                         let namespace = match backend.inner.kind {
                                             Some(kind) => {
-                                                if kind.to_lowercase() == "ExternalService".to_lowercase() {
+                                                if kind.to_lowercase() == BANCKEND_KIND_EXTERNAL_SERVICE.to_lowercase() {
                                                     backend.inner.namespace
                                                 } else {
                                                     Some(backend.inner.namespace.unwrap_or("default".to_string()))

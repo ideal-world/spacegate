@@ -56,12 +56,17 @@ pub fn register_filter_def(code: &str, filter_def: Box<dyn SgPluginFilterDef>) {
     }
 }
 
-pub fn get_filter_def(code: &str) -> TardisResult<&Box<dyn SgPluginFilterDef>> {
+pub fn get_filter_def(code: &str) -> TardisResult<&dyn SgPluginFilterDef> {
     unsafe {
         if FILTERS.is_none() {
             init_filter_defs();
         }
-        FILTERS.as_ref().expect("Unreachable code").get(code).ok_or_else(|| TardisError::format_error(&format!("[SG.FILTER] Filter code '{code}' not found"), ""))
+        FILTERS
+            .as_ref()
+            .expect("Unreachable code")
+            .get(code)
+            .map(|f| f.as_ref())
+            .ok_or_else(|| TardisError::format_error(&format!("[SG.FILTER] Filter code '{code}' not found"), ""))
     }
 }
 

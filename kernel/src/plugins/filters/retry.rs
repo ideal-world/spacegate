@@ -91,10 +91,10 @@ impl SgPluginFilter for SgFilterRetry {
 
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         let mut req_body_cache = REQUEST_BODY.lock().await;
-        let req_body = ctx.request.pop_req_body().await?;
+        let req_body = ctx.request.pop_body().await?;
         req_body_cache.insert(ctx.get_request_id().to_string(), req_body.clone(), (self.retries as u64 * self.max_interval) as u128);
         if let Some(req_body) = req_body {
-            ctx.request.set_req_body(req_body)?;
+            ctx.request.set_body(req_body)?;
         }
         Ok((true, ctx))
     }
@@ -117,10 +117,10 @@ impl SgPluginFilter for SgFilterRetry {
                 log::trace!("[SG.Filter.Retry] retry request retry_times:{} next_retry_backoff:{}", retry_count, backoff_interval);
                 match http_client::raw_request(
                     None,
-                    ctx.request.get_req_method().clone(),
+                    ctx.request.get_method().clone(),
                     &choose_backend_url(&mut ctx),
                     req_body.clone().map(Body::from),
-                    ctx.request.get_req_headers(),
+                    ctx.request.get_headers(),
                     time_out,
                 )
                 .await
@@ -154,7 +154,7 @@ fn choose_backend_url(ctx: &mut SgRoutePluginContext) -> String {
         };
         backend.map(|backend| backend.get_base_url()).unwrap_or_else(|| "".to_string())
     } else {
-        ctx.request.get_req_uri().to_string()
+        ctx.request.get_uri().to_string()
     }
 }
 

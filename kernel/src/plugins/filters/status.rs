@@ -239,7 +239,7 @@ mod tests {
         functions,
         instance::{SgBackendInst, SgHttpRouteRuleInst},
         plugins::{
-            context::ChoseHttpRouteRuleInst,
+            context::ChosenHttpRouteRuleInst,
             filters::{
                 status::{
                     get_cache_key,
@@ -300,7 +300,7 @@ mod tests {
             Body::empty(),
             "127.0.0.1:8080".parse().unwrap(),
             gateway_name.clone(),
-            Some(ChoseHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst { ..Default::default() }, None)),
+            Some(ChosenHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst { ..Default::default() }, None)),
         );
 
         ctx.set_chose_backend(&mock_backend);

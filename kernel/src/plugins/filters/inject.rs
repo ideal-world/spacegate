@@ -51,16 +51,16 @@ impl SgPluginFilter for SgFilterInject {
 
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(req_inject_url) = &self.req_inject_url {
-            let real_method = ctx.request.get_req_method().clone();
-            let real_url = ctx.request.get_req_uri().clone();
-            ctx.request.set_req_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
-            ctx.request.set_req_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
+            let real_method = ctx.request.get_method().clone();
+            let real_url = ctx.request.get_uri().clone();
+            ctx.request.set_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
+            ctx.request.set_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
             let mut resp = http_client::raw_request(
                 None,
                 Method::PUT,
                 req_inject_url,
-                ctx.request.pop_req_body_raw()?,
-                ctx.request.get_req_headers(),
+                ctx.request.pop_body_raw()?,
+                ctx.request.get_headers(),
                 self.req_timeout_ms,
             )
             .await?;
@@ -88,10 +88,10 @@ impl SgPluginFilter for SgFilterInject {
             ctx = SgRoutePluginContext::new_http(
                 new_req_method,
                 new_req_url,
-                *ctx.request.get_req_version(),
+                *ctx.request.get_version(),
                 new_req_headers.clone(),
                 resp.into_body(),
-                *ctx.request.get_req_remote_addr(),
+                *ctx.request.get_remote_addr(),
                 ctx.get_gateway_name(),
                 None,
             )
@@ -101,16 +101,16 @@ impl SgPluginFilter for SgFilterInject {
 
     async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(resp_inject_url) = &self.resp_inject_url {
-            let real_method = ctx.request.get_req_method().clone();
-            let real_url = ctx.request.get_req_uri().clone();
-            ctx.response.set_resp_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
-            ctx.response.set_resp_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
+            let real_method = ctx.request.get_method().clone();
+            let real_url = ctx.request.get_uri().clone();
+            ctx.response.set_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
+            ctx.response.set_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
             let resp = http_client::raw_request(
                 None,
                 Method::PUT,
                 resp_inject_url,
-                ctx.response.pop_resp_body_raw()?,
-                ctx.response.get_resp_headers(),
+                ctx.response.pop_body_raw()?,
+                ctx.response.get_headers(),
                 self.resp_timeout_ms,
             )
             .await?;
@@ -152,17 +152,17 @@ mod tests {
 
         let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
-        let body = String::from_utf8(ctx.request.pop_req_body().await.unwrap().unwrap()).unwrap();
+        assert_eq!(ctx.request.get_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
+        let body = String::from_utf8(ctx.request.pop_body().await.unwrap().unwrap()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/put""#));
         assert!(body.contains(r#""data": "理想世界""#));
 
-        ctx.response.set_resp_body("idealworld".as_bytes().to_vec()).unwrap();
+        ctx.response.set_body("idealworld".as_bytes().to_vec()).unwrap();
         let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
-        assert_eq!(ctx.response.get_resp_status_code(), &StatusCode::OK);
-        assert_eq!(ctx.request.get_req_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
-        let body = String::from_utf8(ctx.response.pop_resp_body().await.unwrap().unwrap()).unwrap();
+        assert_eq!(ctx.response.get_status_code(), &StatusCode::OK);
+        assert_eq!(ctx.request.get_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
+        let body = String::from_utf8(ctx.response.pop_body().await.unwrap().unwrap()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/put""#));
         assert!(body.contains(r#""data": "idealworld""#));
     }

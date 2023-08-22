@@ -58,15 +58,15 @@ impl SgPluginFilter for SgFilterMaintenance {
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if self.is_enabled {
             ctx.set_action(SgRouteFilterRequestAction::Response);
-            let request_headers = ctx.request.get_req_headers();
+            let request_headers = ctx.request.get_headers();
             let content_type = request_headers.get(header::CONTENT_TYPE).map(|content_type| content_type.to_str().unwrap_or("").split(',').collect_vec()).unwrap_or_default();
             let accept_type = request_headers.get(header::ACCEPT).map(|accept| accept.to_str().unwrap_or("").split(',').collect_vec()).unwrap_or_default();
 
             if content_type.contains(&"text/html") || accept_type.contains(&"text/html") {
                 let title = self.title.clone();
                 let msg = self.msg.clone().replace("/n", "<br>");
-                ctx.response.set_resp_header(header::CONTENT_TYPE.as_ref(), "text/html")?;
-                ctx.response.set_resp_body(
+                ctx.response.set_header(header::CONTENT_TYPE.as_ref(), "text/html")?;
+                ctx.response.set_body(
                     format!(
                         r##"<!DOCTYPE html>
                     <html>
@@ -113,7 +113,7 @@ impl SgPluginFilter for SgFilterMaintenance {
                 let msg = self.msg.clone();
                 return Err(TardisError::forbidden(&msg, ""));
             } else {
-                ctx.response.set_resp_body("<h1>Maintenance</h1>".to_string().into_bytes())?;
+                ctx.response.set_body("<h1>Maintenance</h1>".to_string().into_bytes())?;
             }
         }
         Ok((true, ctx))
