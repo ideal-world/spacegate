@@ -8,7 +8,7 @@ use crate::{
     },
     instance::{SgHttpPathMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     plugins::{
-        context::{ChoseHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
+        context::{ChosenHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
         filters::{self, BoxSgPluginFilter, SgPluginFilterInitDto},
     },
 };
@@ -281,10 +281,14 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 
     let (matched_route_inst, matched_rule_inst, matched_match_inst) = match_route_process(&request, &gateway_inst.routes);
 
-    match matched_match_inst {
-        Some(matched_match) => log::trace!("[SG.Route] Matched rule {}", matched_match),
-        None => log::info!("[SG.Route] Not matched rule"),
-    }
+    log::trace!(
+        "[SG.Route] {}",
+        if let Some(matched_match) = matched_match_inst {
+            format!("Matched rule {}", matched_match)
+        } else {
+            "Not matched rule".to_string()
+        }
+    );
 
     if matched_route_inst.is_none() {
         let mut not_found = Response::default();
@@ -300,8 +304,8 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         None
     };
 
-    let backend_filters = backend.map(|backend| &backend.filters);
-    let rule_filters = matched_rule_inst.map(|rule| &rule.filters);
+    let backend_filters = backend.map(|backend| backend.filters.as_slice());
+    let rule_filters = matched_rule_inst.map(|rule| rule.filters.as_slice());
 
     if request.headers().get(UPGRADE).map(|v| &v.to_str().expect("[SG.Websocket] Upgrade header value illegal:  is not ascii").to_lowercase() == "websocket").unwrap_or(false) {
         #[cfg(feature = "ws")]
@@ -320,7 +324,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
                     matched_match_inst,
                 )
                 .await?;
-                *request.uri_mut() = ctx.request.get_req_uri().clone();
+                *request.uri_mut() = ctx.request.get_uri().clone();
                 return crate::functions::websocket::process(gateway_name, remote_addr, backend, request).await;
             } else {
                 return Err(TardisError::bad_request(
@@ -373,7 +377,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
     ctx.build_response().await
 }
 
-///Match route by SgHttpRouteInst list
+/// Match route by SgHttpRouteInst list
 /// First, we perform route matching based on the hostname. Hostname matching can fall into three categories:
 /// exact domain name match, wildcard domain match, and unspecified domain name match.
 /// The priority of matching rules decreases in the following order: exact > wildcard > unspecified.
@@ -389,10 +393,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 /// 1. Exact domain match: "example.com" -> Handles exact hostname "example.com"
 /// 2. Wildcard domain match: "*.example.com" -> Handles any subdomain of "example.com"
 /// 3. Unspecified domain match: "*" -> Handles any hostname not matched by the above rules
-fn match_route_process<'a>(
-    req: &Request<Body>,
-    routes: &'a Vec<SgHttpRouteInst>,
-) -> (Option<&'a SgHttpRouteInst>, Option<&'a SgHttpRouteRuleInst>, Option<&'a SgHttpRouteMatchInst>) {
+fn match_route_process<'a>(req: &Request<Body>, routes: &'a [SgHttpRouteInst]) -> (Option<&'a SgHttpRouteInst>, Option<&'a SgHttpRouteRuleInst>, Option<&'a SgHttpRouteMatchInst>) {
     let (highest, second, lowest) = match_route_insts_with_hostname_priority(req.uri().host(), routes);
     let matched_hostname_route_priorities = vec![highest, second, lowest];
 
@@ -448,13 +449,13 @@ fn match_route_process<'a>(
     (matched_route_inst, matched_rule_inst, matched_match_inst)
 }
 
-///Filter according to the hostname of route, and return with priority in sequence.
+/// Filter according to the hostname of route, and return with priority in sequence.
 /// first return is the highest priority, only exact match sequence
 /// second return is the second priority, only wildcard match sequence
 /// last return is the lowest priority, only no hostname specified sequence
 fn match_route_insts_with_hostname_priority<'a>(
     req_host: Option<&str>,
-    routes: &'a Vec<SgHttpRouteInst>,
+    routes: &'a [SgHttpRouteInst],
 ) -> (Vec<&'a SgHttpRouteInst>, Vec<&'a SgHttpRouteInst>, Vec<&'a SgHttpRouteInst>) {
     if let Some(req_host) = req_host {
         let mut highest_priority_route = Vec::new();
@@ -620,10 +621,10 @@ async fn process_req_filters_http(
     gateway_name: String,
     remote_addr: SocketAddr,
     request: Request<Body>,
-    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    route_filters: &Vec<(String, BoxSgPluginFilter)>,
-    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    backend_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    rule_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    route_filters: &[(String, BoxSgPluginFilter)],
+    global_filters: &[(String, BoxSgPluginFilter)],
     matched_rule_inst: Option<&SgHttpRouteRuleInst>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
 ) -> TardisResult<SgRoutePluginContext> {
@@ -635,7 +636,7 @@ async fn process_req_filters_http(
         request.into_body(),
         remote_addr,
         gateway_name,
-        matched_rule_inst.map(|m| ChoseHttpRouteRuleInst::clone_from(m, matched_match_inst)),
+        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::clone_from(m, matched_match_inst)),
     );
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
@@ -645,10 +646,10 @@ async fn process_req_filters_ws(
     gateway_name: String,
     remote_addr: SocketAddr,
     request: &Request<Body>,
-    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    route_filters: &Vec<(String, BoxSgPluginFilter)>,
-    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    backend_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    rule_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    route_filters: &[(String, BoxSgPluginFilter)],
+    global_filters: &[(String, BoxSgPluginFilter)],
     matched_rule_inst: Option<&SgHttpRouteRuleInst>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
 ) -> TardisResult<SgRoutePluginContext> {
@@ -659,17 +660,17 @@ async fn process_req_filters_ws(
         request.headers().clone(),
         remote_addr,
         gateway_name,
-        matched_rule_inst.map(|m| ChoseHttpRouteRuleInst::clone_from(m, matched_match_inst)),
+        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::clone_from(m, matched_match_inst)),
     );
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
 
 async fn process_req_filters(
     mut ctx: SgRoutePluginContext,
-    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    route_filters: &Vec<(String, BoxSgPluginFilter)>,
-    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    backend_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    rule_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    route_filters: &[(String, BoxSgPluginFilter)],
+    global_filters: &[(String, BoxSgPluginFilter)],
 ) -> TardisResult<SgRoutePluginContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
@@ -722,10 +723,10 @@ async fn process_req_filters(
 
 async fn process_resp_filters(
     mut ctx: SgRoutePluginContext,
-    backend_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    rule_filters: Option<&Vec<(String, BoxSgPluginFilter)>>,
-    route_filters: &Vec<(String, BoxSgPluginFilter)>,
-    global_filters: &Vec<(String, BoxSgPluginFilter)>,
+    backend_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    rule_filters: Option<&[(String, BoxSgPluginFilter)]>,
+    route_filters: &[(String, BoxSgPluginFilter)],
+    global_filters: &[(String, BoxSgPluginFilter)],
 ) -> TardisResult<SgRoutePluginContext> {
     let mut is_continue;
     let mut executed_filters = Vec::new();
@@ -777,7 +778,7 @@ async fn process_resp_filters(
     Ok(ctx)
 }
 
-fn choose_backend(backends: &Vec<SgBackendInst>) -> Option<&SgBackendInst> {
+fn choose_backend(backends: &[SgBackendInst]) -> Option<&SgBackendInst> {
     if backends.is_empty() {
         None
     } else if backends.len() == 1 {
