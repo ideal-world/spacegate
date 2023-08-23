@@ -1112,7 +1112,7 @@ mod tests {
                 ..Default::default()
             },
             SgHttpRouteMatchInst {
-                method: Some(vec![Method::PUT]),
+                method: Some(vec![Method::POST]),
                 ..Default::default()
             },
         ];
