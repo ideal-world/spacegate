@@ -175,13 +175,20 @@ impl SgCtxRequest {
         self.mod_headers = Some(req_headers);
     }
 
-    pub fn set_header(&mut self, key: &str, value: &str) -> TardisResult<()> {
+    pub fn set_header_str(&mut self, key: &str, value: &str) -> TardisResult<()> {
+        self.set_header(
+            HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
+            value,
+        )
+    }
+
+    pub fn set_header(&mut self, key: HeaderName, value: &str) -> TardisResult<()> {
         if self.mod_headers.is_none() {
             self.mod_headers = Some(self.raw_headers.clone());
         }
         let mod_headers = self.mod_headers.as_mut().expect("Unreachable code");
         mod_headers.insert(
-            HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
+            key,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
         );
         Ok(())
@@ -210,8 +217,8 @@ impl SgCtxRequest {
     }
 
     pub fn set_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
-        self.get_headers_mut().remove(http::header::TRANSFER_ENCODING.as_str());
-        self.set_header(http::header::CONTENT_LENGTH.as_str(), body.len().to_string().as_str())?;
+        self.get_headers_mut().remove(http::header::TRANSFER_ENCODING);
+        self.set_header(http::header::CONTENT_LENGTH, body.len().to_string().as_str())?;
         self.mod_body = Some(body);
         Ok(())
     }
@@ -296,13 +303,20 @@ impl SgCtxResponse {
         self.mod_headers = Some(resp_headers);
     }
 
-    pub fn set_header(&mut self, key: &str, value: &str) -> TardisResult<()> {
+    pub fn set_header_str(&mut self, key: &str, value: &str) -> TardisResult<()> {
+        self.set_header(
+            HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
+            value,
+        )
+    }
+
+    pub fn set_header(&mut self, key: HeaderName, value: &str) -> TardisResult<()> {
         if self.mod_headers.is_none() {
             self.mod_headers = Some(self.raw_headers.clone());
         }
         let mod_headers = self.mod_headers.as_mut().expect("Unreachable code");
         mod_headers.insert(
-            HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
+            key,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
         );
         Ok(())
@@ -339,7 +353,7 @@ impl SgCtxResponse {
 
     pub fn set_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
         self.get_headers_mut().remove(http::header::TRANSFER_ENCODING.as_str());
-        self.set_header(http::header::CONTENT_LENGTH.as_str(), body.len().to_string().as_str())?;
+        self.set_header(http::header::CONTENT_LENGTH, body.len().to_string().as_str())?;
         self.mod_body = Some(body);
         Ok(())
     }
@@ -356,6 +370,11 @@ impl SgCtxResponse {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn set_body_raw(&mut self, body: Body) -> TardisResult<()> {
+        self.raw_body = Some(body);
+        Ok(())
     }
 }
 

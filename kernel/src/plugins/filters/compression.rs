@@ -94,7 +94,11 @@ impl SgPluginFilter for SgFilterCompression {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
+        let desired_response_encoding = get_encode_type(ctx.request.get_headers_raw().get(header::ACCEPT_ENCODING));
+        if let Some(encode) = desired_response_encoding {
+            ctx.request.set_header(header::ACCEPT_ENCODING, encode.into())?;
+        }
         Ok((true, ctx))
     }
 
@@ -130,17 +134,17 @@ impl SgPluginFilter for SgFilterCompression {
                 let mut encoded_body = vec![];
                 match desired_response_encoding {
                     CompressionType::Gzip => {
-                        ctx.response.set_header(header::CONTENT_ENCODING.as_str(), CompressionType::Gzip.into())?;
+                        ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Gzip.into())?;
                         let mut encoded = GzipEncoder::new(BufReader::new(&resp_body[..]));
                         let _ = encoded.read_to_end(&mut encoded_body).await;
                     }
                     CompressionType::Deflate => {
-                        ctx.response.set_header(header::CONTENT_ENCODING.as_str(), CompressionType::Deflate.into())?;
+                        ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Deflate.into())?;
                         let mut encoded = DeflateEncoder::new(BufReader::new(&resp_body[..]));
                         let _ = encoded.read_to_end(&mut encoded_body).await;
                     }
                     CompressionType::Br => {
-                        ctx.response.set_header(header::CONTENT_ENCODING.as_str(), CompressionType::Br.into())?;
+                        ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Br.into())?;
                         let mut encoded = BrotliEncoder::new(BufReader::new(&resp_body[..]));
                         let _ = encoded.read_to_end(&mut encoded_body).await;
                     }

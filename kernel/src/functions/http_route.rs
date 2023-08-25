@@ -610,12 +610,8 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                         let q = urlencoding::decode(q).expect("[SG.Route] urlencoding decode error");
                         if let Some(v) = q.as_ref().split('&').filter_map(|item| item.split_once('=')).find_map(|(k, v)| (k == query.name).then_some(v)) {
                             match query.kind {
-                                SgHttpQueryMatchType::Exact => {
-                                    v == query.value
-                                }
-                                SgHttpQueryMatchType::Regular => {
-                                    query.regular.as_ref().expect("[SG.Route] query regular is None").is_match(v)
-                                }
+                                SgHttpQueryMatchType::Exact => v == query.value,
+                                SgHttpQueryMatchType::Regular => query.regular.as_ref().expect("[SG.Route] query regular is None").is_match(v),
                             }
                         } else {
                             false
@@ -1172,13 +1168,7 @@ mod tests {
             )
             .0
         );
-        assert!(
-            match_rule_inst(
-                &Request::builder().method(Method::POST).uri("https://any").body(Body::empty()).unwrap(),
-                Some(&match_conds)
-            )
-            .0
-        );
+        assert!(match_rule_inst(&Request::builder().method(Method::POST).uri("https://any").body(Body::empty()).unwrap(), Some(&match_conds)).0);
     }
 
     #[test]
