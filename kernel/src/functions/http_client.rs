@@ -90,7 +90,12 @@ pub async fn raw_request(
     let timeout_ms = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
     let method_str = method.to_string();
     let url_str = url.to_string();
-    log::trace!("[SG.Client] Request method {} url {} , timeout {} ms", method_str, url_str, timeout_ms);
+
+    if log::level_enabled!(log::Level::TRACE) {
+        log::trace!("[SG.Client] Request method {method_str} url {url_str} header {headers:?} {body:?}, timeout {timeout_ms} ms",);
+    } else if log::level_enabled!(log::Level::DEBUG) {
+        log::debug!("[SG.Client] Request method {method_str} url {url_str} header {headers:?}, timeout {timeout_ms} ms",);
+    }
 
     let mut req = Request::builder();
     req = req.method(method);

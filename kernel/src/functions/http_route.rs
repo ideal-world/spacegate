@@ -261,16 +261,32 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         )
         .parse()
         .map_err(|e| TardisError::bad_request(&format!("[SG.Route] request host rebuild illegal: {}", e), ""))?;
+    };
+
+    if log::level_enabled!(log::Level::TRACE) {
+        log::trace!(
+            "[SG.Route] Request method {} url {} header {:?} body {:?}, request addr {}, from {} @ {}",
+            request.method(),
+            request.uri(),
+            request.headers(),
+            request.body(),
+            local_addr,
+            remote_addr,
+            gateway_name
+        );
+    } else if log::level_enabled!(log::Level::DEBUG) {
+        log::debug!(
+            "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
+            request.method(),
+            request.uri(),
+            local_addr,
+            remote_addr,
+            gateway_name
+        );
+    } else {
+        log::info!("[SG.Route] Request <= {} {} , from {}", request.method(), request.uri(), remote_addr);
     }
-    log::info!("[SG.server] Request <= {} {}", request.method(), request.uri());
-    log::debug!(
-        "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
-        request.method(),
-        request.uri(),
-        local_addr,
-        remote_addr,
-        gateway_name
-    );
+
     let gateway_inst = get(&gateway_name)?;
     if !match_listeners_hostname_and_port(request.uri().host(), local_addr.port(), &gateway_inst.listeners) {
         log::trace!("[SG.Route] Request hostname {} not match", request.uri().host().expect(""));
@@ -355,7 +371,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
     )
     .await?;
 
-    let ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
+    let mut ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
         ctx
     } else {
         let rule_timeout = if let Some(matched_rule_inst) = matched_rule_inst {
@@ -371,6 +387,28 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
+
+    if log::level_enabled!(log::Level::TRACE) {
+        let code = ctx.response.get_status_code_raw().clone();
+        let body = ctx.response.pop_body_raw()?;
+        log::trace!(
+            "[SG.Route] Backend response: {} <= url {} header {:?} body {:?}",
+            code,
+            ctx.request.get_uri(),
+            ctx.response.get_headers(),
+            body,
+        );
+        if let Some(body) = body {
+            ctx.response.set_body_raw(body)?;
+        }
+    } else if log::level_enabled!(log::Level::DEBUG) {
+        log::debug!(
+            "[SG.Route] Backend response: {} <= url {} header {:?}",
+            ctx.response.get_status_code_raw().clone(),
+            ctx.request.get_uri(),
+            ctx.response.get_headers(),
+        );
+    }
 
     let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
 
