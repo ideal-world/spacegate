@@ -173,8 +173,23 @@ async fn process(
         Err(error) => into_http_error(error),
     };
     match &result {
-        Ok(resp) => log::info!("[SG.server] Response: code {} => {} {}", resp.status(), method, uri),
-        Err(e) => log::info!("[SG.server] Response: error {} => {} {}", e.message(), method, uri),
+        Ok(resp) => {
+            if log::level_enabled!(log::Level::TRACE) {
+                log::trace!(
+                    "[SG.server] Response: code {} => {} {} headers {:?} body {:?}",
+                    resp.status(),
+                    method,
+                    uri,
+                    resp.headers(),
+                    resp.body(),
+                );
+            } else if log::level_enabled!(log::Level::DEBUG) {
+                log::debug!("[SG.server] Response: code {} => {} {} headers {:?} ", resp.status(), method, uri, resp.headers(),);
+            } else {
+                log::info!("[SG.server] Response: code {} => {} {}", resp.status(), method, uri);
+            }
+        }
+        Err(e) => log::warn!("[SG.server] Response: error {} => {} {}", e.message(), method, uri),
     }
     result
 }
