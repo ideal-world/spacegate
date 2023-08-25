@@ -84,7 +84,7 @@ pub struct SgCtxRequest {
     raw_method: Method,
     raw_uri: Uri,
     raw_version: Version,
-    raw_body: Option<Body>,
+    pub raw_body: Option<Body>,
     raw_headers: HeaderMap<HeaderValue>,
     raw_remote_addr: SocketAddr,
 
@@ -239,11 +239,10 @@ impl SgCtxRequest {
 pub struct SgCtxResponse {
     raw_status_code: StatusCode,
     raw_headers: HeaderMap<HeaderValue>,
-    raw_body: Option<Body>,
+    pub raw_body: Body,
     raw_resp_err: Option<TardisError>,
     mod_status_code: Option<StatusCode>,
     mod_headers: Option<HeaderMap<HeaderValue>>,
-    mod_body: Option<Vec<u8>>,
 }
 
 impl SgCtxResponse {
@@ -251,11 +250,10 @@ impl SgCtxResponse {
         Self {
             raw_status_code: StatusCode::OK,
             raw_headers: HeaderMap::new(),
-            raw_body: None,
+            raw_body: Body::empty(),
             raw_resp_err: None,
             mod_status_code: None,
             mod_headers: None,
-            mod_body: None,
         }
     }
 
@@ -319,43 +317,12 @@ impl SgCtxResponse {
         &self.raw_headers
     }
 
-    pub async fn pop_body(&mut self) -> TardisResult<Option<Vec<u8>>> {
-        if self.mod_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.mod_body);
-            Ok(body)
-        } else if self.raw_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.raw_body);
-            let body = hyper::body::to_bytes(body.expect("Unreachable code"))
-                .await
-                .map_err(|error| TardisError::format_error(&format!("[SG.Filter] Response Body parsing error:{error}"), ""))?;
-            let body = body.iter().cloned().collect::<Vec<u8>>();
-            Ok(Some(body))
-        } else {
-            Ok(None)
-        }
+    pub fn take_body(&mut self) -> Body {
+        std::mem::take(&mut self.raw_body)
     }
 
-    pub fn set_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
-        self.get_headers_mut().remove(http::header::TRANSFER_ENCODING.as_str());
-        self.set_header(http::header::CONTENT_LENGTH.as_str(), body.len().to_string().as_str())?;
-        self.mod_body = Some(body);
-        Ok(())
-    }
-
-    pub fn pop_body_raw(&mut self) -> TardisResult<Option<Body>> {
-        if self.mod_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.mod_body);
-            Ok(body.map(Body::from))
-        } else if self.raw_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.raw_body);
-            Ok(body)
-        } else {
-            Ok(None)
-        }
+    pub fn replace_body(&mut self, body: Body) -> Body {
+        std::mem::replace(&mut self.raw_body, body)
     }
 }
 
@@ -450,7 +417,7 @@ impl SgRoutePluginContext {
     pub fn resp(mut self, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
         self.response.raw_status_code = status_code;
         self.response.raw_headers = headers;
-        self.response.raw_body = Some(body);
+        self.response.raw_body = body;
         self.response.raw_resp_err = None;
         self
     }
@@ -487,7 +454,7 @@ impl SgRoutePluginContext {
         }
         let resp = resp
             .status(self.response.get_status_code())
-            .body(Body::from(self.response.pop_body().await?.unwrap_or_default()))
+            .body(Body::from(self.response.take_body()))
             .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
         Ok(resp)
     }

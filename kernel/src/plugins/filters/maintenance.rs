@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use http::header;
+use hyper::{Body, body::Bytes};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
-    TardisFuns,
+    TardisFuns, futures_util,
 };
 
 use crate::plugins::context::SgRouteFilterRequestAction;
@@ -66,49 +67,48 @@ impl SgPluginFilter for SgFilterMaintenance {
                 let title = self.title.clone();
                 let msg = self.msg.clone().replace("/n", "<br>");
                 ctx.response.set_header(header::CONTENT_TYPE.as_ref(), "text/html")?;
-                ctx.response.set_body(
-                    format!(
-                        r##"<!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8" />
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                        <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
-                        <title>{title}</title>
-                        <style>
-                            body {{
-                                background: radial-gradient(circle at top left, #FFD700 0%, #FF8C00 25%, #FF4500 50%, #FF6347 75%, #FF1493 100%);
-                                height: 100vh;
-                                display: flex;
-                                justify-content: center;
-                                align-items: center;
-                            }}
-                    
-                            h1 {{
-                                font-size: 40px;
-                                color: #FFFFFF;
-                            }}
-                    
-                            p {{
-                                font-size: 20px;
-                                color: #FFFFFF;
-                                margin-bottom: 20px;
-                            }}
-                        </style>
-                    </head>
-                    <body>
-                        <div>
-                        <h1>{title}</h1>
-                        <br>
-                            <p>{msg}</p>
-                        </div>
-                    </body>
-                    </body>
-                    </html>
-                    "##
-                    )
-                    .into_bytes(),
-                )?;
+                let body = format!(
+                    r##"<!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
+                    <title>{title}</title>
+                    <style>
+                        body {{
+                            background: radial-gradient(circle at top left, #FFD700 0%, #FF8C00 25%, #FF4500 50%, #FF6347 75%, #FF1493 100%);
+                            height: 100vh;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                        }}
+                
+                        h1 {{
+                            font-size: 40px;
+                            color: #FFFFFF;
+                        }}
+                
+                        p {{
+                            font-size: 20px;
+                            color: #FFFFFF;
+                            margin-bottom: 20px;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div>
+                    <h1>{title}</h1>
+                    <br>
+                        <p>{msg}</p>
+                    </div>
+                </body>
+                </body>
+                </html>
+                "##
+                );
+                let resp_body = Body::from(Bytes::from(body));
+                ctx.response.replace_body(resp_body);
             } else if content_type.contains(&"application/json") || accept_type.contains(&"application/json") {
                 let msg = self.msg.clone();
                 return Err(TardisError::forbidden(&msg, ""));
