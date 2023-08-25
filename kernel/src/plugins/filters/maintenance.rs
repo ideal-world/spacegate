@@ -65,7 +65,7 @@ impl SgPluginFilter for SgFilterMaintenance {
             if content_type.contains(&"text/html") || accept_type.contains(&"text/html") {
                 let title = self.title.clone();
                 let msg = self.msg.clone().replace("/n", "<br>");
-                ctx.response.set_header(header::CONTENT_TYPE.as_ref(), "text/html")?;
+                ctx.response.set_header(header::CONTENT_TYPE, "text/html")?;
                 ctx.response.set_body(
                     format!(
                         r##"<!DOCTYPE html>

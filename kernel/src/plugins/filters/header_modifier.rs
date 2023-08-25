@@ -57,7 +57,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
         if let Some(set) = &self.sets {
             for (k, v) in set.iter() {
-                ctx.request.set_header(k, v)?;
+                ctx.request.set_header_str(k, v)?;
             }
         }
         if let Some(remove) = &self.remove {
@@ -76,7 +76,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
         if let Some(set) = &self.sets {
             for (k, v) in set.iter() {
-                ctx.response.set_header(k, v)?;
+                ctx.response.set_header_str(k, v)?;
             }
         }
         if let Some(remove) = &self.remove {
