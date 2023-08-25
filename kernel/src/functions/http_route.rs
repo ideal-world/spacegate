@@ -573,18 +573,15 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
                         if let Some(v) = q.as_ref().split('&').filter_map(|item| item.split_once('=')).find_map(|(k, v)| (k == query.name).then_some(v)) {
                             match query.kind {
                                 SgHttpQueryMatchType::Exact => {
-                                    if v != query.value {
-                                        return false;
-                                    }
+                                    v == query.value
                                 }
                                 SgHttpQueryMatchType::Regular => {
-                                    if !&query.regular.as_ref().expect("[SG.Route] query regular is None").is_match(v) {
-                                        return false;
-                                    }
+                                    query.regular.as_ref().expect("[SG.Route] query regular is None").is_match(v)
                                 }
                             }
+                        } else {
+                            false
                         }
-                        true
                     } else {
                         false
                     }
@@ -922,7 +919,7 @@ mod tests {
         }];
         assert!(
             !match_rule_inst(
-                &Request::builder().method("post").uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+                &Request::builder().method(Method::POST).uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
                 Some(&match_conds)
             )
             .0
@@ -1132,14 +1129,14 @@ mod tests {
         );
         assert!(
             match_rule_inst(
-                &Request::builder().method(Method::from_bytes("put".as_bytes()).unwrap()).uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
+                &Request::builder().method(Method::PUT).uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
                 Some(&match_conds)
             )
             .0
         );
         assert!(
             match_rule_inst(
-                &Request::builder().method(Method::from_bytes("post".as_bytes()).unwrap()).uri("https://any").body(Body::empty()).unwrap(),
+                &Request::builder().method(Method::POST).uri("https://any").body(Body::empty()).unwrap(),
                 Some(&match_conds)
             )
             .0
@@ -1151,7 +1148,7 @@ mod tests {
         // Match all hostname
         assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.com"),
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: None,
                 ..Default::default()
             }]
@@ -1160,7 +1157,7 @@ mod tests {
         .is_empty());
         assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.com"),
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: Some(vec!["*".to_string()]),
                 ..Default::default()
             }]
@@ -1169,7 +1166,7 @@ mod tests {
         .is_empty());
         assert!(!match_route_insts_with_hostname_priority(
             None,
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: None,
                 ..Default::default()
             }]
@@ -1179,7 +1176,7 @@ mod tests {
         // Match exact hostname
         assert!(match_route_insts_with_hostname_priority(
             Some("sg.idealworld.com"),
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: Some(vec!["sg.idealworld.group".to_string()]),
                 ..Default::default()
             }]
@@ -1188,7 +1185,7 @@ mod tests {
         .is_empty());
         assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.group"),
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: Some(vec!["sg.idealworld.group".to_string()]),
                 ..Default::default()
             }]
@@ -1198,7 +1195,7 @@ mod tests {
         // Match wildcard hostname
         assert!(match_route_insts_with_hostname_priority(
             Some("sg.idealworld.com"),
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: Some(vec!["*.idealworld.group".to_string()]),
                 ..Default::default()
             }]
@@ -1207,7 +1204,7 @@ mod tests {
         .is_empty());
         assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.group"),
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: Some(vec!["*.idealworld.group".to_string()]),
                 ..Default::default()
             }]
@@ -1216,7 +1213,7 @@ mod tests {
         .is_empty());
         assert!(!match_route_insts_with_hostname_priority(
             Some("sg.idealworld.group"),
-            &vec![SgHttpRouteInst {
+            &[SgHttpRouteInst {
                 hostnames: Some(vec!["*.idealworld.*".to_string()]),
                 ..Default::default()
             }]
@@ -1537,7 +1534,7 @@ mod tests {
     fn test_choose_backend() {
         // Only one backend
         assert!(
-            choose_backend(&vec![SgBackendInst {
+            choose_backend(&[SgBackendInst {
                 name_or_host: "iam1".to_string(),
                 weight: None,
                 ..Default::default()
