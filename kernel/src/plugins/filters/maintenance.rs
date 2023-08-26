@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use http::header;
-use hyper::{Body, body::Bytes};
+
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
-    TardisFuns, futures_util,
+    TardisFuns,
 };
 
 use crate::plugins::context::SgRouteFilterRequestAction;
@@ -107,13 +107,12 @@ impl SgPluginFilter for SgFilterMaintenance {
                 </html>
                 "##
                 );
-                let resp_body = Body::from(Bytes::from(body));
-                ctx.response.replace_body(resp_body);
+                let _ = ctx.response.replace_body(body);
             } else if content_type.contains(&"application/json") || accept_type.contains(&"application/json") {
                 let msg = self.msg.clone();
                 return Err(TardisError::forbidden(&msg, ""));
             } else {
-                ctx.response.set_body("<h1>Maintenance</h1>".to_string().into_bytes())?;
+                let _ = ctx.response.replace_body("<h1>Maintenance</h1>");
             }
         }
         Ok((true, ctx))
