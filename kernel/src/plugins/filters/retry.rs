@@ -1,7 +1,7 @@
 use std::{sync::Arc, thread};
 
 use async_trait::async_trait;
-use hyper::Body;
+use hyper::{body::Bytes, Body};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use crate::{functions::http_client, plugins::filters::retry::expiring_map::Expir
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
 lazy_static! {
-    static ref REQUEST_BODY: Arc<Mutex<ExpireMap<Option<Vec<u8>>>>> = <_>::default();
+    static ref REQUEST_BODY: Arc<Mutex<ExpireMap<Bytes>>> = <_>::default();
 }
 
 pub const CODE: &str = "retry";
@@ -91,18 +91,15 @@ impl SgPluginFilter for SgFilterRetry {
 
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         let mut req_body_cache = REQUEST_BODY.lock().await;
-        let req_body = ctx.request.pop_body().await?;
-        req_body_cache.insert(ctx.get_request_id().to_string(), req_body.clone(), (self.retries as u64 * self.max_interval) as u128);
-        if let Some(req_body) = req_body {
-            ctx.request.set_body(req_body)?;
-        }
+        let whole_body = ctx.request.dump_body().await?;
+        req_body_cache.insert(ctx.get_request_id().to_string(), whole_body, (self.retries as u64 * self.max_interval) as u128);
         Ok((true, ctx))
     }
 
     async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.is_resp_error() {
             let mut req_body_cache = REQUEST_BODY.lock().await;
-            let req_body = req_body_cache.remove(ctx.get_request_id()).flatten();
+            let req_body = req_body_cache.remove(ctx.get_request_id());
             for i in 0..self.retries {
                 let retry_count = i + 1;
                 let backoff_interval = match self.backoff {
@@ -119,7 +116,7 @@ impl SgPluginFilter for SgFilterRetry {
                     None,
                     ctx.request.get_method().clone(),
                     &choose_backend_url(&mut ctx),
-                    req_body.clone().map(Body::from),
+                    req_body.clone().map(Body::from).unwrap_or_default(),
                     ctx.request.get_headers(),
                     time_out,
                 )
