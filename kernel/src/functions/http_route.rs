@@ -196,7 +196,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     let route_inst = SgGatewayInst {
         filters: global_filters,
         routes: route_insts,
-        client: http_client::init()?,
+        client: http_client::init()?.clone(),
         listeners: gateway_conf.listeners,
     };
     unsafe {

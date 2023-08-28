@@ -97,6 +97,12 @@ pub async fn wait_graceful_shutdown() -> TardisResult<()> {
     Ok(())
 }
 
-pub fn register_filter_def(code: &str, filter_def: Box<dyn SgPluginFilterDef>) {
-    filters::register_filter_def(code, filter_def)
+#[inline]
+pub fn register_filter_def(filter_def: impl SgPluginFilterDef + 'static) {
+    register_filter_def_boxed(Box::new(filter_def))
+}
+
+#[inline]
+pub fn register_filter_def_boxed(filter_def: Box<dyn SgPluginFilterDef>) {
+    filters::register_filter_def(filter_def.get_code(), filter_def)
 }

@@ -15,6 +15,9 @@ pub const CODE: &str = "limit";
 pub struct SgFilterLimitDef;
 
 impl SgPluginFilterDef for SgFilterLimitDef {
+    fn get_code(&self) -> &'static str {
+        CODE
+    }
     fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterLimit>(spec)?;
         Ok(filter.boxed())

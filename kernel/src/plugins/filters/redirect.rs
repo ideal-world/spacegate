@@ -18,6 +18,9 @@ pub const CODE: &str = "redirect";
 pub struct SgFilterRedirectDef;
 
 impl SgPluginFilterDef for SgFilterRedirectDef {
+    fn get_code(&self) -> &'static str {
+        CODE
+    }
     fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterRedirect>(spec)?;
         Ok(filter.boxed())

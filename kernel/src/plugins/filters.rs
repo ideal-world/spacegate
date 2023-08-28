@@ -92,6 +92,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterIn
 }
 
 pub trait SgPluginFilterDef {
+    fn get_code(&self) -> &'static str;
     fn inst(&self, spec: Value) -> TardisResult<BoxSgPluginFilter>;
 }
 
