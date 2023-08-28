@@ -81,7 +81,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
         }
         if let Some(remove) = &self.remove {
             for k in remove {
-                ctx.response.remove_header(k)?;
+                ctx.response.remove_header_str(k)?;
             }
         }
         Ok((true, ctx))

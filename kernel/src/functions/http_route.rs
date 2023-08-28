@@ -389,8 +389,8 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
     };
 
     if log::level_enabled!(log::Level::TRACE) {
-        let code = ctx.response.get_status_code_raw().clone();
-        let body = ctx.response.pop_body_raw()?;
+        let code = *ctx.response.get_status_code_raw();
+        let body = ctx.response.take_body();
         log::trace!(
             "[SG.Route] Backend response: {} <= url {} header {:?} body {:?}",
             code,
@@ -398,9 +398,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
             ctx.response.get_headers(),
             body,
         );
-        if let Some(body) = body {
-            ctx.response.set_body_raw(body)?;
-        }
+        ctx.response.set_body(body);
     } else if log::level_enabled!(log::Level::DEBUG) {
         log::debug!(
             "[SG.Route] Backend response: {} <= url {} header {:?}",

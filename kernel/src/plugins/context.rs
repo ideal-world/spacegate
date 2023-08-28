@@ -3,6 +3,7 @@ use hyper::Body;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::ops::{Deref, DerefMut};
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
@@ -80,114 +81,162 @@ pub enum SgRouteFilterRequestAction {
 }
 
 #[derive(Debug)]
-pub struct SgCtxRequest {
-    raw_method: Method,
-    raw_uri: Uri,
-    raw_version: Version,
-    raw_body: Option<Body>,
-    raw_headers: HeaderMap<HeaderValue>,
-    raw_remote_addr: SocketAddr,
+pub struct MaybeModified<T> {
+    raw: T,
+    modified: Option<T>,
+}
 
-    mod_method: Option<Method>,
-    mod_uri: Option<Uri>,
-    mod_version: Option<Version>,
-    mod_body: Option<Vec<u8>>,
-    mod_headers: Option<HeaderMap<HeaderValue>>,
+impl<T> MaybeModified<T> {
+    pub fn new(value: T) -> Self {
+        Self { raw: value, modified: None }
+    }
+    pub fn reset(&mut self, value: T) {
+        self.raw = value;
+        self.modified.take();
+    }
+    #[inline]
+    pub fn get_raw(&self) -> &T {
+        &self.raw
+    }
+    #[inline]
+    pub fn get(&self) -> &T {
+        self.modified.as_ref().unwrap_or(&self.raw)
+    }
+    #[inline]
+    pub fn replace(&mut self, val: T) -> Option<T> {
+        self.modified.replace(val)
+    }
+    #[inline]
+    pub fn set(&mut self, val: T) {
+        self.modified.replace(val);
+    }
+    #[inline]
+    pub fn get_modified_mut(&mut self) -> Option<&mut T> {
+        self.modified.as_mut()
+    }
+    #[inline]
+    pub fn is_modified(&self) -> bool {
+        self.modified.is_some()
+    }
+}
+
+impl<T: Clone> MaybeModified<T> {
+    pub fn get_mut(&mut self) -> &mut T {
+        self.modified.get_or_insert(self.raw.clone())
+    }
+}
+
+impl<T> From<T> for MaybeModified<T> {
+    fn from(value: T) -> Self {
+        MaybeModified::new(value)
+    }
+}
+
+impl<T> Deref for MaybeModified<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.get()
+    }
+}
+
+impl<T: Clone> DerefMut for MaybeModified<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.get_mut()
+    }
+}
+
+#[derive(Debug)]
+pub struct SgCtxRequest {
+    pub method: MaybeModified<Method>,
+    pub uri: MaybeModified<Uri>,
+    pub version: MaybeModified<Version>,
+    pub body: Body,
+    pub headers: MaybeModified<HeaderMap<HeaderValue>>,
+    pub remote_addr: SocketAddr,
 }
 
 impl SgCtxRequest {
-    pub fn new(method: Method, uri: Uri, version: Version, headers: HeaderMap<HeaderValue>, body: Option<Body>, remote_addr: SocketAddr) -> Self {
+    pub fn new(method: Method, uri: Uri, version: Version, headers: HeaderMap<HeaderValue>, body: Body, remote_addr: SocketAddr) -> Self {
         Self {
-            raw_method: method,
-            raw_uri: uri,
-            raw_version: version,
-            raw_body: body,
-            raw_headers: headers,
-            raw_remote_addr: remote_addr,
-            mod_method: None,
-            mod_uri: None,
-            mod_version: None,
-            mod_body: None,
-            mod_headers: None,
+            method: MaybeModified::new(method),
+            uri: MaybeModified::new(uri),
+            version: MaybeModified::new(version),
+            body,
+            headers: MaybeModified::new(headers),
+            remote_addr,
         }
     }
 
+    #[inline]
     pub fn get_method(&mut self) -> &Method {
-        if self.mod_method.is_none() {
-            self.mod_method = Some(self.raw_method.clone());
-        }
-        self.mod_method.as_ref().expect("Unreachable code")
+        &self.method
     }
 
+    #[inline]
     pub fn set_method(&mut self, method: Method) {
-        self.mod_method = Some(method);
+        self.method.set(method)
     }
 
+    #[inline]
     pub fn get_method_raw(&self) -> &Method {
-        &self.raw_method
+        self.method.get_raw()
     }
 
+    #[inline]
     pub fn get_uri(&mut self) -> &Uri {
-        if self.mod_uri.is_none() {
-            self.mod_uri = Some(self.raw_uri.clone());
-        }
-        self.mod_uri.as_ref().expect("Unreachable code")
+        &self.uri
     }
 
+    #[inline]
     pub fn set_uri(&mut self, uri: Uri) {
-        self.mod_uri = Some(uri);
+        self.uri.set(uri)
     }
 
+    #[inline]
     pub fn get_uri_raw(&self) -> &Uri {
-        &self.raw_uri
+        self.uri.get_raw()
     }
 
+    #[inline]
     pub fn get_version(&mut self) -> &Version {
-        if self.mod_version.is_none() {
-            self.mod_version = Some(self.raw_version);
-        }
-        self.mod_version.as_ref().expect("Unreachable code")
+        &self.version
     }
 
+    #[inline]
     pub fn set_version(&mut self, version: Version) {
-        self.mod_version = Some(version);
+        self.version.set(version)
     }
 
+    #[inline]
     pub fn get_version_raw(&self) -> &Version {
-        &self.raw_version
+        self.version.get_raw()
     }
 
+    #[inline]
     pub fn get_headers(&mut self) -> &HeaderMap<HeaderValue> {
-        if self.mod_headers.is_none() {
-            self.mod_headers = Some(self.raw_headers.clone());
-        }
-        self.mod_headers.as_ref().expect("Unreachable code")
+        self.headers.get()
     }
 
+    #[inline]
     pub fn get_headers_mut(&mut self) -> &mut HeaderMap<HeaderValue> {
-        if self.mod_headers.is_none() {
-            self.mod_headers = Some(self.raw_headers.clone());
-        }
-        self.mod_headers.as_mut().expect("Unreachable code")
+        self.headers.get_mut()
     }
 
+    #[inline]
     pub fn set_headers(&mut self, req_headers: HeaderMap<HeaderValue>) {
-        self.mod_headers = Some(req_headers);
+        self.headers.set(req_headers)
     }
 
     pub fn set_header_str(&mut self, key: &str, value: &str) -> TardisResult<()> {
-        self.set_header(
+        self.get_headers_mut().insert(
             HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
-            value,
-        )
+            HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
+        );
+        Ok(())
     }
 
     pub fn set_header(&mut self, key: HeaderName, value: &str) -> TardisResult<()> {
-        if self.mod_headers.is_none() {
-            self.mod_headers = Some(self.raw_headers.clone());
-        }
-        let mod_headers = self.mod_headers.as_mut().expect("Unreachable code");
-        mod_headers.insert(
+        self.get_headers_mut().insert(
             key,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
         );
@@ -195,186 +244,168 @@ impl SgCtxRequest {
     }
 
     pub fn get_headers_raw(&self) -> &HeaderMap<HeaderValue> {
-        &self.raw_headers
-    }
-
-    pub async fn pop_body(&mut self) -> TardisResult<Option<Vec<u8>>> {
-        if self.mod_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.mod_body);
-            Ok(body)
-        } else if self.raw_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.raw_body);
-            let body = hyper::body::to_bytes(body.expect("Unreachable code"))
-                .await
-                .map_err(|error| TardisError::format_error(&format!("[SG.Filter] Request Body parsing error:{error}"), ""))?;
-            let body = body.iter().cloned().collect::<Vec<u8>>();
-            Ok(Some(body))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn set_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
-        self.get_headers_mut().remove(http::header::TRANSFER_ENCODING);
-        self.set_header(http::header::CONTENT_LENGTH, body.len().to_string().as_str())?;
-        self.mod_body = Some(body);
-        Ok(())
-    }
-
-    pub fn pop_body_raw(&mut self) -> TardisResult<Option<Body>> {
-        if self.mod_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.mod_body);
-            Ok(body.map(Body::from))
-        } else if self.raw_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.raw_body);
-            Ok(body)
-        } else {
-            Ok(None)
-        }
+        self.headers.get_raw()
     }
 
     pub fn get_remote_addr(&self) -> &SocketAddr {
-        &self.raw_remote_addr
+        &self.remote_addr
+    }
+
+    pub fn take_body(&mut self) -> Body {
+        std::mem::take(&mut self.body)
+    }
+
+    pub fn replace_body(&mut self, body: impl Into<Body>) -> Body {
+        std::mem::replace(&mut self.body, body.into())
+    }
+
+    #[inline]
+    pub fn set_body(&mut self, body: impl Into<Body>) {
+        let _ = self.replace_body(body);
+    }
+
+    /// it's a shortcut for [take_body](SgCtxRequest) + [hyper::body::to_bytes]
+    pub async fn take_body_into_bytes(&mut self) -> TardisResult<hyper::body::Bytes> {
+        let bytes = hyper::body::to_bytes(self.take_body()).await.map_err(|e| TardisError::format_error(&format!("[SG.Filter] fail to collect body into bytes: {e}"), ""))?;
+        Ok(bytes)
+    }
+
+    /// it's a shortcut for [`take_body`](SgCtxRequest) + [hyper::body::aggregate]
+    pub async fn take_body_into_buf(&mut self) -> TardisResult<impl hyper::body::Buf> {
+        let buf = hyper::body::aggregate(self.take_body()).await.map_err(|e| TardisError::format_error(&format!("[SG.Filter] fail to aggregate body: {e}"), ""))?;
+        Ok(buf)
+    }
+
+    /// # Performance
+    /// this method will read all of the body and clone it, and it's body will become an once stream which holds the whole body.
+    pub async fn dump_body(&mut self) -> TardisResult<hyper::body::Bytes> {
+        let bytes = self.take_body_into_bytes().await?;
+        self.set_body(bytes.clone());
+        Ok(bytes)
     }
 }
 
 #[derive(Debug)]
 pub struct SgCtxResponse {
-    raw_status_code: StatusCode,
-    raw_headers: HeaderMap<HeaderValue>,
-    raw_body: Option<Body>,
-    raw_resp_err: Option<TardisError>,
-    mod_status_code: Option<StatusCode>,
-    mod_headers: Option<HeaderMap<HeaderValue>>,
-    mod_body: Option<Vec<u8>>,
+    pub status_code: MaybeModified<StatusCode>,
+    pub headers: MaybeModified<HeaderMap<HeaderValue>>,
+    pub body: Body,
+    resp_err: Option<TardisError>,
 }
 
 impl SgCtxResponse {
     pub fn new() -> Self {
         Self {
-            raw_status_code: StatusCode::OK,
-            raw_headers: HeaderMap::new(),
-            raw_body: None,
-            raw_resp_err: None,
-            mod_status_code: None,
-            mod_headers: None,
-            mod_body: None,
+            status_code: MaybeModified::new(StatusCode::OK),
+            headers: MaybeModified::new(HeaderMap::new()),
+            body: Body::empty(),
+            resp_err: None,
         }
     }
 
+    #[inline]
     pub fn is_resp_error(&self) -> bool {
-        self.raw_resp_err.is_some()
+        self.resp_err.is_some()
     }
 
+    #[inline]
     pub fn get_status_code(&mut self) -> &StatusCode {
-        if self.mod_status_code.is_none() {
-            self.mod_status_code = Some(self.raw_status_code);
-        }
-        self.mod_status_code.as_ref().expect("Unreachable code")
+        self.status_code.get()
     }
 
+    #[inline]
     pub fn set_status_code(&mut self, status_code: StatusCode) {
-        self.mod_status_code = Some(status_code);
+        self.status_code.set(status_code)
     }
 
+    #[inline]
     pub fn get_status_code_raw(&self) -> &StatusCode {
-        &self.raw_status_code
+        self.status_code.get_raw()
     }
 
+    #[inline]
     pub fn get_headers(&mut self) -> &HeaderMap<HeaderValue> {
-        if self.mod_headers.is_none() {
-            self.mod_headers = Some(self.raw_headers.clone());
-        }
-        self.mod_headers.as_ref().expect("Unreachable code")
+        self.headers.get()
     }
 
+    #[inline]
+    pub fn get_headers_raw(&mut self) -> &HeaderMap<HeaderValue> {
+        self.headers.get_raw()
+    }
+
+    #[inline]
     pub fn get_headers_mut(&mut self) -> &mut HeaderMap<HeaderValue> {
-        if self.mod_headers.is_none() {
-            self.mod_headers = Some(self.raw_headers.clone());
-        }
-        self.mod_headers.as_mut().expect("Unreachable code")
+        self.headers.get_mut()
     }
 
-    pub fn set_headers(&mut self, resp_headers: HeaderMap<HeaderValue>) {
-        self.mod_headers = Some(resp_headers);
+    #[inline]
+    pub fn set_headers(&mut self, req_headers: HeaderMap<HeaderValue>) {
+        self.headers.set(req_headers)
     }
 
     pub fn set_header_str(&mut self, key: &str, value: &str) -> TardisResult<()> {
-        self.set_header(
+        self.get_headers_mut().insert(
             HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
-            value,
-        )
+            HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
+        );
+        Ok(())
     }
 
     pub fn set_header(&mut self, key: HeaderName, value: &str) -> TardisResult<()> {
-        if self.mod_headers.is_none() {
-            self.mod_headers = Some(self.raw_headers.clone());
-        }
-        let mod_headers = self.mod_headers.as_mut().expect("Unreachable code");
-        mod_headers.insert(
+        self.get_headers_mut().insert(
             key,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
         );
         Ok(())
     }
 
-    pub fn remove_header(&mut self, key: &str) -> TardisResult<()> {
-        if let Some(headers) = self.mod_headers.as_mut() {
+    pub fn remove_header(&mut self, key: HeaderName) -> TardisResult<()> {
+        if let Some(headers) = self.headers.get_modified_mut() {
+            headers.remove(key);
+        }
+        Ok(())
+    }
+
+    pub fn remove_header_str(&mut self, key: &str) -> TardisResult<()> {
+        if let Some(headers) = self.headers.get_modified_mut() {
             headers.remove(HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?);
         }
         Ok(())
     }
 
-    pub fn get_headers_raw(&self) -> &HeaderMap<HeaderValue> {
-        &self.raw_headers
+    #[inline]
+    pub fn take_body(&mut self) -> Body {
+        std::mem::take(&mut self.body)
     }
 
-    pub async fn pop_body(&mut self) -> TardisResult<Option<Vec<u8>>> {
-        if self.mod_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.mod_body);
-            Ok(body)
-        } else if self.raw_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.raw_body);
-            let body = hyper::body::to_bytes(body.expect("Unreachable code"))
-                .await
-                .map_err(|error| TardisError::format_error(&format!("[SG.Filter] Response Body parsing error:{error}"), ""))?;
-            let body = body.iter().cloned().collect::<Vec<u8>>();
-            Ok(Some(body))
-        } else {
-            Ok(None)
-        }
+    #[inline]
+    pub fn replace_body(&mut self, body: impl Into<Body>) -> Body {
+        std::mem::replace(&mut self.body, body.into())
     }
 
-    pub fn set_body(&mut self, body: Vec<u8>) -> TardisResult<()> {
-        self.get_headers_mut().remove(http::header::TRANSFER_ENCODING.as_str());
-        self.set_header(http::header::CONTENT_LENGTH, body.len().to_string().as_str())?;
-        self.mod_body = Some(body);
-        Ok(())
+    #[inline]
+    pub fn set_body(&mut self, body: impl Into<Body>) {
+        let _ = self.replace_body(body);
     }
 
-    pub fn pop_body_raw(&mut self) -> TardisResult<Option<Body>> {
-        if self.mod_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.mod_body);
-            Ok(body.map(Body::from))
-        } else if self.raw_body.is_some() {
-            let mut body = None;
-            std::mem::swap(&mut body, &mut self.raw_body);
-            Ok(body)
-        } else {
-            Ok(None)
-        }
+    /// it's a shortcut for [take_body](SgCtxResponse) + [hyper::body::to_bytes]
+    pub async fn take_body_into_bytes(&mut self) -> TardisResult<hyper::body::Bytes> {
+        let bytes = hyper::body::to_bytes(self.take_body()).await.map_err(|e| TardisError::format_error(&format!("[SG.Filter] fail to collect body into bytes: {e}"), ""))?;
+        Ok(bytes)
     }
 
-    pub fn set_body_raw(&mut self, body: Body) -> TardisResult<()> {
-        self.raw_body = Some(body);
-        Ok(())
+    /// it's a shortcut for [take_body](SgCtxResponse) + [hyper::body::aggregate]
+    pub async fn take_body_into_buf(&mut self) -> TardisResult<impl hyper::body::Buf> {
+        let buf = hyper::body::aggregate(self.take_body()).await.map_err(|e| TardisError::format_error(&format!("[SG.Filter] fail to aggregate body: {e}"), ""))?;
+        Ok(buf)
+    }
+
+    /// # Performance
+    /// This method will read **all** of the body and **clone** it, and it's body will become an once stream which holds the whole body.
+    pub async fn dump_body(&mut self) -> TardisResult<hyper::body::Bytes> {
+        let bytes = self.take_body_into_bytes().await?;
+        self.set_body(bytes.clone());
+        Ok(bytes)
     }
 }
 
@@ -430,7 +461,7 @@ impl SgRoutePluginContext {
     ) -> Self {
         Self {
             request_id: TardisFuns::field.nanoid(),
-            request: SgCtxRequest::new(method, uri, version, headers, Some(body), remote_addr),
+            request: SgCtxRequest::new(method, uri, version, headers, body, remote_addr),
             response: SgCtxResponse::new(),
             ext: HashMap::new(),
             action: SgRouteFilterRequestAction::None,
@@ -453,7 +484,7 @@ impl SgRoutePluginContext {
     ) -> Self {
         Self {
             request_id: TardisFuns::field.nanoid(),
-            request: SgCtxRequest::new(method, uri, version, headers, None, remote_addr),
+            request: SgCtxRequest::new(method, uri, version, headers, Body::default(), remote_addr),
             response: SgCtxResponse::new(),
             ext: HashMap::new(),
             action: SgRouteFilterRequestAction::None,
@@ -465,18 +496,18 @@ impl SgRoutePluginContext {
         }
     }
 
-    ///The following two methods can only be used to fill in the context [resp] [resp_from_error]
+    /// The following two methods can only be used to fill in the context [resp] [resp_from_error]
     pub fn resp(mut self, status_code: StatusCode, headers: HeaderMap<HeaderValue>, body: Body) -> Self {
-        self.response.raw_status_code = status_code;
-        self.response.raw_headers = headers;
-        self.response.raw_body = Some(body);
-        self.response.raw_resp_err = None;
+        self.response.status_code.reset(status_code);
+        self.response.headers.reset(headers);
+        self.response.body = body;
+        self.response.resp_err = None;
         self
     }
 
     pub fn resp_from_error(mut self, error: TardisError) -> Self {
-        self.response.raw_resp_err = Some(error);
-        self.response.raw_status_code = StatusCode::BAD_GATEWAY;
+        self.response.resp_err = Some(error);
+        self.response.status_code.reset(StatusCode::BAD_GATEWAY);
         self
     }
 
@@ -494,7 +525,7 @@ impl SgRoutePluginContext {
 
     /// build response from Context
     pub async fn build_response(&mut self) -> TardisResult<Response<Body>> {
-        if let Some(err) = &self.response.raw_resp_err {
+        if let Some(err) = &self.response.resp_err {
             return Err(err.clone());
         }
         let mut resp = Response::builder();
@@ -506,7 +537,7 @@ impl SgRoutePluginContext {
         }
         let resp = resp
             .status(self.response.get_status_code())
-            .body(Body::from(self.response.pop_body().await?.unwrap_or_default()))
+            .body(self.response.take_body())
             .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build response error:{error}"), ""))?;
         Ok(resp)
     }

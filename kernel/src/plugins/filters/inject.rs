@@ -29,7 +29,10 @@ pub struct SgFilterInject {
     pub resp_timeout_ms: Option<u64>,
 }
 
+// those headers interior mutable
+#[allow(clippy::declare_interior_mutable_const)]
 const SG_INJECT_REAL_METHOD: HeaderName = HeaderName::from_static("sg-inject-real-method");
+#[allow(clippy::declare_interior_mutable_const)]
 const SG_INJECT_REAL_URL: HeaderName = HeaderName::from_static("sg-inject-real-url");
 
 #[async_trait]
@@ -55,15 +58,7 @@ impl SgPluginFilter for SgFilterInject {
             let real_url = ctx.request.get_uri().clone();
             ctx.request.set_header(SG_INJECT_REAL_METHOD, real_method.as_str())?;
             ctx.request.set_header(SG_INJECT_REAL_URL, &real_url.to_string())?;
-            let mut resp = http_client::raw_request(
-                None,
-                Method::PUT,
-                req_inject_url,
-                ctx.request.pop_body_raw()?,
-                ctx.request.get_headers(),
-                self.req_timeout_ms,
-            )
-            .await?;
+            let mut resp = http_client::raw_request(None, Method::PUT, req_inject_url, ctx.request.take_body(), ctx.request.get_headers(), self.req_timeout_ms).await?;
             let new_req_headers = resp.headers_mut();
             let new_req_method = new_req_headers
                 .get(SG_INJECT_REAL_METHOD)
@@ -109,7 +104,7 @@ impl SgPluginFilter for SgFilterInject {
                 None,
                 Method::PUT,
                 resp_inject_url,
-                ctx.response.pop_body_raw()?,
+                ctx.response.take_body(),
                 ctx.response.get_headers(),
                 self.resp_timeout_ms,
             )
@@ -153,16 +148,16 @@ mod tests {
         let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
-        let body = String::from_utf8(ctx.request.pop_body().await.unwrap().unwrap()).unwrap();
+        let body = String::from_utf8(ctx.request.dump_body().await.unwrap().to_vec()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/put""#));
         assert!(body.contains(r#""data": "理想世界""#));
 
-        ctx.response.set_body("idealworld".as_bytes().to_vec()).unwrap();
+        ctx.response.set_body("idealworld");
         let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.response.get_status_code(), &StatusCode::OK);
         assert_eq!(ctx.request.get_uri().to_string(), "http://sg.idealworld.group/iam/ct/001?name=sg");
-        let body = String::from_utf8(ctx.response.pop_body().await.unwrap().unwrap()).unwrap();
+        let body = String::from_utf8(ctx.response.dump_body().await.unwrap().to_vec()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/put""#));
         assert!(body.contains(r#""data": "idealworld""#));
     }

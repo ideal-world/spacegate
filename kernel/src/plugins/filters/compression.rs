@@ -1,15 +1,12 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, pin::Pin};
 
 use async_compression::tokio::bufread::{BrotliDecoder, BrotliEncoder, DeflateDecoder, DeflateEncoder, GzipDecoder, GzipEncoder};
 use async_trait::async_trait;
 use http::{header, HeaderValue};
-use itertools::Itertools;
+use hyper::Body;
 use serde::{Deserialize, Serialize};
-use tardis::{
-    basic::result::TardisResult,
-    tokio::io::{AsyncReadExt, BufReader},
-    TardisFuns,
-};
+use tardis::{basic::result::TardisResult, futures_util::TryStreamExt, tokio::io::BufReader, TardisFuns};
+use tokio_util::io::{ReaderStream, StreamReader};
 
 use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
 
@@ -103,57 +100,53 @@ impl SgPluginFilter for SgFilterCompression {
     }
 
     async fn resp_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
-        let resp_body = ctx.response.pop_body().await?;
-        if let Some(mut resp_body) = resp_body {
-            let resp_encode_type = get_encode_type(ctx.response.get_headers_raw().get(header::CONTENT_ENCODING));
-            let desired_response_encoding = get_encode_type(ctx.request.get_headers_raw().get(header::ACCEPT_ENCODING));
-            if desired_response_encoding == resp_encode_type {
-                ctx.response.set_body(resp_body)?;
-                return Ok((true, ctx));
-            } else {
-                let mut decoded_body = vec![];
-                if let Some(resp_encode_type) = resp_encode_type {
-                    match resp_encode_type {
-                        CompressionType::Gzip => {
-                            let mut decoded = GzipDecoder::new(BufReader::new(&resp_body[..]));
-                            let _ = decoded.read_to_end(&mut decoded_body).await;
-                        }
-                        CompressionType::Deflate => {
-                            let mut decoded = DeflateDecoder::new(BufReader::new(&resp_body[..]));
-                            let _ = decoded.read_to_end(&mut decoded_body).await;
-                        }
-                        CompressionType::Br => {
-                            let mut decoded = BrotliDecoder::new(BufReader::new(&resp_body[..]));
-                            let _ = decoded.read_to_end(&mut decoded_body).await;
-                        }
-                    }
-                    resp_body = decoded_body;
-                }
-            }
-            if let Some(desired_response_encoding) = desired_response_encoding {
-                let mut encoded_body = vec![];
-                match desired_response_encoding {
-                    CompressionType::Gzip => {
-                        ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Gzip.into())?;
-                        let mut encoded = GzipEncoder::new(BufReader::new(&resp_body[..]));
-                        let _ = encoded.read_to_end(&mut encoded_body).await;
-                    }
-                    CompressionType::Deflate => {
-                        ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Deflate.into())?;
-                        let mut encoded = DeflateEncoder::new(BufReader::new(&resp_body[..]));
-                        let _ = encoded.read_to_end(&mut encoded_body).await;
-                    }
-                    CompressionType::Br => {
-                        ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Br.into())?;
-                        let mut encoded = BrotliEncoder::new(BufReader::new(&resp_body[..]));
-                        let _ = encoded.read_to_end(&mut encoded_body).await;
-                    }
-                }
-                ctx.response.set_body(encoded_body)?;
-                return Ok((true, ctx));
-            }
-            ctx.response.set_body(resp_body)?;
+        let resp_encode_type = get_encode_type(ctx.response.get_headers_raw().get(header::CONTENT_ENCODING));
+        let desired_response_encoding = get_encode_type(ctx.request.get_headers_raw().get(header::ACCEPT_ENCODING));
+        fn convert_error(err: hyper::Error) -> std::io::Error {
+            std::io::Error::new(std::io::ErrorKind::Other, err)
         }
+        if desired_response_encoding == resp_encode_type {
+            return Ok((true, ctx));
+        }
+        if let Some(desired_response_encoding) = &desired_response_encoding {
+            match desired_response_encoding {
+                CompressionType::Gzip => ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Gzip.into())?,
+                CompressionType::Deflate => ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Deflate.into())?,
+                CompressionType::Br => ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Br.into())?,
+            }
+        }
+        let mut body = ctx.response.take_body();
+        body = if let Some(resp_encode_type) = resp_encode_type {
+            ctx.response.remove_header(header::CONTENT_LENGTH)?;
+            let bytes_reader = StreamReader::new(body.map_err(convert_error));
+            let mut read_stream: Pin<Box<dyn tardis::tokio::io::AsyncRead + Send>> = match resp_encode_type {
+                CompressionType::Gzip => Box::pin(GzipDecoder::new(bytes_reader)),
+                CompressionType::Deflate => Box::pin(DeflateDecoder::new(bytes_reader)),
+                CompressionType::Br => Box::pin(BrotliDecoder::new(bytes_reader)),
+            };
+            if let Some(desired_response_encoding) = desired_response_encoding {
+                read_stream = match desired_response_encoding {
+                    CompressionType::Gzip => Box::pin(GzipEncoder::new(BufReader::new(read_stream))),
+                    CompressionType::Deflate => Box::pin(DeflateEncoder::new(BufReader::new(read_stream))),
+                    CompressionType::Br => Box::pin(BrotliEncoder::new(BufReader::new(read_stream))),
+                };
+            }
+            Body::wrap_stream(ReaderStream::new(read_stream))
+        } else if let Some(desired_response_encoding) = desired_response_encoding {
+            ctx.response.remove_header(header::CONTENT_LENGTH)?;
+            let bytes_reader = StreamReader::new(body.map_err(convert_error));
+            match desired_response_encoding {
+                CompressionType::Gzip => Body::wrap_stream(ReaderStream::new(GzipEncoder::new(bytes_reader))),
+                CompressionType::Deflate => Body::wrap_stream(ReaderStream::new(DeflateEncoder::new(bytes_reader))),
+                CompressionType::Br => Body::wrap_stream(ReaderStream::new(BrotliEncoder::new(bytes_reader))),
+            }
+        } else {
+            body
+        };
+
+        ctx.response.set_body(body);
+        // let body = ctx.response.dump_body().await?;
+        // dbg!(body);
         Ok((true, ctx))
     }
 }
@@ -163,20 +156,19 @@ fn get_encode_type(header_value: Option<&HeaderValue>) -> Option<CompressionType
         header_value.to_str().map_or_else(
             |_| None,
             |v_str| {
-                let split: Vec<&str> = v_str.split(',').map(|s| s.trim()).collect();
                 // support ;q=
                 if v_str.contains(";q=") {
-                    let high_q_last: Vec<(f32, Option<CompressionType>)> = split
-                        .iter()
+                    let highest_q = v_str
+                        .split(',')
+                        .map(|s| s.trim())
                         .map(|s| {
-                            let split: Vec<&str> = s.split(";q=").collect();
-                            if split.len() == 2 {
-                                (split[1].parse::<f32>().unwrap_or(1f32), CompressionType::from_str(split[0]))
+                            if let Some((comp_type, q)) = s.split_once(";q=") {
+                                (q.parse::<f32>().unwrap_or(1f32), CompressionType::from_str(comp_type))
                             } else {
-                                (1f32, CompressionType::from_str(split[0]))
+                                (1f32, CompressionType::from_str(s))
                             }
                         })
-                        .sorted_by(|(q1, t1), (q2, t2)| {
+                        .max_by(|(q1, t1), (q2, t2)| {
                             if t1.is_none() && t2.is_none() {
                                 Ordering::Equal
                             } else if t1.is_none() && t2.is_some() {
@@ -186,16 +178,15 @@ fn get_encode_type(header_value: Option<&HeaderValue>) -> Option<CompressionType
                             } else {
                                 q1.total_cmp(q2)
                             }
-                        })
-                        .collect();
-                    if let Some(first) = high_q_last.last() {
+                        });
+                    if let Some(first) = highest_q {
                         first.1.clone()
                     } else {
                         None
                     }
-                } else if !split.is_empty() {
+                } else if !v_str.is_empty() {
                     let mut result = None;
-                    for s in split {
+                    for s in v_str.split(',').map(|s| s.trim()) {
                         result = CompressionType::from_str(s);
                         if result.is_some() {
                             break;
@@ -220,8 +211,7 @@ mod tests {
     use async_compression::tokio::bufread::GzipDecoder;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
-    use tardis::tokio::{self};
-
+    use tardis::tokio::{self, io::AsyncReadExt};
     #[test]
     fn test_get_encode_type() {
         assert_eq!(get_encode_type(None), None);
@@ -260,8 +250,8 @@ mod tests {
 
         let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
-        let resp_body = ctx.response.pop_body().await.unwrap().unwrap();
-        let mut decode = GzipDecoder::new(BufReader::new(&resp_body[..]));
+        let resp_body = ctx.response.dump_body().await.unwrap();
+        let mut decode = GzipDecoder::new(BufReader::new(&*resp_body));
         let mut encoder_body = vec![];
         let _ = decode.read_to_end(&mut encoder_body).await;
         unsafe {
@@ -292,10 +282,10 @@ mod tests {
         assert!(is_continue);
 
         let body_str = "test 1 测试 1 ";
-        let mut dncoder = DeflateEncoder::new(BufReader::new(body_str.as_bytes()));
-        let mut dncoded_body = vec![];
-        let _ = dncoder.read_to_end(&mut dncoded_body).await;
-        let resp_body = Body::from(dncoded_body);
+        let mut deflate_encoder = DeflateEncoder::new(BufReader::new(body_str.as_bytes()));
+        let mut deflate_encoded_body = vec![];
+        let _ = deflate_encoder.read_to_end(&mut deflate_encoded_body).await;
+        let resp_body = Body::from(deflate_encoded_body);
         let mut mock_resp_header = HeaderMap::new();
         mock_resp_header.insert(header::CONTENT_ENCODING, CompressionType::Deflate.into());
         ctx = ctx.resp(StatusCode::OK, mock_resp_header, resp_body);
@@ -303,13 +293,11 @@ mod tests {
         let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
 
-        let resp_body = ctx.response.pop_body().await.unwrap().unwrap();
-        let mut decode = GzipDecoder::new(BufReader::new(&resp_body[..]));
+        let resp_body = ctx.response.dump_body().await.unwrap();
+        let mut decode = GzipDecoder::new(BufReader::new(&*resp_body));
         let mut decoded_body = vec![];
         let _ = decode.read_to_end(&mut decoded_body).await;
-        unsafe {
-            let body = String::from_utf8_unchecked(decoded_body);
-            assert_eq!(&body, body_str);
-        }
+        let decoded_body = String::from_utf8(decoded_body).unwrap();
+        assert_eq!(&decoded_body, body_str);
     }
 }

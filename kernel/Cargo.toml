@@ -43,6 +43,8 @@ kube = { workspace = true, optional = true }
 k8s-openapi = { workspace = true, optional = true }
 k8s-gateway-api = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
+async-stream = "0.3.5"
+tokio-util = { version = "0.7.8", features = ["io"] }
 
 
 [dev-dependencies]

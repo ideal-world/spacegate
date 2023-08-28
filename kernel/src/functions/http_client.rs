@@ -67,7 +67,7 @@ async fn do_request(client: &Client<HttpsConnector<HttpConnector>>, url: &str, t
         Some(client),
         ctx.request.get_method().clone(),
         url,
-        ctx.request.pop_body_raw()?,
+        ctx.request.take_body(),
         ctx.request.get_headers(),
         timeout_ms,
     )
@@ -83,7 +83,7 @@ pub async fn raw_request(
     client: Option<&Client<HttpsConnector<HttpConnector>>>,
     method: Method,
     url: &str,
-    body: Option<Body>,
+    body: Body,
     headers: &HeaderMap<HeaderValue>,
     timeout_ms: Option<u64>,
 ) -> TardisResult<Response<Body>> {
@@ -106,9 +106,7 @@ pub async fn raw_request(
         );
     }
     req = req.uri(url);
-    let req = req
-        .body(body.unwrap_or_else(Body::empty))
-        .map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build request method {method_str} url {url_str} error:{error}"), ""))?;
+    let req = req.body(body).map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build request method {method_str} url {url_str} error:{error}"), ""))?;
     let req = if let Some(client) = client {
         client.request(req)
     } else {
@@ -164,7 +162,7 @@ mod tests {
         )
         .await?;
         assert_eq!(resp.response.get_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.response.pop_body().await?.unwrap()).unwrap();
+        let body = String::from_utf8(resp.response.dump_body().await?.to_vec()).unwrap();
         assert!(body.contains("百度一下"));
 
         // test get
@@ -190,7 +188,7 @@ mod tests {
         )
         .await?;
         assert_eq!(resp.response.get_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.response.pop_body().await?.unwrap()).unwrap();
+        let body = String::from_utf8(resp.response.dump_body().await?.to_vec()).unwrap();
         assert!(body.contains(r#""url": "http://httpbin.org/get?foo1=bar1&foo2=bar2""#));
 
         // test post with tls
@@ -217,7 +215,7 @@ mod tests {
         )
         .await?;
         assert_eq!(resp.response.get_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.response.pop_body().await?.unwrap()).unwrap();
+        let body = String::from_utf8(resp.response.dump_body().await?.to_vec()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/post?foo1=bar1&foo2=bar2""#));
         assert!(body.contains(r#""data": "星航""#));
 
@@ -270,7 +268,7 @@ mod tests {
         )
         .await?;
         assert_eq!(resp.response.get_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.response.pop_body().await?.unwrap()).unwrap();
+        let body = String::from_utf8(resp.response.dump_body().await?.to_vec()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         // test redirect
@@ -293,7 +291,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(resp.response.get_status_code().as_u16(), 200);
-        let body = String::from_utf8(resp.response.pop_body().await?.unwrap()).unwrap();
+        let body = String::from_utf8(resp.response.dump_body().await?.to_vec()).unwrap();
         assert!(body.contains(r#""url": "https://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         Ok(())
