@@ -132,7 +132,7 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
                                     path: path_inst,
                                     header: header_inst,
                                     query: query_inst,
-                                    method: rule_match.method.map(|m| m.into_iter().map(|m| m.to_lowercase()).collect_vec()),
+                                    method: rule_match.method.map(|m| m.into_iter().filter_map(|m| m.parse().ok()).collect_vec()),
                                 })
                             })
                             .collect::<TardisResult<Vec<SgHttpRouteMatchInst>>>()
@@ -261,16 +261,32 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         )
         .parse()
         .map_err(|e| TardisError::bad_request(&format!("[SG.Route] request host rebuild illegal: {}", e), ""))?;
+    };
+
+    if log::level_enabled!(log::Level::TRACE) {
+        log::trace!(
+            "[SG.Route] Request method {} url {} header {:?} body {:?}, request addr {}, from {} @ {}",
+            request.method(),
+            request.uri(),
+            request.headers(),
+            request.body(),
+            local_addr,
+            remote_addr,
+            gateway_name
+        );
+    } else if log::level_enabled!(log::Level::DEBUG) {
+        log::debug!(
+            "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
+            request.method(),
+            request.uri(),
+            local_addr,
+            remote_addr,
+            gateway_name
+        );
+    } else {
+        log::info!("[SG.Route] Request <= {} {} , from {}", request.method(), request.uri(), remote_addr);
     }
-    log::info!("[SG.server] Request <= {} {}", request.method(), request.uri());
-    log::debug!(
-        "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
-        request.method(),
-        request.uri(),
-        local_addr,
-        remote_addr,
-        gateway_name
-    );
+
     let gateway_inst = get(&gateway_name)?;
     if !match_listeners_hostname_and_port(request.uri().host(), local_addr.port(), &gateway_inst.listeners) {
         log::trace!("[SG.Route] Request hostname {} not match", request.uri().host().expect(""));
@@ -355,7 +371,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
     )
     .await?;
 
-    let ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
+    let mut ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
         ctx
     } else {
         let rule_timeout = if let Some(matched_rule_inst) = matched_rule_inst {
@@ -371,6 +387,26 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 
         http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
+
+    if log::level_enabled!(log::Level::TRACE) {
+        let code = *ctx.response.get_status_code_raw();
+        let body = ctx.response.take_body();
+        log::trace!(
+            "[SG.Route] Backend response: {} <= url {} header {:?} body {:?}",
+            code,
+            ctx.request.get_uri(),
+            ctx.response.get_headers(),
+            body,
+        );
+        ctx.response.set_body(body);
+    } else if log::level_enabled!(log::Level::DEBUG) {
+        log::debug!(
+            "[SG.Route] Backend response: {} <= url {} header {:?}",
+            ctx.response.get_status_code_raw().clone(),
+            ctx.request.get_uri(),
+            ctx.response.get_headers(),
+        );
+    }
 
     let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
 
@@ -395,7 +431,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 /// 3. Unspecified domain match: "*" -> Handles any hostname not matched by the above rules
 fn match_route_process<'a>(req: &Request<Body>, routes: &'a [SgHttpRouteInst]) -> (Option<&'a SgHttpRouteInst>, Option<&'a SgHttpRouteRuleInst>, Option<&'a SgHttpRouteMatchInst>) {
     let (highest, second, lowest) = match_route_insts_with_hostname_priority(req.uri().host(), routes);
-    let matched_hostname_route_priorities = vec![highest, second, lowest];
+    let matched_hostname_route_priorities = [highest, second, lowest];
 
     let mut matched_route_inst = None;
     let mut matched_rule_inst = None;
@@ -468,18 +504,27 @@ fn match_route_insts_with_hostname_priority<'a>(
                     highest_priority_route.push(route_inst);
                 } else {
                     //start fuzzy match
-                    if hostnames.iter().any(|hostname| hostname == &"*".to_string()) {
+                    if hostnames.iter().any(|hostname| hostname == "*") {
                         // hostname = * ,equal to No Hostname specified , lowest priority
                         matched_route_by_no_set.push(route_inst);
                         continue;
                     }
-                    let req_host_item = req_host.split('.').collect::<Vec<&str>>();
                     if hostnames.iter().any(|hostname| {
-                        let hostname_item = hostname.split('.').collect::<Vec<&str>>();
-                        if hostname_item.len() == req_host_item.len() {
-                            hostname_item.iter().zip(req_host_item.iter()).all(|(hostname_item, req_host_item)| hostname_item == req_host_item || hostname_item == &"*")
-                        } else {
-                            false
+                        let mut req_host_item = req_host.split('.');
+                        let mut hostname_item = hostname.split('.');
+                        loop {
+                            let next_req_host_item = req_host_item.next();
+                            let next_hostname_item = hostname_item.next();
+                            match (next_req_host_item, next_hostname_item) {
+                                (Some(_), Some("*")) => {}
+                                (Some(req_host_item), Some(hostname_item)) => {
+                                    if req_host_item != hostname_item {
+                                        break false;
+                                    }
+                                }
+                                (None, None) => break true,
+                                _ => break false,
+                            }
                         }
                     }) {
                         // Fuzzy match, the second priority
@@ -501,7 +546,7 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
     if let Some(matches) = rule_matches {
         for rule_match in matches {
             if let Some(method) = &rule_match.method {
-                if !method.contains(&req.method().as_str().to_lowercase()) {
+                if !method.contains(req.method()) {
                     continue;
                 }
             }
@@ -559,27 +604,19 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
             }
             if let Some(queries) = &rule_match.query {
                 let matched = queries.iter().all(|query| {
-                    if let Some(Some(req_query_value)) = req.uri().query().map(|q| {
+                    if let Some(q) = req.uri().query() {
                         let q = urlencoding::decode(q).expect("[SG.Route] urlencoding decode error");
-                        let q = q.as_ref().split('&').collect_vec();
-                        q.into_iter().map(|item| item.split('=').collect_vec()).find(|item| item.len() == 2 && item[0] == query.name).map(|item| item[1].to_string())
-                    }) {
-                        match query.kind {
-                            SgHttpQueryMatchType::Exact => {
-                                if req_query_value != query.value {
-                                    return false;
-                                }
+                        if let Some(v) = q.as_ref().split('&').filter_map(|item| item.split_once('=')).find_map(|(k, v)| (k == query.name).then_some(v)) {
+                            match query.kind {
+                                SgHttpQueryMatchType::Exact => v == query.value,
+                                SgHttpQueryMatchType::Regular => query.regular.as_ref().expect("[SG.Route] query regular is None").is_match(v),
                             }
-                            SgHttpQueryMatchType::Regular => {
-                                if !&query.regular.as_ref().expect("[SG.Route] query regular is None").is_match(&req_query_value) {
-                                    return false;
-                                }
-                            }
+                        } else {
+                            false
                         }
                     } else {
-                        return false;
+                        false
                     }
-                    true
                 });
                 if !matched {
                     continue;
@@ -595,23 +632,19 @@ fn match_rule_inst<'a>(req: &Request<Body>, rule_matches: Option<&'a Vec<SgHttpR
 
 fn match_listeners_hostname_and_port(hostname: Option<&str>, port: u16, listeners: &[SgListener]) -> bool {
     if let Some(hostname) = hostname {
-        listeners
-            .iter()
-            .filter(|listener| {
-                (if let Some(listener_hostname) = listener.hostname.clone() {
-                    if listener_hostname == *hostname {
-                        true
-                    } else if let Some(stripped) = listener_hostname.strip_prefix("*.") {
-                        hostname.ends_with(stripped) && hostname != stripped
-                    } else {
-                        false
-                    }
-                } else {
+        listeners.iter().any(|listener| {
+            (if let Some(listener_hostname) = listener.hostname.clone() {
+                if listener_hostname == *hostname {
                     true
-                }) && listener.port == port
-            })
-            .count()
-            > 0
+                } else if let Some(stripped) = listener_hostname.strip_prefix("*.") {
+                    hostname.ends_with(stripped) && hostname != stripped
+                } else {
+                    false
+                }
+            } else {
+                true
+            }) && listener.port == port
+        })
     } else {
         true
     }
@@ -913,12 +946,12 @@ mod tests {
         // -----------------------------------------------------
         // Match method
         let match_conds = vec![SgHttpRouteMatchInst {
-            method: Some(vec!["get".to_string()]),
+            method: Some(vec![Method::GET]),
             ..Default::default()
         }];
         assert!(
             !match_rule_inst(
-                &Request::builder().method("post").uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
+                &Request::builder().method(Method::POST).uri("https://sg.idealworld.group/").body(Body::empty()).unwrap(),
                 Some(&match_conds)
             )
             .0
@@ -1098,7 +1131,7 @@ mod tests {
         // Match multiple
         let match_conds = vec![
             SgHttpRouteMatchInst {
-                method: Some(vec!["put".to_string()]),
+                method: Some(vec![Method::PUT]),
                 query: Some(vec![SgHttpQueryMatchInst {
                     kind: SgHttpQueryMatchType::Regular,
                     name: "id".to_string(),
@@ -1108,7 +1141,7 @@ mod tests {
                 ..Default::default()
             },
             SgHttpRouteMatchInst {
-                method: Some(vec!["post".to_string()]),
+                method: Some(vec![Method::POST]),
                 ..Default::default()
             },
         ];
@@ -1128,18 +1161,12 @@ mod tests {
         );
         assert!(
             match_rule_inst(
-                &Request::builder().method(Method::from_bytes("put".as_bytes()).unwrap()).uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
+                &Request::builder().method(Method::PUT).uri("https://sg.idealworld.group/?id=idadef").body(Body::empty()).unwrap(),
                 Some(&match_conds)
             )
             .0
         );
-        assert!(
-            match_rule_inst(
-                &Request::builder().method(Method::from_bytes("post".as_bytes()).unwrap()).uri("https://any").body(Body::empty()).unwrap(),
-                Some(&match_conds)
-            )
-            .0
-        );
+        assert!(match_rule_inst(&Request::builder().method(Method::POST).uri("https://any").body(Body::empty()).unwrap(), Some(&match_conds)).0);
     }
 
     #[test]

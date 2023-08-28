@@ -14,6 +14,11 @@
 //!
 //! If the priority field is not present in an httproute, its priority will be default to 0, and the default priority
 //! will be determined based on the creation order (earlier routes will have higher priority).
+//!
+//! Note: Trace-level logs will print the contents of both the request and response bodies,
+//! potentially causing significant performance overhead. It is recommended to use debug level
+//! logs at most.
+
 #![warn(clippy::unwrap_used)]
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};

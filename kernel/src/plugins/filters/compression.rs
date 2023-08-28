@@ -91,7 +91,11 @@ impl SgPluginFilter for SgFilterCompression {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
+        let desired_response_encoding = get_encode_type(ctx.request.get_headers_raw().get(header::ACCEPT_ENCODING));
+        if let Some(encode) = desired_response_encoding {
+            ctx.request.set_header(header::ACCEPT_ENCODING, encode.into())?;
+        }
         Ok((true, ctx))
     }
 
@@ -106,13 +110,14 @@ impl SgPluginFilter for SgFilterCompression {
         }
         if let Some(desired_response_encoding) = &desired_response_encoding {
             match desired_response_encoding {
-                CompressionType::Gzip => ctx.response.set_header(header::CONTENT_ENCODING.as_str(), CompressionType::Gzip.into())?,
-                CompressionType::Deflate => ctx.response.set_header(header::CONTENT_ENCODING.as_str(), CompressionType::Deflate.into())?,
-                CompressionType::Br => ctx.response.set_header(header::CONTENT_ENCODING.as_str(), CompressionType::Br.into())?,
+                CompressionType::Gzip => ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Gzip.into())?,
+                CompressionType::Deflate => ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Deflate.into())?,
+                CompressionType::Br => ctx.response.set_header(header::CONTENT_ENCODING, CompressionType::Br.into())?,
             }
         }
         let mut body = ctx.response.take_body();
         body = if let Some(resp_encode_type) = resp_encode_type {
+            ctx.response.remove_header(header::CONTENT_LENGTH)?;
             let bytes_reader = StreamReader::new(body.map_err(convert_error));
             let mut read_stream: Pin<Box<dyn tardis::tokio::io::AsyncRead + Send>> = match resp_encode_type {
                 CompressionType::Gzip => Box::pin(GzipDecoder::new(bytes_reader)),
@@ -128,6 +133,7 @@ impl SgPluginFilter for SgFilterCompression {
             }
             Body::wrap_stream(ReaderStream::new(read_stream))
         } else if let Some(desired_response_encoding) = desired_response_encoding {
+            ctx.response.remove_header(header::CONTENT_LENGTH)?;
             let bytes_reader = StreamReader::new(body.map_err(convert_error));
             match desired_response_encoding {
                 CompressionType::Gzip => Body::wrap_stream(ReaderStream::new(GzipEncoder::new(bytes_reader))),
@@ -138,7 +144,9 @@ impl SgPluginFilter for SgFilterCompression {
             body
         };
 
-        let _ = ctx.response.replace_body(body);
+        ctx.response.set_body(body);
+        // let body = ctx.response.dump_body().await?;
+        // dbg!(body);
         Ok((true, ctx))
     }
 }

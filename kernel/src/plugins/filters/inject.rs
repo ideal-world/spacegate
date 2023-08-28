@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use http::Method;
+use http::{HeaderName, Method};
 use serde::{Deserialize, Serialize};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -29,8 +29,11 @@ pub struct SgFilterInject {
     pub resp_timeout_ms: Option<u64>,
 }
 
-const SG_INJECT_REAL_METHOD: &str = "Sg_Inject_Real_Method";
-const SG_INJECT_REAL_URL: &str = "Sg_Inject_Real_Url";
+// those headers interior mutable
+#[allow(clippy::declare_interior_mutable_const)]
+const SG_INJECT_REAL_METHOD: HeaderName = HeaderName::from_static("sg-inject-real-method");
+#[allow(clippy::declare_interior_mutable_const)]
+const SG_INJECT_REAL_URL: HeaderName = HeaderName::from_static("sg-inject-real-url");
 
 #[async_trait]
 impl SgPluginFilter for SgFilterInject {
@@ -149,7 +152,7 @@ mod tests {
         assert!(body.contains(r#""url": "https://postman-echo.com/put""#));
         assert!(body.contains(r#""data": "理想世界""#));
 
-        let _ = ctx.response.replace_body("idealworld");
+        ctx.response.set_body("idealworld");
         let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.response.get_status_code(), &StatusCode::OK);

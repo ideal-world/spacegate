@@ -227,9 +227,17 @@ impl SgCtxRequest {
         self.headers.set(req_headers)
     }
 
-    pub fn set_header(&mut self, key: &str, value: &str) -> TardisResult<()> {
+    pub fn set_header_str(&mut self, key: &str, value: &str) -> TardisResult<()> {
         self.get_headers_mut().insert(
             HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
+            HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
+        );
+        Ok(())
+    }
+
+    pub fn set_header(&mut self, key: HeaderName, value: &str) -> TardisResult<()> {
+        self.get_headers_mut().insert(
+            key,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
         );
         Ok(())
@@ -251,6 +259,11 @@ impl SgCtxRequest {
         std::mem::replace(&mut self.body, body.into())
     }
 
+    #[inline]
+    pub fn set_body(&mut self, body: impl Into<Body>) {
+        let _ = self.replace_body(body);
+    }
+
     /// it's a shortcut for [take_body](SgCtxRequest) + [hyper::body::to_bytes]
     pub async fn take_body_into_bytes(&mut self) -> TardisResult<hyper::body::Bytes> {
         let bytes = hyper::body::to_bytes(self.take_body()).await.map_err(|e| TardisError::format_error(&format!("[SG.Filter] fail to collect body into bytes: {e}"), ""))?;
@@ -267,7 +280,7 @@ impl SgCtxRequest {
     /// this method will read all of the body and clone it, and it's body will become an once stream which holds the whole body.
     pub async fn dump_body(&mut self) -> TardisResult<hyper::body::Bytes> {
         let bytes = self.take_body_into_bytes().await?;
-        let _ = self.replace_body(bytes.clone());
+        self.set_body(bytes.clone());
         Ok(bytes)
     }
 }
@@ -330,7 +343,7 @@ impl SgCtxResponse {
         self.headers.set(req_headers)
     }
 
-    pub fn set_header(&mut self, key: &str, value: &str) -> TardisResult<()> {
+    pub fn set_header_str(&mut self, key: &str, value: &str) -> TardisResult<()> {
         self.get_headers_mut().insert(
             HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?,
             HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
@@ -338,7 +351,22 @@ impl SgCtxResponse {
         Ok(())
     }
 
-    pub fn remove_header(&mut self, key: &str) -> TardisResult<()> {
+    pub fn set_header(&mut self, key: HeaderName, value: &str) -> TardisResult<()> {
+        self.get_headers_mut().insert(
+            key,
+            HeaderValue::try_from(value).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header value {value} parsing error: {error}"), ""))?,
+        );
+        Ok(())
+    }
+
+    pub fn remove_header(&mut self, key: HeaderName) -> TardisResult<()> {
+        if let Some(headers) = self.headers.get_modified_mut() {
+            headers.remove(key);
+        }
+        Ok(())
+    }
+
+    pub fn remove_header_str(&mut self, key: &str) -> TardisResult<()> {
         if let Some(headers) = self.headers.get_modified_mut() {
             headers.remove(HeaderName::try_from(key).map_err(|error| TardisError::format_error(&format!("[SG.Filter] Header key {key} parsing error: {error}"), ""))?);
         }
@@ -353,6 +381,11 @@ impl SgCtxResponse {
     #[inline]
     pub fn replace_body(&mut self, body: impl Into<Body>) -> Body {
         std::mem::replace(&mut self.body, body.into())
+    }
+
+    #[inline]
+    pub fn set_body(&mut self, body: impl Into<Body>) {
+        let _ = self.replace_body(body);
     }
 
     /// it's a shortcut for [take_body](SgCtxResponse) + [hyper::body::to_bytes]
@@ -371,7 +404,7 @@ impl SgCtxResponse {
     /// This method will read **all** of the body and **clone** it, and it's body will become an once stream which holds the whole body.
     pub async fn dump_body(&mut self) -> TardisResult<hyper::body::Bytes> {
         let bytes = self.take_body_into_bytes().await?;
-        let _ = self.replace_body(bytes.clone());
+        self.set_body(bytes.clone());
         Ok(bytes)
     }
 }

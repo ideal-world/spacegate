@@ -66,7 +66,7 @@ impl SgPluginFilter for SgFilterMaintenance {
             if content_type.contains(&"text/html") || accept_type.contains(&"text/html") {
                 let title = self.title.clone();
                 let msg = self.msg.clone().replace("/n", "<br>");
-                ctx.response.set_header(header::CONTENT_TYPE.as_ref(), "text/html")?;
+                ctx.response.set_header(header::CONTENT_TYPE, "text/html")?;
                 let body = format!(
                     r##"<!DOCTYPE html>
                 <html>
@@ -107,12 +107,12 @@ impl SgPluginFilter for SgFilterMaintenance {
                 </html>
                 "##
                 );
-                let _ = ctx.response.replace_body(body);
+                ctx.response.set_body(body);
             } else if content_type.contains(&"application/json") || accept_type.contains(&"application/json") {
                 let msg = self.msg.clone();
                 return Err(TardisError::forbidden(&msg, ""));
             } else {
-                let _ = ctx.response.replace_body("<h1>Maintenance</h1>");
+                ctx.response.set_body("<h1>Maintenance</h1>");
             }
         }
         Ok((true, ctx))

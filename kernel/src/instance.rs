@@ -6,6 +6,7 @@ use crate::{
     plugins::filters::BoxSgPluginFilter,
 };
 
+use http::Method;
 use hyper::{client::HttpConnector, Client};
 use hyper_rustls::HttpsConnector;
 
@@ -78,7 +79,8 @@ pub struct SgHttpRouteMatchInst {
     pub path: Option<SgHttpPathMatchInst>,
     pub header: Option<Vec<SgHttpHeaderMatchInst>>,
     pub query: Option<Vec<SgHttpQueryMatchInst>>,
-    pub method: Option<Vec<String>>,
+    // here method should be Method
+    pub method: Option<Vec<Method>>,
 }
 
 impl fmt::Display for SgHttpRouteMatchInst {
