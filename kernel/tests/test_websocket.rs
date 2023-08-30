@@ -16,6 +16,7 @@ use spacegate_kernel::config::{
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
 use tardis::web::web_server::WebServerModule;
+use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
     basic::result::TardisResult,
     config::config_dto::{CacheConfig, DBConfig, FrameworkConfig, MQConfig, MailConfig, OSConfig, SearchConfig, TardisConfig, WebServerConfig},
@@ -32,7 +33,6 @@ use tardis::{
     },
     TardisFuns,
 };
-use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 
 lazy_static! {
     static ref SENDERS: Arc<RwLock<HashMap<String, Sender<TardisWebsocketMgrMessage>>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -315,7 +315,8 @@ impl WsApi {
                     })
                 },
                 |_, _| async move {},
-            ).await
+            )
+            .await
         } else if group.0 == "g2" {
             ws_broadcast(
                 vec![name.0],
@@ -336,7 +337,8 @@ impl WsApi {
                     })
                 },
                 |_, _| async move {},
-            ).await
+            )
+            .await
         } else if group.0 == "gerror" {
             ws_broadcast(
                 vec![name.0],
@@ -350,7 +352,8 @@ impl WsApi {
                     None
                 },
                 |_, _| async move {},
-            ).await
+            )
+            .await
         } else {
             ws_echo(
                 name.0,
