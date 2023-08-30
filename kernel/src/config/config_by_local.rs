@@ -17,7 +17,7 @@ lazy_static! {
 }
 
 pub async fn init(conf_path: &str, check_interval_sec: u64) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
-    let gateway_config_path = format!("{conf_path}/gateway.yaml");
+    let gateway_config_path = format!("{conf_path}/gateway.json");
     let routes_config_path = format!("{conf_path}/routes");
 
     let (config, _, _) = fetch_configs(&gateway_config_path, &routes_config_path).await?;
@@ -72,7 +72,9 @@ async fn fetch_configs(gateway_config_path: &str, routes_config_path: &str) -> T
     *md5_cache = (gateway_config_md5, routes_config_md5);
 
     if gateway_config_changed || http_route_configs_changed {
-        let gateway_config = tardis::TardisFuns::json.str_to_obj::<SgGateway>(&gateway_config_content)?;
+        let gateway_config = tardis::TardisFuns::json
+            .str_to_obj::<SgGateway>(&gateway_config_content)
+            .map_err(|e| TardisError::internal_error(&format!("[SG.Config] parse gateway config error: {e}"), ""))?;
         let http_route_configs = routes_config_content
             .iter()
             .map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(v).map_err(|e| TardisError::internal_error(&format!("[SG.Config] parse route config error: {e}"), "")))
