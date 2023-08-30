@@ -1,0 +1,23 @@
+{
+  "gateway_name": "gateway",
+  "rules": [
+    {
+      "matches": [
+        {
+          "path": {
+            "kind": "prefix",
+            "value": "/"
+          }
+        }
+      ],
+      "backends": [
+        {
+          "name_or_host": "www.google.com",
+          "port": 80,
+          "protocol": "http",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}
