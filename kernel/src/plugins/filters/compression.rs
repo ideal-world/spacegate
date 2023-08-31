@@ -257,6 +257,7 @@ mod tests {
         let mut decode = GzipDecoder::new(BufReader::new(&*resp_body));
         let mut encoder_body = vec![];
         let _ = decode.read_to_end(&mut encoder_body).await;
+        // unsafe in test would be ok
         unsafe {
             let body = String::from_utf8_unchecked(encoder_body);
             assert_eq!(&body, body_str);
