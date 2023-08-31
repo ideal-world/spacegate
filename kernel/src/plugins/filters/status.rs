@@ -126,16 +126,16 @@ impl SgPluginFilter for SgFilterStatus {
         });
         (*shutdown).insert(self.port, (shutdown_tx, join));
 
-        let cache_client = cache_client::get(&init_dto.gateway_name)?;
+        let cache_client = cache_client::get(&init_dto.gateway_name).await?;
 
-        clean_status(&get_cache_key(&self.cache_key, &init_dto.gateway_name), cache_client).await?;
+        clean_status(&get_cache_key(&self.cache_key, &init_dto.gateway_name), &cache_client).await?;
         for http_route_rule in init_dto.http_route_rules.clone() {
             if let Some(backends) = &http_route_rule.backends {
                 for backend in backends {
                     update_status(
                         &backend.name_or_host,
                         &get_cache_key(&self.cache_key, &init_dto.gateway_name),
-                        cache_client,
+                        &cache_client,
                         status_plugin::Status::default(),
                     )
                     .await?;
@@ -172,7 +172,7 @@ impl SgPluginFilter for SgFilterStatus {
                             update_status(
                                 &backend_name,
                                 &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                                ctx.cache()?,
+                                ctx.cache().await?,
                                 status_plugin::Status::Major,
                             )
                             .await?;
@@ -180,7 +180,7 @@ impl SgPluginFilter for SgFilterStatus {
                             update_status(
                                 &backend_name,
                                 &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                                ctx.cache()?,
+                                ctx.cache().await?,
                                 status_plugin::Status::Minor,
                             )
                             .await?;
@@ -194,18 +194,18 @@ impl SgPluginFilter for SgFilterStatus {
                     update_status(
                         &backend_name,
                         &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                        ctx.cache()?,
+                        ctx.cache().await?,
                         status_plugin::Status::Minor,
                     )
                     .await?;
                     server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
                 }
-            } else if let Some(status) = get_status(&backend_name, &get_cache_key(&self.cache_key, &ctx.get_gateway_name()), ctx.cache()?).await? {
+            } else if let Some(status) = get_status(&backend_name, &get_cache_key(&self.cache_key, &ctx.get_gateway_name()), ctx.cache().await?).await? {
                 if status != status_plugin::Status::Good {
                     update_status(
                         &backend_name,
                         &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                        ctx.cache()?,
+                        ctx.cache().await?,
                         status_plugin::Status::Good,
                     )
                     .await?;
@@ -312,7 +312,7 @@ mod tests {
         let (is_ok, ctx) = stats.resp_filter("id1", ctx).await.unwrap();
         assert!(is_ok);
         assert_eq!(
-            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap(),
+            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap(),
             Status::Minor
         );
 
@@ -320,14 +320,14 @@ mod tests {
         let (_, ctx) = stats.resp_filter("id3", ctx).await.unwrap();
         let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
         assert_eq!(
-            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap(),
+            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap(),
             Status::Major
         );
 
         let ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), Body::empty());
         let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
         assert_eq!(
-            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap(),
+            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap(),
             Status::Good
         );
     }

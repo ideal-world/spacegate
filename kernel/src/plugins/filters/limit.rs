@@ -126,7 +126,7 @@ impl SgPluginFilter for SgFilterLimit {
                         .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Limit] invalid timestamp: {e}"), ""))?
                         .as_millis() as u64,
                 )
-                .invoke_async(&mut ctx.cache()?.cmd().await?)
+                .invoke_async(&mut ctx.cache().await?.cmd().await?)
                 .await
                 .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Limit] redis error : {e}"), ""))?;
             if !result {

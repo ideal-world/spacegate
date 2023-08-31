@@ -602,7 +602,7 @@ impl SgRoutePluginContext {
     }
 
     #[cfg(feature = "cache")]
-    pub fn cache(&self) -> TardisResult<&'static tardis::cache::cache_client::TardisCacheClient> {
-        crate::functions::cache_client::get(&self.gateway_name)
+    pub async fn cache(&self) -> TardisResult<std::sync::Arc<tardis::cache::cache_client::TardisCacheClient>> {
+        crate::functions::cache_client::get(&self.gateway_name).await
     }
 }

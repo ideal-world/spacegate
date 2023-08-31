@@ -33,12 +33,12 @@ pub(crate) async fn create_status_html(
     cache_key: Arc<Mutex<String>>,
     title: Arc<Mutex<String>>,
 ) -> Result<Response<Body>, hyper::Error> {
-    let cache_client = functions::cache_client::get(&gateway_name.lock().await).expect("get cache client error!");
+    let cache_client = functions::cache_client::get(&gateway_name.lock().await).await.expect("get cache client error!");
     let cache_key = cache_key.lock().await;
     let keys = cache_client.hkeys(&cache_key).await.expect("get cache keys error!");
     let mut service_html = "".to_string();
     for key in keys {
-        if let Some(status) = get_status(&key, &cache_key, cache_client).await.expect("") {
+        if let Some(status) = get_status(&key, &cache_key, &cache_client).await.expect("") {
             service_html.push_str(
                 format!(
                     r##"<div class="service">
@@ -58,13 +58,13 @@ pub(crate) async fn create_status_html(
     Ok(Response::new(Body::from(html)))
 }
 
-pub(crate) async fn update_status(server_name: &str, cache_key: &str, client: &TardisCacheClient, status: Status) -> TardisResult<()> {
-    client.hset(cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
+pub(crate) async fn update_status(server_name: &str, cache_key: &str, client: impl AsRef<TardisCacheClient>, status: Status) -> TardisResult<()> {
+    client.as_ref().hset(cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
     Ok(())
 }
 
-pub(crate) async fn get_status(server_name: &str, cache_key: &str, client: &TardisCacheClient) -> TardisResult<Option<Status>> {
-    match client.hget(cache_key, server_name).await? {
+pub(crate) async fn get_status(server_name: &str, cache_key: &str, client: impl AsRef<TardisCacheClient>) -> TardisResult<Option<Status>> {
+    match client.as_ref().hget(cache_key, server_name).await? {
         Some(result) => Ok(Some(TardisFuns::json.str_to_obj(&result)?)),
         None => Ok(None),
     }
