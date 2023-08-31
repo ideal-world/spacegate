@@ -7,7 +7,6 @@ pub mod maintenance;
 pub mod redirect;
 pub mod retry;
 pub mod rewrite;
-#[cfg(feature = "cache")]
 pub mod status;
 use async_trait::async_trait;
 
@@ -38,7 +37,6 @@ fn init_filter_defs() {
     #[cfg(feature = "cache")]
     filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilterLimitDef));
     filters.insert(compression::CODE.to_string(), Box::new(compression::SgFilterCompressionDef));
-    #[cfg(feature = "cache")]
     filters.insert(status::CODE.to_string(), Box::new(status::SgFilterStatusDef));
     filters.insert(maintenance::CODE.to_string(), Box::new(maintenance::SgFilterMaintenanceDef));
     filters.insert(retry::CODE.to_string(), Box::new(retry::SgFilterRetryDef));
@@ -234,7 +232,6 @@ impl fmt::Display for SgAttachedLevel {
 }
 
 /// Encapsulation filter initialization parameters.
-///
 #[derive(Debug, Clone)]
 pub struct SgPluginFilterInitDto {
     pub gateway_name: String,
@@ -244,6 +241,7 @@ pub struct SgPluginFilterInitDto {
     /// Identifies the level to which the filter is attached
     pub attached_level: SgAttachedLevel,
 }
+
 impl SgPluginFilterInitDto {
     pub fn from_global(gateway_conf: &SgGateway, routes: &[SgHttpRoute]) -> Self {
         Self {
