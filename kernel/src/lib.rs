@@ -104,5 +104,5 @@ pub fn register_filter_def(filter_def: impl SgPluginFilterDef + 'static) {
 
 #[inline]
 pub fn register_filter_def_boxed(filter_def: Box<dyn SgPluginFilterDef>) {
-    filters::register_filter_def(filter_def.get_code(), filter_def)
+    filters::register_filter_def(filter_def.get_code().to_string(), filter_def)
 }
