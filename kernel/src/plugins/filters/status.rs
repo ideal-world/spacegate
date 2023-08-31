@@ -312,7 +312,14 @@ mod tests {
         let (is_ok, ctx) = stats.resp_filter("id1", ctx).await.unwrap();
         assert!(is_ok);
         assert_eq!(
-            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap(),
+            get_status(
+                &mock_backend.name_or_host,
+                &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()),
+                ctx.cache().await.unwrap()
+            )
+            .await
+            .unwrap()
+            .unwrap(),
             Status::Minor
         );
 
@@ -320,14 +327,28 @@ mod tests {
         let (_, ctx) = stats.resp_filter("id3", ctx).await.unwrap();
         let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
         assert_eq!(
-            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap(),
+            get_status(
+                &mock_backend.name_or_host,
+                &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()),
+                ctx.cache().await.unwrap()
+            )
+            .await
+            .unwrap()
+            .unwrap(),
             Status::Major
         );
 
         let ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), Body::empty());
         let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
         assert_eq!(
-            get_status(&mock_backend.name_or_host, &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap(),
+            get_status(
+                &mock_backend.name_or_host,
+                &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()),
+                ctx.cache().await.unwrap()
+            )
+            .await
+            .unwrap()
+            .unwrap(),
             Status::Good
         );
     }

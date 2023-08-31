@@ -1,8 +1,12 @@
-use std::{collections::HashMap, sync::{OnceLock, Arc}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, OnceLock},
+};
 
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
-    cache::cache_client::TardisCacheClient, tokio::sync::RwLock,
+    cache::cache_client::TardisCacheClient,
+    tokio::sync::RwLock,
 };
 
 pub fn cache_clients() -> &'static RwLock<HashMap<String, Arc<TardisCacheClient>>> {
