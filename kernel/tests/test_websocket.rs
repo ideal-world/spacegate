@@ -16,6 +16,7 @@ use spacegate_kernel::config::{
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
 use tardis::web::web_server::WebServerModule;
+use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
     basic::result::TardisResult,
     config::config_dto::{CacheConfig, DBConfig, FrameworkConfig, MQConfig, MailConfig, OSConfig, SearchConfig, TardisConfig, WebServerConfig},
@@ -34,7 +35,7 @@ use tardis::{
 };
 
 lazy_static! {
-    static ref SENDERS: Arc<RwLock<HashMap<String, Sender<String>>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref SENDERS: Arc<RwLock<HashMap<String, Sender<TardisWebsocketMgrMessage>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
 #[tokio::test]
@@ -291,7 +292,7 @@ impl WsApi {
     #[oai(path = "/ws/broadcast/:group/:name", method = "get")]
     async fn ws_broadcast(&self, group: Path<String>, name: Path<String>, websocket: WebSocket) -> BoxWebSocketUpgraded {
         if !SENDERS.read().await.contains_key(&group.0) {
-            SENDERS.write().await.insert(group.0.clone(), tokio::sync::broadcast::channel::<String>(100).0);
+            SENDERS.write().await.insert(group.0.clone(), tokio::sync::broadcast::channel::<TardisWebsocketMgrMessage>(100).0);
         }
         let sender = SENDERS.read().await.get(&group.0).unwrap().clone();
         if group.0 == "g1" {
@@ -315,6 +316,7 @@ impl WsApi {
                 },
                 |_, _| async move {},
             )
+            .await
         } else if group.0 == "g2" {
             ws_broadcast(
                 vec![name.0],
@@ -336,6 +338,7 @@ impl WsApi {
                 },
                 |_, _| async move {},
             )
+            .await
         } else if group.0 == "gerror" {
             ws_broadcast(
                 vec![name.0],
@@ -350,6 +353,7 @@ impl WsApi {
                 },
                 |_, _| async move {},
             )
+            .await
         } else {
             ws_echo(
                 name.0,
