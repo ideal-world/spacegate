@@ -205,6 +205,8 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
 }
 
 // TODO
+/// The SgPluginFilterKind enum is used to represent the types of plugins
+/// supported by Spacegate or to identify the type of the current request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SgPluginFilterKind {
     Http,
@@ -212,6 +214,8 @@ pub enum SgPluginFilterKind {
     Ws,
 }
 
+/// The SgAttachedLevel enum is used to represent the levels at which a plugin
+/// can be attached within
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SgAttachedLevel {
     Gateway,

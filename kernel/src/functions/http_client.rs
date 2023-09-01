@@ -134,13 +134,15 @@ mod tests {
         instance::SgBackendInst,
         plugins::context::SgRoutePluginContext,
     };
+    use hyper::{client::HttpConnector, Client};
+    use hyper_rustls::HttpsConnector;
 
     #[tokio::test]
     async fn test_request() -> TardisResult<()> {
         let client = init().unwrap();
 
         // test simple
-        let mut resp = request(
+        let mut resp = retry_test_request(
             &client,
             Some(&SgBackendInst {
                 name_or_host: "www.baidu.com".to_string(),
@@ -166,7 +168,7 @@ mod tests {
         assert!(body.contains("百度一下"));
 
         // test get
-        let mut resp = request(
+        let mut resp = retry_test_request(
             &client,
             Some(&SgBackendInst {
                 name_or_host: "httpbin.org".to_string(),
@@ -192,7 +194,7 @@ mod tests {
         assert!(body.contains(r#""url": "http://httpbin.org/get?foo1=bar1&foo2=bar2""#));
 
         // test post with tls
-        let mut resp = request(
+        let mut resp = retry_test_request(
             &client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
@@ -220,7 +222,7 @@ mod tests {
         assert!(body.contains(r#""data": "星航""#));
 
         // test timeout
-        let mut resp = request(
+        let mut resp = retry_test_request(
             &client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
@@ -244,7 +246,7 @@ mod tests {
         .unwrap();
         assert_eq!(resp.response.get_status_code().as_u16(), 504);
 
-        let mut resp = request(
+        let mut resp = retry_test_request(
             &client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
@@ -272,7 +274,7 @@ mod tests {
         assert!(body.contains(r#""url": "https://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         // test redirect
-        let mut resp = request(
+        let mut resp = retry_test_request(
             &client,
             None,
             Some(20000),
@@ -295,5 +297,24 @@ mod tests {
         assert!(body.contains(r#""url": "https://postman-echo.com/get?foo1=bar1&foo2=bar2""#));
 
         Ok(())
+    }
+
+    // Because this unit test depends on the external url,
+    // it may be due to the failure of the external url, so add retry
+    async fn retry_test_request(
+        client: &Client<HttpsConnector<HttpConnector>>,
+        backend: Option<&SgBackendInst>,
+        rule_timeout_ms: Option<u64>,
+        redirect: bool,
+        mut ctx: SgRoutePluginContext,
+    ) -> TardisResult<SgRoutePluginContext> {
+        let clone_body = ctx.request.dump_body().await?;
+        let mut clone_ctx = ctx.clone();
+        clone_ctx.request.set_body(clone_body);
+        let mut result = request(client, backend, rule_timeout_ms, redirect, ctx).await?;
+        if !result.response.get_status_code().is_success() {
+            result = request(client, backend, rule_timeout_ms, redirect, clone_ctx).await?;
+        }
+        Ok(result)
     }
 }
