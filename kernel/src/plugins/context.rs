@@ -157,8 +157,6 @@ pub struct SgCtxRequest {
     pub remote_addr: SocketAddr,
 }
 
-
-
 impl SgCtxRequest {
     pub fn new(method: Method, uri: Uri, version: Version, headers: HeaderMap<HeaderValue>, body: Body, remote_addr: SocketAddr) -> Self {
         Self {
@@ -436,7 +434,8 @@ impl Clone for SgCtxResponse {
             headers: self.headers.clone(),
             resp_err: self.resp_err.clone(),
         }
-    }}
+    }
+}
 
 impl Default for SgCtxResponse {
     fn default() -> Self {
