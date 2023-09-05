@@ -186,7 +186,9 @@ async fn process(
             } else if log::level_enabled!(log::Level::DEBUG) {
                 log::debug!("[SG.server] Response: code {} => {} {} headers {:?} ", resp.status(), method, uri, resp.headers(),);
             } else {
-                log::info!("[SG.server] Response: code {} => {} {}", resp.status(), method, uri);
+                if !resp.status().is_success() {
+                    log::info!("[SG.server] Response: code {} => {} {}", resp.status(), method, uri);
+                }
             }
         }
         Err(e) => log::warn!("[SG.server] Response: error {} => {} {}", e.message(), method, uri),

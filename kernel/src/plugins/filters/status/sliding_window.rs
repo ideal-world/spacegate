@@ -314,7 +314,7 @@ mod tests {
             )
         }
 
-        let mut test = SlidingWindowCounter::new(Duration::seconds(60), "");
+        let test = SlidingWindowCounter::new(Duration::seconds(60), "");
 
         assert_eq!(
             test.add_and_count(DateTime::parse_from_rfc3339("2000-01-01T01:00:50.100Z").unwrap().into(), &new_ctx()).await.unwrap(),

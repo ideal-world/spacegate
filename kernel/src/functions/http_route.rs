@@ -12,7 +12,7 @@ use crate::{
         filters::{self, BoxSgPluginFilter, SgPluginFilterInitDto},
     },
 };
-use http::{header::UPGRADE, Request, Response};
+use http::{header::UPGRADE, HeaderValue, Request, Response};
 use hyper::{Body, StatusCode};
 
 use itertools::Itertools;
@@ -283,9 +283,9 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
             remote_addr,
             gateway_name
         );
-    } else {
-        log::info!("[SG.Route] Request <= {} {} , from {}", request.method(), request.uri(), remote_addr);
     }
+
+    process_request_headers(&mut request, remote_addr)?;
 
     let gateway_inst = get(&gateway_name)?;
     if !match_listeners_hostname_and_port(request.uri().host(), local_addr.port(), &gateway_inst.listeners) {
@@ -413,6 +413,25 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
     ctx.build_response().await
 }
 
+fn process_request_headers(request: &mut Request<Body>, remote_addr: SocketAddr) -> TardisResult<()> {
+    const X_FORWARDED_FOR: &str = "X-Forwarded-For";
+    let real_ip = remote_addr.ip().to_string();
+    let forwarded_for = match request.headers().get(X_FORWARDED_FOR) {
+        Some(forwarded) => {
+            format!(
+                "{},{}",
+                forwarded.to_str().map_err(|e| TardisError::bad_gateway(&format!("[SG.ProcessRequestHeaders] X-Forwarded-For header value parse err {e}"), ""))?,
+                real_ip
+            )
+        }
+        None => real_ip,
+    };
+    request.headers_mut().insert(
+        X_FORWARDED_FOR,
+        HeaderValue::from_str(&forwarded_for).map_err(|e| TardisError::bad_gateway(&format!("[SG.ProcessRequestHeaders] X-Forwarded-For header value parse err {e}"), ""))?,
+    );
+    Ok(())
+}
 /// Match route by SgHttpRouteInst list
 /// First, we perform route matching based on the hostname. Hostname matching can fall into three categories:
 /// exact domain name match, wildcard domain match, and unspecified domain name match.
