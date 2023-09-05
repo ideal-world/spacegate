@@ -1,3 +1,6 @@
+#[cfg(feature = "cache")]
+use crate::plugins::context::SgRoutePluginContext;
+#[cfg(feature = "cache")]
 use lazy_static::lazy_static;
 use tardis::basic::{error::TardisError, result::TardisResult};
 #[cfg(feature = "cache")]
@@ -5,7 +8,7 @@ use tardis::cache::Script;
 use tardis::chrono::{DateTime, Duration, Utc};
 
 #[cfg(feature = "cache")]
-const CONF_WINDOW_KEY: &str = "sg:plugin:filter:window:key";
+pub(super) const DEFAULT_CONF_WINDOW_KEY: &str = "sg:plugin:filter:window:key";
 
 #[cfg(feature = "cache")]
 lazy_static! {
@@ -38,11 +41,11 @@ lazy_static! {
 
     -- Remove elements older than (now - window) at the given subdivision unit
     redis.call('ZREMRANGEBYSCORE', key, 0, (current_time - window_size))
-    
+
     -- Get number of requests in the current window
     local current_requests_count = redis.call('ZCARD', key)
 
-    redis.call('ZADD', key, member_score, now_microsec)
+    redis.call('ZADD', key, member_score, current_time)
 
     redis.call('PEXPIRE', key, window_expire_at)
 
@@ -51,24 +54,59 @@ lazy_static! {
     );
 }
 
-pub(crate) struct SlidingWindowCounter {
+/// # SlidingWindowCounter:
+///
+/// This is a sliding window counter that provides two implementations. When
+/// the 'cache features' option is enabled, it uses Redis for storage.
+/// When using the cache implementation, it can support the 'status' plugin to
+/// run in a distributed manner.
+/// The other implementation is memory-based, and it does not support distributed
+/// operation via the 'status' plugin.
+///
+/// ## Performance:
+/// - Redis Implementation: Adds and counts operations take milliseconds.
+/// - Memory Implementation: Adds and counts operations take nanoseconds.
+///
+///
+/// ## Note:
+/// - The Redis-based implementation is suitable for distributed systems
+/// and offers higher-level performance with millisecond-level accuracy.
+/// - The Memory-based implementation is more efficient in terms of performance
+/// but lacks distributed support and offers nanosecond-level accuracy.
+#[derive(Debug, Clone)]
+pub struct SlidingWindowCounter {
     window_size: Duration,
+    #[cfg(not(feature = "cache"))]
     data: Vec<Slot>,
-    // slot_num equal to data.len()
+    /// slot_num equal to data.len()
+    #[cfg(not(feature = "cache"))]
     slot_num: usize,
-    // milliseconds
+    /// milliseconds
+    #[cfg(not(feature = "cache"))]
     interval: i64,
-    // range: 0--(slot_num-1)
+    /// range: 0--(slot_num-1)
+    #[cfg(not(feature = "cache"))]
     start_slot: usize,
+    #[cfg(feature = "cache")]
+    window_key: String,
 }
 
 impl SlidingWindowCounter {
-    pub(crate) fn new(window_size: Duration, slot_num: usize) -> Self {
-        let interval = window_size.num_milliseconds() / slot_num as i64;
+    #[cfg(feature = "cache")]
+    pub fn new(window_size: Duration, window_key: &str) -> Self {
+        SlidingWindowCounter {
+            window_size,
+            window_key: window_key.to_string(),
+        }
+    }
+
+    #[cfg(not(feature = "cache"))]
+    pub fn new(window_size: Duration, _slot_num: usize) -> Self {
+        let interval = window_size.num_milliseconds() / _slot_num as i64;
         let mut result = SlidingWindowCounter {
             window_size,
-            data: vec![Slot::default(); slot_num],
-            slot_num,
+            data: vec![Slot::default(); _slot_num],
+            slot_num: _slot_num,
             interval,
             start_slot: 0,
         };
@@ -76,8 +114,9 @@ impl SlidingWindowCounter {
         result
     }
 
+    #[cfg(not(feature = "cache"))]
     /// Initialize the sliding window ,set start_slot 0
-    fn init(&mut self, now: DateTime<Utc>) {
+    pub fn init(&mut self, now: DateTime<Utc>) {
         let mut start_slot_time = now;
         for i in 0..self.slot_num {
             self.data[i] = Slot::new(start_slot_time);
@@ -86,7 +125,8 @@ impl SlidingWindowCounter {
         self.start_slot = 0;
     }
 
-    // move_idex range: 1--slot_num
+    #[cfg(not(feature = "cache"))]
+    // move_index range: 1--slot_num
     fn init_part(&mut self, move_index: i64) -> TardisResult<()> {
         if self.slot_num < move_index as usize {
             return Err(TardisError::bad_request("move index out of range", ""));
@@ -106,7 +146,8 @@ impl SlidingWindowCounter {
         Ok(())
     }
 
-    pub(crate) fn add_one(&mut self, now: DateTime<Utc>) {
+    #[cfg(not(feature = "cache"))]
+    pub fn add_one(&mut self, now: DateTime<Utc>) {
         let start_slot = &self.data[self.start_slot];
         let mut start_slot_time = start_slot.time.clone();
         if start_slot_time + self.window_size <= now {
@@ -124,27 +165,45 @@ impl SlidingWindowCounter {
         self.data[add_slot_index].count += 1;
     }
 
-    pub(crate) fn count_in_window(&self, now: DateTime<Utc>) -> u64 {
+    #[cfg(not(feature = "cache"))]
+    pub fn count_in_window(&self, now: DateTime<Utc>) -> u64 {
         self.data.iter().map(|slot| if (now - self.window_size) <= slot.time { slot.count } else { 0 }).sum::<u64>()
     }
 
-    pub(crate) fn add_and_count(&mut self, now: DateTime<Utc>) -> u64 {
-        let result =self.count_in_window(now);
+    #[cfg(feature = "cache")]
+    pub async fn add_and_count(&self, now: DateTime<Utc>, ctx: &SgRoutePluginContext) -> TardisResult<u64> {
+        let result: &u64 = &SCRIPT
+            .key(format!("{}", if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }))
+            .arg(self.window_size.num_milliseconds())
+            .arg(now.timestamp_millis())
+            .invoke_async(&mut ctx.cache()?.cmd().await?)
+            .await
+            .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Status] redis error : {e}"), ""))?;
+        Ok(*result)
+    }
+
+    #[cfg(not(feature = "cache"))]
+    pub fn add_and_count(&mut self, now: DateTime<Utc>) -> u64 {
+        let result = self.count_in_window(now);
         self.add_one(now);
         result
     }
 
+    #[cfg(not(feature = "cache"))]
+    #[allow(dead_code)]
     fn get_data(&self) -> &[Slot] {
         &self.data
     }
 }
 
+#[cfg(not(feature = "cache"))]
 #[derive(Default, Clone, Debug)]
 struct Slot {
     time: DateTime<Utc>,
     count: u64,
 }
 
+#[cfg(not(feature = "cache"))]
 impl Slot {
     fn new(start_time: DateTime<Utc>) -> Self {
         Slot { time: start_time, count: 0 }
@@ -154,13 +213,24 @@ impl Slot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "cache")]
+    use crate::functions::cache_client;
+    #[cfg(feature = "cache")]
+    use http::{HeaderMap, Method, Uri, Version};
+    #[cfg(feature = "cache")]
+    use hyper::Body;
+    #[cfg(feature = "cache")]
+    use tardis::test::test_container::TardisTestContainer;
+    #[cfg(feature = "cache")]
+    use tardis::{testcontainers, tokio};
 
     #[test]
+    #[cfg(not(feature = "cache"))]
     fn test() {
         let mut test = SlidingWindowCounter::new(Duration::seconds(60), 12);
         test.init(DateTime::parse_from_rfc3339("2000-01-01T01:00:00.000Z").unwrap().into());
 
-        assert!(test.get_data().len() == 12);
+        assert_eq!(test.get_data().len(), 12);
         test.add_one(DateTime::parse_from_rfc3339("2000-01-01T01:00:01.100Z").unwrap().into());
         test.add_one(DateTime::parse_from_rfc3339("2000-01-01T01:00:01.200Z").unwrap().into());
         test.add_one(DateTime::parse_from_rfc3339("2000-01-01T01:00:01.300Z").unwrap().into());
@@ -220,5 +290,57 @@ mod tests {
         assert_eq!(test.start_slot, 0);
 
         assert_eq!(test.count_in_window(DateTime::parse_from_rfc3339("2000-01-01T01:05:10.100Z").unwrap().into()), 2);
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "cache")]
+    async fn test() {
+        let docker = testcontainers::clients::Cli::default();
+        let redis_container = TardisTestContainer::redis_custom(&docker);
+        let port = redis_container.get_host_port_ipv4(6379);
+        let url = format!("redis://127.0.0.1:{port}/0",);
+        cache_client::init("test_gate", &url).await.unwrap();
+
+        fn new_ctx() -> SgRoutePluginContext {
+            SgRoutePluginContext::new_http(
+                Method::GET,
+                Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
+                Version::HTTP_11,
+                HeaderMap::new(),
+                Body::empty(),
+                "127.0.0.1:8080".parse().unwrap(),
+                "test_gate".to_string(),
+                None,
+            )
+        }
+
+        let mut test = SlidingWindowCounter::new(Duration::seconds(60), "");
+
+        assert_eq!(
+            test.add_and_count(DateTime::parse_from_rfc3339("2000-01-01T01:00:50.100Z").unwrap().into(), &new_ctx()).await.unwrap(),
+            0
+        );
+        assert_eq!(
+            test.add_and_count(DateTime::parse_from_rfc3339("2000-01-01T01:00:55.100Z").unwrap().into(), &new_ctx()).await.unwrap(),
+            1
+        );
+
+        assert_eq!(
+            test.add_and_count(DateTime::parse_from_rfc3339("2000-01-01T01:01:50.100Z").unwrap().into(), &new_ctx()).await.unwrap(),
+            1
+        );
+        assert_eq!(
+            test.add_and_count(DateTime::parse_from_rfc3339("2000-01-01T01:01:55.000Z").unwrap().into(), &new_ctx()).await.unwrap(),
+            2
+        );
+        assert_eq!(
+            test.add_and_count(DateTime::parse_from_rfc3339("2000-01-01T01:01:55.100Z").unwrap().into(), &new_ctx()).await.unwrap(),
+            2
+        );
+
+        assert_eq!(
+            test.add_and_count(DateTime::parse_from_rfc3339("2000-01-01T01:05:00.100Z").unwrap().into(), &new_ctx()).await.unwrap(),
+            0
+        );
     }
 }

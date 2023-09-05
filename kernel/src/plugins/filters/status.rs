@@ -7,7 +7,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Server};
 
 use serde::{Deserialize, Serialize};
-use tardis::chrono::Utc;
+use tardis::chrono::{Duration, Utc};
 use tardis::tokio::task::JoinHandle;
 use tardis::{
     basic::result::TardisResult,
@@ -24,12 +24,14 @@ use crate::functions::cache_client;
 
 use self::status_plugin::{clean_status, get_status, update_status, Status};
 use super::{BoxSgPluginFilter, SgAttachedLevel, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use crate::plugins::filters::status::sliding_window::SlidingWindowCounter;
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
+#[cfg(not(feature = "cache"))]
+use tardis::tokio::sync::RwLock;
 
 lazy_static! {
     static ref SHUTDOWN_TX: Arc<Mutex<HashMap<u16, (Sender<()>, JoinHandle<Result<(), hyper::Error>>)>>> = Default::default();
-    static ref SERVER_ERR: Arc<Mutex<HashMap<String, (u16, i64)>>> = Default::default();
 }
 
 pub mod sliding_window;
@@ -45,7 +47,7 @@ impl SgPluginFilterDef for SgFilterStatusDef {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SgFilterStatus {
     pub serv_addr: String,
@@ -53,9 +55,15 @@ pub struct SgFilterStatus {
     pub title: String,
     /// Unhealthy threshold , if server error more than this, server will be tag as unhealthy
     pub unhealthy_threshold: u16,
+    /// second
     pub interval: u64,
+    #[cfg(not(feature = "cache"))]
+    #[serde(skip)]
+    counter: RwLock<SlidingWindowCounter>,
     #[cfg(feature = "cache")]
-    pub cache_key: String,
+    pub status_cache_key: String,
+    #[cfg(feature = "cache")]
+    pub window_cache_key: String,
 }
 
 impl Default for SgFilterStatus {
@@ -67,7 +75,11 @@ impl Default for SgFilterStatus {
             unhealthy_threshold: 3,
             interval: 5,
             #[cfg(feature = "cache")]
-            cache_key: "spacegate:cache:plugin:status".to_string(),
+            status_cache_key: "spacegate:cache:plugin:status".to_string(),
+            #[cfg(feature = "cache")]
+            window_cache_key: sliding_window::DEFAULT_CONF_WINDOW_KEY.to_string(),
+            #[cfg(not(feature = "cache"))]
+            counter: RwLock::new(SlidingWindowCounter::new(Duration::seconds(3), 60)),
         }
     }
 }
@@ -155,6 +167,10 @@ impl SgPluginFilter for SgFilterStatus {
                 }
             }
         }
+        #[cfg(not(feature = "cache"))]
+        {
+            self.counter = RwLock::new(SlidingWindowCounter::new(Duration::seconds(self.interval as i64), 60));
+        }
         Ok(())
     }
 
@@ -176,34 +192,25 @@ impl SgPluginFilter for SgFilterStatus {
     async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(backend_name) = ctx.get_chose_backend_name() {
             if ctx.is_resp_error() {
-                let mut server_err = SERVER_ERR.lock().await;
-                let now = Utc::now().timestamp();
-                if let Some((times, expire)) = server_err.get_mut(&backend_name) {
-                    log::debug!("[SG.Filter.Status] times:{times} expire:{expire} now:{now} unhealthy");
-                    if *expire > now {
-                        if *times >= self.unhealthy_threshold {
-                            #[cfg(feature = "cache")]
-                            {
-                                update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Major).await?;
-                            }
-                            #[cfg(not(feature = "cache"))]
-                            {
-                                update_status(&backend_name, status_plugin::Status::Major).await?;
-                            }
-                        } else {
-                            #[cfg(feature = "cache")]
-                            {
-                                update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Minor).await?;
-                            }
-                            #[cfg(not(feature = "cache"))]
-                            {
-                                update_status(&backend_name, status_plugin::Status::Minor).await?;
-                            }
-                        }
-                        let new_times = *times + 1;
-                        server_err.insert(backend_name.clone(), (new_times, now + self.interval as i64));
-                    } else {
-                        server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
+                let now = Utc::now();
+                let count;
+                #[cfg(not(feature = "cache"))]
+                {
+                    let mut counter = self.counter.write().await;
+                    count = counter.add_and_count(now)
+                }
+                #[cfg(feature = "cache")]
+                {
+                    count = SlidingWindowCounter::new(Duration::seconds(self.interval as i64), &self.window_cache_key).add_and_count(now, &ctx).await?;
+                }
+                if count >= self.unhealthy_threshold as u64 {
+                    #[cfg(feature = "cache")]
+                    {
+                        update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Major).await?;
+                    }
+                    #[cfg(not(feature = "cache"))]
+                    {
+                        update_status(&backend_name, status_plugin::Status::Major).await?;
                     }
                 } else {
                     #[cfg(feature = "cache")]
@@ -214,8 +221,45 @@ impl SgPluginFilter for SgFilterStatus {
                     {
                         update_status(&backend_name, status_plugin::Status::Minor).await?;
                     }
-                    server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
                 }
+                // if let Some((times, expire)) = server_err.get_mut(&backend_name) {
+                //     log::debug!("[SG.Filter.Status] times:{times} expire:{expire} now:{now} unhealthy");
+                //     if *expire > now {
+                //         if *times >= self.unhealthy_threshold {
+                //             #[cfg(feature = "cache")]
+                //             {
+                //                 update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Major).await?;
+                //             }
+                //             #[cfg(not(feature = "cache"))]
+                //             {
+                //                 update_status(&backend_name, status_plugin::Status::Major).await?;
+                //             }
+                //         } else {
+                //             #[cfg(feature = "cache")]
+                //             {
+                //                 update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Minor).await?;
+                //             }
+                //             #[cfg(not(feature = "cache"))]
+                //             {
+                //                 update_status(&backend_name, status_plugin::Status::Minor).await?;
+                //             }
+                //         }
+                //         let new_times = *times + 1;
+                //         server_err.insert(backend_name.clone(), (new_times, now + self.interval as i64));
+                //     } else {
+                //         server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
+                //     }
+                // } else {
+                //     #[cfg(feature = "cache")]
+                //     {
+                //         update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Minor).await?;
+                //     }
+                //     #[cfg(not(feature = "cache"))]
+                //     {
+                //         update_status(&backend_name, status_plugin::Status::Minor).await?;
+                //     }
+                //     server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
+                // }
             } else {
                 let gotten_status: Option<Status>;
                 #[cfg(feature = "cache")]
@@ -246,7 +290,7 @@ impl SgPluginFilter for SgFilterStatus {
 
 #[cfg(feature = "cache")]
 fn get_cache_key(filter_status: &SgFilterStatus, gateway_name: &str) -> String {
-    format!("{}:{}", filter_status.cache_key, gateway_name)
+    format!("{}:{}", filter_status.status_cache_key, gateway_name)
 }
 #[cfg(not(feature = "cache"))]
 // not use in not cache mode;

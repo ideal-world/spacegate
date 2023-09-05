@@ -117,8 +117,24 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
+    /// Request Filtering:
+    ///
+    /// This method is used for request filtering. It takes two parameters:
+    ///
+    /// - `id`: The plugin instance ID, which identifies the specific plugin
+    /// instance.
+    /// - `ctx`: A mutable context object that holds information about the
+    /// request and allows for modifications.
     async fn req_filter(&self, id: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)>;
 
+    /// Response Filtering:
+    ///
+    /// This method is used for response filtering. It takes two parameters:
+    ///
+    /// - `id`: The plugin instance ID, which identifies the specific plugin
+    /// instance.
+    /// - `ctx`: A mutable context object that holds information about the
+    /// request and allows for modifications.
     async fn resp_filter(&self, id: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)>;
 
     fn boxed(self) -> BoxSgPluginFilter
