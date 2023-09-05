@@ -299,7 +299,7 @@ mod tests {
         let redis_container = TardisTestContainer::redis_custom(&docker);
         let port = redis_container.get_host_port_ipv4(6379);
         let url = format!("redis://127.0.0.1:{port}/0",);
-        cache_client::init("test_gate", &url).await.unwrap();
+        cache_client::init("test_gate1", &url).await.unwrap();
 
         fn new_ctx() -> SgRoutePluginContext {
             SgRoutePluginContext::new_http(
@@ -309,7 +309,7 @@ mod tests {
                 HeaderMap::new(),
                 Body::empty(),
                 "127.0.0.1:8080".parse().unwrap(),
-                "test_gate".to_string(),
+                "test_gate1".to_string(),
                 None,
             )
         }
