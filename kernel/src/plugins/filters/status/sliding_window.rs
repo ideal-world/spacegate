@@ -1,5 +1,55 @@
+use lazy_static::lazy_static;
 use tardis::basic::{error::TardisError, result::TardisResult};
+#[cfg(feature = "cache")]
+use tardis::cache::Script;
 use tardis::chrono::{DateTime, Duration, Utc};
+
+#[cfg(feature = "cache")]
+const CONF_WINDOW_KEY: &str = "sg:plugin:filter:window:key";
+
+#[cfg(feature = "cache")]
+lazy_static! {
+    /// Sliding window script
+    ///
+    /// # Arguments
+    ///
+    /// * KEYS[1]  window key
+    /// * ARGV[1]  interval
+    /// * ARGV[2]  window size
+    /// * ARGV[3]  current timestamp
+    ///
+    /// # Return
+    ///
+    /// * count
+    ///
+    /// # Kernel logic
+    ///
+    static ref SCRIPT: Script = Script::new(
+        r"
+    local key = KEYS[1]
+    local microsecFactor = tonumber(KEYS[2])
+
+    local window_size = tonumber(ARGV[1])
+    local current_time = tonumber(ARGV[2])
+    local interval = tonumber(ARGV[1])
+
+    local member_score = current_time  -- Compute member score (timestamp) at the right subdivision unit using the conversion factor
+    local window_expire_at = current_time + window_size -- Window expiration epoch in milliseconds
+
+    -- Remove elements older than (now - window) at the given subdivision unit
+    redis.call('ZREMRANGEBYSCORE', key, 0, (current_time - window_size))
+    
+    -- Get number of requests in the current window
+    local current_requests_count = redis.call('ZCARD', key)
+
+    redis.call('ZADD', key, member_score, now_microsec)
+
+    redis.call('PEXPIRE', key, window_expire_at)
+
+    return current_requests_count
+    ",
+    );
+}
 
 pub(crate) struct SlidingWindowCounter {
     window_size: Duration,
@@ -78,10 +128,17 @@ impl SlidingWindowCounter {
         self.data.iter().map(|slot| if (now - self.window_size) <= slot.time { slot.count } else { 0 }).sum::<u64>()
     }
 
+    pub(crate) fn add_and_count(&mut self, now: DateTime<Utc>) -> u64 {
+        let result =self.count_in_window(now);
+        self.add_one(now);
+        result
+    }
+
     fn get_data(&self) -> &[Slot] {
         &self.data
     }
 }
+
 #[derive(Default, Clone, Debug)]
 struct Slot {
     time: DateTime<Utc>,
@@ -97,6 +154,7 @@ impl Slot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test() {
         let mut test = SlidingWindowCounter::new(Duration::seconds(60), 12);
