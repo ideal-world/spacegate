@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::OnceLock, time::Duration};
 
 use crate::{config::gateway_dto::SgProtocol, plugins::context::SgRoutePluginContext};
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
@@ -14,15 +14,13 @@ use crate::instance::SgBackendInst;
 
 const DEFAULT_TIMEOUT_MS: u64 = 5000;
 
-static mut DEFAULT_CLIENT: Option<Client<HttpsConnector<HttpConnector>>> = None;
+static DEFAULT_CLIENT: OnceLock<Client<HttpsConnector<HttpConnector>>> = OnceLock::new();
 
-pub fn init() -> TardisResult<Client<HttpsConnector<HttpConnector>>> {
-    unsafe {
-        if DEFAULT_CLIENT.is_none() {
-            DEFAULT_CLIENT = Some(do_init()?);
-        }
+pub fn init() -> TardisResult<&'static Client<HttpsConnector<HttpConnector>>> {
+    if DEFAULT_CLIENT.get().is_none() {
+        let _ = DEFAULT_CLIENT.set(do_init()?);
     }
-    do_init()
+    Ok(default_client())
 }
 
 fn do_init() -> TardisResult<Client<HttpsConnector<HttpConnector>>> {
@@ -33,7 +31,7 @@ fn do_init() -> TardisResult<Client<HttpsConnector<HttpConnector>>> {
 }
 
 fn default_client() -> &'static Client<HttpsConnector<HttpConnector>> {
-    unsafe { DEFAULT_CLIENT.as_ref().expect("DEFAULT_CLIENT not initialized") }
+    DEFAULT_CLIENT.get().expect("DEFAULT_CLIENT not initialized")
 }
 
 pub async fn request(
@@ -141,7 +139,7 @@ mod tests {
 
         // test simple
         let mut resp = request(
-            &client,
+            client,
             Some(&SgBackendInst {
                 name_or_host: "www.baidu.com".to_string(),
                 port: 80,
@@ -167,7 +165,7 @@ mod tests {
 
         // test get
         let mut resp = request(
-            &client,
+            client,
             Some(&SgBackendInst {
                 name_or_host: "httpbin.org".to_string(),
                 port: 80,
@@ -193,7 +191,7 @@ mod tests {
 
         // test post with tls
         let mut resp = request(
-            &client,
+            client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
                 protocol: Some(SgProtocol::Https),
@@ -221,7 +219,7 @@ mod tests {
 
         // test timeout
         let mut resp = request(
-            &client,
+            client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 80,
@@ -245,7 +243,7 @@ mod tests {
         assert_eq!(resp.response.get_status_code().as_u16(), 504);
 
         let mut resp = request(
-            &client,
+            client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
                 port: 443,
@@ -273,7 +271,7 @@ mod tests {
 
         // test redirect
         let mut resp = request(
-            &client,
+            client,
             None,
             Some(20000),
             true,
