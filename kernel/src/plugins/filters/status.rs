@@ -222,44 +222,6 @@ impl SgPluginFilter for SgFilterStatus {
                         update_status(&backend_name, status_plugin::Status::Minor).await?;
                     }
                 }
-                // if let Some((times, expire)) = server_err.get_mut(&backend_name) {
-                //     log::debug!("[SG.Filter.Status] times:{times} expire:{expire} now:{now} unhealthy");
-                //     if *expire > now {
-                //         if *times >= self.unhealthy_threshold {
-                //             #[cfg(feature = "cache")]
-                //             {
-                //                 update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Major).await?;
-                //             }
-                //             #[cfg(not(feature = "cache"))]
-                //             {
-                //                 update_status(&backend_name, status_plugin::Status::Major).await?;
-                //             }
-                //         } else {
-                //             #[cfg(feature = "cache")]
-                //             {
-                //                 update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Minor).await?;
-                //             }
-                //             #[cfg(not(feature = "cache"))]
-                //             {
-                //                 update_status(&backend_name, status_plugin::Status::Minor).await?;
-                //             }
-                //         }
-                //         let new_times = *times + 1;
-                //         server_err.insert(backend_name.clone(), (new_times, now + self.interval as i64));
-                //     } else {
-                //         server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
-                //     }
-                // } else {
-                //     #[cfg(feature = "cache")]
-                //     {
-                //         update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Minor).await?;
-                //     }
-                //     #[cfg(not(feature = "cache"))]
-                //     {
-                //         update_status(&backend_name, status_plugin::Status::Minor).await?;
-                //     }
-                //     server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
-                // }
             } else {
                 let gotten_status: Option<Status>;
                 #[cfg(feature = "cache")]
