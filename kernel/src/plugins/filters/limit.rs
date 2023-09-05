@@ -15,6 +15,9 @@ pub const CODE: &str = "limit";
 pub struct SgFilterLimitDef;
 
 impl SgPluginFilterDef for SgFilterLimitDef {
+    fn get_code(&self) -> &'static str {
+        CODE
+    }
     fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterLimit>(spec)?;
         Ok(filter.boxed())
@@ -123,7 +126,7 @@ impl SgPluginFilter for SgFilterLimit {
                         .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Limit] invalid timestamp: {e}"), ""))?
                         .as_millis() as u64,
                 )
-                .invoke_async(&mut ctx.cache()?.cmd().await?)
+                .invoke_async(&mut ctx.cache().await?.cmd().await?)
                 .await
                 .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Limit] redis error : {e}"), ""))?;
             if !result {

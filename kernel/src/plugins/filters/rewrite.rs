@@ -15,6 +15,9 @@ pub const CODE: &str = "rewrite";
 pub struct SgFilterRewriteDef;
 
 impl SgPluginFilterDef for SgFilterRewriteDef {
+    fn get_code(&self) -> &'static str {
+        CODE
+    }
     fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterRewrite>(spec)?;
         Ok(filter.boxed())
