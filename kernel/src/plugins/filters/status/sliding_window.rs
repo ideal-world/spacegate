@@ -17,9 +17,9 @@ lazy_static! {
     /// # Arguments
     ///
     /// * KEYS[1]  window key
-    /// * ARGV[1]  interval
-    /// * ARGV[2]  window size
-    /// * ARGV[3]  current timestamp
+    /// * ARGV[1]  window size
+    /// * ARGV[2]  current timestamp
+    /// * ARGV[3]  current sub_second microsecond
     ///
     /// # Return
     ///
@@ -27,25 +27,52 @@ lazy_static! {
     ///
     /// # Kernel logic
     ///
+    /// -- Extract the key from the KEYS array, which represents the Redis key used for the sorted set.
+    /// local key = KEYS[1]
+    ///
+    /// -- Convert the window size from the ARGV array into a numeric value.
+    /// local window_size = tonumber(ARGV[1])
+    ///
+    /// -- Convert the current time timestamp, including seconds and microseconds, from ARGV into numeric values.
+    /// local current_time_timestamp = tonumber(ARGV[2])
+    /// local current_time_subsec_micros = tonumber(ARGV[3])
+    ///
+    /// -- Calculate the member_score, which combines timestamp and microseconds.
+    /// local member_score = ((current_time_timestamp % 10000000) * 1000000) + current_time_subsec_micros
+    ///
+    /// -- Calculate the timestamp when the current window should expire, in milliseconds.
+    /// local window_expire_at = (current_time_timestamp * 1000) + window_size
+    ///
+    /// -- Remove elements from the sorted set that are older than (now - window) based on member_score.
+    /// redis.call('ZREMRANGEBYSCORE', key, 0, (member_score - (window_size * 1000)))
+    ///
+    /// -- Get the number of requests in the current window by counting the elements in the sorted set.
+    /// local current_requests_count = redis.call('ZCARD', key)
+    ///
+    /// -- Add the current request's member_score to the sorted set.
+    /// redis.call('ZADD', key, member_score, member_score)
+    ///
+    /// -- Set the expiration time for the key, specifying when the window should expire.
+    /// redis.call('PEXPIRE', key, window_expire_at)
+    ///
+    /// -- Return the count of requests in the current window.
+    /// return current_requests_count
     static ref SCRIPT: Script = Script::new(
         r"
     local key = KEYS[1]
-    local microsecFactor = tonumber(KEYS[2])
 
     local window_size = tonumber(ARGV[1])
-    local current_time = tonumber(ARGV[2])
-    local interval = tonumber(ARGV[1])
+    local current_time_timestamp = tonumber(ARGV[2])
+    local current_time_subsec_micros = tonumber(ARGV[3])
 
-    local member_score = current_time  -- Compute member score (timestamp) at the right subdivision unit using the conversion factor
-    local window_expire_at = current_time + window_size -- Window expiration epoch in milliseconds
+    local member_score = ((current_time_timestamp % 10000000) * 1000000) + current_time_subsec_micros
+    local window_expire_at = (current_time_timestamp * 1000) + window_size
 
-    -- Remove elements older than (now - window) at the given subdivision unit
-    redis.call('ZREMRANGEBYSCORE', key, 0, (current_time - window_size))
+    redis.call('ZREMRANGEBYSCORE', key, 0, (member_score - (window_size * 1000)))
 
-    -- Get number of requests in the current window
     local current_requests_count = redis.call('ZCARD', key)
 
-    redis.call('ZADD', key, member_score, current_time)
+    redis.call('ZADD', key, member_score, member_score)
 
     redis.call('PEXPIRE', key, window_expire_at)
 
@@ -175,7 +202,8 @@ impl SlidingWindowCounter {
         let result: &u64 = &SCRIPT
             .key((if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }).to_string())
             .arg(self.window_size.num_milliseconds())
-            .arg(now.timestamp_millis())
+            .arg(now.timestamp())
+            .arg(now.timestamp_subsec_micros())
             .invoke_async(&mut ctx.cache().await?.cmd().await?)
             .await
             .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Status] redis error : {e}"), ""))?;
