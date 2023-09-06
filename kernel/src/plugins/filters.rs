@@ -7,7 +7,6 @@ pub mod maintenance;
 pub mod redirect;
 pub mod retry;
 pub mod rewrite;
-#[cfg(feature = "cache")]
 pub mod status;
 use async_trait::async_trait;
 
@@ -38,7 +37,6 @@ fn init_filter_defs() {
     #[cfg(feature = "cache")]
     filters.insert(limit::CODE.to_string(), Box::new(limit::SgFilterLimitDef));
     filters.insert(compression::CODE.to_string(), Box::new(compression::SgFilterCompressionDef));
-    #[cfg(feature = "cache")]
     filters.insert(status::CODE.to_string(), Box::new(status::SgFilterStatusDef));
     filters.insert(maintenance::CODE.to_string(), Box::new(maintenance::SgFilterMaintenanceDef));
     filters.insert(retry::CODE.to_string(), Box::new(retry::SgFilterRetryDef));
@@ -120,8 +118,24 @@ pub trait SgPluginFilter: Send + Sync + 'static {
 
     async fn destroy(&self) -> TardisResult<()>;
 
+    /// Request Filtering:
+    ///
+    /// This method is used for request filtering. It takes two parameters:
+    ///
+    /// - `id`: The plugin instance ID, which identifies the specific plugin
+    /// instance.
+    /// - `ctx`: A mutable context object that holds information about the
+    /// request and allows for modifications.
     async fn req_filter(&self, id: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)>;
 
+    /// Response Filtering:
+    ///
+    /// This method is used for response filtering. It takes two parameters:
+    ///
+    /// - `id`: The plugin instance ID, which identifies the specific plugin
+    /// instance.
+    /// - `ctx`: A mutable context object that holds information about the
+    /// request and allows for modifications.
     async fn resp_filter(&self, id: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)>;
 
     fn boxed(self) -> BoxSgPluginFilter
@@ -208,6 +222,8 @@ pub fn http_common_modify_path(uri: &http::Uri, modify_path: &Option<SgHttpPathM
 }
 
 // TODO
+/// The SgPluginFilterKind enum is used to represent the types of plugins
+/// supported by Spacegate or to identify the type of the current request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SgPluginFilterKind {
     Http,
@@ -215,6 +231,8 @@ pub enum SgPluginFilterKind {
     Ws,
 }
 
+/// The SgAttachedLevel enum is used to represent the levels at which a plugin
+/// can be attached within
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SgAttachedLevel {
     Gateway,
@@ -235,7 +253,6 @@ impl fmt::Display for SgAttachedLevel {
 }
 
 /// Encapsulation filter initialization parameters.
-///
 #[derive(Debug, Clone)]
 pub struct SgPluginFilterInitDto {
     pub gateway_name: String,
@@ -245,6 +262,7 @@ pub struct SgPluginFilterInitDto {
     /// Identifies the level to which the filter is attached
     pub attached_level: SgAttachedLevel,
 }
+
 impl SgPluginFilterInitDto {
     pub fn from_global(gateway_conf: &SgGateway, routes: &[SgHttpRoute]) -> Self {
         Self {

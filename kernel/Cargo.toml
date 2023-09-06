@@ -51,6 +51,7 @@ tokio-util = { version = "0.7.8", features = ["io"] }
 tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
 reqwest = { workspace = true }
 tracing-subscriber = { workspace = true }
+criterion = { version = "0.5" ,features = ["async_tokio"]}
 
 [package.metadata.docs.rs]
 all-features = true
@@ -59,3 +60,16 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[test]]
 name = "test_config_by_redis"
 required-features = ["cache"]
+
+[[test]]
+name = "test_websocket"
+required-features = ["ws"]
+
+[[bench]]
+name = "cache_sliding_window_benchmark"
+required-features = ["cache"]
+harness = false
+
+[[bench]]
+name="local_sliding_window_benchmark"
+harness=false
