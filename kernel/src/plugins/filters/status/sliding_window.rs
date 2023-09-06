@@ -120,7 +120,7 @@ impl SlidingWindowCounter {
         let mut start_slot_time = now;
         for i in 0..self.slot_num {
             self.data[i] = Slot::new(start_slot_time);
-            start_slot_time = start_slot_time + Duration::milliseconds(self.interval);
+            start_slot_time += Duration::milliseconds(self.interval);
         }
         self.start_slot = 0;
     }
@@ -133,13 +133,13 @@ impl SlidingWindowCounter {
         }
 
         let last_slot_index = (self.start_slot + self.slot_num - 1) % self.slot_num;
-        let mut move_slot_time = self.data[last_slot_index].time.clone();
-        move_slot_time = move_slot_time + Duration::milliseconds(self.interval);
+        let mut move_slot_time = self.data[last_slot_index].time;
+        move_slot_time += Duration::milliseconds(self.interval);
 
         for i in 0..move_index as usize {
             let index = (i + self.start_slot) % self.slot_num;
             self.data[index] = Slot::new(move_slot_time);
-            move_slot_time = move_slot_time + Duration::milliseconds(self.interval);
+            move_slot_time += Duration::milliseconds(self.interval);
         }
 
         self.start_slot = (move_index as usize + self.start_slot) % self.slot_num;
@@ -149,18 +149,18 @@ impl SlidingWindowCounter {
     #[cfg(not(feature = "cache"))]
     pub fn add_one(&mut self, now: DateTime<Utc>) {
         let start_slot = &self.data[self.start_slot];
-        let mut start_slot_time = start_slot.time.clone();
+        let mut start_slot_time = start_slot.time;
         if start_slot_time + self.window_size <= now {
             if start_slot_time + self.window_size * 2 <= now {
                 self.init(now);
             } else {
-                let move_index = (now - start_slot_time - self.window_size).num_milliseconds() / self.interval as i64 + 1;
+                let move_index = (now - start_slot_time - self.window_size).num_milliseconds() / self.interval + 1;
                 self.init_part(move_index).expect("init part failed");
             }
-            start_slot_time = self.data[self.start_slot].time.clone();
+            start_slot_time = self.data[self.start_slot].time;
         }
         // found a slot by now
-        let slot_index = (now - start_slot_time).num_milliseconds() / self.interval as i64;
+        let slot_index = (now - start_slot_time).num_milliseconds() / self.interval;
         let add_slot_index = (slot_index as usize + self.start_slot) % self.slot_num;
         self.data[add_slot_index].count += 1;
     }
@@ -173,10 +173,10 @@ impl SlidingWindowCounter {
     #[cfg(feature = "cache")]
     pub async fn add_and_count(&self, now: DateTime<Utc>, ctx: &SgRoutePluginContext) -> TardisResult<u64> {
         let result: &u64 = &SCRIPT
-            .key(format!("{}", if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }))
+            .key(( if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }).to_string())
             .arg(self.window_size.num_milliseconds())
             .arg(now.timestamp_millis())
-            .invoke_async(&mut ctx.cache()?.cmd().await?)
+            .invoke_async(&mut ctx.cache().await?.cmd().await?)
             .await
             .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Status] redis error : {e}"), ""))?;
         Ok(*result)

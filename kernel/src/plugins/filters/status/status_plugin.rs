@@ -62,7 +62,7 @@ pub(crate) async fn create_status_html(
         let status;
         #[cfg(feature = "cache")]
         {
-            let cache_client = functions::cache_client::get(&_gateway_name.lock().await).expect("get cache client error!");
+            let cache_client = functions::cache_client::get(&_gateway_name.lock().await).await.expect("get cache client error!");
             let cache_key = _cache_key.lock().await;
             status = get_status(&key, &cache_key, &cache_client).await.expect("");
         }
@@ -92,7 +92,7 @@ pub(crate) async fn create_status_html(
 
 #[cfg(feature = "cache")]
 pub(crate) async fn update_status(server_name: &str, _cache_key: &str, client: impl AsRef<TardisCacheClient>, status: Status) -> TardisResult<()> {
-    client.hset(_cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
+    client.as_ref().hset(_cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
     Ok(())
 }
 #[cfg(not(feature = "cache"))]
@@ -117,9 +117,8 @@ pub(crate) async fn get_status(server_name: &str) -> TardisResult<Option<Status>
 
 #[cfg(feature = "cache")]
 pub(crate) async fn clean_status(cache_key: &str, gateway_name: &str) -> TardisResult<()> {
-    let client = cache_client::get(gateway_name)?;
-    client.del(cache_key).await?;
-
+    let client = cache_client::get(gateway_name).await?;
+    client.as_ref().del(cache_key).await?;
     Ok(())
 }
 

@@ -115,7 +115,7 @@ impl SgPluginFilter for SgFilterStatus {
         let addr = (addr_ip, self.port).into();
         let title = Arc::new(Mutex::new(self.title.clone()));
         let gateway_name = Arc::new(Mutex::new(init_dto.gateway_name.clone()));
-        let cache_key = Arc::new(Mutex::new(get_cache_key(&self, &init_dto.gateway_name)));
+        let cache_key = Arc::new(Mutex::new(get_cache_key(self, &init_dto.gateway_name)));
         let make_svc = make_service_fn(move |_conn| {
             let title = title.clone();
             let gateway_name = gateway_name.clone();
@@ -143,7 +143,7 @@ impl SgPluginFilter for SgFilterStatus {
 
         #[cfg(feature = "cache")]
         {
-            clean_status(&get_cache_key(&self, &init_dto.gateway_name), &init_dto.gateway_name).await?;
+            clean_status(&get_cache_key(self, &init_dto.gateway_name), &init_dto.gateway_name).await?;
         }
         #[cfg(not(feature = "cache"))]
         {
@@ -154,10 +154,10 @@ impl SgPluginFilter for SgFilterStatus {
                 for backend in backends {
                     #[cfg(feature = "cache")]
                     {
-                        let cache_client = cache_client::get(&init_dto.gateway_name)?;
+                        let cache_client = cache_client::get(&init_dto.gateway_name).await?;
                         update_status(
                             &backend.name_or_host,
-                            &get_cache_key(&self, &init_dto.gateway_name),
+                            &get_cache_key(self, &init_dto.gateway_name),
                             &cache_client,
                             status_plugin::Status::default(),
                         )
@@ -209,7 +209,13 @@ impl SgPluginFilter for SgFilterStatus {
                 if count >= self.unhealthy_threshold as u64 {
                     #[cfg(feature = "cache")]
                     {
-                        update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Major).await?;
+                        update_status(
+                            &backend_name,
+                            &get_cache_key(self, &ctx.get_gateway_name()),
+                            &ctx.cache().await?,
+                            status_plugin::Status::Major,
+                        )
+                        .await?;
                     }
                     #[cfg(not(feature = "cache"))]
                     {
@@ -218,7 +224,13 @@ impl SgPluginFilter for SgFilterStatus {
                 } else {
                     #[cfg(feature = "cache")]
                     {
-                        update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Minor).await?;
+                        update_status(
+                            &backend_name,
+                            &get_cache_key(self, &ctx.get_gateway_name()),
+                            &ctx.cache().await?,
+                            status_plugin::Status::Minor,
+                        )
+                        .await?;
                     }
                     #[cfg(not(feature = "cache"))]
                     {
@@ -229,7 +241,7 @@ impl SgPluginFilter for SgFilterStatus {
                 let gotten_status: Option<Status>;
                 #[cfg(feature = "cache")]
                 {
-                    gotten_status = get_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?).await?;
+                    gotten_status = get_status(&backend_name, &get_cache_key(self, &ctx.get_gateway_name()), &ctx.cache().await?).await?;
                 }
                 #[cfg(not(feature = "cache"))]
                 {
@@ -239,7 +251,13 @@ impl SgPluginFilter for SgFilterStatus {
                     if status != status_plugin::Status::Good {
                         #[cfg(feature = "cache")]
                         {
-                            update_status(&backend_name, &get_cache_key(&self, &ctx.get_gateway_name()), ctx.cache()?, status_plugin::Status::Good).await?;
+                            update_status(
+                                &backend_name,
+                                &get_cache_key(self, &ctx.get_gateway_name()),
+                                &ctx.cache().await?,
+                                status_plugin::Status::Good,
+                            )
+                            .await?;
                         }
                         #[cfg(not(feature = "cache"))]
                         {
@@ -364,7 +382,7 @@ mod tests {
         let gotten_status: Status;
         #[cfg(feature = "cache")]
         {
-            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap();
+            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap();
         }
         #[cfg(not(feature = "cache"))]
         {
@@ -379,7 +397,7 @@ mod tests {
         let gotten_status: Status;
         #[cfg(feature = "cache")]
         {
-            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &ctx.get_gateway_name()), ctx.cache().unwrap()).await.unwrap().unwrap();
+            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap();
         }
         #[cfg(not(feature = "cache"))]
         {
@@ -393,7 +411,7 @@ mod tests {
         let gotten_status: Status;
         #[cfg(feature = "cache")]
         {
-            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &_ctx.get_gateway_name()), _ctx.cache().unwrap()).await.unwrap().unwrap();
+            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &_ctx.get_gateway_name()), _ctx.cache().await.unwrap()).await.unwrap().unwrap();
         }
         #[cfg(not(feature = "cache"))]
         {
