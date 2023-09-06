@@ -329,7 +329,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         {
             if let Some(backend) = backend {
                 log::trace!("[SG.Route] Backend: {:?}", backend.name_or_host);
-                let mut ctx = process_req_filters_ws(
+                let ctx = process_req_filters_ws(
                     gateway_name.to_string(),
                     remote_addr,
                     &request,
