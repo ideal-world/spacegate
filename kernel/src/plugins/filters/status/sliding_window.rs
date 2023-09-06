@@ -173,7 +173,7 @@ impl SlidingWindowCounter {
     #[cfg(feature = "cache")]
     pub async fn add_and_count(&self, now: DateTime<Utc>, ctx: &SgRoutePluginContext) -> TardisResult<u64> {
         let result: &u64 = &SCRIPT
-            .key(( if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }).to_string())
+            .key((if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }).to_string())
             .arg(self.window_size.num_milliseconds())
             .arg(now.timestamp_millis())
             .invoke_async(&mut ctx.cache().await?.cmd().await?)
