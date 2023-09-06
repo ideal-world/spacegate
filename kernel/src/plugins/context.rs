@@ -16,6 +16,7 @@ use crate::instance::{SgBackendInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
 use super::filters::SgPluginFilterKind;
 
 /// Chosen http route rule
+#[cfg_attr(test, derive(Clone))]
 #[derive(Default, Debug)]
 pub struct ChosenHttpRouteRuleInst {
     matched_match: Option<SgHttpRouteMatchInst>,
@@ -80,6 +81,7 @@ pub enum SgRouteFilterRequestAction {
     Response,
 }
 
+#[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct MaybeModified<T> {
     raw: T,
@@ -285,6 +287,20 @@ impl SgCtxRequest {
     }
 }
 
+#[cfg(test)]
+impl Clone for SgCtxRequest {
+    fn clone(&self) -> Self {
+        SgCtxRequest {
+            method: self.method.clone(),
+            uri: self.uri.clone(),
+            version: self.version.clone(),
+            body: Body::empty(),
+            headers: self.headers.clone(),
+            remote_addr: self.remote_addr.clone(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SgCtxResponse {
     pub status_code: MaybeModified<StatusCode>,
@@ -409,6 +425,18 @@ impl SgCtxResponse {
     }
 }
 
+#[cfg(test)]
+impl Clone for SgCtxResponse {
+    fn clone(&self) -> Self {
+        SgCtxResponse {
+            status_code: self.status_code.clone(),
+            body: Body::empty(),
+            headers: self.headers.clone(),
+            resp_err: self.resp_err.clone(),
+        }
+    }
+}
+
 impl Default for SgCtxResponse {
     fn default() -> Self {
         Self::new()
@@ -428,9 +456,22 @@ pub struct SGRoleInfo {
     pub name: Option<String>,
 }
 
+/// The SgRoutePluginContext struct is used for communication within Spacegate.
+/// It serves as the core of the plugin system and represents a single request.
+/// When a request enters Spacegate, the information is encapsulated into a context,
+/// which is then passed to the plugin execution chain. The Spacegate kernel
+/// processes the request to the backend based on the context and stores the response
+/// back into the context before passing it back through the plugin execution chain.
+/// Ultimately, the Spacegate kernel extracts the content from the context to form
+/// the actual Spacegate response.
+///
+/// *Clone* is only available for testing purposes.
+#[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct SgRoutePluginContext {
+    /// A unique identifier for the request.
     request_id: String,
+    /// see [SgPluginFilterKind]
     request_kind: SgPluginFilterKind,
 
     pub request: SgCtxRequest,

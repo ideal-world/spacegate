@@ -7,7 +7,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Server};
 
 use serde::{Deserialize, Serialize};
-use tardis::chrono::Utc;
+use tardis::chrono::{Duration, Utc};
 use tardis::tokio::task::JoinHandle;
 use tardis::{
     basic::result::TardisResult,
@@ -19,19 +19,22 @@ use tardis::{
     TardisFuns,
 };
 
+#[cfg(feature = "cache")]
 use crate::functions::cache_client;
 
-use self::status_plugin::{clean_status, get_status, update_status};
-
+use self::status_plugin::{clean_status, get_status, update_status, Status};
 use super::{BoxSgPluginFilter, SgAttachedLevel, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use crate::plugins::filters::status::sliding_window::SlidingWindowCounter;
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
+#[cfg(not(feature = "cache"))]
+use tardis::tokio::sync::RwLock;
 
 lazy_static! {
-    static ref SHUTDOWN_TX: Arc<Mutex<HashMap<u16, (Sender<()>, JoinHandle<Result<(), hyper::Error>>)>>> = <_>::default();
-    static ref SERVER_ERR: Arc<Mutex<HashMap<String, (u16, i64)>>> = <_>::default();
+    static ref SHUTDOWN_TX: Arc<Mutex<HashMap<u16, (Sender<()>, JoinHandle<Result<(), hyper::Error>>)>>> = Default::default();
 }
 
+pub mod sliding_window;
 pub mod status_plugin;
 
 pub const CODE: &str = "status";
@@ -47,7 +50,7 @@ impl SgPluginFilterDef for SgFilterStatusDef {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SgFilterStatus {
     pub serv_addr: String,
@@ -55,8 +58,15 @@ pub struct SgFilterStatus {
     pub title: String,
     /// Unhealthy threshold , if server error more than this, server will be tag as unhealthy
     pub unhealthy_threshold: u16,
+    /// second
     pub interval: u64,
-    pub cache_key: String,
+    #[cfg(not(feature = "cache"))]
+    #[serde(skip)]
+    counter: RwLock<SlidingWindowCounter>,
+    #[cfg(feature = "cache")]
+    pub status_cache_key: String,
+    #[cfg(feature = "cache")]
+    pub window_cache_key: String,
 }
 
 impl Default for SgFilterStatus {
@@ -67,7 +77,12 @@ impl Default for SgFilterStatus {
             title: "System Status".to_string(),
             unhealthy_threshold: 3,
             interval: 5,
-            cache_key: "spacegate:cache:plugin:status".to_string(),
+            #[cfg(feature = "cache")]
+            status_cache_key: "spacegate:cache:plugin:status".to_string(),
+            #[cfg(feature = "cache")]
+            window_cache_key: sliding_window::DEFAULT_CONF_WINDOW_KEY.to_string(),
+            #[cfg(not(feature = "cache"))]
+            counter: RwLock::new(SlidingWindowCounter::new(Duration::seconds(3), 60)),
         }
     }
 }
@@ -100,7 +115,7 @@ impl SgPluginFilter for SgFilterStatus {
         let addr = (addr_ip, self.port).into();
         let title = Arc::new(Mutex::new(self.title.clone()));
         let gateway_name = Arc::new(Mutex::new(init_dto.gateway_name.clone()));
-        let cache_key = Arc::new(Mutex::new(get_cache_key(&self.cache_key, &init_dto.gateway_name)));
+        let cache_key = Arc::new(Mutex::new(get_cache_key(self, &init_dto.gateway_name)));
         let make_svc = make_service_fn(move |_conn| {
             let title = title.clone();
             let gateway_name = gateway_name.clone();
@@ -126,21 +141,38 @@ impl SgPluginFilter for SgFilterStatus {
         });
         (*shutdown).insert(self.port, (shutdown_tx, join));
 
-        let cache_client = cache_client::get(&init_dto.gateway_name).await?;
-
-        clean_status(&get_cache_key(&self.cache_key, &init_dto.gateway_name), &cache_client).await?;
+        #[cfg(feature = "cache")]
+        {
+            clean_status(&get_cache_key(self, &init_dto.gateway_name), &init_dto.gateway_name).await?;
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            clean_status().await?;
+        }
         for http_route_rule in init_dto.http_route_rules.clone() {
             if let Some(backends) = &http_route_rule.backends {
                 for backend in backends {
-                    update_status(
-                        &backend.name_or_host,
-                        &get_cache_key(&self.cache_key, &init_dto.gateway_name),
-                        &cache_client,
-                        status_plugin::Status::default(),
-                    )
-                    .await?;
+                    #[cfg(feature = "cache")]
+                    {
+                        let cache_client = cache_client::get(&init_dto.gateway_name).await?;
+                        update_status(
+                            &backend.name_or_host,
+                            &get_cache_key(self, &init_dto.gateway_name),
+                            &cache_client,
+                            status_plugin::Status::default(),
+                        )
+                        .await?;
+                    }
+                    #[cfg(not(feature = "cache"))]
+                    {
+                        update_status(&backend.name_or_host, status_plugin::Status::default()).await?;
+                    }
                 }
             }
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            self.counter = RwLock::new(SlidingWindowCounter::new(Duration::seconds(self.interval as i64), 60));
         }
         Ok(())
     }
@@ -163,60 +195,90 @@ impl SgPluginFilter for SgFilterStatus {
     async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if let Some(backend_name) = ctx.get_chose_backend_name() {
             if ctx.is_resp_error() {
-                let mut server_err = SERVER_ERR.lock().await;
-                let now = Utc::now().timestamp();
-                if let Some((times, expire)) = server_err.get_mut(&backend_name) {
-                    println!("[SG.Filter.Status] times:{times} expire:{expire} now:{now} unhealthy");
-                    if *expire > now {
-                        if *times >= self.unhealthy_threshold {
+                let now = Utc::now();
+                let count;
+                #[cfg(not(feature = "cache"))]
+                {
+                    let mut counter = self.counter.write().await;
+                    count = counter.add_and_count(now)
+                }
+                #[cfg(feature = "cache")]
+                {
+                    count = SlidingWindowCounter::new(Duration::seconds(self.interval as i64), &self.window_cache_key).add_and_count(now, &ctx).await?;
+                }
+                if count >= self.unhealthy_threshold as u64 {
+                    #[cfg(feature = "cache")]
+                    {
+                        update_status(
+                            &backend_name,
+                            &get_cache_key(self, &ctx.get_gateway_name()),
+                            &ctx.cache().await?,
+                            status_plugin::Status::Major,
+                        )
+                        .await?;
+                    }
+                    #[cfg(not(feature = "cache"))]
+                    {
+                        update_status(&backend_name, status_plugin::Status::Major).await?;
+                    }
+                } else {
+                    #[cfg(feature = "cache")]
+                    {
+                        update_status(
+                            &backend_name,
+                            &get_cache_key(self, &ctx.get_gateway_name()),
+                            &ctx.cache().await?,
+                            status_plugin::Status::Minor,
+                        )
+                        .await?;
+                    }
+                    #[cfg(not(feature = "cache"))]
+                    {
+                        update_status(&backend_name, status_plugin::Status::Minor).await?;
+                    }
+                }
+            } else {
+                let gotten_status: Option<Status>;
+                #[cfg(feature = "cache")]
+                {
+                    gotten_status = get_status(&backend_name, &get_cache_key(self, &ctx.get_gateway_name()), &ctx.cache().await?).await?;
+                }
+                #[cfg(not(feature = "cache"))]
+                {
+                    gotten_status = get_status(&backend_name).await?;
+                }
+                if let Some(status) = gotten_status {
+                    if status != status_plugin::Status::Good {
+                        #[cfg(feature = "cache")]
+                        {
                             update_status(
                                 &backend_name,
-                                &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                                ctx.cache().await?,
-                                status_plugin::Status::Major,
-                            )
-                            .await?;
-                        } else {
-                            update_status(
-                                &backend_name,
-                                &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                                ctx.cache().await?,
-                                status_plugin::Status::Minor,
+                                &get_cache_key(self, &ctx.get_gateway_name()),
+                                &ctx.cache().await?,
+                                status_plugin::Status::Good,
                             )
                             .await?;
                         }
-                        let new_times = *times + 1;
-                        server_err.insert(backend_name.clone(), (new_times, now + self.interval as i64));
-                    } else {
-                        server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
+                        #[cfg(not(feature = "cache"))]
+                        {
+                            update_status(&backend_name, status_plugin::Status::Good).await?;
+                        }
                     }
-                } else {
-                    update_status(
-                        &backend_name,
-                        &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                        ctx.cache().await?,
-                        status_plugin::Status::Minor,
-                    )
-                    .await?;
-                    server_err.insert(backend_name.clone(), (1, now + self.interval as i64));
-                }
-            } else if let Some(status) = get_status(&backend_name, &get_cache_key(&self.cache_key, &ctx.get_gateway_name()), ctx.cache().await?).await? {
-                if status != status_plugin::Status::Good {
-                    update_status(
-                        &backend_name,
-                        &get_cache_key(&self.cache_key, &ctx.get_gateway_name()),
-                        ctx.cache().await?,
-                        status_plugin::Status::Good,
-                    )
-                    .await?;
                 }
             }
         }
         Ok((true, ctx))
     }
 }
-fn get_cache_key(cache_key: &str, gateway_name: &str) -> String {
-    format!("{}:{}", cache_key, gateway_name)
+
+#[cfg(feature = "cache")]
+fn get_cache_key(filter_status: &SgFilterStatus, gateway_name: &str) -> String {
+    format!("{}:{}", filter_status.status_cache_key, gateway_name)
+}
+#[cfg(not(feature = "cache"))]
+// not use in not cache mode;
+fn get_cache_key(_: &SgFilterStatus, _: &str) -> String {
+    String::new()
 }
 
 #[cfg(test)]
@@ -234,18 +296,20 @@ mod tests {
         tokio,
     };
 
+    #[cfg(feature = "cache")]
+    use crate::functions;
+    #[cfg(feature = "cache")]
+    use crate::plugins::filters::status::get_cache_key;
     use crate::{
         config::{
             gateway_dto::SgParameters,
             http_route_dto::{SgBackendRef, SgHttpRouteRule},
         },
-        functions,
         instance::{SgBackendInst, SgHttpRouteRuleInst},
         plugins::{
             context::ChosenHttpRouteRuleInst,
             filters::{
                 status::{
-                    get_cache_key,
                     status_plugin::{get_status, Status},
                     SgFilterStatus,
                 },
@@ -256,6 +320,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status() {
+        env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
         tracing_subscriber::fmt::init();
         let mut stats = SgFilterStatus::default();
         let mock_backend_ref = SgBackendRef {
@@ -270,6 +335,8 @@ mod tests {
         let docker = testcontainers::clients::Cli::default();
         let _x = docker_init(&docker).await.unwrap();
         let gateway_name = "gateway_name1".to_string();
+
+        #[cfg(feature = "cache")]
         functions::cache_client::init(&gateway_name, &env::var("TARDIS_FW.CACHE.URL").unwrap()).await.unwrap();
 
         stats
@@ -308,49 +375,49 @@ mod tests {
 
         ctx.set_chose_backend(&mock_backend);
 
-        let ctx = ctx.resp_from_error(TardisError::bad_request("", ""));
+        let ctx = ctx.resp_from_error(TardisError::bad_request("mock resp error", ""));
         let (is_ok, ctx) = stats.resp_filter("id1", ctx).await.unwrap();
         assert!(is_ok);
-        assert_eq!(
-            get_status(
-                &mock_backend.name_or_host,
-                &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()),
-                ctx.cache().await.unwrap()
-            )
-            .await
-            .unwrap()
-            .unwrap(),
-            Status::Minor
-        );
+
+        let gotten_status: Status;
+        #[cfg(feature = "cache")]
+        {
+            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap();
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            gotten_status = get_status(&mock_backend.name_or_host).await.unwrap().unwrap();
+        }
+        assert_eq!(gotten_status, Status::Minor);
 
         let (_, ctx) = stats.resp_filter("id2", ctx).await.unwrap();
         let (_, ctx) = stats.resp_filter("id3", ctx).await.unwrap();
         let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
-        assert_eq!(
-            get_status(
-                &mock_backend.name_or_host,
-                &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()),
-                ctx.cache().await.unwrap()
-            )
-            .await
-            .unwrap()
-            .unwrap(),
-            Status::Major
-        );
+
+        let gotten_status: Status;
+        #[cfg(feature = "cache")]
+        {
+            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &ctx.get_gateway_name()), ctx.cache().await.unwrap()).await.unwrap().unwrap();
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            gotten_status = get_status(&mock_backend.name_or_host).await.unwrap().unwrap();
+        }
+        assert_eq!(gotten_status, Status::Major);
 
         let ctx = ctx.resp(StatusCode::OK, HeaderMap::new(), Body::empty());
-        let (_, ctx) = stats.resp_filter("id4", ctx).await.unwrap();
-        assert_eq!(
-            get_status(
-                &mock_backend.name_or_host,
-                &get_cache_key(&stats.cache_key, &ctx.get_gateway_name()),
-                ctx.cache().await.unwrap()
-            )
-            .await
-            .unwrap()
-            .unwrap(),
-            Status::Good
-        );
+        let (_, _ctx) = stats.resp_filter("id4", ctx).await.unwrap();
+
+        let gotten_status: Status;
+        #[cfg(feature = "cache")]
+        {
+            gotten_status = get_status(&mock_backend.name_or_host, &get_cache_key(&stats, &_ctx.get_gateway_name()), _ctx.cache().await.unwrap()).await.unwrap().unwrap();
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            gotten_status = get_status(&mock_backend.name_or_host).await.unwrap().unwrap();
+        }
+        assert_eq!(gotten_status, Status::Good);
     }
 
     pub struct LifeHold<'a> {
