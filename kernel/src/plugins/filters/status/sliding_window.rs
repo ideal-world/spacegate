@@ -91,7 +91,7 @@ lazy_static! {
 /// operation via the 'status' plugin.
 ///
 /// ## Performance:
-/// - Redis Implementation: Adds and counts operations take milliseconds.
+/// - Redis Implementation: Adds and counts operations take close to a milliseconds.
 /// - Memory Implementation: Adds and counts operations take nanoseconds.
 ///
 ///

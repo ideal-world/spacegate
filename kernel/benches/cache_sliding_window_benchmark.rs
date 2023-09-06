@@ -5,16 +5,17 @@ use spacegate_kernel::functions::cache_client;
 use spacegate_kernel::plugins::context::SgRoutePluginContext;
 use spacegate_kernel::plugins::filters::status::sliding_window::SlidingWindowCounter;
 use tardis::chrono::{Duration, Utc};
+use tardis::futures::executor::block_on;
 use tardis::test::test_container::TardisTestContainer;
 use tardis::testcontainers;
 use tardis::tokio::runtime::Runtime;
 use tardis::tokio::time::Instant;
 
 async fn add_one() -> u64 {
-    let mut test = SlidingWindowCounter::new(Duration::seconds(60), "");
+    let test = SlidingWindowCounter::new(Duration::seconds(60), "");
     test.add_and_count(
         Utc::now(),
-        SgRoutePluginContext::new_http(
+        &SgRoutePluginContext::new_http(
             Method::GET,
             Uri::from_static("http://sg.idealworld.group/iam/ct/001?name=sg"),
             Version::HTTP_11,
