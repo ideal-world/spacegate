@@ -14,6 +14,9 @@ pub const CODE: &str = "compression";
 pub struct SgFilterCompressionDef;
 
 impl SgPluginFilterDef for SgFilterCompressionDef {
+    fn get_code(&self) -> &'static str {
+        CODE
+    }
     fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterCompression>(spec)?;
         Ok(filter.boxed())
@@ -254,6 +257,7 @@ mod tests {
         let mut decode = GzipDecoder::new(BufReader::new(&*resp_body));
         let mut encoder_body = vec![];
         let _ = decode.read_to_end(&mut encoder_body).await;
+        // unsafe in test would be ok
         unsafe {
             let body = String::from_utf8_unchecked(encoder_body);
             assert_eq!(&body, body_str);

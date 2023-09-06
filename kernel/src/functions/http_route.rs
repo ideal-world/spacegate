@@ -16,8 +16,9 @@ use http::{header::UPGRADE, HeaderValue, Request, Response};
 use hyper::{Body, StatusCode};
 
 use itertools::Itertools;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::vec::Vec;
+use tardis::tokio::sync::RwLock;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
@@ -28,7 +29,10 @@ use tardis::{
 
 use super::http_client;
 
-static mut ROUTES: Option<HashMap<String, SgGatewayInst>> = None;
+fn get_routes() -> &'static RwLock<HashMap<String, Arc<SgGatewayInst>>> {
+    static ROUTES: OnceLock<RwLock<HashMap<String, Arc<SgGatewayInst>>>> = OnceLock::new();
+    ROUTES.get_or_init(Default::default)
+}
 
 pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisResult<()> {
     let _all_route_rules = routes.iter().flat_map(|route| route.rules.clone().unwrap_or_default()).collect::<Vec<_>>();
@@ -196,37 +200,32 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     let route_inst = SgGatewayInst {
         filters: global_filters,
         routes: route_insts,
-        client: http_client::init()?,
+        client: http_client::init()?.clone(),
         listeners: gateway_conf.listeners,
     };
-    unsafe {
-        if ROUTES.is_none() {
-            ROUTES = Some(HashMap::new());
-        }
-        ROUTES.as_mut().expect("Unreachable code").insert(gateway_conf.name.to_string(), route_inst);
-    };
-
+    {
+        let mut routes_write = get_routes().write().await;
+        routes_write.insert(gateway_conf.name.to_string(), Arc::new(route_inst));
+    }
     Ok(())
 }
 
 pub async fn remove(name: &str) -> TardisResult<()> {
-    let route = unsafe {
-        if ROUTES.is_none() {
-            ROUTES = Some(HashMap::new());
-        }
-        ROUTES.as_mut().expect("Unreachable code").remove(name)
+    let route = {
+        let mut routes_write = get_routes().write().await;
+        routes_write.remove(name)
     };
     if let Some(gateway_inst) = route {
-        for (_, filter) in gateway_inst.filters {
+        for (_, filter) in &gateway_inst.filters {
             filter.destroy().await?;
         }
-        for route in gateway_inst.routes {
-            for (_, filter) in route.filters {
+        for route in &gateway_inst.routes {
+            for (_, filter) in &route.filters {
                 filter.destroy().await?;
             }
-            if let Some(rules) = route.rules {
+            if let Some(rules) = &route.rules {
                 for rule in rules {
-                    for (_, filter) in rule.filters {
+                    for (_, filter) in &rule.filters {
                         filter.destroy().await?;
                     }
                 }
@@ -236,13 +235,15 @@ pub async fn remove(name: &str) -> TardisResult<()> {
     Ok(())
 }
 
-fn get(name: &str) -> TardisResult<&'static SgGatewayInst> {
-    unsafe {
-        if let Some(routes) = ROUTES.as_ref().ok_or_else(|| TardisError::bad_request("[SG.Route] Get routes failed", ""))?.get(name) {
-            Ok(routes)
-        } else {
-            Err(TardisError::bad_request(&format!("[SG.Route] Get routes {name} failed"), ""))
-        }
+async fn get(name: &str) -> TardisResult<Arc<SgGatewayInst>> {
+    let route = {
+        let routes_read = get_routes().read().await;
+        routes_read.get(name).cloned()
+    };
+    if let Some(routes) = route {
+        Ok(routes)
+    } else {
+        Err(TardisError::bad_request(&format!("[SG.Route] Get routes {name} failed"), ""))
     }
 }
 
@@ -287,7 +288,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 
     process_request_headers(&mut request, remote_addr)?;
 
-    let gateway_inst = get(&gateway_name)?;
+    let gateway_inst = get(&gateway_name).await?;
     if !match_listeners_hostname_and_port(request.uri().host(), local_addr.port(), &gateway_inst.listeners) {
         log::trace!("[SG.Route] Request hostname {} not match", request.uri().host().expect(""));
         let mut not_found = Response::default();

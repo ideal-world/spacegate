@@ -583,12 +583,12 @@ impl SgRoutePluginContext {
         Ok(resp)
     }
 
-    pub fn get_ext(&self, key: &str) -> Option<String> {
-        self.ext.get(key).map(|value| value.to_string())
+    pub fn get_ext(&self, key: &str) -> Option<&str> {
+        self.ext.get(key).map(|x| x.as_str())
     }
 
-    pub fn set_ext(&mut self, key: &str, value: &str) {
-        self.ext.insert(key.to_string(), value.to_string());
+    pub fn set_ext(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.ext.insert(key.into(), value.into());
     }
 
     pub fn remove_ext(&mut self, key: &str) {
@@ -643,7 +643,7 @@ impl SgRoutePluginContext {
     }
 
     #[cfg(feature = "cache")]
-    pub fn cache(&self) -> TardisResult<&'static tardis::cache::cache_client::TardisCacheClient> {
-        crate::functions::cache_client::get(&self.gateway_name)
+    pub async fn cache(&self) -> TardisResult<std::sync::Arc<tardis::cache::cache_client::TardisCacheClient>> {
+        crate::functions::cache_client::get(&self.gateway_name).await
     }
 }

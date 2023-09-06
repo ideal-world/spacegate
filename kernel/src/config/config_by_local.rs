@@ -64,7 +64,7 @@ async fn fetch_configs(gateway_config_path: &str, routes_config_path: &str) -> T
         routes_config_content
     };
     let gateway_config_md5 = TardisFuns::crypto.digest.md5(&gateway_config_content)?;
-    let routes_config_md5 = TardisFuns::crypto.digest.md5(&routes_config_content.join("\r\n"))?;
+    let routes_config_md5 = TardisFuns::crypto.digest.md5(routes_config_content.join("\r\n").as_str())?;
 
     let mut md5_cache = MD5_CACHE.lock().await;
     let gateway_config_changed = gateway_config_md5 != md5_cache.0;

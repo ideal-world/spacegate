@@ -41,6 +41,9 @@ pub const CODE: &str = "status";
 pub struct SgFilterStatusDef;
 
 impl SgPluginFilterDef for SgFilterStatusDef {
+    fn get_code(&self) -> &'static str {
+        CODE
+    }
     fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterStatus>(spec)?;
         Ok(filter.boxed())
@@ -155,7 +158,7 @@ impl SgPluginFilter for SgFilterStatus {
                         update_status(
                             &backend.name_or_host,
                             &get_cache_key(&self, &init_dto.gateway_name),
-                            cache_client,
+                            &cache_client,
                             status_plugin::Status::default(),
                         )
                         .await?;

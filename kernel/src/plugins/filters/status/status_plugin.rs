@@ -48,7 +48,7 @@ pub(crate) async fn create_status_html(
     let keys;
     #[cfg(feature = "cache")]
     {
-        let cache_client = functions::cache_client::get(&_gateway_name.lock().await).expect("get cache client error!");
+        let cache_client = functions::cache_client::get(&_gateway_name.lock().await).await.expect("get cache client error!");
         let cache_key = _cache_key.lock().await;
         keys = cache_client.hkeys(&cache_key).await.expect("get cache keys error!");
     }
@@ -64,7 +64,7 @@ pub(crate) async fn create_status_html(
         {
             let cache_client = functions::cache_client::get(&_gateway_name.lock().await).expect("get cache client error!");
             let cache_key = _cache_key.lock().await;
-            status = get_status(&key, &cache_key, cache_client).await.expect("");
+            status = get_status(&key, &cache_key, &cache_client).await.expect("");
         }
         #[cfg(not(feature = "cache"))]
         {
@@ -91,7 +91,7 @@ pub(crate) async fn create_status_html(
 }
 
 #[cfg(feature = "cache")]
-pub(crate) async fn update_status(server_name: &str, _cache_key: &str, client: &TardisCacheClient, status: Status) -> TardisResult<()> {
+pub(crate) async fn update_status(server_name: &str, _cache_key: &str, client: impl AsRef<TardisCacheClient>, status: Status) -> TardisResult<()> {
     client.hset(_cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
     Ok(())
 }
@@ -103,8 +103,8 @@ pub(crate) async fn update_status(server_name: &str, status: Status) -> TardisRe
 }
 
 #[cfg(feature = "cache")]
-pub(crate) async fn get_status(server_name: &str, cache_key: &str, client: &TardisCacheClient) -> TardisResult<Option<Status>> {
-    match client.hget(cache_key, server_name).await? {
+pub(crate) async fn get_status(server_name: &str, cache_key: &str, client: impl AsRef<TardisCacheClient>) -> TardisResult<Option<Status>> {
+    match client.as_ref().hget(cache_key, server_name).await? {
         Some(result) => Ok(Some(TardisFuns::json.str_to_obj(&result)?)),
         None => Ok(None),
     }

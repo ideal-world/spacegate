@@ -45,12 +45,12 @@ fn init_filter_defs() {
     }
 }
 
-pub fn register_filter_def(code: &str, filter_def: Box<dyn SgPluginFilterDef>) {
+pub fn register_filter_def(code: impl Into<String>, filter_def: Box<dyn SgPluginFilterDef>) {
     unsafe {
         if FILTERS.is_none() {
             init_filter_defs();
         }
-        FILTERS.as_mut().expect("Unreachable code").insert(code.to_string(), filter_def);
+        FILTERS.as_mut().expect("Unreachable code").insert(code.into(), filter_def);
     }
 }
 
@@ -90,6 +90,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterIn
 }
 
 pub trait SgPluginFilterDef {
+    fn get_code(&self) -> &str;
     fn inst(&self, spec: Value) -> TardisResult<BoxSgPluginFilter>;
 }
 

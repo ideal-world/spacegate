@@ -24,6 +24,9 @@ use tardis::{
 pub struct SgFilterAuthDef;
 
 impl SgPluginFilterDef for SgFilterAuthDef {
+    fn get_code(&self) -> &'static str {
+        "auth"
+    }
     fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
         let filter = TardisFuns::json.json_to_obj::<SgFilterAuth>(spec)?;
         Ok(filter.boxed())
@@ -59,7 +62,7 @@ impl SgPluginFilter for SgFilterAuth {
 async fn test_custom_plugin() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();
-    spacegate_kernel::register_filter_def("auth", Box::new(SgFilterAuthDef));
+    spacegate_kernel::register_filter_def(SgFilterAuthDef);
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),
