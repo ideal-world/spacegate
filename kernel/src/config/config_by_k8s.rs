@@ -430,7 +430,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             .spec
             .listeners
             .iter()
-            .any(|listener| listener.protocol.eq_ignore_ascii_case("https") && !listener.protocol.eq_ignore_ascii_case("http") && !listener.protocol.eq_ignore_ascii_case("ws"))
+            .any(|listener| !listener.protocol.eq_ignore_ascii_case("https") && !listener.protocol.eq_ignore_ascii_case("http") && !listener.protocol.eq_ignore_ascii_case("ws"))
         {
             return Err(TardisError::not_implemented(
                 "[SG.Config] Gateway [spec.listener.protocol!=HTTPS|HTTP|ws] not supported yet",
