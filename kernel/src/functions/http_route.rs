@@ -409,9 +409,9 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         );
     }
 
-    let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
+    let ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
 
-    ctx.build_response().await
+    process_response_headers(ctx).await?.build_response().await
 }
 
 fn process_request_headers(request: &mut Request<Body>, remote_addr: SocketAddr) -> TardisResult<()> {
@@ -433,6 +433,14 @@ fn process_request_headers(request: &mut Request<Body>, remote_addr: SocketAddr)
     );
     Ok(())
 }
+
+async fn process_response_headers(mut ctx: SgRoutePluginContext) -> TardisResult<SgRoutePluginContext> {
+    let response_body:Vec<u8>=ctx.response.take_body_into_bytes().await?.into();
+    ctx.response.set_header(http::header::CONTENT_LENGTH, response_body.len().to_string().as_str())?;
+    ctx.response.set_body(response_body);
+    Ok(ctx)
+}
+
 /// Match route by SgHttpRouteInst list
 /// First, we perform route matching based on the hostname. Hostname matching can fall into three categories:
 /// exact domain name match, wildcard domain match, and unspecified domain name match.
