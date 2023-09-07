@@ -435,9 +435,17 @@ fn process_request_headers(request: &mut Request<Body>, remote_addr: SocketAddr)
 }
 
 async fn process_response_headers(mut ctx: SgRoutePluginContext) -> TardisResult<SgRoutePluginContext> {
-    let response_body:Vec<u8>=ctx.response.take_body_into_bytes().await?.into();
-    ctx.response.set_header(http::header::CONTENT_LENGTH, response_body.len().to_string().as_str())?;
-    ctx.response.set_body(response_body);
+    let is_chunked = if let Some(encoding) = ctx.response.get_headers().get(hyper::header::TRANSFER_ENCODING) {
+        encoding.to_str().map_err(|e| TardisError::bad_gateway(&format!("[SG.ProcessResponseHeaders] Transfer-Encoding header value parse err {e}"), ""))?.contains("chunked")
+    } else {
+        false
+    };
+    if !is_chunked {
+        let response_body: Vec<u8> = ctx.response.take_body_into_bytes().await?.into();
+        ctx.response.set_header(http::header::CONTENT_LENGTH, response_body.len().to_string().as_str())?;
+        ctx.response.set_body(response_body);
+    }
+
     Ok(ctx)
 }
 
