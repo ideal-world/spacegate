@@ -699,7 +699,9 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                                 })
                                                 .collect_vec()
                                         }),
-                                        method: a_match.method.map(|method| vec![method.to_lowercase()]),
+                                        // ref https://www.rfc-editor.org/rfc/rfc9110.html#name-methods
+                                        // Method is case-sensitive and standardized methods are defined in all-uppercase US-ASCII letters
+                                        method: a_match.method.map(|method| vec![method]),
                                     })
                                     .collect_vec()
                             }),
