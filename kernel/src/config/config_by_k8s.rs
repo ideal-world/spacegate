@@ -232,7 +232,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             let mut gateway_obj_map = HashMap::new();
             let mut http_route_rel_gateway_map = HashMap::new();
             for target_ref in filter_obj.spec.target_refs {
-                if target_ref.kind.to_lowercase() == *"gateway" {
+                if target_ref.kind.eq_ignore_ascii_case("gateway") {
                     let gateway_api: Api<Gateway> = Api::namespaced(
                         get_client().await.expect("[SG.Config] Failed to get client"),
                         target_ref.namespace.as_ref().unwrap_or(&"default".to_string()),
@@ -250,7 +250,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                         gateway_obj,
                     );
                 };
-                if target_ref.kind.to_lowercase() == *"httproute" {
+                if target_ref.kind.eq_ignore_ascii_case("httproute") {
                     let http_route_api: Api<HttpRoute> = Api::namespaced(
                         get_client().await.expect("[SG.Config] Failed to get client"),
                         target_ref.namespace.as_ref().unwrap_or(&"default".to_string()),
@@ -430,7 +430,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             .spec
             .listeners
             .iter()
-            .any(|listener| listener.protocol.to_lowercase() != "https" && listener.protocol.to_lowercase() != "http" && listener.protocol.to_lowercase() != "ws")
+            .any(|listener| listener.protocol.eq_ignore_ascii_case("https") && !listener.protocol.eq_ignore_ascii_case("http") && !listener.protocol.eq_ignore_ascii_case("ws"))
         {
             return Err(TardisError::not_implemented(
                 "[SG.Config] Gateway [spec.listener.protocol!=HTTPS|HTTP|ws] not supported yet",
@@ -441,7 +441,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
             .spec
             .listeners
             .iter()
-            .any(|listener| listener.tls.as_ref().map(|tls| tls.mode.as_ref().map(|mode| mode.to_lowercase() != "terminate").unwrap_or(false)).unwrap_or(false))
+            .any(|listener| listener.tls.as_ref().map(|tls| tls.mode.as_ref().map(|mode| !mode.eq_ignore_ascii_case("terminate")).unwrap_or(false)).unwrap_or(false))
         {
             return Err(TardisError::not_implemented(
                 "[SG.Config] Gateway [spec.listener.tls.mode!=TERMINATE] not supported yet",
@@ -456,7 +456,12 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         if gateway_obj.metadata.name.is_none() {
             return Err(TardisError::format_error("[SG.Config] Gateway [metadata.name] is required", ""));
         }
-        if gateway_obj.spec.listeners.iter().any(|listener| (listener.protocol.to_lowercase() == "https" || listener.protocol.to_lowercase() == "tls") && listener.tls.is_none()) {
+        if gateway_obj
+            .spec
+            .listeners
+            .iter()
+            .any(|listener| (listener.protocol.eq_ignore_ascii_case("https") || listener.protocol.eq_ignore_ascii_case("tls")) && listener.tls.is_none())
+        {
             return Err(TardisError::format_error(
                 "[SG.Config] Gateway [spec.listener.tls] is required when the Protocol field is “HTTPS” or “TLS”",
                 "",
@@ -602,7 +607,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                         .inner
                                         .kind
                                         .as_ref()
-                                        .map(|kind| kind.to_lowercase() != "service" && kind.to_lowercase() != BANCKEND_KIND_EXTERNAL_SERVICE.to_lowercase())
+                                        .map(|kind| !kind.eq_ignore_ascii_case("service") && !kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_SERVICE))
                                         .unwrap_or(false)
                             })
                         })
@@ -712,7 +717,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                         let backend = backend.backend_ref.expect("[SG.Config] unexpected none: http_route backendRef");
                                         let namespace = match backend.inner.kind {
                                             Some(kind) => {
-                                                if kind.to_lowercase() == BANCKEND_KIND_EXTERNAL_SERVICE.to_lowercase() {
+                                                if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_SERVICE) {
                                                     backend.inner.namespace
                                                 } else {
                                                     Some(backend.inner.namespace.unwrap_or("default".to_string()))
@@ -755,9 +760,9 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
         .into_iter()
         .filter(|filter_obj| {
             filter_obj.spec.target_refs.iter().any(|target_ref| {
-                target_ref.kind.to_lowercase() == kind.to_lowercase()
-                    && target_ref.name.to_lowercase() == name.to_lowercase()
-                    && target_ref.namespace.as_ref().unwrap_or(&"default".to_string()).to_lowercase() == namespace.to_lowercase()
+                target_ref.kind.eq_ignore_ascii_case(kind)
+                    && target_ref.name.eq_ignore_ascii_case(name)
+                    && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
             })
         })
         .flat_map(|filter_obj| {

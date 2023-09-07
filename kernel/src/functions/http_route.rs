@@ -324,7 +324,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
     let backend_filters = backend.map(|backend| backend.filters.as_slice());
     let rule_filters = matched_rule_inst.map(|rule| rule.filters.as_slice());
 
-    if request.headers().get(UPGRADE).map(|v| &v.to_str().expect("[SG.Websocket] Upgrade header value illegal:  is not ascii").to_lowercase() == "websocket").unwrap_or(false) {
+    if request.headers().get(UPGRADE).is_some_and(|v| v.as_bytes().eq_ignore_ascii_case(b"websocket")) {
         #[cfg(feature = "ws")]
         {
             if let Some(backend) = backend {
