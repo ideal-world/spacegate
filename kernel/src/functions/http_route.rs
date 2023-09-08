@@ -328,7 +328,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         #[cfg(feature = "ws")]
         {
             if let Some(backend) = backend {
-                log::trace!("[SG.Route] Backend: {:?}", backend.name_or_host);
+                log::trace!("[SG.Websocket] Backend: {:?}", backend.name_or_host);
                 let mut ctx = process_req_filters_ws(
                     gateway_name.to_string(),
                     remote_addr,
@@ -382,7 +382,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         };
 
         match backend {
-            Some(b) => log::trace!("[SG.Request] matched  backend: {}", b),
+            Some(b) => log::debug!("[SG.Request] matched  backend: {}", b),
             None => log::info!("[SG.Request] matched no backend"),
         }
 
