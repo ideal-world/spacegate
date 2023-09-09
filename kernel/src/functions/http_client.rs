@@ -1,4 +1,7 @@
-use std::{sync::OnceLock, time::Duration};
+use std::{
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use crate::{config::gateway_dto::SgProtocol, plugins::context::SgRoutePluginContext};
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
@@ -18,18 +21,57 @@ static DEFAULT_CLIENT: OnceLock<Client<HttpsConnector<HttpConnector>>> = OnceLoc
 
 pub fn init() -> TardisResult<&'static Client<HttpsConnector<HttpConnector>>> {
     if DEFAULT_CLIENT.get().is_none() {
-        let _ = DEFAULT_CLIENT.set(do_init()?);
+        let _ = DEFAULT_CLIENT.set(do_init(false)?);
     }
     Ok(default_client())
 }
 
-fn do_init() -> TardisResult<Client<HttpsConnector<HttpConnector>>> {
-    let tls_cfg = rustls::ClientConfig::builder().with_safe_defaults().with_native_roots().with_no_client_auth();
-    let https = hyper_rustls::HttpsConnectorBuilder::new().with_tls_config(tls_cfg).https_or_http().enable_http1().build();
+pub fn get_ignore_validation_clint() -> TardisResult<Client<HttpsConnector<HttpConnector>>> {
+    do_init(true)
+}
+
+fn do_init(ignore_validation: bool) -> TardisResult<Client<HttpsConnector<HttpConnector>>> {
+    fn get_tls_config(ignore: bool) -> rustls::ClientConfig {
+        if ignore {
+            get_rustls_config_dangerous()
+        } else {
+            rustls::ClientConfig::builder().with_safe_defaults().with_native_roots().with_no_client_auth()
+        }
+    }
+
+    let https = hyper_rustls::HttpsConnectorBuilder::new().with_tls_config(get_tls_config(ignore_validation)).https_or_http().enable_http1().build();
     let tls_client = Client::builder().build(https);
+
     Ok(tls_client)
 }
 
+pub fn get_rustls_config_dangerous() -> rustls::ClientConfig {
+    let store = rustls::RootCertStore::empty();
+    let mut config = rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(store).with_no_client_auth();
+
+    // completely disable cert-verification
+    let mut dangerous_config = rustls::ClientConfig::dangerous(&mut config);
+    dangerous_config.set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+
+    config
+}
+
+pub struct NoCertificateVerification {}
+impl rustls::client::ServerCertVerifier for NoCertificateVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
+
+#[inline]
 fn default_client() -> &'static Client<HttpsConnector<HttpConnector>> {
     DEFAULT_CLIENT.get().expect("DEFAULT_CLIENT not initialized")
 }
@@ -105,11 +147,7 @@ pub async fn raw_request(
     }
     req = req.uri(url);
     let req = req.body(body).map_err(|error| TardisError::internal_error(&format!("[SG.Route] Build request method {method_str} url {url_str} error:{error}"), ""))?;
-    let req = if let Some(client) = client {
-        client.request(req)
-    } else {
-        default_client().request(req)
-    };
+    let req = if let Some(client) = client { client.request(req) } else { init()?.request(req) };
     let response = match timeout(Duration::from_millis(timeout_ms), req).await {
         Ok(response) => response.map_err(|error: Error| TardisError::custom("502", &format!("[SG.Client] Request method {method_str} url {url_str} error: {error}"), "")),
         Err(_) => {

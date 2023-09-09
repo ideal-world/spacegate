@@ -16,7 +16,12 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{constants, do_startup, functions::http_route, shutdown};
+use crate::{
+    constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION},
+    do_startup,
+    functions::http_route,
+    shutdown,
+};
 
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
@@ -490,7 +495,15 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                     .annotations
                     .clone()
                     .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string())),
-                lang: gateway_obj.metadata.annotations.and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string())),
+                lang: gateway_obj
+                    .metadata
+                    .annotations
+                    .clone()
+                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string())),
+                ignore_tls_verification: gateway_obj
+                    .metadata
+                    .annotations
+                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok())),
             },
             listeners: join_all(
                 gateway_obj

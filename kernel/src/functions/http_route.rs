@@ -200,7 +200,11 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     let route_inst = SgGatewayInst {
         filters: global_filters,
         routes: route_insts,
-        client: http_client::init()?.clone(),
+        client: if gateway_conf.parameters.ignore_tls_verification.unwrap_or(false) {
+            http_client::init()?.clone()
+        } else {
+            http_client::get_ignore_validation_clint()?
+        },
         listeners: gateway_conf.listeners,
     };
     {
