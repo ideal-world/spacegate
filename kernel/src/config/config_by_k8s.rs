@@ -27,7 +27,7 @@ use super::{
     k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
 };
-use crate::constants::{BANCKEND_KIND_EXTERNAL_SERVICE, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
+use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -602,7 +602,11 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                         .inner
                                         .kind
                                         .as_ref()
-                                        .map(|kind| kind.to_lowercase() != "service" && kind.to_lowercase() != BANCKEND_KIND_EXTERNAL_SERVICE.to_lowercase())
+                                        .map(|kind| {
+                                            kind.to_lowercase() != "service"
+                                                && kind.to_lowercase() != BANCKEND_KIND_EXTERNAL_HTTP.to_lowercase()
+                                                && kind.to_lowercase() != BANCKEND_KIND_EXTERNAL_HTTPS.to_lowercase()
+                                        })
                                         .unwrap_or(false)
                             })
                         })
@@ -612,7 +616,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
             .unwrap_or(false)
         {
             return Err(TardisError::not_implemented(
-                "[SG.Config] HttpRoute [spec.rules.backendRefs.kind!=(Service || ExternalService)] not supported yet",
+                "[SG.Config] HttpRoute [spec.rules.backendRefs.kind!=(Service || ExternalHttp || ExternalHttps )] not supported yet",
                 "",
             ));
         }
@@ -712,9 +716,14 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                     .map(|backend| {
                                         let filters = convert_filters(backend.filters);
                                         let backend = backend.backend_ref.expect("[SG.Config] unexpected none: http_route backendRef");
+                                        let mut protocol = None;
                                         let namespace = match backend.inner.kind {
                                             Some(kind) => {
-                                                if kind.to_lowercase() == BANCKEND_KIND_EXTERNAL_SERVICE.to_lowercase() {
+                                                if kind.to_lowercase() == BANCKEND_KIND_EXTERNAL_HTTP.to_lowercase() {
+                                                    protocol = Some(SgProtocol::Http);
+                                                    backend.inner.namespace
+                                                } else if kind.to_lowercase() == BANCKEND_KIND_EXTERNAL_HTTPS.to_lowercase() {
+                                                    protocol = Some(SgProtocol::Https);
                                                     backend.inner.namespace
                                                 } else {
                                                     Some(backend.inner.namespace.unwrap_or("default".to_string()))
@@ -727,7 +736,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                             namespace,
                                             port: backend.inner.port.expect("[SG.Config] unexpected none: http_route backend's port"),
                                             timeout_ms: None,
-                                            protocol: None,
+                                            protocol,
                                             weight: backend.weight,
                                             filters,
                                         }
