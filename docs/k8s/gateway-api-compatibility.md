@@ -109,6 +109,13 @@ Fields:
 
 > Spacegate's unique implementation that is different or even opposite to the standard
 
+### Gateway
+- metadata
+    - annotations
+        - log_level (option) - spacegate log level : see [rust log level](https://docs.rs/log/latest/log/enum.Level.html)
+        - redis_url (option) - spacegate redis url
+        - lang (option) - spacegate i8n support
+        - ignore_tls_verification (option) - ignore backend tls verification
 ### HttpRoute
 
 - metadata
