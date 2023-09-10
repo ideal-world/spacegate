@@ -67,8 +67,8 @@ jobs:
           kubectl apply -f ./kernel/res/namespace.yaml
           kubectl apply -f ./kernel/res/gatewayclass.yaml
           kubectl apply -f ./kernel/res/spacegate-gateway.yaml
-          kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
           sleep 5
+          kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
 
       - name: Run k8s e2e test
         run: |
