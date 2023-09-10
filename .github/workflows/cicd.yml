@@ -1,6 +1,6 @@
 name: CICD
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 env:
   ARTIFACT_DIR: release-artifacts
@@ -88,50 +88,56 @@ jobs:
 
   release-linux:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [check]
+    needs: [ check ]
     runs-on: ubuntu-latest
     strategy:
       matrix:
         target:
           [
+            x86_64-unknown-linux-musl,
             aarch64-unknown-linux-gnu,
-            x86_64-unknown-linux-gnu,
             aarch64-unknown-linux-musl,
+          ]
+        service:
+          [
+            spacegate-simplify,
+            spacegate-native,
+            spacegate,
           ]
     env:
       OPENSSL_DIR: /opt/openssl
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run build ${{ matrix.service }} (${{ matrix.target }})
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          docker run --rm -t \
+          -v $HOME/.cargo/registry/:/root/.cargo/registry \
+          -v "$(pwd)":/volume \
+          clux/muslrust:stable \
+          cargo build --release -p ${{ matrix.service }} --target ${{ matrix.target }}
 
       - name: Init rust environment
         uses: actions-rs/toolchain@v1
+        if: matrix.target != 'x86_64-unknown-linux-musl'
         with:
           toolchain: stable
           profile: minimal
           override: true
           target: ${{ matrix.target }}
 
-      - name: Run build spacegate-simplify (${{ matrix.target }})
+      - name: Run build ${{ matrix.service }} (${{ matrix.target }})
         uses: actions-rs/cargo@v1
+        if: matrix.target != 'x86_64-unknown-linux-musl'
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }} -p spacegate-simplify
-
-      - name: Run build spacegate-native (${{ matrix.target }})
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --target ${{ matrix.target }} -p spacegate-native
-
-      - name: Run build spacegate-full (${{ matrix.target }})
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --target ${{ matrix.target }} -p spacegate
+          args: --release --target ${{ matrix.target }} -p ${{ matrix.service }}
 
       - name: Prepare artifacts
         run: |
@@ -139,27 +145,13 @@ jobs:
           DEST_DIR=${{ env.ARTIFACT_DIR }}
           mkdir -p ${DEST_DIR}
 
-          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
-          CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
-          mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
-          shasum -a 256 ${RELEASE_NAME_FULL} > ${CHECKSUM_FULL}
+          RELEASE_NAME=spacegate-${{ matrix.target }}-${{ github.ref_name }}
+          CHECKSUM=${RELEASE_NAME}.checksum.txt
+          mv ${SRC_DIR}/${{ matrix.target }} ${RELEASE_NAME}
+          shasum -a 256 ${RELEASE_NAME} > ${CHECKSUM}
 
-          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
-          CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
-          mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
-          shasum -a 256 ${RELEASE_NAME_NATIVE} > ${CHECKSUM_NATIVE}
-
-          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
-          CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
-          mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
-          shasum -a 256 ${RELEASE_NAME_SIMPLIFY} > ${CHECKSUM_SIMPLIFY}
-
-          mv ${RELEASE_NAME_FULL} ${DEST_DIR}
-          mv ${CHECKSUM_FULL} ${DEST_DIR}
-          mv ${RELEASE_NAME_NATIVE} ${DEST_DIR}
-          mv ${CHECKSUM_NATIVE} ${DEST_DIR}
-          mv ${RELEASE_NAME_SIMPLIFY} ${DEST_DIR}
-          mv ${CHECKSUM_SIMPLIFY} ${DEST_DIR}
+          mv ${RELEASE_NAME} ${DEST_DIR}
+          mv ${CHECKSUM} ${DEST_DIR}
 
           ls ${DEST_DIR}
 
@@ -178,7 +170,7 @@ jobs:
 
   release-macos:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [check]
+    needs: [ check ]
     runs-on: macos-latest
     strategy:
       matrix:
@@ -268,7 +260,7 @@ jobs:
 
   release-windows:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [check]
+    needs: [ check ]
     runs-on: windows-latest
     strategy:
       matrix:
@@ -302,7 +294,7 @@ jobs:
       #     export OPENSSL_DIR=$PWD/packages/openssl_x64-windows-static
 
       - run: vcpkg install openssl:x64-windows-static-md
-      
+
       - name: Run build spacegate-simplify (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
@@ -367,7 +359,7 @@ jobs:
 
   publish-lib-kernel:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [check]
+    needs: [ check ]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
