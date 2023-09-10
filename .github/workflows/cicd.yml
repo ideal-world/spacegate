@@ -112,6 +112,9 @@ jobs:
 
       - name: Cache rust
         uses: Swatinem/rust-cache@v2
+        with:
+          key: release ${{ matrix.target }}
+          cache-targets: "false"
 
       - name: Run build ${{ matrix.service }} (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-musl'
