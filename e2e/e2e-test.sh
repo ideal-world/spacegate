@@ -219,6 +219,7 @@ echo "============[websocket]basic test============"
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
 
+kubectl describe pod -l app=websocket-echo
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
 sleep 5
 
