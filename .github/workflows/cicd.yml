@@ -141,6 +141,7 @@ jobs:
           -v "$(pwd)":/volume \
           clux/muslrust:stable \
           cargo build --release -p ${{ matrix.service }} --target ${{ matrix.target }}
+          sudo chown -R runner  target/x86_64-unknown-linux-musl
 
       - name: Init rust environment
         uses: actions-rs/toolchain@v1
@@ -167,6 +168,7 @@ jobs:
 
           RELEASE_NAME=${{ matrix.service }}-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM=${RELEASE_NAME}.checksum.txt
+          sudo 
           mv ${SRC_DIR}/${{ matrix.service }} ${RELEASE_NAME}
           shasum -a 256 ${RELEASE_NAME} > ${CHECKSUM}
 
