@@ -103,7 +103,7 @@ jobs:
 #          path: cobertura.xml
 
   release-linux:
-    if: startsWith(github.ref, 'refs/tags/')
+#    if: startsWith(github.ref, 'refs/tags/')
     needs: [ check ]
     runs-on: ubuntu-latest
     strategy:
