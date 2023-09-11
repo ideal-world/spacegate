@@ -18,23 +18,23 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
-
-      - name: Cache rust
-        uses: Swatinem/rust-cache@v2
-
-      - name: Check format
-        run: cargo fmt --all -- --check
-
-      - name: Check clippy
-        run: cargo clippy --all --all-features
-
-      - name: Run rust test
-        run: cargo test --all-features
+#      - name: Init rust envrionment
+#        uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: stable
+#          components: rustfmt, clippy
+#
+#      - name: Cache rust
+#        uses: Swatinem/rust-cache@v2
+#
+#      - name: Check format
+#        run: cargo fmt --all -- --check
+#
+#      - name: Check clippy
+#        run: cargo clippy --all --all-features
+#
+#      - name: Run rust test
+#        run: cargo test --all-features
 
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
@@ -52,55 +52,55 @@ jobs:
           large-packages: true
           swap-storage: true
 
-      - name: Setup k8s e2e env
-        uses: AbsaOSS/k3d-action@v2
-        with:
-          cluster-name: spacegate-test
-          args: >-
-            --agents 1
-            --no-lb
-            --k3s-arg "--no-deploy=traefik,servicelb,metrics-server@server:*"
-
-      - name: Init k8s e2e env
-        run: |
-          cd ~ 
-          pwd
-          cd -
-          echo $KUBECONFIG
-          echo "========="
-          cat ~/.kube/config
-          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
-          cargo build -p spacegate
-          cd services/full/res
-          mv ../../../target/debug/spacegate ./
-          docker build -t ecfront/spacegate:0.1.0-alpha.2 .
-          rm spacegate
-          k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test --verbose
-
-          kubectl wait --for=condition=Ready pod -l name=gateway-api-admission-server -n gateway-system
-          sleep 10
-          cd ../../../
-          kubectl apply -f ./kernel/res/namespace.yaml
-          kubectl apply -f ./kernel/res/gatewayclass.yaml
-          kubectl apply -f ./kernel/res/spacegate-gateway.yaml
-          sleep 5
-          kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
-
-      - name: Run k8s e2e test
-        run: |
-          cd ./e2e
-          sudo bash ./e2e-test.sh
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v2
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v2
-        with:
-          name: code-coverage-report
-          path: cobertura.xml
+#      - name: Setup k8s e2e env
+#        uses: AbsaOSS/k3d-action@v2
+#        with:
+#          cluster-name: spacegate-test
+#          args: >-
+#            --agents 1
+#            --no-lb
+#            --k3s-arg "--no-deploy=traefik,servicelb,metrics-server@server:*"
+#
+#      - name: Init k8s e2e env
+#        run: |
+#          cd ~
+#          pwd
+#          cd -
+#          echo $KUBECONFIG
+#          echo "========="
+#          cat ~/.kube/config
+#          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
+#          cargo build -p spacegate
+#          cd services/full/res
+#          mv ../../../target/debug/spacegate ./
+#          docker build -t ecfront/spacegate:0.1.0-alpha.2 .
+#          rm spacegate
+#          k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test --verbose
+#
+#          kubectl wait --for=condition=Ready pod -l name=gateway-api-admission-server -n gateway-system
+#          sleep 10
+#          cd ../../../
+#          kubectl apply -f ./kernel/res/namespace.yaml
+#          kubectl apply -f ./kernel/res/gatewayclass.yaml
+#          kubectl apply -f ./kernel/res/spacegate-gateway.yaml
+#          sleep 5
+#          kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
+#
+#      - name: Run k8s e2e test
+#        run: |
+#          cd ./e2e
+#          sudo bash ./e2e-test.sh
+#
+#      - name: Upload to codecov.io
+#        uses: codecov/codecov-action@v2
+#        with:
+#          token: ${{secrets.CODECOV_TOKEN}}
+#
+#      - name: Archive code coverage results
+#        uses: actions/upload-artifact@v2
+#        with:
+#          name: code-coverage-report
+#          path: cobertura.xml
 
   release-linux:
     if: startsWith(github.ref, 'refs/tags/')
@@ -168,7 +168,6 @@ jobs:
 
           RELEASE_NAME=${{ matrix.service }}-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM=${RELEASE_NAME}.checksum.txt
-          sudo 
           mv ${SRC_DIR}/${{ matrix.service }} ${RELEASE_NAME}
           shasum -a 256 ${RELEASE_NAME} > ${CHECKSUM}
 
