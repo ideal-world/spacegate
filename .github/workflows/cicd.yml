@@ -165,9 +165,9 @@ jobs:
           DEST_DIR=${{ env.ARTIFACT_DIR }}
           mkdir -p ${DEST_DIR}
 
-          RELEASE_NAME=spacegate-${{ matrix.target }}-${{ github.ref_name }}
+          RELEASE_NAME=${{ matrix.service }}-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM=${RELEASE_NAME}.checksum.txt
-          mv ${SRC_DIR}/${{ matrix.target }} ${RELEASE_NAME}
+          mv ${SRC_DIR}/${{ matrix.service }} ${RELEASE_NAME}
           shasum -a 256 ${RELEASE_NAME} > ${CHECKSUM}
 
           mv ${RELEASE_NAME} ${DEST_DIR}
