@@ -220,6 +220,7 @@ kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
 
 sleep 5
+kubectl --kubeconfig /home/runner/.kube/config describe node
 kubectl --kubeconfig /home/runner/.kube/config describe pod -l app=websocket-echo
 kubectl --kubeconfig /home/runner/.kube/config logs -l app=websocket-echo
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
