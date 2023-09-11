@@ -133,6 +133,9 @@ jobs:
           key: release ${{ matrix.target }}
           cache-targets: "false"
 
+      - name: apt list
+        run: sudo apt list --installed
+        
       - name: Run build ${{ matrix.service }} (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
