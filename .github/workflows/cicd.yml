@@ -121,8 +121,8 @@ jobs:
             spacegate-native,
             spacegate,
           ]
-    env:
-      OPENSSL_DIR: /opt/openssl
+#    env:
+#      OPENSSL_DIR: /opt/openssl
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
@@ -134,7 +134,8 @@ jobs:
           cache-targets: "false"
 
       - name: apt list
-        run: sudo apt list --installed
+        run: openssl version 
+          sudo apt list --installed
 
       - name: Run build ${{ matrix.service }} (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-musl'
