@@ -4,7 +4,7 @@
 
 [IMPORTANT]
 ====
-There are several version types of ``Tardis``, so please choose carefully when using them.
+There are several version types of ``Spacegate``, so please choose carefully when using them.
 
 . ``ga`` General Availability, the official version, internally tested with no known bugs and verified in production, preferred for production environments!
 . . ``rc`` Release Candidate, internally tested with no known bugs and available for production environments.
@@ -18,4 +18,14 @@ TIP: The version number follows the https://semver.org/[``semver``] specificatio
 
 === Release Notes
 
-==== 0.1.0
+==== 0.1.0-alpha.2
+
+- Initial release.
+  The architecture is completed and basically available
+
+==== 0.1.0-alpha.7
+
+- Add several plugins: maintenance, status, compression,etc.
+- Enhance SGPluginContext: optimize api, add more obtainable parameters.
+- Code readability improvement and optimization.
+- Write some documents.

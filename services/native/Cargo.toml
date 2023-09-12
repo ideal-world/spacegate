@@ -13,7 +13,7 @@ edition.workspace = true
 readme = "../../README.md"
 
 [dependencies]
-spacegate-kernel = { version = "0.1.0-alpha.6", path = "../../kernel", features = [
+spacegate-kernel = { version = "0.1.0-alpha.7", path = "../../kernel", features = [
     "ws",
     "cache",
 ] }
