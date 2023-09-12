@@ -170,7 +170,7 @@ impl SgCtxRequest {
     }
 
     #[inline]
-    pub fn get_method(&mut self) -> &Method {
+    pub fn get_method(&self) -> &Method {
         &self.method
     }
 
@@ -185,7 +185,7 @@ impl SgCtxRequest {
     }
 
     #[inline]
-    pub fn get_uri(&mut self) -> &Uri {
+    pub fn get_uri(&self) -> &Uri {
         &self.uri
     }
 
@@ -200,7 +200,7 @@ impl SgCtxRequest {
     }
 
     #[inline]
-    pub fn get_version(&mut self) -> &Version {
+    pub fn get_version(&self) -> &Version {
         &self.version
     }
 
@@ -215,7 +215,7 @@ impl SgCtxRequest {
     }
 
     #[inline]
-    pub fn get_headers(&mut self) -> &HeaderMap<HeaderValue> {
+    pub fn get_headers(&self) -> &HeaderMap<HeaderValue> {
         self.headers.get()
     }
 
@@ -296,7 +296,7 @@ impl Clone for SgCtxRequest {
             version: self.version.clone(),
             body: Body::empty(),
             headers: self.headers.clone(),
-            remote_addr: self.remote_addr.clone(),
+            remote_addr: self.remote_addr,
         }
     }
 }
@@ -325,7 +325,7 @@ impl SgCtxResponse {
     }
 
     #[inline]
-    pub fn get_status_code(&mut self) -> &StatusCode {
+    pub fn get_status_code(&self) -> &StatusCode {
         self.status_code.get()
     }
 
@@ -340,12 +340,12 @@ impl SgCtxResponse {
     }
 
     #[inline]
-    pub fn get_headers(&mut self) -> &HeaderMap<HeaderValue> {
+    pub fn get_headers(&self) -> &HeaderMap<HeaderValue> {
         self.headers.get()
     }
 
     #[inline]
-    pub fn get_headers_raw(&mut self) -> &HeaderMap<HeaderValue> {
+    pub fn get_headers_raw(&self) -> &HeaderMap<HeaderValue> {
         self.headers.get_raw()
     }
 

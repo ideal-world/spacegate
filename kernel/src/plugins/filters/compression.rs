@@ -59,7 +59,7 @@ impl From<CompressionType> for &str {
 impl PartialEq<CompressionType> for &str {
     fn eq(&self, other: &CompressionType) -> bool {
         let other_str: &str = other.clone().into();
-        self.to_lowercase() == *other_str
+        self.eq_ignore_ascii_case(other_str)
     }
 }
 
