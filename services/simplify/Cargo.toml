@@ -25,3 +25,6 @@ tardis = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[target.'cfg(not(target_os = "x86_64-unknown-linux-musl"))'.dependencies]
+openssl = {features = ["vendored"]}
