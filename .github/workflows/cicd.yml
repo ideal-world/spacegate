@@ -134,7 +134,8 @@ jobs:
           cache-targets: "false"
 
       - name: apt list
-        run: openssl version 
+        run: |
+          openssl version 
           sudo apt list --installed
 
       - name: Run build ${{ matrix.service }} (${{ matrix.target }})
