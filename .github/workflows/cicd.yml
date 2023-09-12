@@ -194,7 +194,7 @@ jobs:
             ${{ env.ARTIFACT_DIR }}/*.*
 
   release-macos:
-    if: startsWith(github.ref, 'refs/tags/')
+#    if: startsWith(github.ref, 'refs/tags/')
     needs: [ check ]
     runs-on: macos-latest
     strategy:
@@ -203,6 +203,12 @@ jobs:
           [
             x86_64-apple-darwin,
             aarch64-apple-darwin,
+          ]
+        service:
+          [
+            spacegate-simplify,
+            spacegate-native,
+            spacegate,
           ]
     steps:
       - name: Check out the repo
@@ -219,26 +225,12 @@ jobs:
         run: |
           brew install openssl
 
-      - name: Run build spacegate-simplify (${{ matrix.target }})
+      - name: Run build ${{ matrix.service }} (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }} -p spacegate-simplify
-
-      - name: Run build spacegate-native (${{ matrix.target }})
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --target ${{ matrix.target }} -p spacegate-native
-
-      - name: Run build spacegate-full (${{ matrix.target }})
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --target ${{ matrix.target }} -p spacegate
+          args: --release --target ${{ matrix.target }} -p ${{ matrix.service }}
 
       - name: Prepare artifacts
         run: |
@@ -246,27 +238,13 @@ jobs:
           DEST_DIR=${{ env.ARTIFACT_DIR }}
           mkdir -p ${DEST_DIR}
 
-          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}
+          RELEASE_NAME_FULL=${{ matrix.service }}-${{ matrix.target }}-${{ github.ref_name }}
           CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
-          mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
+          mv ${SRC_DIR}/${{ matrix.service }} ${RELEASE_NAME_FULL}
           shasum -a 256 ${RELEASE_NAME_FULL} > ${CHECKSUM_FULL}
-
-          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}
-          CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
-          mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
-          shasum -a 256 ${RELEASE_NAME_NATIVE} > ${CHECKSUM_NATIVE}
-
-          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}
-          CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
-          mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
-          shasum -a 256 ${RELEASE_NAME_SIMPLIFY} > ${CHECKSUM_SIMPLIFY}
 
           mv ${RELEASE_NAME_FULL} ${DEST_DIR}
           mv ${CHECKSUM_FULL} ${DEST_DIR}
-          mv ${RELEASE_NAME_NATIVE} ${DEST_DIR}
-          mv ${CHECKSUM_NATIVE} ${DEST_DIR}
-          mv ${RELEASE_NAME_SIMPLIFY} ${DEST_DIR}
-          mv ${CHECKSUM_SIMPLIFY} ${DEST_DIR}
 
           ls ${DEST_DIR}
 
@@ -295,6 +273,12 @@ jobs:
             #x86_64-pc-windows-gnu,
             x86_64-pc-windows-msvc,
           ]
+        service:
+          [
+            spacegate-simplify,
+            spacegate-native,
+            spacegate,
+          ]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -320,23 +304,11 @@ jobs:
 
       - run: vcpkg install openssl:x64-windows-static-md
 
-      - name: Run build spacegate-simplify (${{ matrix.target }})
+      - name: Run build ${{ matrix.service }} (${{ matrix.target }})
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --target ${{ matrix.target }} -p spacegate-simplify
-
-      - name: Run build spacegate-native (${{ matrix.target }})
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target ${{ matrix.target }} -p spacegate-native
-
-      - name: Run build spacegate-full (${{ matrix.target }})
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target ${{ matrix.target }} -p spacegate
+          args: --release --target ${{ matrix.target }} -p ${{ matrix.service }}
 
       - name: Prepare artifacts
         shell: bash
@@ -345,27 +317,13 @@ jobs:
           DEST_DIR=${{ env.ARTIFACT_DIR }}
           mkdir -p ${DEST_DIR}
 
-          RELEASE_NAME_FULL=spacegate-${{ matrix.target }}-${{ github.ref_name }}.exe
+          RELEASE_NAME_FULL=${{ matrix.service }}-${{ matrix.target }}-${{ github.ref_name }}.exe
           CHECKSUM_FULL=${RELEASE_NAME_FULL}.checksum.txt
-          mv ${SRC_DIR}/spacegate ${RELEASE_NAME_FULL}
+          mv ${SRC_DIR}/${{ matrix.service }} ${RELEASE_NAME_FULL}
           certutil -hashfile ${RELEASE_NAME_FULL} SHA256 >${CHECKSUM_FULL}
-
-          RELEASE_NAME_NATIVE=spacegate-native-${{ matrix.target }}-${{ github.ref_name }}.exe
-          CHECKSUM_NATIVE=${RELEASE_NAME_NATIVE}.checksum.txt
-          mv ${SRC_DIR}/spacegate-native ${RELEASE_NAME_NATIVE}
-          certutil -hashfile ${RELEASE_NAME_NATIVE} SHA256 >${CHECKSUM_NATIVE}
-
-          RELEASE_NAME_SIMPLIFY=spacegate-simplify-${{ matrix.target }}-${{ github.ref_name }}.exe
-          CHECKSUM_SIMPLIFY=${RELEASE_NAME_SIMPLIFY}.checksum.txt
-          mv ${SRC_DIR}/spacegate-simplify ${RELEASE_NAME_SIMPLIFY}
-          certutil -hashfile ${RELEASE_NAME_SIMPLIFY} SHA256 >${CHECKSUM_SIMPLIFY}
 
           mv ${RELEASE_NAME_FULL} ${DEST_DIR}
           mv ${CHECKSUM_FULL} ${DEST_DIR}
-          mv ${RELEASE_NAME_NATIVE} ${DEST_DIR}
-          mv ${CHECKSUM_NATIVE} ${DEST_DIR}
-          mv ${RELEASE_NAME_SIMPLIFY} ${DEST_DIR}
-          mv ${CHECKSUM_SIMPLIFY} ${DEST_DIR}
 
           ls ${DEST_DIR}
 
