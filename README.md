@@ -28,9 +28,18 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 
 ## 📦 Components
 
-| Crate                         | Description | 
-|-------------------------------|-------------|
-| **spacegate-kernel** [![Crate](https://img.shields.io/crates/v/spacegate-kernel.svg)](https://crates.io/crates/spacegate-kernel) [![Docs](https://docs.rs/spacegate-kernel/badge.svg)](https://docs.rs/spacegate-kernel) | Class library with all functions, support for embedding into your own rust project |
-| **spacegate** [![Crate](https://img.shields.io/crates/v/spacegate.svg)](https://crates.io/crates/spacegate) [![Docs](https://docs.rs/spacegate/badge.svg)](https://docs.rs/spacegate)  | Out-of-the-box service with all features |
-| **spacegate-native** [![Crate](https://img.shields.io/crates/v/spacegate-native.svg)](https://crates.io/crates/spacegate-native) [![Docs](https://docs.rs/spacegate-native/badge.svg)](https://docs.rs/spacegate-native)  | Out-of-the-box service that include all features except kubernetes support |
-| **spacegate-simplify** [![Crate](https://img.shields.io/crates/v/spacegate-simplify.svg)](https://crates.io/crates/spacegate-simplify) [![Docs](https://docs.rs/spacegate-simplify/badge.svg)](https://docs.rs/spacegate-simplify)  | Out-of-the-box service for standalone environments |
+| Crate                         | Form | Description                                                                        | 
+|-------------------------------|------|------------------------------------------------------------------------------------|
+| **spacegate-kernel** [![Crate](https://img.shields.io/crates/v/spacegate-kernel.svg)](https://crates.io/crates/spacegate-kernel) [![Docs](https://docs.rs/spacegate-kernel/badge.svg)](https://docs.rs/spacegate-kernel) | lib  | Class library with all functions, support for embedding into your own rust project |
+| **spacegate** | bin  | Out-of-the-box service with all features                                           |
+| **spacegate-native** | bin  | Out-of-the-box service that include all features except kubernetes support         |
+| **spacegate-simplify** | bin  | Out-of-the-box service for standalone environments                                 |
+
+## 🔖 Releases
+> Release binary naming method: {crate}-{arch}{OS}{libc}-{version}
+
+| OS          | Arch                   | libc          | Remark                                       |
+|-------------|------------------------|---------------|----------------------------------------------|
+| **linux**   | **x86_64**,**aarch64** | **gnu,musl**  | If you need static linking please use `musl` |
+| **macos**   | **x86_64**,**aarch64** | **Libsystem** |                                              |
+| **windows** | **x86_64**             | **msvc**      |                                              |
