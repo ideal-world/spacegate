@@ -33,7 +33,7 @@ async-compression.workspace = true
 
 tardis = { workspace = true, features = ["future", "crypto", "tls"] }
 http.workspace = true
-rustls.workspace = true
+rustls = { workspace = true, features = ["dangerous_configuration"] }
 hyper.workspace = true
 hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
@@ -51,7 +51,7 @@ tokio-util = { version = "0.7.8", features = ["io"] }
 tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
 reqwest = { workspace = true }
 tracing-subscriber = { workspace = true }
-criterion = { version = "0.5" ,features = ["async_tokio"]}
+criterion = { version = "0.5", features = ["async_tokio"] }
 
 [package.metadata.docs.rs]
 all-features = true
@@ -71,5 +71,5 @@ required-features = ["cache"]
 harness = false
 
 [[bench]]
-name="local_sliding_window_benchmark"
-harness=false
+name = "local_sliding_window_benchmark"
+harness = false

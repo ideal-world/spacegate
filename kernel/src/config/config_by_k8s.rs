@@ -16,7 +16,12 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{constants, do_startup, functions::http_route, shutdown};
+use crate::{
+    constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION},
+    do_startup,
+    functions::http_route,
+    shutdown,
+};
 
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
@@ -27,7 +32,7 @@ use super::{
     k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
 };
-use crate::constants::{BANCKEND_KIND_EXTERNAL_SERVICE, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
+use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -495,7 +500,15 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                     .annotations
                     .clone()
                     .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string())),
-                lang: gateway_obj.metadata.annotations.and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string())),
+                lang: gateway_obj
+                    .metadata
+                    .annotations
+                    .clone()
+                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string())),
+                ignore_tls_verification: gateway_obj
+                    .metadata
+                    .annotations
+                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok())),
             },
             listeners: join_all(
                 gateway_obj
@@ -607,7 +620,11 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                         .inner
                                         .kind
                                         .as_ref()
-                                        .map(|kind| !kind.eq_ignore_ascii_case("service") && !kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_SERVICE))
+                                        .map(|kind| {
+                                            !kind.eq_ignore_ascii_case("service")
+                                                && !kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTP)
+                                                && !kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTPS)
+                                        })
                                         .unwrap_or(false)
                             })
                         })
@@ -617,7 +634,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
             .unwrap_or(false)
         {
             return Err(TardisError::not_implemented(
-                "[SG.Config] HttpRoute [spec.rules.backendRefs.kind!=(Service || ExternalService)] not supported yet",
+                "[SG.Config] HttpRoute [spec.rules.backendRefs.kind!=(Service || ExternalHttp || ExternalHttps )] not supported yet",
                 "",
             ));
         }
@@ -704,7 +721,9 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                                 })
                                                 .collect_vec()
                                         }),
-                                        method: a_match.method.map(|method| vec![method.to_lowercase()]),
+                                        // ref https://www.rfc-editor.org/rfc/rfc9110.html#name-methods
+                                        // Method is case-sensitive and standardized methods are defined in all-uppercase US-ASCII letters
+                                        method: a_match.method.map(|method| vec![method]),
                                     })
                                     .collect_vec()
                             }),
@@ -715,9 +734,14 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                     .map(|backend| {
                                         let filters = convert_filters(backend.filters);
                                         let backend = backend.backend_ref.expect("[SG.Config] unexpected none: http_route backendRef");
+                                        let mut protocol = None;
                                         let namespace = match backend.inner.kind {
                                             Some(kind) => {
-                                                if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_SERVICE) {
+                                                if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTP) {
+                                                    protocol = Some(SgProtocol::Http);
+                                                    backend.inner.namespace
+                                                } else if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTPS) {
+                                                    protocol = Some(SgProtocol::Https);
                                                     backend.inner.namespace
                                                 } else {
                                                     Some(backend.inner.namespace.unwrap_or("default".to_string()))
@@ -730,7 +754,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                             namespace,
                                             port: backend.inner.port.expect("[SG.Config] unexpected none: http_route backend's port"),
                                             timeout_ms: None,
-                                            protocol: None,
+                                            protocol,
                                             weight: backend.weight,
                                             filters,
                                         }

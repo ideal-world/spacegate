@@ -200,7 +200,11 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
     let route_inst = SgGatewayInst {
         filters: global_filters,
         routes: route_insts,
-        client: http_client::init()?.clone(),
+        client: if gateway_conf.parameters.ignore_tls_verification.unwrap_or(false) {
+            http_client::get_ignore_validation_clint()?
+        } else {
+            http_client::init()?.clone()
+        },
         listeners: gateway_conf.listeners,
     };
     {
@@ -328,7 +332,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         #[cfg(feature = "ws")]
         {
             if let Some(backend) = backend {
-                log::trace!("[SG.Route] Backend: {:?}", backend.name_or_host);
+                log::trace!("[SG.Websocket] Backend: {:?}", backend.name_or_host);
                 let ctx = process_req_filters_ws(
                     gateway_name.to_string(),
                     remote_addr,
@@ -382,7 +386,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         };
 
         match backend {
-            Some(b) => log::trace!("[SG.Request] matched  backend: {}", b),
+            Some(b) => log::debug!("[SG.Request] matched  backend: {}", b),
             None => log::info!("[SG.Request] matched no backend"),
         }
 
@@ -409,9 +413,9 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         );
     }
 
-    let mut ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
+    let ctx: SgRoutePluginContext = process_resp_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
 
-    ctx.build_response().await
+    process_response_headers(ctx).await?.build_response().await
 }
 
 fn process_request_headers(request: &mut Request<Body>, remote_addr: SocketAddr) -> TardisResult<()> {
@@ -433,6 +437,22 @@ fn process_request_headers(request: &mut Request<Body>, remote_addr: SocketAddr)
     );
     Ok(())
 }
+
+async fn process_response_headers(mut ctx: SgRoutePluginContext) -> TardisResult<SgRoutePluginContext> {
+    let is_chunked = if let Some(encoding) = ctx.response.get_headers().get(hyper::header::TRANSFER_ENCODING) {
+        encoding.to_str().map_err(|e| TardisError::bad_gateway(&format!("[SG.ProcessResponseHeaders] Transfer-Encoding header value parse err {e}"), ""))?.contains("chunked")
+    } else {
+        false
+    };
+    if !is_chunked {
+        let response_body: Vec<u8> = ctx.response.take_body_into_bytes().await?.into();
+        ctx.response.set_header(http::header::CONTENT_LENGTH, response_body.len().to_string().as_str())?;
+        ctx.response.set_body(response_body);
+    }
+
+    Ok(ctx)
+}
+
 /// Match route by SgHttpRouteInst list
 /// First, we perform route matching based on the hostname. Hostname matching can fall into three categories:
 /// exact domain name match, wildcard domain match, and unspecified domain name match.

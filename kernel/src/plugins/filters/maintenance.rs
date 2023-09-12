@@ -1,8 +1,10 @@
 use async_trait::async_trait;
 use http::header;
+use std::ops::Range;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use tardis::chrono::{Local, NaiveTime};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     TardisFuns,
@@ -28,15 +30,37 @@ impl SgPluginFilterDef for SgFilterMaintenanceDef {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct SgFilterMaintenance {
-    is_enabled: bool,
+    enabled_time_range: Option<Vec<Range<NaiveTime>>>,
     title: String,
     msg: String,
+}
+
+impl SgFilterMaintenance {
+    pub fn check_by_time(&self, time: NaiveTime) -> bool {
+        let contains_time = |range: &Range<NaiveTime>| {
+            if range.start > range.end {
+                !(range.end..range.start).contains(&time)
+            } else {
+                range.contains(&time)
+            }
+        };
+        if let Some(enabled_time) = &self.enabled_time_range {
+            enabled_time.iter().any(contains_time)
+        } else {
+            true
+        }
+    }
+
+    pub fn check_by_now(&self) -> bool {
+        let local_time = Local::now().time();
+        self.check_by_time(local_time)
+    }
 }
 
 impl Default for SgFilterMaintenance {
     fn default() -> Self {
         Self {
-            is_enabled: false,
+            enabled_time_range: None,
             title: "System Maintenance".to_string(),
             msg: "We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly./n Thank you for your patience, understanding, and support.".to_string(),
         }
@@ -60,7 +84,7 @@ impl SgPluginFilter for SgFilterMaintenance {
     }
 
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
-        if self.is_enabled {
+        if self.check_by_now() {
             ctx.set_action(SgRouteFilterRequestAction::Response);
             let request_headers = ctx.request.get_headers();
             let content_type = request_headers.get(header::CONTENT_TYPE).map(|content_type| content_type.to_str().unwrap_or("").split(',').collect_vec()).unwrap_or_default();
@@ -115,7 +139,7 @@ impl SgPluginFilter for SgFilterMaintenance {
                 let msg = self.msg.clone();
                 return Err(TardisError::forbidden(&msg, ""));
             } else {
-                ctx.response.set_body("<h1>Maintenance</h1>");
+                ctx.response.set_body(format!("<h1>{}</h1>", self.title));
             }
         }
         Ok((true, ctx))

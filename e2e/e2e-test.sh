@@ -219,8 +219,11 @@ echo "============[websocket]basic test============"
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_base_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f websocket_echo_test.yaml
 
-kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
 sleep 5
+kubectl --kubeconfig /home/runner/.kube/config describe node
+kubectl --kubeconfig /home/runner/.kube/config describe pod -l app=websocket-echo
+kubectl --kubeconfig /home/runner/.kube/config logs -l app=websocket-echo
+kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=websocket-echo
 
 
 command_output=$(echo hi | ./websocat.x86_64-unknown-linux-musl "ws://${cluster_ip}:9000/echo")
