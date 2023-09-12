@@ -258,7 +258,7 @@ mod tests {
         assert!(body.contains(r#""data": "星航""#));
 
         // test timeout
-        let mut resp = retry_test_request(
+        let resp = retry_test_request(
             client,
             Some(&SgBackendInst {
                 name_or_host: "postman-echo.com".to_string(),
