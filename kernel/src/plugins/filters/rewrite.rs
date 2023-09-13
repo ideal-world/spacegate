@@ -71,7 +71,7 @@ impl SgPluginFilter for SgFilterRewrite {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+
 mod tests {
     use crate::{
         config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
@@ -114,12 +114,12 @@ mod tests {
             Some(ChosenHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
         );
 
-        let (is_continue, mut ctx) = filter.req_filter("", ctx).await.unwrap();
+        let (is_continue, ctx) = filter.req_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_uri().to_string(), "http://sg_new.idealworld.group/new_iam/ct/001?name=sg");
         assert_eq!(ctx.response.get_status_code(), &StatusCode::OK);
 
-        let (is_continue, mut ctx) = filter.resp_filter("", ctx).await.unwrap();
+        let (is_continue, ctx) = filter.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.response.get_status_code(), &StatusCode::OK);
     }

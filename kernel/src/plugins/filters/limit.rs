@@ -142,7 +142,6 @@ impl SgPluginFilter for SgFilterLimit {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use std::time::Duration;
 

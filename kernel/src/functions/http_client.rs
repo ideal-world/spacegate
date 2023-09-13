@@ -158,7 +158,7 @@ pub async fn raw_request(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+
 mod tests {
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;

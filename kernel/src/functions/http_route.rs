@@ -270,9 +270,10 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
 
     if log::level_enabled!(log::Level::TRACE) {
         log::trace!(
-            "[SG.Route] Request method {} url {} header {:?} body {:?}, request addr {}, from {} @ {}",
+            "[SG.Route] Request method {} url {} http_version {:?} header {:?} body {:?}, request addr {}, from {} @ {}",
             request.method(),
             request.uri(),
+            request.version(),
             request.headers(),
             request.body(),
             local_addr,
@@ -281,9 +282,10 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         );
     } else if log::level_enabled!(log::Level::DEBUG) {
         log::debug!(
-            "[SG.Route] Request method {} url {}, request addr {}, from {} @ {}",
+            "[SG.Route] Request method {} url {} header {:?}, request addr {}, from {} @ {}",
             request.method(),
             request.uri(),
+            request.headers(),
             local_addr,
             remote_addr,
             gateway_name
@@ -865,7 +867,7 @@ fn choose_backend(backends: &[SgBackendInst]) -> Option<&SgBackendInst> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+
 mod tests {
     use std::collections::HashMap;
 

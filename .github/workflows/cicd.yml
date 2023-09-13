@@ -164,7 +164,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
 
       - name: Prepare artifacts
         run: |
@@ -233,7 +233,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
 
       - name: Prepare artifacts
         run: |
@@ -311,7 +311,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
 
       - name: Prepare artifacts
         shell: bash

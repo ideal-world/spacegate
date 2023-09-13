@@ -36,9 +36,10 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 | **spacegate-simplify** | bin  | Out-of-the-box service for standalone environments                                 |
 
 ## 🔖 Releases
-> Release binary naming method: {crate}-{arch}{OS}{libc}-{version}
+> Release binary naming method: {crate}-{arch}{OS}{abi}-{version}
+> [download here](https://github.com/ideal-world/spacegate/releases/latest)
 
-| OS          | Arch                   | libc          | Remark                                       |
+| OS          | Arch                   | abi           | Remark                                       |
 |-------------|------------------------|---------------|----------------------------------------------|
 | **linux**   | **x86_64**,**aarch64** | **gnu,musl**  | If you need static linking please use `musl` |
 | **macos**   | **x86_64**,**aarch64** | **Libsystem** |                                              |

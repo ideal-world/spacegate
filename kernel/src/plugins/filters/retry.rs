@@ -223,7 +223,7 @@ mod expiring_map {
     }
 
     #[cfg(test)]
-    #[allow(clippy::unwrap_used)]
+
     mod tests {
 
         use super::ExpireMap;
@@ -264,7 +264,7 @@ mod expiring_map {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+
 mod tests {
     use crate::functions::http_client;
     use http::{HeaderMap, Method, Uri, Version};
