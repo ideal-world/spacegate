@@ -156,8 +156,7 @@ impl SgPluginFilter for SgFilterMaintenance {
                 ctx.response.set_body(format!("<h1>{}</h1>", self.title));
             }
             Ok((false, ctx))
-        }
-        else {
+        } else {
             Ok((true, ctx))
         }
     }
@@ -169,10 +168,10 @@ impl SgPluginFilter for SgFilterMaintenance {
 
 #[cfg(test)]
 mod test {
+    use crate::plugins::context::SgRouteFilterRequestAction;
     use crate::plugins::context::SgRoutePluginContext;
     use crate::plugins::filters::maintenance::SgFilterMaintenanceDef;
     use crate::plugins::filters::SgPluginFilterDef;
-    use crate::plugins::context::SgRouteFilterRequestAction;
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;
     use serde_json::json;
@@ -214,7 +213,7 @@ mod test {
             String::new(),
             None,
         );
-        assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(),&SgRouteFilterRequestAction::None);
+        assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(), &SgRouteFilterRequestAction::None);
 
         let ctx = SgRoutePluginContext::new_http(
             Method::POST,
@@ -226,6 +225,6 @@ mod test {
             String::new(),
             None,
         );
-        assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(),&SgRouteFilterRequestAction::Response);
+        assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(), &SgRouteFilterRequestAction::Response);
     }
 }
