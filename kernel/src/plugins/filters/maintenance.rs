@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use http::header;
+use ipnet::IpNet;
+use std::net::IpAddr;
 use std::ops::Range;
 
 use itertools::Itertools;
@@ -31,6 +33,7 @@ impl SgPluginFilterDef for SgFilterMaintenanceDef {
 #[serde(default)]
 pub struct SgFilterMaintenance {
     enabled_time_range: Option<Vec<Range<NaiveTime>>>,
+    exclude_ip_range: Option<Vec<IpNet>>,
     title: String,
     msg: String,
 }
@@ -51,9 +54,19 @@ impl SgFilterMaintenance {
         }
     }
 
+    /// If the current time is within the set range, return true
     pub fn check_by_now(&self) -> bool {
         let local_time = Local::now().time();
         self.check_by_time(local_time)
+    }
+
+    /// If the parameter ip is within the setting range, return true
+    pub fn check_ip(&self, ip: &IpAddr) -> bool {
+        if let Some(ips) = &self.exclude_ip_range {
+            ips.iter().any(|allow_ip| allow_ip.contains(ip))
+        } else {
+            false
+        }
     }
 }
 
@@ -61,6 +74,7 @@ impl Default for SgFilterMaintenance {
     fn default() -> Self {
         Self {
             enabled_time_range: None,
+            exclude_ip_range: None,
             title: "System Maintenance".to_string(),
             msg: "We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly./n Thank you for your patience, understanding, and support.".to_string(),
         }
@@ -84,7 +98,7 @@ impl SgPluginFilter for SgFilterMaintenance {
     }
 
     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
-        if self.check_by_now() {
+        if self.check_by_now() && !self.check_ip(&ctx.request.get_remote_addr().ip()) {
             ctx.set_action(SgRouteFilterRequestAction::Response);
             let request_headers = ctx.request.get_headers();
             let content_type = request_headers.get(header::CONTENT_TYPE).map(|content_type| content_type.to_str().unwrap_or("").split(',').collect_vec()).unwrap_or_default();
@@ -141,11 +155,77 @@ impl SgPluginFilter for SgFilterMaintenance {
             } else {
                 ctx.response.set_body(format!("<h1>{}</h1>", self.title));
             }
+            Ok((false, ctx))
         }
-        Ok((true, ctx))
+        else {
+            Ok((true, ctx))
+        }
     }
 
     async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         Ok((true, ctx))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::plugins::context::SgRoutePluginContext;
+    use crate::plugins::filters::maintenance::SgFilterMaintenanceDef;
+    use crate::plugins::filters::SgPluginFilterDef;
+    use crate::plugins::context::SgRouteFilterRequestAction;
+    use http::{HeaderMap, Method, Uri, Version};
+    use hyper::Body;
+    use serde_json::json;
+    use tardis::chrono::{Duration, Local};
+    use tardis::tokio;
+
+    #[tokio::test]
+    async fn test_config() {
+        let now = Local::now();
+        let duration = Duration::seconds(100);
+        let end_time = now + duration;
+        let maintenance = SgFilterMaintenanceDef {}
+            .inst(json!({
+              "enabled_time_range": [
+                {
+                  "start": "10:00:00",
+                  "end": "14:30:00"
+                },
+                {
+                  "start":now.format("%H:%M:%S").to_string() ,
+                  "end": end_time.format("%H:%M:%S").to_string() ,
+                }
+              ],
+              "exclude_ip_range": [
+                   "192.168.1.0/24",
+                   "10.0.0.0/16"
+              ]
+            }
+            ))
+            .unwrap();
+
+        let ctx = SgRoutePluginContext::new_http(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "192.168.1.123:10000".parse().unwrap(),
+            String::new(),
+            None,
+        );
+        assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(),&SgRouteFilterRequestAction::None);
+
+        let ctx = SgRoutePluginContext::new_http(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "192.168.2.123:10000".parse().unwrap(),
+            String::new(),
+            None,
+        );
+        assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(),&SgRouteFilterRequestAction::Response);
     }
 }

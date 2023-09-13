@@ -282,7 +282,6 @@ fn get_cache_key(_: &SgFilterStatus, _: &str) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use std::env;
 

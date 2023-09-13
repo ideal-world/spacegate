@@ -12,12 +12,18 @@ license.workspace = true
 edition.workspace = true
 readme = "../../README.md"
 
+
+[features]
+default=[]
+# Used to statically link openssl at compile time
+static-openssl=["openssl/vendored"]
+
 [dependencies]
 spacegate-kernel = { version = "0.1.0-alpha.7", path = "../../kernel", features = [
     "ws",
     "local",
 ] }
-
+openssl = {version = "0.10"}
 tardis = { workspace = true }
 
 [dev-dependencies]
@@ -25,6 +31,3 @@ tardis = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
-
-[target.'cfg(not(target_os = "x86_64-unknown-linux-musl"))'.dependencies]
-openssl = {features = ["vendored"]}

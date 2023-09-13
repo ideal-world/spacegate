@@ -92,7 +92,7 @@ impl SgPluginFilter for SgFilterHeaderModifier {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+
 mod tests {
 
     use super::*;
@@ -142,7 +142,7 @@ mod tests {
 
         let mock_resp_headers = ctx.request.get_headers().clone();
         ctx.response.set_headers(mock_resp_headers);
-        let (is_continue, mut ctx) = filter_resp.resp_filter("", ctx).await.unwrap();
+        let (is_continue, ctx) = filter_resp.resp_filter("", ctx).await.unwrap();
         assert!(is_continue);
         assert_eq!(ctx.request.get_method().as_str().to_lowercase(), Method::GET.as_str().to_lowercase());
         assert_eq!(ctx.request.get_headers().len(), 2);

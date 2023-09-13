@@ -320,7 +320,7 @@ impl Default for SgPluginFilterAccept {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+
 mod tests {
     use tardis::{basic::result::TardisResult, regex::Regex};
 
