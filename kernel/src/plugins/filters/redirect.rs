@@ -1,31 +1,17 @@
 use async_trait::async_trait;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;
-use tardis::{
-    basic::{error::TardisError, result::TardisResult},
-    TardisFuns,
-};
 
 use crate::config::plugin_filter_dto::SgHttpPathModifier;
+use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use crate::plugins::context::SgRouteFilterRequestAction;
 
-use super::{http_common_modify_path, BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 
-pub const CODE: &str = "redirect";
-
-pub struct SgFilterRedirectDef;
-
-impl SgPluginFilterDef for SgFilterRedirectDef {
-    fn get_code(&self) -> &'static str {
-        CODE
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterRedirect>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("redirect", SgFilterRedirectDef, SgFilterRedirect);
 
 /// RedirectFilter defines a filter that redirects a request.
 ///

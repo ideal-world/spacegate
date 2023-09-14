@@ -4,30 +4,17 @@ use ipnet::IpNet;
 use std::net::IpAddr;
 use std::ops::Range;
 
+use crate::def_filter;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::chrono::{Local, NaiveTime};
-use tardis::{
-    basic::{error::TardisError, result::TardisResult},
-    TardisFuns,
-};
 
 use crate::plugins::context::SgRouteFilterRequestAction;
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 
-pub const CODE: &str = "maintenance";
-pub struct SgFilterMaintenanceDef;
-
-impl SgPluginFilterDef for SgFilterMaintenanceDef {
-    fn get_code(&self) -> &'static str {
-        CODE
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterMaintenance>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("maintenance", SgFilterMaintenanceDef, SgFilterMaintenance);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]

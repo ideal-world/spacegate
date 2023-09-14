@@ -28,6 +28,38 @@ use super::context::SgRoutePluginContext;
 
 static mut FILTERS: Option<HashMap<String, Box<dyn SgPluginFilterDef>>> = None;
 
+/// # Generate filter definition
+/// ## Concept Note
+/// ### Filter definition
+/// Filter definitions are used to register filters see[crate::register_filter_def]
+///
+/// ## Parameter Description
+/// ### code
+/// Defines a unique code for a plugins, used to specify this code in
+/// the configuration to use this plug-in
+/// ### filter_def
+/// The recommended naming convention is `{filter_type}Def`
+/// ### filter_type
+/// Actual struct of Filter
+#[macro_export]
+macro_rules! def_filter {
+    ($code:expr, $filter_def:ident, $filter_type:ty) => {
+        pub const CODE: &str = $code;
+
+        pub struct $filter_def;
+
+        impl $crate::plugins::filters::SgPluginFilterDef for $filter_def {
+            fn get_code(&self) -> &'static str {
+                CODE
+            }
+            fn inst(&self, spec: serde_json::Value) -> TardisResult<$crate::plugins::filters::BoxSgPluginFilter> {
+                let filter = tardis::TardisFuns::json.json_to_obj::<$filter_type>(spec)?;
+                Ok(filter.boxed())
+            }
+        }
+    };
+}
+
 fn init_filter_defs() {
     let mut filters: HashMap<String, Box<dyn SgPluginFilterDef>> = HashMap::new();
     filters.insert(header_modifier::CODE.to_string(), Box::new(header_modifier::SgFilterHeaderModifierDef));
