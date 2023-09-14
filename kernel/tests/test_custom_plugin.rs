@@ -12,26 +12,16 @@ use spacegate_kernel::{
         http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
-    plugins::filters::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef},
+    def_filter,
+    plugins::filters::SgPluginFilter,
 };
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     tokio::{self, time::sleep},
     web::web_client::TardisWebClient,
-    TardisFuns,
 };
 
-pub struct SgFilterAuthDef;
-
-impl SgPluginFilterDef for SgFilterAuthDef {
-    fn get_code(&self) -> &'static str {
-        "auth"
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterAuth>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("auth", SgFilterAuthDef, SgFilterAuth);
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilterAuth {}
@@ -46,7 +36,7 @@ impl SgPluginFilter for SgFilterAuth {
         Ok(())
     }
 
-    async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
+    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
         if ctx.request.get_headers().contains_key("Authorization") {
             return Ok((true, ctx));
         }

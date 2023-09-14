@@ -16,14 +16,14 @@ use tardis::{
         self,
         sync::{watch::Sender, Mutex},
     },
-    TardisFuns,
 };
 
 #[cfg(feature = "cache")]
 use crate::functions::cache_client;
 
 use self::status_plugin::{clean_status, get_status, update_status, Status};
-use super::{BoxSgPluginFilter, SgAttachedLevel, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{SgAttachedLevel, SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
+use crate::def_filter;
 use crate::plugins::filters::status::sliding_window::SlidingWindowCounter;
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
@@ -37,18 +37,7 @@ lazy_static! {
 pub mod sliding_window;
 pub mod status_plugin;
 
-pub const CODE: &str = "status";
-pub struct SgFilterStatusDef;
-
-impl SgPluginFilterDef for SgFilterStatusDef {
-    fn get_code(&self) -> &'static str {
-        CODE
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterStatus>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("status", SgFilterStatusDef, SgFilterStatus);
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]

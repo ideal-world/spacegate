@@ -10,30 +10,17 @@ use tardis::{
     log,
     rand::{self, distributions::WeightedIndex, prelude::Distribution, thread_rng, Rng},
     tokio::sync::Mutex,
-    TardisFuns,
 };
 
-use crate::{functions::http_client, plugins::filters::retry::expiring_map::ExpireMap};
+use crate::{def_filter, functions::http_client, plugins::filters::retry::expiring_map::ExpireMap};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 
 lazy_static! {
     static ref REQUEST_BODY: Arc<Mutex<ExpireMap<Bytes>>> = <_>::default();
 }
 
-pub const CODE: &str = "retry";
-
-pub struct SgFilterRetryDef;
-
-impl SgPluginFilterDef for SgFilterRetryDef {
-    fn get_code(&self) -> &'static str {
-        CODE
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterRetry>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("retry", SgFilterRetryDef, SgFilterRetry);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]

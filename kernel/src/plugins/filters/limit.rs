@@ -5,24 +5,13 @@ use serde::{Deserialize, Serialize};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     cache::Script,
-    TardisFuns,
 };
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
+use crate::def_filter;
 use lazy_static::lazy_static;
-pub const CODE: &str = "limit";
 
-pub struct SgFilterLimitDef;
-
-impl SgPluginFilterDef for SgFilterLimitDef {
-    fn get_code(&self) -> &'static str {
-        CODE
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterLimit>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("limit", SgFilterLimitDef, SgFilterLimit);
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilterLimit {

@@ -1,27 +1,13 @@
 use std::collections::HashMap;
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
+use crate::def_filter;
 use async_trait::async_trait;
 use http::HeaderName;
 use serde::{Deserialize, Serialize};
-use tardis::{
-    basic::{error::TardisError, result::TardisResult},
-    TardisFuns,
-};
+use tardis::basic::{error::TardisError, result::TardisResult};
 
-pub const CODE: &str = "header_modifier";
-
-pub struct SgFilterHeaderModifierDef;
-
-impl SgPluginFilterDef for SgFilterHeaderModifierDef {
-    fn get_code(&self) -> &'static str {
-        CODE
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("header_modifier", SgFilterHeaderModifierDef, SgFilterHeaderModifier);
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilterHeaderModifier {

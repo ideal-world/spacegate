@@ -1,27 +1,17 @@
 use std::{cmp::Ordering, pin::Pin};
 
+use crate::def_filter;
 use async_compression::tokio::bufread::{BrotliDecoder, BrotliEncoder, DeflateDecoder, DeflateEncoder, GzipDecoder, GzipEncoder};
 use async_trait::async_trait;
 use http::{header, HeaderValue};
 use hyper::Body;
 use serde::{Deserialize, Serialize};
-use tardis::{basic::result::TardisResult, futures_util::TryStreamExt, tokio::io::BufReader, TardisFuns};
+use tardis::{basic::result::TardisResult, futures_util::TryStreamExt, tokio::io::BufReader};
 use tokio_util::io::{ReaderStream, StreamReader};
 
-use super::{BoxSgPluginFilter, SgPluginFilter, SgPluginFilterDef, SgPluginFilterInitDto, SgRoutePluginContext};
+use super::{SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 
-pub const CODE: &str = "compression";
-pub struct SgFilterCompressionDef;
-
-impl SgPluginFilterDef for SgFilterCompressionDef {
-    fn get_code(&self) -> &'static str {
-        CODE
-    }
-    fn inst(&self, spec: serde_json::Value) -> TardisResult<BoxSgPluginFilter> {
-        let filter = TardisFuns::json.json_to_obj::<SgFilterCompression>(spec)?;
-        Ok(filter.boxed())
-    }
-}
+def_filter!("compression", SgFilterCompressionDef, SgFilterCompression);
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilterCompression {}
