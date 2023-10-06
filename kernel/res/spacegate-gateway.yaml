@@ -62,6 +62,18 @@ spec:
                     required:
                       - kind
                       - name
+      additionalPrinterColumns:
+        - name: Code
+          type: string
+          description: The code of SgFilter
+          jsonPath: .spec.filters[*].code
+        - name: target
+          type: string
+          description: The target of SgFilter
+          jsonPath: .spec.targetRefs[*].kind
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
 ---
 apiVersion: v1
 kind: ServiceAccount

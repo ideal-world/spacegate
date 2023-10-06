@@ -1,7 +1,7 @@
-use crate::config::plugin_filter_dto::SgHttpPathModifier;
 use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use async_trait::async_trait;
+use kernel_dto::dto::plugin_filter_dto::SgHttpPathModifier;
 use serde::{Deserialize, Serialize};
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;

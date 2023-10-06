@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;
 
-use crate::config::plugin_filter_dto::SgHttpPathModifier;
 use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use crate::plugins::context::SgRouteFilterRequestAction;
+use kernel_dto::dto::plugin_filter_dto::SgHttpPathModifier;
 
 use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 

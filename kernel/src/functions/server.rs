@@ -5,13 +5,13 @@ use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
-use crate::config::gateway_dto::{SgGateway, SgProtocol, SgTlsMode};
 use core::task::{Context, Poll};
 use http::{HeaderValue, Request, Response, StatusCode};
 use hyper::server::conn::{AddrIncoming, AddrStream};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 use hyper::{server::accept::Accept, Body};
+use kernel_dto::dto::gateway_dto::{SgGateway, SgProtocol, SgTlsMode};
 
 use lazy_static::lazy_static;
 use rustls::{PrivateKey, ServerConfig};

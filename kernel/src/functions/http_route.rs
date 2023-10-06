@@ -2,10 +2,6 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use crate::instance::{SgBackendInst, SgGatewayInst, SgHttpHeaderMatchInst, SgHttpQueryMatchInst};
 use crate::{
-    config::{
-        gateway_dto::{SgGateway, SgListener},
-        http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
-    },
     instance::{SgHttpPathMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     plugins::{
         context::{ChosenHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
@@ -16,6 +12,8 @@ use http::{header::UPGRADE, HeaderValue, Request, Response};
 use hyper::{Body, StatusCode};
 
 use itertools::Itertools;
+use kernel_dto::dto::gateway_dto::{SgGateway, SgListener};
+use kernel_dto::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute};
 use std::sync::{Arc, OnceLock};
 use std::vec::Vec;
 use tardis::tokio::sync::RwLock;
@@ -446,7 +444,8 @@ async fn process_response_headers(mut ctx: SgRoutePluginContext) -> TardisResult
     } else {
         false
     };
-    if !is_chunked {
+
+    if !is_chunked && ctx.response.get_headers().get(http::header::CONTENT_LENGTH).is_some() {
         let response_body: Vec<u8> = ctx.response.take_body_into_bytes().await?.into();
         ctx.response.set_header(http::header::CONTENT_LENGTH, response_body.len().to_string().as_str())?;
         ctx.response.set_body(response_body);

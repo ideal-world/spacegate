@@ -1,15 +1,11 @@
-use crate::{
-    config::{
-        gateway_dto::{SgListener, SgProtocol},
-        http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
-    },
-    plugins::filters::BoxSgPluginFilter,
-};
+use crate::plugins::filters::BoxSgPluginFilter;
 
 use http::Method;
 use hyper::{client::HttpConnector, Client};
 use hyper_rustls::HttpsConnector;
 
+use kernel_dto::dto::gateway_dto::{SgListener, SgProtocol};
+use kernel_dto::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType};
 use std::{fmt, vec::Vec};
 use tardis::regex::Regex;
 

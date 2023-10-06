@@ -3,10 +3,11 @@ use std::{
     time::Duration,
 };
 
-use crate::{config::gateway_dto::SgProtocol, plugins::context::SgRoutePluginContext};
+use crate::plugins::context::SgRoutePluginContext;
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
 use hyper::{client::HttpConnector, Body, Client, Error};
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
+use kernel_dto::dto::gateway_dto::SgProtocol;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     log,

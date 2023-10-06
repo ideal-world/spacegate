@@ -9,7 +9,7 @@ use tardis::basic::result::TardisResult;
 
 use tardis::TardisFuns;
 
-use crate::config::gateway_dto::SgProtocol;
+use kernel_dto::dto::gateway_dto::SgProtocol;
 
 use crate::instance::{SgBackendInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
 
@@ -77,7 +77,8 @@ pub enum SgRouteFilterRequestAction {
     None,
     /// Forwarding the current request.
     Redirect,
-    /// Constructing a response directly based on the information in the context , without making a backend request.
+    /// Constructing a response directly based on the information in the context ,
+    /// without making a backend request.
     Response,
 }
 

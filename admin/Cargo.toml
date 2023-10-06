@@ -1,0 +1,26 @@
+[package]
+name = "spacegate-admin"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "./README.md"
+
+[features]
+k8s = ["kube", "k8s-openapi", "k8s-gateway-api","kernel-dto/k8s"]
+
+[dependencies]
+tardis = { workspace = true ,features = ["web-server"]}
+serde.workspace = true
+serde_json.workspace = true
+
+kernel-dto={path = "../kernel-dto",features = ["admin-support"]}
+kube = { workspace = true, optional = true }
+k8s-openapi = { workspace = true, optional = true }
+k8s-gateway-api = { workspace = true, optional = true }

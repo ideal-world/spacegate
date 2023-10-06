@@ -15,6 +15,7 @@ pub struct K8sSgFilterSpec {
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecFilter {
+    /// see [crate::dto::plugin_filter_dto::SgRouteFilter].code
     pub code: String,
     pub name: Option<String>,
     pub enable: bool,
