@@ -10,7 +10,7 @@ use std::{fmt::Display, str::FromStr};
 use super::plugin_filter_dto::SgRouteFilter;
 use crate::constants::GATEWAY_CLASS_NAME;
 use crate::dto::plugin_filter_dto::SgSingeFilter;
-use crate::k8s_crd::{K8sSgFilterSpec, K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef, SgFilter};
+use crate::k8s_crd::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use serde::{Deserialize, Serialize};
 use tardis::basic::error::TardisError;
 #[cfg(feature = "admin-support")]
@@ -78,13 +78,13 @@ impl SgGateway {
                 .map(|f| SgSingeFilter {
                     name: f.name,
                     namespace: namespace.to_string(),
-                    filters: K8sSgFilterSpecFilter {
+                    filter: K8sSgFilterSpecFilter {
                         code: f.code,
                         name: None,
                         enable: true,
                         config: f.spec,
                     },
-                    target_refs: K8sSgFilterSpecTargetRef {
+                    target_ref: K8sSgFilterSpecTargetRef {
                         kind: "Gateway".to_string(),
                         name: self.name.clone(),
                         namespace: Some(namespace.to_string()),

@@ -11,7 +11,7 @@ use kube::api::PostParams;
 use kube::ResourceExt;
 #[cfg(feature = "k8s")]
 use kube::{api::ListParams, Api};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
@@ -33,24 +33,32 @@ impl PluginService {
     }
 
     #[cfg(feature = "k8s")]
-    pub async fn add_sgfilter_vec(sgfilters: Vec<SgSingeFilter>) -> TardisResult<Vec<SgFilter>> {
-        let add_filter = sgfilters.iter().map(|f| f.spec.filters.iter().map(|f_f| (f_f.name.clone(), f_f.code.clone())).collect::<Vec<_>>()).flatten().collect::<HashSet<_>>();
-        let add_target = sgfilters
-            .iter()
-            .map(|f| {let f_t=f.target_refs.clone(); (f_t.name.clone(), f_t.namespace.clone(), f_t.kind.clone())}).collect::<Vec<_>>()
-            .flatten()
-            .collect::<HashSet<_>>();
+    pub async fn add_sgfilter_vec(sgfilters: Vec<SgSingeFilter>) -> TardisResult<()> {
+        let mut filter_map = HashMap::new();
         for sf in sgfilters {
-            let filter_api: Api<SgFilter> = Self::get_filter_api(&sf.namespace).await?;
-            if let Some(mut query_sf) = filter_api.get_opt(&sf.name_any()).await.warp_result_by_method("get")? {
-                sf.spec.filters.iter().filter(|&x| query_sf.spec.filters.iter().any(|qsf| qsf.code == x.code)).collect();
-                filter_api.replace(&query_sf.name_any(), &PostParams::default(), &query_sf).await.warp_result_by_method("replace")?;
+            let filter_api: Api<SgFilter> = Self::get_filter_api(&Some(sf.namespace.clone())).await?;
+
+            let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
+                filter_list
             } else {
-                filter_api.create(&PostParams::default(), &sf).await.warp_result_by_method("create")?;
+                let filter_list = filter_api.list(&ListParams::default()).await.warp_result_by_method("list")?;
+                filter_map.insert(sf.namespace.clone(), filter_list);
+                filter_map.get(&sf.namespace).expect("")
+            };
+
+            if let Some(mut query_sf) = namespace_filter.items.clone().into_iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)) {
+                if query_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
+                    //存在
+                } else {
+                    query_sf.spec.target_refs.push(sf.target_ref);
+                    filter_api.replace(&query_sf.name_any(), &PostParams::default(), &query_sf).await.warp_result_by_method("replace")?;
+                }
+            } else {
+                filter_api.create(&PostParams::default(), &sf.to_sg_filter()).await.warp_result_by_method("create")?;
             }
         }
 
-        Ok(sgfilters)
+        Ok(())
     }
 
     #[cfg(feature = "k8s")]

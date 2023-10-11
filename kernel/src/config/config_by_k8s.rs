@@ -19,7 +19,9 @@ use tardis::{
 use crate::{do_startup, functions::http_route, shutdown};
 
 use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
+use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
 use kernel_dto::constants::GATEWAY_CLASS_NAME;
+use kernel_dto::dto::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType};
 use kernel_dto::dto::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{
@@ -31,7 +33,6 @@ use kernel_dto::dto::{
 };
 use kernel_dto::k8s_crd::SgFilter;
 use lazy_static::lazy_static;
-use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
 
 lazy_static! {
     static ref GATEWAY_NAMES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
@@ -900,38 +901,65 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
 }
 
 fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> Option<Vec<HttpRouteFilter>> {
-    filters.map(|filters| {
-        filters
-            .into_iter()
-            .map(|filter| {
-                let http_route_filter=match filter.code.as_str() {
-                    crate::plugins::filters::header_modifier::CODE=>{
-                        let header_modifier=TardisFuns::json.json_to_obj::<crate::plugins::filters::header_modifier::SgFilterHeaderModifier>(filter.spec)?;
-                        match  header_modifier.kind{
-                            SgFilterHeaderModifierKind::Request => {HttpRouteFilter::RequestHeaderModifier { request_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
-                                set: header_modifier.sets.map(|set|set.into_iter().map(|(name,value)| k8s_gateway_api::HttpHeader {name,value}).collect::<Vec<_>>()),
-                                add: None,
-                                remove: header_modifier.remove,
-                            } }}
-                            SgFilterHeaderModifierKind::Response => {HttpRouteFilter::ResponseHeaderModifier { response_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
-                                set: header_modifier.sets.map(|set|set.into_iter().map(|(name,value)| k8s_gateway_api::HttpHeader {name,value}).collect::<Vec<_>>()),
-                                add: None,
-                                remove: header_modifier.remove,
-                            } }}
+    filters
+        .map(|filters| {
+            filters
+                .into_iter()
+                .map(|filter| {
+                    let http_route_filter = match filter.code.as_str() {
+                        crate::plugins::filters::header_modifier::CODE => {
+                            let header_modifier = TardisFuns::json.json_to_obj::<crate::plugins::filters::header_modifier::SgFilterHeaderModifier>(filter.spec)?;
+                            match header_modifier.kind {
+                                SgFilterHeaderModifierKind::Request => HttpRouteFilter::RequestHeaderModifier {
+                                    request_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
+                                        set: header_modifier.sets.map(|set| set.into_iter().map(|(name, value)| k8s_gateway_api::HttpHeader { name, value }).collect::<Vec<_>>()),
+                                        add: None,
+                                        remove: header_modifier.remove,
+                                    },
+                                },
+                                SgFilterHeaderModifierKind::Response => HttpRouteFilter::ResponseHeaderModifier {
+                                    response_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
+                                        set: header_modifier.sets.map(|set| set.into_iter().map(|(name, value)| k8s_gateway_api::HttpHeader { name, value }).collect::<Vec<_>>()),
+                                        add: None,
+                                        remove: header_modifier.remove,
+                                    },
+                                },
+                            }
                         }
-                    },
-                    crate::plugins::filters::rewrite::CODE=>{
-                        let header_modifier=TardisFuns::json.json_to_obj::<>(filter.spec)?;
-                        HttpRouteFilter::URLRewrite {
-
+                        crate::plugins::filters::rewrite::CODE => {
+                            let rewrite = TardisFuns::json.json_to_obj::<crate::plugins::filters::rewrite::SgFilterRewrite>(filter.spec)?;
+                            HttpRouteFilter::URLRewrite {
+                                url_rewrite: k8s_gateway_api::HttpUrlRewriteFilter {
+                                    hostname: rewrite.hostname,
+                                    path: rewrite.path.map(|p| match p.kind {
+                                        SgHttpPathModifierType::ReplaceFullPath => k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path: p.value },
+                                        SgHttpPathModifierType::ReplacePrefixMatch => k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: p.value },
+                                    }),
+                                },
+                            }
                         }
-                    },
-                    _ => {}
-                };
-                HttpRouteFilter {}
-            })
-            .collect_vec()
-    })
+                        crate::plugins::filters::redirect::CODE => {
+                            let redirect = TardisFuns::json.json_to_obj::<crate::plugins::filters::redirect::SgFilterRedirect>(filter.spec)?;
+                            HttpRouteFilter::RequestRedirect {
+                                request_redirect: k8s_gateway_api::HttpRequestRedirectFilter {
+                                    scheme: redirect.scheme,
+                                    hostname: redirect.hostname,
+                                    path: redirect.path.map(|p| match p.kind {
+                                        SgHttpPathModifierType::ReplaceFullPath => k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path: p.value },
+                                        SgHttpPathModifierType::ReplacePrefixMatch => k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: p.value },
+                                    }),
+                                    port: redirect.port,
+                                    status_code: redirect.status_code,
+                                },
+                            }
+                        }
+                        _ => return None,
+                    };
+                    Some(http_route_filter)
+                })
+                .collect_vec()
+        })
+        .map(|filters| filters.into_iter().filter(|filter| filter.is_some()).map(|f| f.unwrap()).collect_vec())
 }
 
 async fn get_client() -> TardisResult<Client> {

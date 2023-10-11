@@ -1,4 +1,3 @@
-use crate::dto::base_dto::CommonPageDto;
 use crate::dto::query_dto::GatewayQueryDto;
 use crate::service::gateway_service::GatewayService;
 use kernel_dto::dto::gateway_dto::SgGateway;

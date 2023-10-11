@@ -22,7 +22,7 @@ pub struct K8sSgFilterSpecFilter {
     pub config: Value,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecTargetRef {
     pub kind: String,
