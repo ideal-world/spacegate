@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
-use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter, ParentReference};
+use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::ListParams,
@@ -190,15 +190,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let sg_filter_objs: Vec<SgFilter> =
         filter_api.list(&ListParams::default()).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?.into_iter().collect();
 
-    let sg_filter_objs_versions = sg_filter_objs
-        .iter()
-        .map(|filter| {
-            (
-                filter.metadata.uid.clone().unwrap_or("".to_string()),
-                filter.metadata.resource_version.clone().unwrap_or_default(),
-            )
-        })
-        .collect::<HashMap<String, String>>();
+    let sg_filter_objs_versions = k8s_helper::get_obj_uid_version_map(&sg_filter_objs);
 
     tardis::tokio::spawn(async move {
         let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
@@ -303,8 +295,6 @@ async fn get_http_spaceroute_by_api(
     gateway_uniques: &Vec<String>,
     (http_spaceroute_api, http_route_api): (&Api<HttpSpaceroute>, &Api<HttpRoute>),
 ) -> TardisResult<Vec<HttpSpaceroute>> {
-    let get_parent_ref_unique = |parent_ref: &ParentReference, obj: &HttpSpaceroute| {};
-
     let mut http_route_objs: Vec<HttpSpaceroute> = http_spaceroute_api
         .list(&ListParams::default())
         .await
