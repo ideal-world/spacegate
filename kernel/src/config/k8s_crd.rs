@@ -24,6 +24,10 @@ pub struct K8sSgFilterSpecFilter {
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecTargetRef {
+    /// # FilterTarget Kind
+    /// gateway
+    /// httproute
+    /// httpspaceroute
     pub kind: String,
     pub name: String,
     pub namespace: Option<String>,

@@ -70,15 +70,8 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .into_iter()
         .filter(|gateway_obj| gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME)
         .collect::<Vec<Gateway>>();
-    let gateway_objs_versions = gateway_objs
-        .iter()
-        .map(|gateway_obj| {
-            (
-                gateway_obj.metadata.uid.clone().unwrap_or("".to_string()),
-                gateway_obj.metadata.resource_version.clone().unwrap_or_default(),
-            )
-        })
-        .collect::<HashMap<String, String>>();
+    let gateway_objs_versions = k8s_helper::get_obj_uid_version_map(&gateway_objs);
+
     let mut gateway_objs_params = gateway_objs
         .iter()
         .map(|gateway_obj| (gateway_obj.metadata.uid.clone().unwrap_or("".to_string()), gateway_obj.metadata.annotations.clone()))
@@ -89,15 +82,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
     let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&gateway_uniques, (&http_spaceroute_api, &http_route_api)).await?;
 
-    let http_route_objs_versions = http_route_objs
-        .iter()
-        .map(|http_route_obj| {
-            (
-                http_route_obj.metadata.uid.clone().unwrap_or("".to_string()),
-                http_route_obj.metadata.resource_version.clone().unwrap_or_default(),
-            )
-        })
-        .collect::<HashMap<String, String>>();
+    let http_route_objs_versions = k8s_helper::get_obj_uid_version_map(&http_route_objs);
 
     let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect()).await?;
 
@@ -118,6 +103,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_spaceroute_api_clone = http_spaceroute_api.clone();
     let http_route_api_clone = http_route_api.clone();
 
+    // watch gateway
     tardis::tokio::spawn(async move {
         let ew = watcher::watcher(gateway_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
@@ -141,12 +127,16 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         }
     });
 
+    // watch http_spaceroute and http_route
     tardis::tokio::spawn(async move {
         let http_spaceroute_api_clone = http_spaceroute_api.clone();
         let http_route_api_clone = http_route_api.clone();
-        let ew = watcher::watcher(http_route_api_clone, watcher::Config::default()).touched_objects();
-        pin_mut!(ew);
-        while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
+
+        let http_spaceroute_api = &http_spaceroute_api;
+        let http_route_api = &http_route_api;
+        let http_route_objs_versions = &http_route_objs_versions;
+
+        let watch_http_spaceroute = |http_route_obj: HttpSpaceroute| async move {
             log::trace!("[SG.Config] http_route config watch tiger");
             if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
@@ -158,11 +148,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 if named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
                     // ignore the original object
                     // ignore if obj is some(it's means obj is not deleted)
-                    continue;
+                    return;
                 }
             }
             if http_route_obj.spec.inner.parent_refs.is_none() {
-                continue;
+                return;
             }
             let (rel_gateway_namespaces, rel_gateway_name) = (
                 if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].namespace.as_ref() {
@@ -175,23 +165,37 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.expect("[SG.Config] Failed to get client"), &rel_gateway_namespaces);
             let gateway_obj = if let Ok(Some(gateway_obj)) = gateway_api.get_opt(&rel_gateway_name).await {
                 if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
-                    continue;
+                    return;
                 }
                 gateway_obj
             } else {
-                continue;
+                return;
             };
 
             log::trace!("[SG.Config] Http route config change found");
 
-            overload_http_route(gateway_obj, (&http_spaceroute_api_clone, &http_route_api)).await;
+            overload_http_route(gateway_obj, (&http_spaceroute_api, &http_route_api)).await;
+        };
+
+        let ew = watcher::watcher(http_spaceroute_api_clone, watcher::Config::default()).touched_objects();
+        pin_mut!(ew);
+        while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
+            watch_http_spaceroute(http_route_obj).await;
+        }
+
+        let ew = watcher::watcher(http_route_api_clone, watcher::Config::default()).touched_objects();
+        pin_mut!(ew);
+        while let Some(http_route_obj) = ew.try_next().await.expect("[SG.Config] http_route watcher error") {
+            watch_http_spaceroute(http_route_obj.into()).await;
         }
     });
+
     let sg_filter_objs: Vec<SgFilter> =
         filter_api.list(&ListParams::default()).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?.into_iter().collect();
 
     let sg_filter_objs_versions = k8s_helper::get_obj_uid_version_map(&sg_filter_objs);
 
+    // watch sgfilter
     tardis::tokio::spawn(async move {
         let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);

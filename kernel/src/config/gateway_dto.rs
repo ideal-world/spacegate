@@ -1,6 +1,5 @@
 use std::{fmt::Display, str::FromStr};
 
-
 use serde::{Deserialize, Serialize};
 use tardis::basic::error::TardisError;
 
