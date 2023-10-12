@@ -84,6 +84,9 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
     let http_route_objs_versions = k8s_helper::get_obj_uid_version_map(&http_route_objs);
 
+    //todo remove
+    log::info!("===={http_route_objs_versions:?}");
+
     let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect()).await?;
 
     let config = gateway_configs
@@ -137,7 +140,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let http_route_objs_versions = &http_route_objs_versions;
 
         let watch_http_spaceroute = |http_route_obj: HttpSpaceroute| async move {
-            log::trace!("[SG.Config] http_route config watch tiger");
+            log::trace!("[SG.Config] http_route config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&http_route_obj));
             if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
@@ -145,7 +148,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     get_client().await.expect("[SG.Config] Failed to get client"),
                     http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
                 );
-                if named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
+                let named_http_space_route_api: Api<HttpSpaceroute> = Api::namespaced(
+                    get_client().await.expect("[SG.Config] Failed to get client"),
+                    http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
+                );
+                if named_http_space_route_api.get(&http_route_obj.name_any()).await.ok().is_some() || named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
                     // ignore the original object
                     // ignore if obj is some(it's means obj is not deleted)
                     return;
@@ -172,7 +179,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 return;
             };
 
-            log::trace!("[SG.Config] Http route config change found");
+            log::debug!("[SG.Config] Http route:{} config change found", k8s_helper::get_k8s_obj_unique(&http_route_obj));
 
             overload_http_route(gateway_obj, (&http_spaceroute_api, &http_route_api)).await;
         };
@@ -200,7 +207,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
-            log::trace!("[SG.Config] filter_api config watch tiger");
+            log::trace!("[SG.Config] filter_api config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&filter_obj));
             if sg_filter_objs_versions.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == filter_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
@@ -219,7 +226,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             }
             let mut gateway_obj_map = HashMap::new();
             let mut http_route_rel_gateway_map = HashMap::new();
-            for target_ref in filter_obj.spec.target_refs {
+            for target_ref in &filter_obj.spec.target_refs {
                 if target_ref.kind.eq_ignore_ascii_case("gateway") {
                     let gateway_api: Api<Gateway> = Api::namespaced(
                         get_client().await.expect("[SG.Config] Failed to get client"),
@@ -233,11 +240,41 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    gateway_obj_map.insert(
-                        format!("{}/{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_obj.name_any()),
-                        gateway_obj,
-                    );
+                    gateway_obj_map.insert(k8s_helper::get_k8s_obj_unique(&gateway_obj), gateway_obj);
                 };
+                if target_ref.kind.eq_ignore_ascii_case("httpspaceroute") {
+                    let http_route_api: Api<HttpSpaceroute> = Api::namespaced(
+                        get_client().await.expect("[SG.Config] Failed to get client"),
+                        target_ref.namespace.as_ref().unwrap_or(&"default".to_string()),
+                    );
+                    let (rel_gateway_namespaces, rel_gateway_name) = if let Ok(http_route) = http_route_api.get(&target_ref.name).await {
+                        (
+                            if let Some(namespaces) =
+                                http_route.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].namespace.as_ref()
+                            {
+                                namespaces.to_string()
+                            } else {
+                                http_route.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
+                            },
+                            http_route.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].name.clone(),
+                        )
+                    } else {
+                        continue;
+                    };
+                    let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.expect("[SG.Config] Failed to get client"), &rel_gateway_namespaces);
+                    let gateway_obj = if let Ok(Some(gateway_obj)) = gateway_api.get_opt(&rel_gateway_name).await {
+                        if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
+                            continue;
+                        }
+                        gateway_obj
+                    } else {
+                        continue;
+                    };
+                    let key = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+                    if gateway_obj_map.get(&key).is_none() && http_route_rel_gateway_map.get(&key).is_none() {
+                        http_route_rel_gateway_map.insert(key, gateway_obj);
+                    }
+                }
                 if target_ref.kind.eq_ignore_ascii_case("httproute") {
                     let http_route_api: Api<HttpRoute> = Api::namespaced(
                         get_client().await.expect("[SG.Config] Failed to get client"),
@@ -266,7 +303,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    let key = format!("{}/{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_obj.name_any());
+                    let key = k8s_helper::get_k8s_obj_unique(&gateway_obj);
                     if gateway_obj_map.get(&key).is_none() && http_route_rel_gateway_map.get(&key).is_none() {
                         http_route_rel_gateway_map.insert(key, gateway_obj);
                     }
@@ -276,7 +313,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 continue;
             }
 
-            log::trace!("[SG.Config] SgFilter config change found");
+            log::trace!("[SG.Config] SgFilter config:{} change found", k8s_helper::get_k8s_obj_unique(&filter_obj));
 
             let http_route_api = (
                 &Api::all(get_client().await.expect("[SG.Config] Failed to get client")),

@@ -25,9 +25,10 @@ pub struct K8sSgFilterSpecFilter {
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecTargetRef {
     /// # FilterTarget Kind
-    /// gateway
-    /// httproute
-    /// httpspaceroute
+    ///  can be:
+    /// - gateway
+    /// - httproute
+    /// - httpspaceroute
     pub kind: String,
     pub name: String,
     pub namespace: Option<String>,
