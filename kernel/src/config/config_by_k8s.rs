@@ -1,7 +1,8 @@
+use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
-use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
+use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter, ParentReference};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::ListParams,
@@ -32,24 +33,34 @@ use super::{
     k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
 };
+use crate::config::k8s_crd_spaceroute::HttpSpaceroute;
 use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
+use crate::helpers::k8s_helper;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref GATEWAY_NAMES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+    /// see [SgGateway].name
+    /// format see [k8s_helper::format_k8s_obj_unique]
+    static ref GATEWAY_UNIQUES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
 }
 
 const GATEWAY_CLASS_NAME: &str = "spacegate";
 
 pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
-    let (gateway_api, http_route_api, filter_api): (Api<Gateway>, Api<HttpRoute>, Api<SgFilter>) = if let Some(namespaces) = namespaces {
+    let (gateway_api, http_spaceroute_api, http_route_api, filter_api): (Api<Gateway>, Api<HttpSpaceroute>, Api<HttpRoute>, Api<SgFilter>) = if let Some(namespaces) = namespaces {
         (
+            Api::namespaced(get_client().await?, &namespaces),
             Api::namespaced(get_client().await?, &namespaces),
             Api::namespaced(get_client().await?, &namespaces),
             Api::namespaced(get_client().await?, &namespaces),
         )
     } else {
-        (Api::all(get_client().await?), Api::all(get_client().await?), Api::all(get_client().await?))
+        (
+            Api::all(get_client().await?),
+            Api::all(get_client().await?),
+            Api::all(get_client().await?),
+            Api::all(get_client().await?),
+        )
     };
 
     let gateway_objs = gateway_api
@@ -74,35 +85,9 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .collect::<HashMap<String, Option<_>>>();
 
     let gateway_configs = process_gateway_config(gateway_objs.into_iter().collect()).await?;
-    let gateway_names = gateway_configs.iter().map(|gateway_config| gateway_config.name.clone()).collect::<Vec<String>>();
+    let gateway_uniques = gateway_configs.iter().map(|gateway_config| gateway_config.name.clone()).collect::<Vec<String>>();
 
-    let http_route_objs: Vec<HttpRoute> = http_route_api
-        .list(&ListParams::default())
-        .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
-        .into_iter()
-        .filter(|http_route_obj| {
-            http_route_obj
-                .spec
-                .inner
-                .parent_refs
-                .as_ref()
-                .map(|parent_refs| {
-                    parent_refs.iter().any(|parent_ref| {
-                        gateway_names.contains(&format!(
-                            "{}.{}",
-                            if let Some(namespaces) = parent_ref.namespace.as_ref() {
-                                namespaces.to_string()
-                            } else {
-                                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
-                            },
-                            parent_ref.name
-                        ))
-                    })
-                })
-                .unwrap_or(false)
-        })
-        .collect::<Vec<HttpRoute>>();
+    let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&gateway_uniques, (&http_spaceroute_api, &http_route_api)).await?;
 
     let http_route_objs_versions = http_route_objs
         .iter()
@@ -126,10 +111,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         .collect();
 
     {
-        let mut gateway_names_guard = GATEWAY_NAMES.write().await;
-        *gateway_names_guard = gateway_names;
+        let mut gateway_uniques_guard = GATEWAY_UNIQUES.write().await;
+        *gateway_uniques_guard = gateway_uniques;
     }
 
+    let http_spaceroute_api_clone = http_spaceroute_api.clone();
     let http_route_api_clone = http_route_api.clone();
 
     tardis::tokio::spawn(async move {
@@ -151,11 +137,12 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
             log::trace!("[SG.Config] Gateway config change found");
 
-            overload_gateway(gateway_obj, &http_route_api_clone).await;
+            overload_gateway(gateway_obj, (&http_spaceroute_api_clone, &http_route_api_clone)).await;
         }
     });
 
     tardis::tokio::spawn(async move {
+        let http_spaceroute_api_clone = http_spaceroute_api.clone();
         let http_route_api_clone = http_route_api.clone();
         let ew = watcher::watcher(http_route_api_clone, watcher::Config::default()).touched_objects();
         pin_mut!(ew);
@@ -197,7 +184,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
             log::trace!("[SG.Config] Http route config change found");
 
-            overload_http_route(gateway_obj, &http_route_api).await;
+            overload_http_route(gateway_obj, (&http_spaceroute_api_clone, &http_route_api)).await;
         }
     });
     let sg_filter_objs: Vec<SgFilter> =
@@ -295,13 +282,16 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
             log::trace!("[SG.Config] SgFilter config change found");
 
-            let http_route_api = Api::all(get_client().await.expect("[SG.Config] Failed to get client"));
+            let http_route_api = (
+                &Api::all(get_client().await.expect("[SG.Config] Failed to get client")),
+                &Api::all(get_client().await.expect("[SG.Config] Failed to get client")),
+            );
             for gateway_obj in gateway_obj_map.into_values() {
-                overload_gateway(gateway_obj, &http_route_api).await;
+                overload_gateway(gateway_obj, http_route_api).await;
             }
 
             for gateway_obj in http_route_rel_gateway_map.into_values() {
-                overload_http_route(gateway_obj, &http_route_api).await;
+                overload_http_route(gateway_obj, http_route_api).await;
             }
         }
     });
@@ -309,7 +299,80 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     Ok(config)
 }
 
-async fn overload_gateway(gateway_obj: Gateway, http_route_api_clone: &Api<HttpRoute>) {
+async fn get_http_spaceroute_by_api(
+    gateway_uniques: &Vec<String>,
+    (http_spaceroute_api, http_route_api): (&Api<HttpSpaceroute>, &Api<HttpRoute>),
+) -> TardisResult<Vec<HttpSpaceroute>> {
+    let get_parent_ref_unique = |parent_ref: &ParentReference, obj: &HttpSpaceroute| {};
+
+    let mut http_route_objs: Vec<HttpSpaceroute> = http_spaceroute_api
+        .list(&ListParams::default())
+        .await
+        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .into_iter()
+        .filter(|http_route_obj| {
+            http_route_obj
+                .spec
+                .inner
+                .parent_refs
+                .as_ref()
+                .map(|parent_refs| {
+                    parent_refs.iter().any(|parent_ref| {
+                        let http_route_namespace = http_route_obj.namespace();
+                        gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+                            if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                                Some(namespaces)
+                            } else {
+                                http_route_namespace.as_ref()
+                            },
+                            &parent_ref.name,
+                        ))
+                    })
+                })
+                .unwrap_or(false)
+        })
+        .collect();
+    let http_spaceroute_name_namespace_set =
+        http_route_objs.iter().map(|spaceroute| format!("{}{}", spaceroute.name_any(), spaceroute.namespace().unwrap_or_default())).collect::<HashSet<String>>();
+
+    let mut add_http_route_objs: Vec<HttpSpaceroute> = http_route_api
+        .list(&ListParams::default())
+        .await
+        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .into_iter()
+        .filter(|http_route_obj| {
+            // HTTPSpaceroute has higher priority than HTTPRoute.
+            // HTTPRoute needs to filter already existing HTTPSpaceroute ({name}{namespace} as unique)
+            http_spaceroute_name_namespace_set.get(&format!("{}{}", http_route_obj.name_any(), http_route_obj.namespace().unwrap_or_default())).is_none()
+                && http_route_obj
+                    .spec
+                    .inner
+                    .parent_refs
+                    .as_ref()
+                    .map(|parent_refs| {
+                        parent_refs.iter().any(|parent_ref| {
+                            let http_route_namespace = http_route_obj.namespace();
+                            gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+                                if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                                    Some(namespaces)
+                                } else {
+                                    http_route_namespace.as_ref()
+                                },
+                                &parent_ref.name,
+                            ))
+                        })
+                    })
+                    .unwrap_or(false)
+        })
+        .map(|http_route_obj| http_route_obj.into())
+        .collect::<Vec<HttpSpaceroute>>();
+
+    http_route_objs.append(&mut add_http_route_objs);
+
+    Ok(http_route_objs)
+}
+
+async fn overload_gateway(gateway_obj: Gateway, http_route_apis: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
     let gateway_api: Api<Gateway> = Api::namespaced(
         get_client().await.expect("[SG.Config] Failed to get client"),
         gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
@@ -325,38 +388,15 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_clone: &Api<HttpR
 
             if has_gateway_obj.is_some() {
                 {
-                    let mut gateway_names_guard = GATEWAY_NAMES.write().await;
-                    gateway_names_guard.push(gateway_config.name.clone());
+                    let mut gateway_uniques_guard = GATEWAY_UNIQUES.write().await;
+                    gateway_uniques_guard.push(gateway_config.name.clone());
                 }
-                let gateway_names_guard = GATEWAY_NAMES.read().await;
-                let http_route_objs = http_route_api_clone
-                    .list(&ListParams::default())
+                let gateway_uniques_guard = GATEWAY_UNIQUES.read().await;
+                let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&gateway_uniques_guard, http_route_apis)
                     .await
-                    .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                    .expect("")
-                    .into_iter()
-                    .filter(|http_route_obj| {
-                        http_route_obj
-                            .spec
-                            .inner
-                            .parent_refs
-                            .as_ref()
-                            .map(|parent_refs| {
-                                parent_refs.iter().any(|parent_ref| {
-                                    gateway_names_guard.contains(&format!(
-                                        "{}.{}",
-                                        if let Some(namespaces) = parent_ref.namespace.as_ref() {
-                                            namespaces.to_string()
-                                        } else {
-                                            http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
-                                        },
-                                        parent_ref.name
-                                    ))
-                                })
-                            })
-                            .unwrap_or(false)
-                    })
-                    .collect::<Vec<HttpRoute>>();
+                    .map_err(|error| TardisError::wrap(&format!("[SG.Config] Get HttpRoute Kubernetes error: {error:?}"), ""))
+                    .expect("");
+
                 let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect())
                     .await
                     .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
@@ -366,8 +406,8 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_clone: &Api<HttpR
                 do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] Failed to restart gateway");
             } else {
                 {
-                    let mut gateway_names_guard = GATEWAY_NAMES.write().await;
-                    gateway_names_guard.retain(|name| name != &gateway_config.name);
+                    let mut gateway_uniques_guard = GATEWAY_UNIQUES.write().await;
+                    gateway_uniques_guard.retain(|name| name != &gateway_config.name);
                 }
                 shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
             }
@@ -378,8 +418,7 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_clone: &Api<HttpR
     }
 }
 
-async fn overload_http_route(gateway_obj: Gateway, http_route_api: &Api<HttpRoute>) {
-    let gateway_namespace = gateway_obj.namespace().unwrap_or("default".to_string());
+async fn overload_http_route(gateway_obj: Gateway, http_route_apis: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
     let gateway_config = process_gateway_config(vec![gateway_obj])
         .await
         .expect("[SG.Config] Failed to process gateway config for http_route parent ref")
@@ -387,33 +426,12 @@ async fn overload_http_route(gateway_obj: Gateway, http_route_api: &Api<HttpRout
         .expect("[SG.Config] Gateway config not found for http_route parent ref")
         .clone();
 
-    let gateway_names_guard = GATEWAY_NAMES.read().await;
+    let gateway_uniques_guard = GATEWAY_UNIQUES.read().await;
 
-    let http_route_objs: Vec<HttpRoute> = http_route_api
-        .list(&ListParams::default())
+    let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&gateway_uniques_guard, http_route_apis)
         .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-        .expect("")
-        .into_iter()
-        .filter(|http_route_obj| {
-            http_route_obj
-                .spec
-                .inner
-                .parent_refs
-                .as_ref()
-                .map(|parent_refs| {
-                    parent_refs.iter().any(|parent_ref| {
-                        let namespace = if let Some(namespaces) = parent_ref.namespace.as_ref() {
-                            namespaces.to_string()
-                        } else {
-                            http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
-                        };
-                        gateway_namespace == namespace && gateway_names_guard.contains(&format!("{}.{}", namespace, parent_ref.name))
-                    })
-                })
-                .unwrap_or(false)
-        })
-        .collect::<Vec<HttpRoute>>();
+        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Get HttpRoute Kubernetes error: {error:?}"), ""))
+        .expect("");
 
     if http_route_objs.is_empty() {
         http_route::init(gateway_config, vec![]).await.expect("[SG.Config] Failed to re-init http_route");
@@ -492,7 +510,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         // Generate gateway configuration
         let gateway_name_without_namespace = gateway_obj.metadata.name.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [metadata.name] is required", ""))?;
         let gateway_config = SgGateway {
-            name: format!("{}.{}", gateway_obj.namespace().unwrap_or("default".to_string()), gateway_name_without_namespace),
+            name: k8s_helper::format_k8s_obj_unique(gateway_obj.namespace().as_ref(), gateway_name_without_namespace),
             parameters: SgParameters {
                 redis_url: gateway_obj.metadata.annotations.clone().and_then(|ann| ann.get(GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string())),
                 log_level: gateway_obj
@@ -581,7 +599,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
     Ok(gateway_configs)
 }
 
-async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> TardisResult<Vec<SgHttpRoute>> {
+async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> TardisResult<Vec<SgHttpRoute>> {
     let mut http_route_configs = Vec::new();
     http_route_objs.sort_by(|http_route_a, http_route_b| {
         let (a_priority, b_priority) = (
@@ -753,7 +771,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                             name_or_host: backend.inner.name,
                                             namespace,
                                             port: backend.inner.port.expect("[SG.Config] unexpected none: http_route backend's port"),
-                                            timeout_ms: None,
+                                            timeout_ms: backend.inner.timeout_ms,
                                             protocol,
                                             weight: backend.weight,
                                             filters,
@@ -761,7 +779,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpRoute>) -> Tardi
                                     })
                                     .collect_vec()
                             }),
-                            timeout_ms: None,
+                            timeout_ms: rule.timeout_ms,
                         })
                         .collect_vec();
                     Some(sg_rules)

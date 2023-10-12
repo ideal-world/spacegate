@@ -18,6 +18,7 @@ pub mod http_route_dto;
 #[cfg(feature = "k8s")]
 pub mod k8s_crd;
 pub mod plugin_filter_dto;
+mod k8s_crd_spaceroute;
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
