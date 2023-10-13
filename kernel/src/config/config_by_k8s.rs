@@ -84,9 +84,6 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
     let http_route_objs_versions = k8s_helper::get_obj_uid_version_map(&http_route_objs);
 
-    //todo remove
-    log::info!("===={http_route_objs_versions:?}");
-
     let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect()).await?;
 
     let config = gateway_configs
@@ -707,9 +704,14 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
         );
         let http_route_config = SgHttpRoute {
             gateway_name: rel_gateway_name,
-            hostnames: http_route_obj.spec.hostnames,
-            filters: if let Some(name) = http_route_obj.metadata.name {
-                get_filters_from_cdr("httproute", &name, &http_route_obj.metadata.namespace).await?
+            hostnames: http_route_obj.spec.hostnames.clone(),
+            filters: if let Some(name) = &http_route_obj.metadata.name {
+                let kind = if let Some(kind) = http_route_obj.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
+                    kind
+                } else {
+                    constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
+                };
+                get_filters_from_cdr(kind, name, &http_route_obj.metadata.namespace).await?
             } else {
                 None
             },
@@ -798,11 +800,14 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                                             }
                                             None => Some(backend.inner.namespace.unwrap_or("default".to_string())),
                                         };
+                                        //todo remove
+                                        log::info!("{}========backend.inner.timeout_ms:{:?}", backend.inner.name, backend.timeout_ms);
+
                                         SgBackendRef {
                                             name_or_host: backend.inner.name,
                                             namespace,
                                             port: backend.inner.port.expect("[SG.Config] unexpected none: http_route backend's port"),
-                                            timeout_ms: backend.inner.timeout_ms,
+                                            timeout_ms: backend.timeout_ms,
                                             protocol,
                                             weight: backend.weight,
                                             filters,

@@ -1,4 +1,7 @@
+use crate::constants;
 use k8s_gateway_api::{CommonRouteSpec, Group, Hostname, HttpRoute, HttpRouteFilter, HttpRouteMatch, Kind, Namespace, ObjectName, PortNumber, RouteStatus};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, kube::CustomResource, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[kube(
@@ -202,6 +205,7 @@ pub struct HttpBackendRef {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct BackendRef {
     /// Weight specifies the proportion of requests forwarded to the referenced
     /// backend. This is computed as weight/(sum of all weights in this
@@ -217,6 +221,8 @@ pub struct BackendRef {
     ///
     /// Support for this field varies based on the context where used.
     pub weight: Option<u16>,
+
+    pub timeout_ms: Option<u64>,
 
     /// BackendObjectReference references a Kubernetes object.
     #[serde(flatten)]
@@ -252,14 +258,20 @@ pub struct BackendObjectReference {
     /// resources, destination port might be derived from the referent resource
     /// or this field.
     pub port: Option<PortNumber>,
-
-    pub timeout_ms: Option<u64>,
 }
 
 impl From<HttpRoute> for HttpSpaceroute {
     fn from(http_route_obj: HttpRoute) -> Self {
         HttpSpaceroute {
-            metadata: http_route_obj.metadata,
+            metadata: ObjectMeta {
+                annotations: Some(if let Some(mut ann) = http_route_obj.metadata.annotations {
+                    ann.insert(constants::RAW_HTTP_ROUTE_KIND.to_string(), constants::RAW_HTTP_ROUTE_KIND_DEFAULT.to_string());
+                    ann
+                } else {
+                    BTreeMap::from([(constants::RAW_HTTP_ROUTE_KIND.to_string(), constants::RAW_HTTP_ROUTE_KIND_DEFAULT.to_string())])
+                }),
+                ..http_route_obj.metadata
+            },
             spec: HttpSpacerouteSpec {
                 inner: http_route_obj.spec.inner,
                 hostnames: http_route_obj.spec.hostnames,
@@ -275,13 +287,13 @@ impl From<HttpRoute> for HttpSpaceroute {
                                     .map(|http_backend_ref| HttpBackendRef {
                                         backend_ref: http_backend_ref.backend_ref.map(|backend_ref| BackendRef {
                                             weight: backend_ref.weight,
+                                            timeout_ms: None,
                                             inner: BackendObjectReference {
                                                 group: backend_ref.inner.group,
                                                 kind: backend_ref.inner.kind,
                                                 name: backend_ref.inner.name,
                                                 namespace: backend_ref.inner.namespace,
                                                 port: backend_ref.inner.port,
-                                                timeout_ms: None,
                                             },
                                         }),
                                         filters: http_backend_ref.filters,
