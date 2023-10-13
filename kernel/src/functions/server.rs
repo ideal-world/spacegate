@@ -20,7 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::vec::Vec;
 use std::{io, sync};
-use tardis::basic::tracing::TardisTracing;
+use tardis::{basic::tracing::TardisTracing, config::config_dto::LogConfig};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
@@ -50,7 +50,18 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     }
     if let Some(log_level) = gateway_conf.parameters.log_level.clone() {
         log::debug!("[SG.Server] change log level to {log_level}");
-        TardisTracing::update_log_level_by_domain_code(crate::constants::DOMAIN_CODE, &log_level)?;
+        let fw_config = TardisFuns::fw_config();
+        let old_configs = fw_config.log();
+        let directive = format!("{domain}={log_level}", domain = crate::constants::DOMAIN_CODE).parse().expect("invalid directive");
+        let mut directives = old_configs.directives.clone();
+        if let Some(index) = directives.iter().position(|d| d.to_string().starts_with(crate::constants::DOMAIN_CODE)) {
+            directives.remove(index);
+        }
+        directives.push(directive);
+        TardisFuns::tracing().update_config(&LogConfig {
+            level: old_configs.level.clone(),
+            directives,
+        })?;
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 
@@ -283,6 +294,7 @@ impl Accept for TlsAcceptor {
 }
 
 enum State {
+
     Handshaking(tokio_rustls::Accept<AddrStream>),
     Streaming(tokio_rustls::server::TlsStream<AddrStream>),
 }
@@ -293,6 +305,7 @@ struct TlsStream {
 
 impl TlsStream {
     fn new(stream: AddrStream, config: Arc<ServerConfig>) -> TlsStream {
+        
         let accept = tokio_rustls::TlsAcceptor::from(config).accept(stream);
         TlsStream {
             state: State::Handshaking(accept),

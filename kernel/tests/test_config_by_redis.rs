@@ -5,6 +5,7 @@ use serde_json::Value;
 use tardis::{
     basic::result::TardisResult,
     cache::cache_client::TardisCacheClient,
+    config::config_dto::{WebClientModuleConfig, CacheModuleConfig},
     testcontainers,
     tokio::{self, time::sleep},
     web::web_client::TardisWebClient,
@@ -14,14 +15,18 @@ use tardis::{
 async fn test_config_by_redis() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
     tracing_subscriber::fmt::init();
-    let http_client = TardisWebClient::init(100)?;
+    let http_client = TardisWebClient::init(&WebClientModuleConfig {
+        connect_timeout_sec: 100,
+        ..Default::default()
+    })?;
     let docker = testcontainers::clients::Cli::default();
     let (cache_url, _x) = init_cache_container::init(&docker).await?;
-
     // Without keys
     assert!(spacegate_kernel::startup(false, Some(cache_url.clone()), None).await.is_err());
 
-    let cache_client = TardisCacheClient::init(&cache_url).await?;
+    let cache_client = TardisCacheClient::init(&CacheModuleConfig {
+        url: cache_url.parse().expect("invalid url"),
+    }).await?;
     cache_client
         .hset(
             "sg:conf:gateway",

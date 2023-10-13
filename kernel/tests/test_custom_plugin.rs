@@ -15,6 +15,7 @@ use spacegate_kernel::{
     def_filter,
     plugins::filters::SgPluginFilter,
 };
+use tardis::config::config_dto::WebClientModuleConfig;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     tokio::{self, time::sleep},
@@ -79,11 +80,14 @@ async fn test_custom_plugin() -> TardisResult<()> {
     )
     .await?;
     sleep(Duration::from_millis(500)).await;
-    let client = TardisWebClient::init(100)?;
+    let client = TardisWebClient::init(&WebClientModuleConfig {
+        connect_timeout_sec: 100,
+        ..Default::default()
+    })?;
     let resp = client.get_to_str("http://localhost:8888/get?dd", None).await?;
     assert_eq!(resp.code, 401);
 
-    let resp = client.get::<Value>("http://localhost:8888/get?dd", Some(vec![("Authorization".to_string(), "xxxxx".to_string())])).await?;
+    let resp = client.get::<Value>("http://localhost:8888/get?dd", [("Authorization", "xxxxx")]).await?;
     assert_eq!(resp.code, 200);
     assert!(resp.body.unwrap().get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
     Ok(())

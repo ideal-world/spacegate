@@ -15,7 +15,6 @@ use spacegate_kernel::config::{
     gateway_dto::{SgGateway, SgListener},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
-use tardis::web::web_server::WebServerModule;
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
     basic::result::TardisResult,
@@ -33,6 +32,7 @@ use tardis::{
     },
     TardisFuns,
 };
+use tardis::{config::config_dto::WebServerCommonConfig, web::web_server::WebServerModule};
 
 lazy_static! {
     static ref SENDERS: Arc<RwLock<HashMap<String, Sender<TardisWebsocketMgrMessage>>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -45,36 +45,7 @@ async fn test_webscoket() -> TardisResult<()> {
         cs: Default::default(),
         fw: FrameworkConfig {
             app: Default::default(),
-            web_server: WebServerConfig {
-                enabled: true,
-                port: 8081,
-                ..Default::default()
-            },
-            web_client: Default::default(),
-            cache: CacheConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            db: DBConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            mq: MQConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            search: SearchConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            mail: MailConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            os: OSConfig {
-                enabled: false,
-                ..Default::default()
-            },
+            web_server: Some(WebServerConfig::builder().common(WebServerCommonConfig::builder().port(8081).build()).default(Default::default()).build()),
             ..Default::default()
         },
     })
