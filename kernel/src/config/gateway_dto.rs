@@ -12,6 +12,9 @@ use super::plugin_filter_dto::SgRouteFilter;
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgGateway {
     /// Name of the Gateway. Global Unique.
+    ///
+    /// In k8s mode, this name MUST be unique within a namespace.
+    /// format see [k8s_helper::format_k8s_obj_unique]
     pub name: String,
     /// Some parameters necessary for the gateway.
     pub parameters: SgParameters,

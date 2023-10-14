@@ -119,6 +119,7 @@ rules:
   - spacegate.idealworld.group
   resources:
   - sgfilters
+  - httpspaceroutes
   verbs:
   - get
   - list
