@@ -4,7 +4,7 @@ use kernel_dto::dto::gateway_dto::SgGateway;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
-use tardis::web::web_resp::{TardisApiResult, TardisPage, TardisResp, Void};
+use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
 #[derive(Clone, Default)]
 pub struct GatewayApi;

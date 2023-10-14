@@ -1,12 +1,12 @@
 use crate::dto::query_dto::GatewayQueryDto;
+#[cfg(feature = "k8s")]
 use crate::dto::ToFields;
 #[cfg(feature = "k8s")]
 use crate::service::helper::get_k8s_client;
 use crate::service::plugin_service;
 use crate::service::plugin_service::PluginService;
 #[cfg(feature = "k8s")]
-use k8s_gateway_api::Gateway;
-use k8s_gateway_api::{GatewaySpec, Listener};
+use k8s_gateway_api::{Gateway, GatewaySpec, Listener};
 #[cfg(feature = "k8s")]
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};

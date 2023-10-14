@@ -21,7 +21,6 @@ use crate::{do_startup, functions::http_route, shutdown};
 
 use crate::config::k8s_crd_spaceroute::HttpSpaceroute;
 use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
-use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
 use crate::helpers::k8s_helper;
 use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
 use kernel_dto::constants::GATEWAY_CLASS_NAME;
@@ -452,56 +451,6 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
         }
     }
 }
-
-//todo remove
-// async fn watch_http_spaceroute(
-//     http_route_obj: HttpSpaceroute,
-//     http_route_objs_versions: &mut HashMap<String, String>,
-//     http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>),
-// ) {
-//     log::trace!("[SG.Config] http_route config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&http_route_obj));
-//     if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
-//         == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
-//     {
-//         let named_http_route_api: Api<HttpRoute> = Api::namespaced(
-//             get_client().await.expect("[SG.Config] Failed to get client"),
-//             http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
-//         );
-//         let named_http_space_route_api: Api<HttpSpaceroute> = Api::namespaced(
-//             get_client().await.expect("[SG.Config] Failed to get client"),
-//             http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
-//         );
-//         if named_http_space_route_api.get(&http_route_obj.name_any()).await.ok().is_some() || named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
-//             // ignore the original object
-//             // ignore if obj is some(it's means obj is not deleted)
-//             return;
-//         }
-//     }
-//     if http_route_obj.spec.inner.parent_refs.is_none() {
-//         return;
-//     }
-//     let (rel_gateway_namespaces, rel_gateway_name) = (
-//         if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].namespace.as_ref() {
-//             namespaces.to_string()
-//         } else {
-//             http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
-//         },
-//         http_route_obj.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].name.clone(),
-//     );
-//     let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.expect("[SG.Config] Failed to get client"), &rel_gateway_namespaces);
-//     let gateway_obj = if let Ok(Some(gateway_obj)) = gateway_api.get_opt(&rel_gateway_name).await {
-//         if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
-//             return;
-//         }
-//         gateway_obj
-//     } else {
-//         return;
-//     };
-//
-//     log::debug!("[SG.Config] Http route:{} config change found", k8s_helper::get_k8s_obj_unique(&http_route_obj));
-//
-//     overload_http_route(gateway_obj, http_route_api_refs).await;
-// }
 
 async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
     let gateway_config = process_gateway_config(vec![gateway_obj])

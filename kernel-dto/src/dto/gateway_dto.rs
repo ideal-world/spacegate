@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::{fmt::Display, str::FromStr};
 
 use super::plugin_filter_dto::SgRouteFilter;
+#[cfg(feature = "k8s")]
 use crate::constants::GATEWAY_CLASS_NAME;
 use crate::dto::plugin_filter_dto::SgSingeFilter;
 use crate::k8s_crd::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
