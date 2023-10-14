@@ -3,20 +3,23 @@ use crate::dto::query_dto::GatewayQueryDto;
 use crate::dto::ToFields;
 #[cfg(feature = "k8s")]
 use crate::service::helper::get_k8s_client;
-use crate::service::plugin_service;
+
 use crate::service::plugin_service::PluginService;
 #[cfg(feature = "k8s")]
-use k8s_gateway_api::{Gateway, GatewaySpec, Listener};
+use k8s_gateway_api::Gateway;
 #[cfg(feature = "k8s")]
 use k8s_openapi::api::core::v1::Secret;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
-use kernel_dto::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
+#[cfg(feature = "k8s")]
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
+#[cfg(feature = "k8s")]
+use kernel_dto::constants::DEFAULT_NAMESPACE;
 use kernel_dto::dto::gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode};
+#[cfg(feature = "k8s")]
 use kube::api::{DeleteParams, PostParams};
-use kube::Resource;
+
 #[cfg(feature = "k8s")]
 use kube::{api::ListParams, Api, ResourceExt};
-use std::fmt::format;
+
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::futures_util::future::join_all;
@@ -29,7 +32,7 @@ impl GatewayService {
         #[cfg(feature = "k8s")]
         {
             let gateway_api: Api<Gateway> = if let Some(namespace) = &namespace {
-                Api::namespaced(get_k8s_client().await?, &namespace)
+                Api::namespaced(get_k8s_client().await?, namespace)
             } else {
                 Api::all(get_k8s_client().await?)
             };
@@ -83,14 +86,16 @@ impl GatewayService {
             result = Self::kube_to(vec![result_gateway]).await?.remove(0);
         }
         #[cfg(not(feature = "k8s"))]
-        {}
+        {
+            result = add;
+        }
         Ok(result)
     }
 
     pub async fn edit(namespace: Option<String>, edit: SgGateway) -> TardisResult<SgGateway> {
         #[cfg(feature = "k8s")]
         {
-            let gateway_api: Api<Gateway> = Self::get_gateway_api(&namespace).await?;
+            let _gateway_api: Api<Gateway> = Self::get_gateway_api(&namespace).await?;
 
             //todo 对比z
             // let (gateway, secrets, sgfilters) = edit.to_kube_gateway();
@@ -115,7 +120,7 @@ impl GatewayService {
 
     #[cfg(feature = "k8s")]
     async fn get_gateway_api(namespace: &Option<String>) -> TardisResult<Api<Gateway>> {
-        Ok(Api::namespaced(get_k8s_client().await?, &namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
+        Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
     }
     //todo try to compress with kernel::config::config_by_k8s
     #[cfg(feature = "k8s")]

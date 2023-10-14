@@ -1,8 +1,10 @@
 #[cfg(feature = "k8s")]
-use k8s_gateway_api::{Gateway, Listener};
-use k8s_gateway_api::{GatewaySpec, GatewayTlsConfig, SecretObjectReference, TlsModeType};
+use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference, TlsModeType};
+#[cfg(feature = "k8s")]
 use k8s_openapi::api::core::v1::Secret;
+#[cfg(feature = "k8s")]
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+#[cfg(feature = "k8s")]
 use k8s_openapi::ByteString;
 use std::collections::BTreeMap;
 use std::{fmt::Display, str::FromStr};
@@ -10,8 +12,10 @@ use std::{fmt::Display, str::FromStr};
 use super::plugin_filter_dto::SgRouteFilter;
 #[cfg(feature = "k8s")]
 use crate::constants::GATEWAY_CLASS_NAME;
+#[cfg(feature = "k8s")]
 use crate::dto::plugin_filter_dto::SgSingeFilter;
-use crate::k8s_crd::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
+#[cfg(feature = "k8s")]
+use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use serde::{Deserialize, Serialize};
 use tardis::basic::error::TardisError;
 #[cfg(feature = "admin-support")]
@@ -26,6 +30,9 @@ use tardis::TardisFuns;
 #[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgGateway {
     /// Name of the Gateway. Global Unique.
+    ///
+    /// In k8s mode, this name MUST be unique within a namespace.
+    /// format see [k8s_helper::format_k8s_obj_unique]
     pub name: String,
     /// Some parameters necessary for the gateway.
     pub parameters: SgParameters,
@@ -216,6 +223,7 @@ pub struct SgTlsConfig {
 }
 
 impl SgTlsConfig {
+    #[cfg(feature = "k8s")]
     pub fn to_kube_tls(self, namespace: &str) -> (GatewayTlsConfig, Secret) {
         let tls_name = TardisFuns::field.nanoid_custom(
             10,

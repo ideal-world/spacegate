@@ -19,7 +19,6 @@ use tardis::{
 
 use crate::{do_startup, functions::http_route, shutdown};
 
-use crate::config::k8s_crd_spaceroute::HttpSpaceroute;
 use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::helpers::k8s_helper;
 use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
@@ -34,7 +33,8 @@ use kernel_dto::dto::{
     plugin_filter_dto,
     plugin_filter_dto::SgRouteFilter,
 };
-use kernel_dto::k8s_crd::SgFilter;
+use kernel_dto::k8s_crd::http_spaceroute::HttpSpaceroute;
+use kernel_dto::k8s_crd::sg_filter::SgFilter;
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -696,10 +696,10 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
             gateway_name: rel_gateway_name,
             hostnames: http_route_obj.spec.hostnames.clone(),
             filters: if let Some(name) = &http_route_obj.metadata.name {
-                let kind = if let Some(kind) = http_route_obj.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
+                let kind = if let Some(kind) = http_route_obj.annotations().get(kernel_dto::constants::RAW_HTTP_ROUTE_KIND) {
                     kind
                 } else {
-                    constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
+                    kernel_dto::constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
                 };
                 get_filters_from_cdr(kind, name, &http_route_obj.metadata.namespace).await?
             } else {

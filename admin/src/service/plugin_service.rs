@@ -1,17 +1,19 @@
 use crate::dto::query_dto::PluginQueryDto;
+#[cfg(feature = "k8s")]
 use crate::dto::ToFields;
 #[cfg(feature = "k8s")]
-use crate::service::helper::get_k8s_client;
-use crate::service::helper::WarpKubeResult;
+use crate::helper::get_k8s_client;
+use crate::helper::WarpKubeResult;
+#[cfg(feature = "k8s")]
 use kernel_dto::constants::DEFAULT_NAMESPACE;
-use kernel_dto::dto::plugin_filter_dto::{SgRouteFilter, SgSingeFilter};
+use kernel_dto::dto::plugin_filter_dto::SgRouteFilter;
 #[cfg(feature = "k8s")]
-use kernel_dto::k8s_crd::SgFilter;
-use kube::api::PostParams;
-use kube::ResourceExt;
+use kernel_dto::dto::plugin_filter_dto::SgSingeFilter;
 #[cfg(feature = "k8s")]
-use kube::{api::ListParams, Api};
-use std::collections::{HashMap, HashSet};
+use kernel_dto::k8s_crd::sg_filter::SgFilter;
+#[cfg(feature = "k8s")]
+use kube::{api::ListParams, api::PostParams, Api, ResourceExt};
+use std::collections::HashMap;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
@@ -24,7 +26,7 @@ impl PluginService {
         {
             let filter_api: Api<SgFilter> = Self::get_filter_api(&query.namespace).await?;
 
-            let filter_list = filter_api.list(&ListParams::default().fields(&query.to_fields())).await.map_err(|e| TardisError::io_error(&format!("err:{e}"), ""))?;
+            let _filter_list = filter_api.list(&ListParams::default().fields(&query.to_fields())).await.map_err(|e| TardisError::io_error(&format!("err:{e}"), ""))?;
         }
         #[cfg(not(feature = "k8s"))]
         {}
@@ -64,6 +66,6 @@ impl PluginService {
     #[cfg(feature = "k8s")]
     #[inline]
     pub async fn get_filter_api(namespace: &Option<String>) -> TardisResult<Api<SgFilter>> {
-        Ok(Api::namespaced(get_k8s_client().await?, &namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
+        Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
     }
 }
