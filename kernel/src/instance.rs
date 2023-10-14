@@ -59,7 +59,7 @@ impl fmt::Display for SgHttpRouteRuleInst {
             "".to_string()
         };
         let backend = if let Some(backend) = &self.backends {
-            format!("backend:[{}]", backend.iter().map(|b| format!("{}", b)).collect::<Vec<String>>().join(", "))
+            format!("backend:[{}]", backend.iter().map(|b| format!("({})", b)).collect::<Vec<String>>().join(", "))
         } else {
             "".to_string()
         };
@@ -171,7 +171,7 @@ impl fmt::Display for SgBackendInst {
             self.namespace.as_ref().map(|n| format!(".{n}")).unwrap_or("".to_string()),
             self.port
         );
-
-        write!(f, "w:{}->{}", self.weight.as_ref().unwrap_or(&0), url)
+        let timeout_ms = if let Some(t) = self.timeout_ms { format!(",timeout({})", t) } else { "".to_string() };
+        write!(f, "weight({}){timeout_ms}->{url}", self.weight.as_ref().unwrap_or(&0),)
     }
 }

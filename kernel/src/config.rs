@@ -13,6 +13,8 @@ pub mod config_by_k8s;
 pub mod config_by_local;
 #[cfg(feature = "cache")]
 pub mod config_by_redis;
+#[cfg(feature = "k8s")]
+mod k8s_crd_spaceroute;
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]

@@ -83,6 +83,7 @@ jobs:
           kubectl apply -f ./kernel/res/namespace.yaml
           kubectl apply -f ./kernel/res/gatewayclass.yaml
           kubectl apply -f ./kernel/res/spacegate-gateway.yaml
+          kubectl apply -f ./kernel/res/spacegate-httproute.yaml
           sleep 5
           kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
 

@@ -189,8 +189,8 @@ pub async fn init(gateway_conf: SgGateway, routes: Vec<SgHttpRoute>) -> TardisRe
         })
     }
 
-    log::trace!(
-        "[SG.Route] Init route:[{}] by  {}",
+    log::debug!(
+        "[SG.Route] Init route:[{}] by {}",
         route_insts.iter().map(|route| format!("({})", route)).collect::<Vec<_>>().join(", "),
         gateway_conf.name
     );

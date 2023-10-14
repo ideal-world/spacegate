@@ -1,5 +1,5 @@
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
+apiVersion: spacegate.idealworld.group/v1
+kind: HTTPSpaceroute
 metadata:
   name: echo
   annotations:
@@ -18,6 +18,8 @@ spec:
     - path:
         type: PathPrefix
         value: /echo
+    timeoutMs: 10000
     backendRefs:
     - name: echo
       port: 80
+      timeoutMs: 9000
