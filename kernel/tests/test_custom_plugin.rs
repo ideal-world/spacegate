@@ -1,20 +1,15 @@
 use std::{env, time::Duration, vec};
 
 use async_trait::async_trait;
+use kernel_dto::dto::gateway_dto::SgProtocol::Https;
+use kernel_dto::dto::gateway_dto::{SgGateway, SgListener};
+use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
+use kernel_dto::dto::plugin_filter_dto::SgRouteFilter;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use spacegate_kernel::config::gateway_dto::SgProtocol::Https;
 use spacegate_kernel::plugins::context::SgRoutePluginContext;
 use spacegate_kernel::plugins::filters::SgPluginFilterInitDto;
-use spacegate_kernel::{
-    config::{
-        gateway_dto::{SgGateway, SgListener},
-        http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-        plugin_filter_dto::SgRouteFilter,
-    },
-    def_filter,
-    plugins::filters::SgPluginFilter,
-};
+use spacegate_kernel::{def_filter, plugins::filters::SgPluginFilter};
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     tokio::{self, time::sleep},

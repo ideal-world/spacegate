@@ -60,7 +60,6 @@ impl SgPluginFilter for SgFilterRewrite {
 
 mod tests {
     use crate::{
-        config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
         instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
         plugins::context::ChosenHttpRouteRuleInst,
     };
@@ -68,6 +67,8 @@ mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
+    use kernel_dto::dto::http_route_dto::SgHttpPathMatchType;
+    use kernel_dto::dto::plugin_filter_dto::SgHttpPathModifierType;
     use tardis::tokio;
 
     #[tokio::test]

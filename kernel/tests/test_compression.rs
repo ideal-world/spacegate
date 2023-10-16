@@ -1,19 +1,16 @@
 use std::{env, time::Duration, vec};
 
+use kernel_dto::dto::gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode};
+use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
+use kernel_dto::dto::plugin_filter_dto::SgRouteFilter;
 use serde_json::{json, Value};
-use spacegate_kernel::{
-    config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
-        http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-        plugin_filter_dto::SgRouteFilter,
-    },
-    plugins::filters::compression::{self},
-};
+use spacegate_kernel::plugins::filters::compression::{self};
 use tardis::{
     basic::result::TardisResult,
     log::info,
     tokio::{self, time::sleep},
 };
+
 const HTTP_PORT: u16 = 8888;
 const HTTPS_PORT: u16 = 18443;
 #[tokio::test]

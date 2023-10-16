@@ -277,6 +277,8 @@ mod tests {
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
 
+    use kernel_dto::dto::gateway_dto::SgParameters;
+    use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpRouteRule};
     use tardis::{
         basic::{error::TardisError, result::TardisResult},
         test::test_container::TardisTestContainer,
@@ -289,10 +291,6 @@ mod tests {
     #[cfg(feature = "cache")]
     use crate::plugins::filters::status::get_cache_key;
     use crate::{
-        config::{
-            gateway_dto::SgParameters,
-            http_route_dto::{SgBackendRef, SgHttpRouteRule},
-        },
         instance::{SgBackendInst, SgHttpRouteRuleInst},
         plugins::{
             context::ChosenHttpRouteRuleInst,
@@ -316,7 +314,7 @@ mod tests {
             namespace: None,
             port: 80,
             timeout_ms: None,
-            protocol: Some(crate::config::gateway_dto::SgProtocol::Http),
+            protocol: Some(kernel_dto::dto::gateway_dto::SgProtocol::Http),
             weight: None,
             filters: None,
         };

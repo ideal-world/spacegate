@@ -36,7 +36,6 @@ use kernel_dto::dto::{
 use kernel_dto::k8s_crd::http_spaceroute::HttpSpaceroute;
 use kernel_dto::k8s_crd::sg_filter::SgFilter;
 use lazy_static::lazy_static;
-use tardis::web::poem::EndpointExt;
 
 lazy_static! {
     /// see [SgGateway].name
@@ -972,7 +971,7 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<
                         crate::plugins::filters::header_modifier::CODE => {
                             let header_modifier = TardisFuns::json
                                 .json_to_obj::<crate::plugins::filters::header_modifier::SgFilterHeaderModifier>(filter.spec)
-                                .map_err(|error| TardisError::bad_request("", ""))?;
+                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
                             match header_modifier.kind {
                                 SgFilterHeaderModifierKind::Request => HttpRouteFilter::RequestHeaderModifier {
                                     request_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
@@ -991,8 +990,9 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<
                             }
                         }
                         crate::plugins::filters::rewrite::CODE => {
-                            let rewrite =
-                                TardisFuns::json.json_to_obj::<crate::plugins::filters::rewrite::SgFilterRewrite>(filter.spec).map_err(|error| TardisError::bad_request("", ""))?;
+                            let rewrite = TardisFuns::json
+                                .json_to_obj::<crate::plugins::filters::rewrite::SgFilterRewrite>(filter.spec)
+                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
                             HttpRouteFilter::URLRewrite {
                                 url_rewrite: k8s_gateway_api::HttpUrlRewriteFilter {
                                     hostname: rewrite.hostname,
@@ -1006,7 +1006,7 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<
                         crate::plugins::filters::redirect::CODE => {
                             let redirect = TardisFuns::json
                                 .json_to_obj::<crate::plugins::filters::redirect::SgFilterRedirect>(filter.spec)
-                                .map_err(|error| TardisError::bad_request("", ""))?;
+                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
                             HttpRouteFilter::RequestRedirect {
                                 request_redirect: k8s_gateway_api::HttpRequestRedirectFilter {
                                     scheme: redirect.scheme,

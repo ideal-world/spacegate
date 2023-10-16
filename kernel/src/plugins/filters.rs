@@ -355,13 +355,11 @@ impl Default for SgPluginFilterAccept {
 #[cfg(test)]
 
 mod tests {
+    use kernel_dto::dto::http_route_dto::SgHttpPathMatchType;
+    use kernel_dto::dto::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType};
     use tardis::{basic::result::TardisResult, regex::Regex};
 
     use crate::{
-        config::{
-            http_route_dto::SgHttpPathMatchType,
-            plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType},
-        },
         instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst},
         plugins::filters::http_common_modify_path,
     };

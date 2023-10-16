@@ -872,10 +872,10 @@ mod tests {
 
     use http::{Method, Request};
     use hyper::Body;
+    use kernel_dto::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType};
     use tardis::regex::Regex;
 
     use crate::{
-        config::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
         functions::http_route::{choose_backend, match_route_insts_with_hostname_priority},
         instance::{SgBackendInst, SgHttpHeaderMatchInst, SgHttpPathMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     };

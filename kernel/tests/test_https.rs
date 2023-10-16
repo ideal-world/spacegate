@@ -1,10 +1,8 @@
 use std::{env, time::Duration, vec};
 
+use kernel_dto::dto::gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode};
+use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
 use serde_json::{json, Value};
-use spacegate_kernel::config::{
-    gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
-    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-};
 use tardis::{
     basic::result::TardisResult,
     tokio::{self, time::sleep},

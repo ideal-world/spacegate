@@ -166,13 +166,13 @@ mod tests {
     use tardis::{basic::result::TardisResult, tokio};
 
     use crate::{
-        config::gateway_dto::SgProtocol,
         functions::http_client::{init, request},
         instance::SgBackendInst,
         plugins::context::SgRoutePluginContext,
     };
     use hyper::{client::HttpConnector, Client};
     use hyper_rustls::HttpsConnector;
+    use kernel_dto::dto::gateway_dto::SgProtocol;
 
     #[tokio::test]
     async fn test_request() -> TardisResult<()> {

@@ -2,7 +2,7 @@ use crate::dto::query_dto::GatewayQueryDto;
 #[cfg(feature = "k8s")]
 use crate::dto::ToFields;
 #[cfg(feature = "k8s")]
-use crate::service::helper::get_k8s_client;
+use crate::helper::get_k8s_client;
 
 use crate::service::plugin_service::PluginService;
 #[cfg(feature = "k8s")]

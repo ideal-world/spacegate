@@ -9,12 +9,10 @@ use std::{
     vec,
 };
 
+use kernel_dto::dto::gateway_dto::{SgGateway, SgListener};
+use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
 use lazy_static::lazy_static;
 use serde_json::json;
-use spacegate_kernel::config::{
-    gateway_dto::{SgGateway, SgListener},
-    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-};
 use tardis::web::web_server::WebServerModule;
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
