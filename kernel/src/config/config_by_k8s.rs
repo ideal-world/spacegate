@@ -36,6 +36,7 @@ use kernel_dto::dto::{
 use kernel_dto::k8s_crd::http_spaceroute::HttpSpaceroute;
 use kernel_dto::k8s_crd::sg_filter::SgFilter;
 use lazy_static::lazy_static;
+use tardis::web::poem::EndpointExt;
 
 lazy_static! {
     /// see [SgGateway].name
@@ -961,7 +962,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
         .map(|filters| filters.into_iter().map(|filter| filter.expect("Unreachable code")).collect_vec())
 }
 
-fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> Option<Vec<HttpRouteFilter>> {
+fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<Option<Vec<HttpRouteFilter>>> {
     filters
         .map(|filters| {
             filters
@@ -969,7 +970,9 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> Option<Vec<Ht
                 .map(|filter| {
                     let http_route_filter = match filter.code.as_str() {
                         crate::plugins::filters::header_modifier::CODE => {
-                            let header_modifier = TardisFuns::json.json_to_obj::<crate::plugins::filters::header_modifier::SgFilterHeaderModifier>(filter.spec)?;
+                            let header_modifier = TardisFuns::json
+                                .json_to_obj::<crate::plugins::filters::header_modifier::SgFilterHeaderModifier>(filter.spec)
+                                .map_err(|error| TardisError::bad_request("", ""))?;
                             match header_modifier.kind {
                                 SgFilterHeaderModifierKind::Request => HttpRouteFilter::RequestHeaderModifier {
                                     request_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
@@ -988,7 +991,8 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> Option<Vec<Ht
                             }
                         }
                         crate::plugins::filters::rewrite::CODE => {
-                            let rewrite = TardisFuns::json.json_to_obj::<crate::plugins::filters::rewrite::SgFilterRewrite>(filter.spec)?;
+                            let rewrite =
+                                TardisFuns::json.json_to_obj::<crate::plugins::filters::rewrite::SgFilterRewrite>(filter.spec).map_err(|error| TardisError::bad_request("", ""))?;
                             HttpRouteFilter::URLRewrite {
                                 url_rewrite: k8s_gateway_api::HttpUrlRewriteFilter {
                                     hostname: rewrite.hostname,
@@ -1000,7 +1004,9 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> Option<Vec<Ht
                             }
                         }
                         crate::plugins::filters::redirect::CODE => {
-                            let redirect = TardisFuns::json.json_to_obj::<crate::plugins::filters::redirect::SgFilterRedirect>(filter.spec)?;
+                            let redirect = TardisFuns::json
+                                .json_to_obj::<crate::plugins::filters::redirect::SgFilterRedirect>(filter.spec)
+                                .map_err(|error| TardisError::bad_request("", ""))?;
                             HttpRouteFilter::RequestRedirect {
                                 request_redirect: k8s_gateway_api::HttpRequestRedirectFilter {
                                     scheme: redirect.scheme,
@@ -1014,13 +1020,16 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> Option<Vec<Ht
                                 },
                             }
                         }
-                        _ => return None,
+                        _ => return Ok(None),
                     };
-                    Some(http_route_filter)
+                    Ok(Some(http_route_filter))
                 })
-                .collect_vec()
+                .map(|f| f.transpose())
+                .filter(|filter| filter.is_some())
+                .map(|f| f.unwrap())
+                .collect::<TardisResult<Vec<HttpRouteFilter>>>()
         })
-        .map(|filters| filters.into_iter().filter(|filter| filter.is_some()).map(|f| f.unwrap()).collect_vec())
+        .transpose()
 }
 
 async fn get_client() -> TardisResult<Client> {
