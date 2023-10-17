@@ -43,6 +43,12 @@ This guide walks you through how to install Spacegate Kubernetes Gateway on a ge
     kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/kernel/res/gatewayclass.yaml
     ```
 
+1. Create the Spacegate Kubernetes CRD HttpSpaceroute:
+
+    ```
+    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/kernel/res/spacegate-httproute.yaml
+    ```
+
 1. Deploy the Spacegate Kubernetes Gateway:
 
     ```
