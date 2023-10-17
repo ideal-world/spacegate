@@ -412,6 +412,7 @@ async fn get_http_spaceroute_by_api(
 }
 
 async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
+    let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_api: Api<Gateway> = Api::namespaced(
         get_client().await.expect("[SG.Config] Failed to get client"),
         gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
@@ -430,8 +431,7 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
                     let mut gateway_uniques_guard = GATEWAY_UNIQUES.write().await;
                     gateway_uniques_guard.push(gateway_config.name.clone());
                 }
-                let gateway_uniques_guard = GATEWAY_UNIQUES.read().await;
-                let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&gateway_uniques_guard, http_route_api_refs)
+                let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&vec![gateway_unique], http_route_api_refs)
                     .await
                     .map_err(|error| TardisError::wrap(&format!("[SG.Config] Get HttpRoute Kubernetes error: {error:?}"), ""))
                     .expect("");
@@ -507,6 +507,7 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
 // }
 
 async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
+    let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_config = process_gateway_config(vec![gateway_obj])
         .await
         .expect("[SG.Config] Failed to process gateway config for http_route parent ref")
@@ -514,9 +515,7 @@ async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<Ht
         .expect("[SG.Config] Gateway config not found for http_route parent ref")
         .clone();
 
-    let gateway_uniques_guard = GATEWAY_UNIQUES.read().await;
-
-    let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&gateway_uniques_guard, http_route_api_refs)
+    let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&vec![gateway_unique], http_route_api_refs)
         .await
         .map_err(|error| TardisError::wrap(&format!("[SG.Config] Get HttpRoute Kubernetes error: {error:?}"), ""))
         .expect("");
