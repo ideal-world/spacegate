@@ -125,6 +125,7 @@ Fields:
     - rules
         - backendRefs
             - kind - supports `Service`: k8s service
+              `External`: external-k8s service, backend name can be host or ip.
               `ExternalHttp`: external-k8s http service, backend name can be host or ip.
               `ExternalHttps`: external https service for k8s, similar to `ExternalHttp`.
 
