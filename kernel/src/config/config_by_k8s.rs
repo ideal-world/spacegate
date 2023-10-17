@@ -34,7 +34,9 @@ use super::{
     plugin_filter_dto::SgRouteFilter,
 };
 use crate::config::k8s_crd_spaceroute::HttpSpaceroute;
-use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL};
+use crate::constants::{
+    BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL,
+};
 use crate::helpers::k8s_helper;
 use lazy_static::lazy_static;
 
@@ -726,6 +728,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                                         .as_ref()
                                         .map(|kind| {
                                             !kind.eq_ignore_ascii_case("service")
+                                                && !kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL)
                                                 && !kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTP)
                                                 && !kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTPS)
                                         })
@@ -846,7 +849,9 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                                         let mut protocol = None;
                                         let namespace = match backend.inner.kind {
                                             Some(kind) => {
-                                                if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTP) {
+                                                if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL) {
+                                                    backend.inner.namespace
+                                                } else if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTP) {
                                                     protocol = Some(SgProtocol::Http);
                                                     backend.inner.namespace
                                                 } else if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTPS) {

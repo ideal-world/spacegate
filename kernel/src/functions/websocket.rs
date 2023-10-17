@@ -49,7 +49,8 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
         ));
     };
 
-    let scheme = backend.protocol.as_ref().unwrap_or(&SgProtocol::Ws);
+    let default_protocol = if backend.port == 443 { SgProtocol::Wss } else { SgProtocol::Ws };
+    let scheme = backend.protocol.as_ref().unwrap_or(&default_protocol);
     let client_url = format!(
         "{}://{}{}{}",
         scheme,
