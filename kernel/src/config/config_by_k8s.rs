@@ -19,11 +19,11 @@ use tardis::{
 
 use crate::{do_startup, functions::http_route, shutdown};
 
-use crate::constants::{BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
+use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::helpers::k8s_helper;
 use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
 use kernel_dto::constants::GATEWAY_CLASS_NAME;
-use kernel_dto::dto::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType};
+use kernel_dto::dto::plugin_filter_dto::SgHttpPathModifierType;
 use kernel_dto::dto::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{
