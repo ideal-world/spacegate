@@ -5,9 +5,9 @@ use crate::dto::ToFields;
 use crate::helper::{get_k8s_client, WarpKubeResult};
 #[cfg(feature = "k8s")]
 use kernel_common::constants::DEFAULT_NAMESPACE;
-use kernel_common::dto::plugin_filter_dto::SgRouteFilter;
 #[cfg(feature = "k8s")]
-use kernel_common::dto::plugin_filter_dto::SgSingeFilter;
+use kernel_common::converter::plugin_k8s_conv::SgSingeFilter;
+use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 #[cfg(feature = "k8s")]
 use kernel_common::k8s_crd::sg_filter::SgFilter;
 #[cfg(feature = "k8s")]

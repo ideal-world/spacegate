@@ -7,7 +7,7 @@ use tardis::url::Url;
 use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use crate::plugins::context::SgRouteFilterRequestAction;
-use kernel_common::dto::plugin_filter_dto::SgHttpPathModifier;
+use kernel_common::inner_model::plugin_filter::SgHttpPathModifier;
 
 use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 
@@ -92,8 +92,8 @@ mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
-    use kernel_common::dto::http_route_dto::SgHttpPathMatchType;
-    use kernel_common::dto::plugin_filter_dto::SgHttpPathModifierType;
+    use kernel_common::inner_model::http_route::SgHttpPathMatchType;
+    use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
     use tardis::tokio;
 
     #[tokio::test]

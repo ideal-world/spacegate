@@ -9,7 +9,7 @@ use tardis::{
 
 use crate::{do_startup, functions::http_route, shutdown};
 
-use kernel_common::dto::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
+use kernel_common::inner_model::{gateway::SgGateway, http_route::SgHttpRoute};
 use lazy_static::lazy_static;
 
 lazy_static! {

@@ -3,9 +3,9 @@ use tardis::{
     log,
 };
 
-use kernel_common::dto::gateway_dto::SgGateway;
+use kernel_common::inner_model::gateway::SgGateway;
 
-use kernel_common::dto::http_route_dto::SgHttpRoute;
+use kernel_common::inner_model::http_route::SgHttpRoute;
 
 #[cfg(feature = "k8s")]
 pub mod config_by_k8s;

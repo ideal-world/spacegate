@@ -4,8 +4,8 @@ use http::Method;
 use hyper::{client::HttpConnector, Client};
 use hyper_rustls::HttpsConnector;
 
-use kernel_common::dto::gateway_dto::{SgListener, SgProtocol};
-use kernel_common::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType};
+use kernel_common::inner_model::gateway::{SgListener, SgProtocol};
+use kernel_common::inner_model::http_route::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType};
 use std::{fmt, vec::Vec};
 use tardis::regex::Regex;
 

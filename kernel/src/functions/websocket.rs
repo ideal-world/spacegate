@@ -4,7 +4,7 @@ use http::header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, SEC_WEBS
 use hyper::header::HeaderValue;
 use hyper::{self};
 use hyper::{Body, Request, Response, StatusCode};
-use kernel_common::dto::gateway_dto::SgProtocol;
+use kernel_common::inner_model::gateway::SgProtocol;
 use std::sync::Arc;
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::futures::stream::StreamExt;

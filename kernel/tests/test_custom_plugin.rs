@@ -1,10 +1,10 @@
 use std::{env, time::Duration, vec};
 
 use async_trait::async_trait;
-use kernel_common::dto::gateway_dto::SgProtocol::Https;
-use kernel_common::dto::gateway_dto::{SgGateway, SgListener};
-use kernel_common::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
-use kernel_common::dto::plugin_filter_dto::SgRouteFilter;
+use kernel_common::inner_model::gateway::SgProtocol::Https;
+use kernel_common::inner_model::gateway::{SgGateway, SgListener};
+use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
+use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use spacegate_kernel::plugins::context::SgRoutePluginContext;

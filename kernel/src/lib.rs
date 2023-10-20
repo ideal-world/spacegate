@@ -23,7 +23,7 @@
 use functions::{http_route, server};
 pub use http;
 pub use hyper;
-use kernel_common::dto::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
+use kernel_common::inner_model::{gateway::SgGateway, http_route::SgHttpRoute};
 use plugins::filters::{self, SgPluginFilterDef};
 use tardis::{basic::result::TardisResult, log, tokio::signal};
 

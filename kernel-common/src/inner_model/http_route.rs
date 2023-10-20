@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use super::{gateway_dto::SgProtocol, plugin_filter_dto::SgRouteFilter};
+use super::{gateway::SgProtocol, plugin_filter::SgRouteFilter};
 
 /// HTTPRoute provides a way to route HTTP requests.
 ///

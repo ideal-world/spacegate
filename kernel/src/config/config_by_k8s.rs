@@ -23,15 +23,15 @@ use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANC
 use crate::helpers::k8s_helper;
 use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
 use kernel_common::constants::GATEWAY_CLASS_NAME;
-use kernel_common::dto::plugin_filter_dto::SgHttpPathModifierType;
-use kernel_common::dto::{
-    gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
-    http_route_dto::{
+use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
+use kernel_common::inner_model::{
+    gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
+    http_route::{
         SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
         SgHttpRouteRule,
     },
-    plugin_filter_dto,
-    plugin_filter_dto::SgRouteFilter,
+    plugin_filter,
+    plugin_filter::SgRouteFilter,
 };
 use kernel_common::k8s_crd::http_spaceroute::HttpSpaceroute;
 use kernel_common::k8s_crd::sg_filter::SgFilter;
@@ -913,12 +913,12 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                                 scheme: request_redirect.scheme,
                                 hostname: request_redirect.hostname,
                                 path: request_redirect.path.map(|path| match path {
-                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => plugin_filter_dto::SgHttpPathModifier {
-                                        kind: plugin_filter_dto::SgHttpPathModifierType::ReplaceFullPath,
+                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplaceFullPath,
                                         value: replace_full_path,
                                     },
-                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => plugin_filter_dto::SgHttpPathModifier {
-                                        kind: plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplacePrefixMatch,
                                         value: replace_prefix_match,
                                     },
                                 }),
@@ -932,12 +932,12 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                             spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::rewrite::SgFilterRewrite {
                                 hostname: url_rewrite.hostname,
                                 path: url_rewrite.path.map(|path| match path {
-                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => plugin_filter_dto::SgHttpPathModifier {
-                                        kind: plugin_filter_dto::SgHttpPathModifierType::ReplaceFullPath,
+                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplaceFullPath,
                                         value: replace_full_path,
                                     },
-                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => plugin_filter_dto::SgHttpPathModifier {
-                                        kind: plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplacePrefixMatch,
                                         value: replace_prefix_match,
                                     },
                                 }),

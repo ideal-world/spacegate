@@ -9,7 +9,7 @@ use tardis::basic::result::TardisResult;
 
 use tardis::TardisFuns;
 
-use kernel_common::dto::gateway_dto::SgProtocol;
+use kernel_common::inner_model::gateway::SgProtocol;
 
 use crate::instance::{SgBackendInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst};
 
