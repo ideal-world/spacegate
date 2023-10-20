@@ -1,6 +1,6 @@
 use crate::dto::query_dto::GatewayQueryDto;
 use crate::service::gateway_service::GatewayService;
-use kernel_dto::dto::gateway_dto::SgGateway;
+use kernel_common::dto::gateway_dto::SgGateway;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;

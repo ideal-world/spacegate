@@ -22,9 +22,9 @@ use crate::{do_startup, functions::http_route, shutdown};
 use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::helpers::k8s_helper;
 use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
-use kernel_dto::constants::GATEWAY_CLASS_NAME;
-use kernel_dto::dto::plugin_filter_dto::SgHttpPathModifierType;
-use kernel_dto::dto::{
+use kernel_common::constants::GATEWAY_CLASS_NAME;
+use kernel_common::dto::plugin_filter_dto::SgHttpPathModifierType;
+use kernel_common::dto::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{
         SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
@@ -33,8 +33,8 @@ use kernel_dto::dto::{
     plugin_filter_dto,
     plugin_filter_dto::SgRouteFilter,
 };
-use kernel_dto::k8s_crd::http_spaceroute::HttpSpaceroute;
-use kernel_dto::k8s_crd::sg_filter::SgFilter;
+use kernel_common::k8s_crd::http_spaceroute::HttpSpaceroute;
+use kernel_common::k8s_crd::sg_filter::SgFilter;
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -696,10 +696,10 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
             gateway_name: rel_gateway_name,
             hostnames: http_route_obj.spec.hostnames.clone(),
             filters: if let Some(name) = &http_route_obj.metadata.name {
-                let kind = if let Some(kind) = http_route_obj.annotations().get(kernel_dto::constants::RAW_HTTP_ROUTE_KIND) {
+                let kind = if let Some(kind) = http_route_obj.annotations().get(kernel_common::constants::RAW_HTTP_ROUTE_KIND) {
                     kind
                 } else {
-                    kernel_dto::constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
+                    kernel_common::constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
                 };
                 get_filters_from_cdr(kind, name, &http_route_obj.metadata.namespace).await?
             } else {

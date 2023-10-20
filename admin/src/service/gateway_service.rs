@@ -12,8 +12,8 @@ use k8s_openapi::api::core::v1::Secret;
 #[cfg(feature = "k8s")]
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
 #[cfg(feature = "k8s")]
-use kernel_dto::constants::DEFAULT_NAMESPACE;
-use kernel_dto::dto::gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode};
+use kernel_common::constants::DEFAULT_NAMESPACE;
+use kernel_common::dto::gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode};
 #[cfg(feature = "k8s")]
 use kube::api::{DeleteParams, PostParams};
 

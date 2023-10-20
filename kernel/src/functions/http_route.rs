@@ -12,8 +12,8 @@ use http::{header::UPGRADE, HeaderValue, Request, Response};
 use hyper::{Body, StatusCode};
 
 use itertools::Itertools;
-use kernel_dto::dto::gateway_dto::{SgGateway, SgListener};
-use kernel_dto::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute};
+use kernel_common::dto::gateway_dto::{SgGateway, SgListener};
+use kernel_common::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute};
 use std::sync::{Arc, OnceLock};
 use std::vec::Vec;
 use tardis::tokio::sync::RwLock;
@@ -872,7 +872,7 @@ mod tests {
 
     use http::{Method, Request};
     use hyper::Body;
-    use kernel_dto::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType};
+    use kernel_common::dto::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType};
     use tardis::regex::Regex;
 
     use crate::{

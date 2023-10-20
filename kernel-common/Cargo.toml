@@ -1,5 +1,5 @@
 [package]
-name = "kernel-dto"
+name = "kernel-common"
 version.workspace = true
 authors.workspace = true
 description.workspace = true

@@ -20,9 +20,9 @@ use tardis::url::Url;
 use tardis::{log, TardisFuns};
 
 use crate::instance::SgHttpRouteMatchInst;
-use kernel_dto::dto::gateway_dto::{SgGateway, SgParameters};
-use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteRule};
-use kernel_dto::dto::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
+use kernel_common::dto::gateway_dto::{SgGateway, SgParameters};
+use kernel_common::dto::http_route_dto::{SgBackendRef, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteRule};
+use kernel_common::dto::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
 
 use super::context::SgRoutePluginContext;
 
@@ -355,8 +355,8 @@ impl Default for SgPluginFilterAccept {
 #[cfg(test)]
 
 mod tests {
-    use kernel_dto::dto::http_route_dto::SgHttpPathMatchType;
-    use kernel_dto::dto::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType};
+    use kernel_common::dto::http_route_dto::SgHttpPathMatchType;
+    use kernel_common::dto::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType};
     use tardis::{basic::result::TardisResult, regex::Regex};
 
     use crate::{

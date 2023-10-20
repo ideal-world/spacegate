@@ -1,7 +1,7 @@
 use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use async_trait::async_trait;
-use kernel_dto::dto::plugin_filter_dto::SgHttpPathModifier;
+use kernel_common::dto::plugin_filter_dto::SgHttpPathModifier;
 use serde::{Deserialize, Serialize};
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;
@@ -67,8 +67,8 @@ mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
-    use kernel_dto::dto::http_route_dto::SgHttpPathMatchType;
-    use kernel_dto::dto::plugin_filter_dto::SgHttpPathModifierType;
+    use kernel_common::dto::http_route_dto::SgHttpPathMatchType;
+    use kernel_common::dto::plugin_filter_dto::SgHttpPathModifierType;
     use tardis::tokio;
 
     #[tokio::test]

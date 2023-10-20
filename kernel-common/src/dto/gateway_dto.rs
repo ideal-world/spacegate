@@ -6,6 +6,7 @@ use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 #[cfg(feature = "k8s")]
 use k8s_openapi::ByteString;
+#[cfg(feature = "k8s")]
 use std::collections::BTreeMap;
 use std::{fmt::Display, str::FromStr};
 
@@ -20,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use tardis::basic::error::TardisError;
 #[cfg(feature = "admin-support")]
 use tardis::web::poem_openapi;
+#[cfg(feature = "k8s")]
 use tardis::TardisFuns;
 
 /// Gateway represents an instance of a service-traffic handling infrastructure

@@ -1,8 +1,8 @@
 use std::{env, time::Duration, vec};
 
-use kernel_dto::dto::gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode};
-use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
-use kernel_dto::dto::plugin_filter_dto::SgRouteFilter;
+use kernel_common::dto::gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode};
+use kernel_common::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
+use kernel_common::dto::plugin_filter_dto::SgRouteFilter;
 use serde_json::{json, Value};
 use spacegate_kernel::plugins::filters::compression::{self};
 use tardis::{

@@ -7,7 +7,7 @@ use crate::plugins::context::SgRoutePluginContext;
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
 use hyper::{client::HttpConnector, Body, Client, Error};
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
-use kernel_dto::dto::gateway_dto::SgProtocol;
+use kernel_common::dto::gateway_dto::SgProtocol;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     log,
@@ -172,7 +172,7 @@ mod tests {
     };
     use hyper::{client::HttpConnector, Client};
     use hyper_rustls::HttpsConnector;
-    use kernel_dto::dto::gateway_dto::SgProtocol;
+    use kernel_common::dto::gateway_dto::SgProtocol;
 
     #[tokio::test]
     async fn test_request() -> TardisResult<()> {

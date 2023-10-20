@@ -4,12 +4,12 @@ use crate::dto::ToFields;
 #[cfg(feature = "k8s")]
 use crate::helper::{get_k8s_client, WarpKubeResult};
 #[cfg(feature = "k8s")]
-use kernel_dto::constants::DEFAULT_NAMESPACE;
-use kernel_dto::dto::plugin_filter_dto::SgRouteFilter;
+use kernel_common::constants::DEFAULT_NAMESPACE;
+use kernel_common::dto::plugin_filter_dto::SgRouteFilter;
 #[cfg(feature = "k8s")]
-use kernel_dto::dto::plugin_filter_dto::SgSingeFilter;
+use kernel_common::dto::plugin_filter_dto::SgSingeFilter;
 #[cfg(feature = "k8s")]
-use kernel_dto::k8s_crd::sg_filter::SgFilter;
+use kernel_common::k8s_crd::sg_filter::SgFilter;
 #[cfg(feature = "k8s")]
 use kube::{api::ListParams, api::PostParams, Api, ResourceExt};
 use std::collections::HashMap;

@@ -9,10 +9,10 @@ use std::{
     vec,
 };
 
-use kernel_dto::dto::gateway_dto::{SgGateway, SgListener};
-use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpPathMatch, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule};
-use kernel_dto::dto::plugin_filter_dto;
-use kernel_dto::dto::plugin_filter_dto::SgRouteFilter;
+use kernel_common::dto::gateway_dto::{SgGateway, SgListener};
+use kernel_common::dto::http_route_dto::{SgBackendRef, SgHttpPathMatch, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule};
+use kernel_common::dto::plugin_filter_dto;
+use kernel_common::dto::plugin_filter_dto::SgRouteFilter;
 use lazy_static::lazy_static;
 use serde_json::json;
 use spacegate_kernel::plugins::filters;
