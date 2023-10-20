@@ -10,9 +10,12 @@ use std::{
 };
 
 use kernel_dto::dto::gateway_dto::{SgGateway, SgListener};
-use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
+use kernel_dto::dto::http_route_dto::{SgBackendRef, SgHttpPathMatch, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule};
+use kernel_dto::dto::plugin_filter_dto;
+use kernel_dto::dto::plugin_filter_dto::SgRouteFilter;
 use lazy_static::lazy_static;
 use serde_json::json;
+use spacegate_kernel::plugins::filters;
 use tardis::web::web_server::WebServerModule;
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
