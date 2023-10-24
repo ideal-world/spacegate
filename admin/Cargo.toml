@@ -24,3 +24,4 @@ kernel-common={path = "../kernel-common",features = ["admin-support"]}
 kube = { workspace = true, optional = true }
 k8s-openapi = { workspace = true, optional = true }
 k8s-gateway-api = { workspace = true, optional = true }
+lazy_static = "1.4.0"

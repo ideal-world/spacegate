@@ -11,6 +11,7 @@ use tardis::web::poem_openapi;
 /// 4. Backend level, which works on all requests under the same backend
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
 pub struct SgFilterVO {
+    /// unique by id
     pub id: String,
     /// Filter code, Used to match the corresponding filter.
     pub code: String,
