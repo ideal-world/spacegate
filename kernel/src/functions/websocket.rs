@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::futures::stream::StreamExt;
 use tardis::futures_util::SinkExt;
-use tardis::web::tokio_tungstenite::tungstenite::protocol;
+use tardis::web::tokio_tungstenite::tungstenite::{protocol, Message};
 use tardis::web::tokio_tungstenite::{connect_async, WebSocketStream};
 use tardis::{log, tokio, TardisFuns};
 
@@ -49,7 +49,8 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
         ));
     };
 
-    let scheme = backend.protocol.as_ref().unwrap_or(&SgProtocol::Ws);
+    let default_protocol = if backend.port == 443 { SgProtocol::Wss } else { SgProtocol::Ws };
+    let scheme = backend.protocol.as_ref().unwrap_or(&default_protocol);
     let client_url = format!(
         "{}://{}{}{}",
         scheme,
@@ -85,7 +86,12 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
                     loop {
                         match service_read.next().await {
                             Some(Ok(message)) => {
-                                log::trace!("[SG.Websocket] Gateway receive and forward message: {message} from {remote_addr} @ {gateway_name_clone}");
+                                if let Message::Close(frame) = &message {
+                                    let code = frame.as_ref().map(|f| f.code.to_string()).unwrap_or_default();
+                                    log::trace!("[SG.Websocket] Gateway receive close message: (code:{code} {message}) from {remote_addr} @ {gateway_name_clone}",);
+                                } else {
+                                    log::trace!("[SG.Websocket] Gateway receive and forward message: {message} from {remote_addr} @ {gateway_name_clone}");
+                                }
                                 if let Err(error) = client_write.send(message).await {
                                     log::warn!("[SG.Websocket] Forward message error: {error} from {remote_addr} @ {gateway_name_clone}");
                                     return;
@@ -95,7 +101,9 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
                                 log::warn!("[SG.Websocket] Gateway receive message error: {error} from {remote_addr} @ {gateway_name_clone}");
                                 return;
                             }
-                            _ => {}
+                            None => {
+                                return;
+                            }
                         }
                     }
                 });
@@ -105,6 +113,12 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
                     loop {
                         match client_read.next().await {
                             Some(Ok(message)) => {
+                                if let Message::Close(frame) = &message {
+                                    let code = frame.as_ref().map(|f| f.code.to_string()).unwrap_or_default();
+                                    log::trace!("[SG.Websocket] Client receive close message: (code:{code} {message}) from {remote_addr} @ {gateway_name}",);
+                                } else {
+                                    log::trace!("[SG.Websocket] Client receive and reply message: {message} from {remote_addr} @ {gateway_name}");
+                                }
                                 log::trace!("[SG.Websocket] Client receive and reply message: {message} from {remote_addr} @ {gateway_name}");
                                 if let Err(error) = service_write.send(message).await {
                                     log::warn!("[SG.Websocket] Reply message error: {error} from {remote_addr} @ {gateway_name}");
@@ -115,7 +129,9 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
                                 log::warn!("[SG.Websocket] Client receive message error: {error} from {remote_addr} @ {gateway_name}");
                                 return;
                             }
-                            _ => {}
+                            None => {
+                                return;
+                            }
                         }
                     }
                 });

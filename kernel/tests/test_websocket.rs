@@ -11,10 +11,16 @@ use std::{
 
 use lazy_static::lazy_static;
 use serde_json::json;
+use spacegate_kernel::config::http_route_dto::{SgHttpPathMatch, SgHttpPathMatchType, SgHttpRouteMatch};
+use spacegate_kernel::config::plugin_filter_dto::SgRouteFilter;
 use spacegate_kernel::config::{
     gateway_dto::{SgGateway, SgListener},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
+    plugin_filter_dto,
 };
+use spacegate_kernel::plugins::filters;
+use tardis::config::config_dto::WebServerCommonConfig;
+use tardis::web::web_server::WebServerModule;
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
     basic::result::TardisResult,
@@ -32,7 +38,6 @@ use tardis::{
     },
     TardisFuns,
 };
-use tardis::{config::config_dto::WebServerCommonConfig, web::web_server::WebServerModule};
 
 lazy_static! {
     static ref SENDERS: Arc<RwLock<HashMap<String, Sender<TardisWebsocketMgrMessage>>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -41,6 +46,8 @@ lazy_static! {
 #[tokio::test]
 async fn test_webscoket() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace,tardis=trace");
+    tracing_subscriber::fmt::init();
+
     TardisFuns::init_conf(TardisConfig {
         cs: Default::default(),
         fw: FrameworkConfig {
@@ -65,6 +72,24 @@ async fn test_webscoket() -> TardisResult<()> {
                     port: 8081,
                     ..Default::default()
                 }]),
+                matches: Some(vec![SgHttpRouteMatch {
+                    path: Some(SgHttpPathMatch {
+                        kind: SgHttpPathMatchType::Prefix,
+                        value: "/".to_string(),
+                    }),
+                    ..Default::default()
+                }]),
+                filters: Some(vec![SgRouteFilter {
+                    code: "rewrite".to_string(),
+                    name: None,
+                    spec: TardisFuns::json.obj_to_json(&filters::rewrite::SgFilterRewrite {
+                        hostname: None,
+                        path: Some(plugin_filter_dto::SgHttpPathModifier {
+                            kind: plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                            value: "/".to_string(),
+                        }),
+                    })?,
+                }]),
                 ..Default::default()
             }]),
             ..Default::default()
@@ -76,6 +101,11 @@ async fn test_webscoket() -> TardisResult<()> {
     static ERROR_COUNTER: AtomicUsize = AtomicUsize::new(0);
     static SUB_COUNTER: AtomicUsize = AtomicUsize::new(0);
     static NON_SUB_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    // close message
+    let close_client_a = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/gerror/a", move |_| async move { None }).await?;
+    close_client_a.send_text("hi".parse()?).await?;
+    close_client_a.send_raw(Message::Close(None)).await.unwrap();
 
     // message not illegal test
     let error_client_a = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/gerror/a", move |msg| async move {

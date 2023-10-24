@@ -18,9 +18,11 @@ use rustls::{PrivateKey, ServerConfig};
 use serde_json::json;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use std::vec::Vec;
 use std::{io, sync};
 use tardis::config::config_dto::LogConfig;
+use tardis::tokio::time::timeout;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
@@ -263,7 +265,13 @@ pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
     }
     let mut handle_guard: tokio::sync::MutexGuard<HashMap<String, JoinHandle<()>>> = START_JOIN_HANDLE.lock().await;
     if let Some(handle) = handle_guard.remove(gateway_name) {
-        handle.await.map_err(|e| TardisError::bad_request(&format!("[SG.Server] Wait shutdown failed:{e}"), ""))?;
+        match timeout(Duration::from_millis(1000), handle).await {
+            Ok(response) => response.map_err(|e| TardisError::bad_gateway(&format!("[SG.Server] Wait shutdown failed:{e}"), "")),
+            Err(e) => {
+                log::warn!("[SG.Server] Wait shutdown timeout:{e}");
+                Ok(())
+            }
+        }?;
         log::info!("[SG.Server] Gateway shutdown");
     }
     Ok(())
