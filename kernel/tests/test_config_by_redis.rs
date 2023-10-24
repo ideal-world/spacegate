@@ -5,7 +5,7 @@ use serde_json::Value;
 use tardis::{
     basic::result::TardisResult,
     cache::cache_client::TardisCacheClient,
-    config::config_dto::{WebClientModuleConfig, CacheModuleConfig},
+    config::config_dto::{CacheModuleConfig, WebClientModuleConfig},
     testcontainers,
     tokio::{self, time::sleep},
     web::web_client::TardisWebClient,
@@ -26,7 +26,8 @@ async fn test_config_by_redis() -> TardisResult<()> {
 
     let cache_client = TardisCacheClient::init(&CacheModuleConfig {
         url: cache_url.parse().expect("invalid url"),
-    }).await?;
+    })
+    .await?;
     cache_client
         .hset(
             "sg:conf:gateway",

@@ -7,8 +7,9 @@ use spacegate_kernel::config::{
 };
 use tardis::{
     basic::result::TardisResult,
+    config::config_dto::WebClientModuleConfig,
     tokio::{self, time::sleep},
-    web::web_client::{TardisHttpResponse, TardisWebClient}, config::config_dto::WebClientModuleConfig,
+    web::web_client::{TardisHttpResponse, TardisWebClient},
 };
 
 const TLS_RSA_KEY: &str = r#"
