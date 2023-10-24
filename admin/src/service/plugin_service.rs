@@ -1,8 +1,9 @@
-use crate::dto::query_dto::PluginQueryDto;
-#[cfg(feature = "k8s")]
-use crate::dto::ToFields;
 #[cfg(feature = "k8s")]
 use crate::helper::{get_k8s_client, WarpKubeResult};
+use crate::model::query_dto::PluginQueryDto;
+use crate::model::vo::plugin_vo::SgFilterVO;
+#[cfg(feature = "k8s")]
+use crate::model::ToFields;
 #[cfg(feature = "k8s")]
 use kernel_common::constants::DEFAULT_NAMESPACE;
 #[cfg(feature = "k8s")]
@@ -13,19 +14,28 @@ use kernel_common::k8s_crd::sg_filter::SgFilter;
 #[cfg(feature = "k8s")]
 use kube::{api::ListParams, api::PostParams, Api, ResourceExt};
 use std::collections::HashMap;
+use k8s_gateway_api::Gateway;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
 pub struct PluginService;
 
 impl PluginService {
+    pub async fn add(add: SgFilterVO) -> TardisResult<Vec<SgRouteFilter>> {
+        let result = vec![];
+        #[cfg(feature = "k8s")]
+        {}
+        #[cfg(not(feature = "k8s"))]
+        {}
+
+        Ok(result)
+    }
+
     pub async fn list(query: PluginQueryDto) -> TardisResult<Vec<SgRouteFilter>> {
         let result = vec![];
         #[cfg(feature = "k8s")]
         {
-            let filter_api: Api<SgFilter> = Self::get_filter_api(&query.namespace).await?;
-
-            let _filter_list = filter_api.list(&ListParams::default().fields(&query.to_fields())).await.map_err(|e| TardisError::io_error(&format!("err:{e}"), ""))?;
+            
         }
         #[cfg(not(feature = "k8s"))]
         {}

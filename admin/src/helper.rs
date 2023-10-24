@@ -1,3 +1,6 @@
+use k8s_gateway_api::Gateway;
+use k8s_openapi::api::core::v1::ConfigMap;
+use kube::Api;
 #[cfg(feature = "k8s")]
 use kube::Client;
 use tardis::basic::error::TardisError;

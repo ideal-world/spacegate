@@ -1,8 +1,3 @@
-pub struct CommonPageDto {
-    pub page_size: u32,
-    pub page_number: u32,
-}
-
 pub struct TargetRefDTO {
     pub name: String,
     pub kind: Option<String>,

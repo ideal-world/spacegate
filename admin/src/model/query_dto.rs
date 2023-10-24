@@ -1,6 +1,6 @@
-use crate::dto::base_dto::TargetRefDTO;
+use crate::model::base_dto::TargetRefDTO;
 #[cfg(feature = "k8s")]
-use crate::dto::ToFields;
+use crate::model::ToFields;
 
 #[derive(Default)]
 pub struct GatewayQueryDto {

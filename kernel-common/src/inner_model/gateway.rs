@@ -11,7 +11,6 @@ use tardis::web::poem_openapi;
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1beta1.Gateway)
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgGateway {
     /// Name of the Gateway. Global Unique.
     ///
@@ -43,7 +42,6 @@ pub struct SgParameters {
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
     pub name: String,

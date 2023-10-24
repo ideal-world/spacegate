@@ -1,4 +1,4 @@
-use crate::dto::query_dto::PluginQueryDto;
+use crate::model::query_dto::PluginQueryDto;
 use crate::service::plugin_service::PluginService;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
