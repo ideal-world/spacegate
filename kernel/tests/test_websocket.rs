@@ -19,11 +19,12 @@ use spacegate_kernel::config::{
     plugin_filter_dto,
 };
 use spacegate_kernel::plugins::filters;
+use tardis::config::config_dto::WebServerCommonConfig;
 use tardis::web::web_server::WebServerModule;
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
     basic::result::TardisResult,
-    config::config_dto::{CacheConfig, DBConfig, FrameworkConfig, MQConfig, MailConfig, OSConfig, SearchConfig, TardisConfig, WebServerConfig},
+    config::config_dto::{FrameworkConfig, TardisConfig, WebServerConfig},
     tokio::{
         self,
         sync::{broadcast::Sender, RwLock},
@@ -51,36 +52,7 @@ async fn test_webscoket() -> TardisResult<()> {
         cs: Default::default(),
         fw: FrameworkConfig {
             app: Default::default(),
-            web_server: WebServerConfig {
-                enabled: true,
-                port: 8081,
-                ..Default::default()
-            },
-            web_client: Default::default(),
-            cache: CacheConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            db: DBConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            mq: MQConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            search: SearchConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            mail: MailConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            os: OSConfig {
-                enabled: false,
-                ..Default::default()
-            },
+            web_server: Some(WebServerConfig::builder().common(WebServerCommonConfig::builder().port(8081).build()).default(Default::default()).build()),
             ..Default::default()
         },
     })

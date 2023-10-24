@@ -276,13 +276,13 @@ mod tests {
 
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
-
     use tardis::{
         basic::{error::TardisError, result::TardisResult},
         test::test_container::TardisTestContainer,
-        testcontainers::{self, clients::Cli, images::redis::Redis, Container},
+        testcontainers::{self, clients::Cli, Container},
         tokio,
     };
+    use testcontainers_modules::redis::Redis;
 
     #[cfg(feature = "cache")]
     use crate::functions;
