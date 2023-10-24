@@ -7,6 +7,7 @@ use hyper::{self};
 use hyper::{Body, Request, Response, StatusCode};
 use std::sync::Arc;
 use tardis::basic::{error::TardisError, result::TardisResult};
+use tardis::crypto::crypto_digest::algorithm;
 use tardis::futures::stream::StreamExt;
 use tardis::futures_util::SinkExt;
 use tardis::web::tokio_tungstenite::tungstenite::{protocol, Message};
@@ -141,7 +142,7 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
             }
         }
     });
-    let accept_key = TardisFuns::crypto.base64.encode_raw(TardisFuns::crypto.digest.sha1(format!("{request_key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11").as_bytes())?);
+    let accept_key = TardisFuns::crypto.base64.encode_raw(TardisFuns::crypto.digest.digest_bytes::<algorithm::Sha1>(format!("{request_key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))?);
 
     let mut response = Response::new(Body::empty());
     *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
