@@ -20,7 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::vec::Vec;
 use std::{io, sync};
-use tardis::{basic::tracing::TardisTracing, config::config_dto::LogConfig};
+use tardis::config::config_dto::LogConfig;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::future::join_all,
@@ -61,6 +61,7 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
         TardisFuns::tracing().update_config(&LogConfig {
             level: old_configs.level.clone(),
             directives,
+            ..Default::default()
         })?;
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
@@ -294,7 +295,6 @@ impl Accept for TlsAcceptor {
 }
 
 enum State {
-
     Handshaking(tokio_rustls::Accept<AddrStream>),
     Streaming(tokio_rustls::server::TlsStream<AddrStream>),
 }
@@ -305,7 +305,6 @@ struct TlsStream {
 
 impl TlsStream {
     fn new(stream: AddrStream, config: Arc<ServerConfig>) -> TlsStream {
-        
         let accept = tokio_rustls::TlsAcceptor::from(config).accept(stream);
         TlsStream {
             state: State::Handshaking(accept),

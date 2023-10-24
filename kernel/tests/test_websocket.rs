@@ -18,7 +18,7 @@ use spacegate_kernel::config::{
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;
 use tardis::{
     basic::result::TardisResult,
-    config::config_dto::{CacheConfig, DBConfig, FrameworkConfig, MQConfig, MailConfig, OSConfig, SearchConfig, TardisConfig, WebServerConfig},
+    config::config_dto::{FrameworkConfig, TardisConfig, WebServerConfig},
     tokio::{
         self,
         sync::{broadcast::Sender, RwLock},

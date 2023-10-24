@@ -1,7 +1,7 @@
 use tardis::basic::result::TardisResult;
 use tardis::test::test_container::TardisTestContainer;
 use tardis::testcontainers::clients::Cli;
-use tardis::testcontainers::images::redis::Redis;
+use testcontainers_modules::redis::Redis;
 use tardis::testcontainers::Container;
 
 pub struct LifeHold<'a> {

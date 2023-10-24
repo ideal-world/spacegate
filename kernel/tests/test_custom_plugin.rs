@@ -87,7 +87,7 @@ async fn test_custom_plugin() -> TardisResult<()> {
     let resp = client.get_to_str("http://localhost:8888/get?dd", None).await?;
     assert_eq!(resp.code, 401);
 
-    let resp = client.get::<Value>("http://localhost:8888/get?dd", [("Authorization", "xxxxx")]).await?;
+    let resp = client.get::<Value>("http://localhost:8888/get?dd", [("Authorization".to_string(), "xxxxx".to_string())]).await?;
     assert_eq!(resp.code, 200);
     assert!(resp.body.unwrap().get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
     Ok(())
