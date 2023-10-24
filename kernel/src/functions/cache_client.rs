@@ -6,6 +6,7 @@ use std::{
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     cache::cache_client::TardisCacheClient,
+    config::config_dto::CacheModuleConfig,
     tokio::sync::RwLock,
 };
 
@@ -15,7 +16,7 @@ pub fn cache_clients() -> &'static RwLock<HashMap<String, Arc<TardisCacheClient>
 }
 
 pub async fn init(name: impl Into<String>, url: &str) -> TardisResult<()> {
-    let cache = TardisCacheClient::init(url).await?;
+    let cache = TardisCacheClient::init(&CacheModuleConfig::builder().url(url.parse().expect("invalid url")).build()).await?;
     {
         let mut write = cache_clients().write().await;
         write.insert(name.into(), Arc::new(cache));

@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
 use std::{io, sync};
-use tardis::basic::tracing::TardisTracing;
+use tardis::config::config_dto::LogConfig;
 use tardis::tokio::time::timeout;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
@@ -52,7 +52,19 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
     }
     if let Some(log_level) = gateway_conf.parameters.log_level.clone() {
         log::debug!("[SG.Server] change log level to {log_level}");
-        TardisTracing::update_log_level_by_domain_code(crate::constants::DOMAIN_CODE, &log_level)?;
+        let fw_config = TardisFuns::fw_config();
+        let old_configs = fw_config.log();
+        let directive = format!("{domain}={log_level}", domain = crate::constants::DOMAIN_CODE).parse().expect("invalid directive");
+        let mut directives = old_configs.directives.clone();
+        if let Some(index) = directives.iter().position(|d| d.to_string().starts_with(crate::constants::DOMAIN_CODE)) {
+            directives.remove(index);
+        }
+        directives.push(directive);
+        TardisFuns::tracing().update_config(&LogConfig {
+            level: old_configs.level.clone(),
+            directives,
+            ..Default::default()
+        })?;
     }
     let (shutdown_tx, _) = tokio::sync::watch::channel(());
 

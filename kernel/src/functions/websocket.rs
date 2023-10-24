@@ -141,10 +141,7 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
             }
         }
     });
-    let accept_key = TardisFuns::crypto.base64.encode_raw(TardisFuns::crypto.digest.digest_raw(
-        format!("{request_key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11").as_bytes(),
-        tardis::crypto::rust_crypto::sha1::Sha1::new(),
-    )?);
+    let accept_key = TardisFuns::crypto.base64.encode_raw(TardisFuns::crypto.digest.sha1(format!("{request_key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11").as_bytes())?);
 
     let mut response = Response::new(Body::empty());
     *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;

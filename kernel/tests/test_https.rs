@@ -7,6 +7,7 @@ use spacegate_kernel::config::{
 };
 use tardis::{
     basic::result::TardisResult,
+    config::config_dto::WebClientModuleConfig,
     tokio::{self, time::sleep},
     web::web_client::{TardisHttpResponse, TardisWebClient},
 };
@@ -152,7 +153,10 @@ async fn test_https() -> TardisResult<()> {
     )
     .await?;
     sleep(Duration::from_millis(500)).await;
-    let client = TardisWebClient::init(100)?;
+    let client = TardisWebClient::init(&WebClientModuleConfig {
+        connect_timeout_sec: 100,
+        ..Default::default()
+    })?;
     let resp: TardisHttpResponse<Value> = client
         .post(
             "https://localhost:8888/post?dd",
@@ -165,7 +169,10 @@ async fn test_https() -> TardisResult<()> {
         .await?;
     assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
 
-    let client = TardisWebClient::init(100)?;
+    let client = TardisWebClient::init(&WebClientModuleConfig {
+        connect_timeout_sec: 100,
+        ..Default::default()
+    })?;
     let resp: TardisHttpResponse<Value> = client
         .post(
             "https://localhost:8889/post?dd",
@@ -178,7 +185,10 @@ async fn test_https() -> TardisResult<()> {
         .await?;
     assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
 
-    let client = TardisWebClient::init(100)?;
+    let client = TardisWebClient::init(&WebClientModuleConfig {
+        connect_timeout_sec: 100,
+        ..Default::default()
+    })?;
     let resp: TardisHttpResponse<Value> = client
         .post(
             "https://localhost:8890/post?dd",
