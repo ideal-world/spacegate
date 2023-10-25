@@ -2,6 +2,11 @@ use crate::model::base_dto::TargetRefDTO;
 #[cfg(feature = "k8s")]
 use crate::model::ToFields;
 
+pub struct BackendRefQueryDto {
+    pub(crate) name: Option<String>,
+    pub(crate) namespace: Option<String>,
+}
+
 #[derive(Default)]
 pub struct GatewayQueryDto {
     pub name: Option<String>,
@@ -9,7 +14,7 @@ pub struct GatewayQueryDto {
     pub port: Option<u16>,
     pub hostname: Option<String>,
 }
-
+pub struct SgTlsConfigQueryVO {}
 #[cfg(feature = "k8s")]
 impl ToFields for GatewayQueryDto {
     fn to_fields_vec(&self) -> Vec<String> {

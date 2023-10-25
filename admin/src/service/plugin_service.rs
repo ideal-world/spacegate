@@ -1,9 +1,11 @@
 #[cfg(feature = "k8s")]
 use crate::helper::{get_k8s_client, WarpKubeResult};
-use crate::model::query_dto::PluginQueryDto;
+use crate::model::query_dto::{BackendRefQueryDto, PluginQueryDto};
+use crate::model::vo::backend_vo::BackendRefVO;
 use crate::model::vo::plugin_vo::SgFilterVO;
 #[cfg(feature = "k8s")]
 use crate::model::ToFields;
+use crate::service::base_service::BaseService;
 #[cfg(feature = "k8s")]
 use kernel_common::constants::DEFAULT_NAMESPACE;
 #[cfg(feature = "k8s")]
@@ -14,33 +16,34 @@ use kernel_common::k8s_crd::sg_filter::SgFilter;
 #[cfg(feature = "k8s")]
 use kube::{api::ListParams, api::PostParams, Api, ResourceExt};
 use std::collections::HashMap;
-use k8s_gateway_api::Gateway;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
 pub struct PluginService;
 
 impl PluginService {
-    pub async fn add(add: SgFilterVO) -> TardisResult<Vec<SgRouteFilter>> {
-        let result = vec![];
-        #[cfg(feature = "k8s")]
-        {}
-        #[cfg(not(feature = "k8s"))]
-        {}
-
-        Ok(result)
+    pub(crate) async fn list(query: PluginQueryDto) -> TardisResult<Vec<SgFilterVO>> {
+        //todo query
+        BaseService::get_type_map::<SgFilterVO>()
+            .await?
+            .values()
+            .into_iter()
+            .map(|v| serde_json::from_str(v).map_err(|e| TardisError::bad_request(&format!(""), "")))
+            .collect::<TardisResult<Vec<SgFilterVO>>>()
     }
 
-    pub async fn list(query: PluginQueryDto) -> TardisResult<Vec<SgRouteFilter>> {
-        let result = vec![];
-        #[cfg(feature = "k8s")]
-        {
-            
-        }
-        #[cfg(not(feature = "k8s"))]
-        {}
+    pub(crate) async fn add(add: BackendRefVO) -> TardisResult<()> {
+        BaseService::add::<BackendRefVO>(add).await?;
+        Ok(())
+    }
+    pub(crate) async fn update(update: BackendRefVO) -> TardisResult<()> {
+        BaseService::update::<BackendRefVO>(update).await?;
+        Ok(())
+    }
 
-        Ok(result)
+    pub(crate) async fn delete(id: &str) -> TardisResult<()> {
+        BaseService::delete::<BackendRefVO>(&id).await?;
+        Ok(())
     }
 
     #[cfg(feature = "k8s")]

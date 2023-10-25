@@ -1,3 +1,4 @@
+use crate::model::vo::Vo;
 use kernel_common::inner_model::gateway::{SgParameters, SgProtocol, SgTlsMode};
 use serde::{Deserialize, Serialize};
 use tardis::web::poem_openapi;
@@ -48,4 +49,15 @@ pub struct SgTlsConfigVO {
     pub mode: SgTlsMode,
     pub key: String,
     pub cert: String,
+    pub ref_ids: Option<Vec<String>>,
+}
+
+impl Vo for SgTlsConfigVO {
+    fn get_vo_type() -> String {
+        todo!()
+    }
+
+    fn get_unique_name(&self) -> String {
+        self.id.clone()
+    }
 }

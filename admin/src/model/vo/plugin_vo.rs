@@ -1,3 +1,5 @@
+use crate::constants;
+use crate::model::vo::Vo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tardis::web::poem_openapi;
@@ -20,4 +22,14 @@ pub struct SgFilterVO {
     pub name: Option<String>,
     /// filter parameters.
     pub spec: Value,
+}
+
+impl Vo for SgFilterVO {
+    fn get_vo_type() -> String {
+        constants::PLUGIN_TYPE.to_string()
+    }
+
+    fn get_unique_name(&self) -> String {
+        self.id.clone()
+    }
 }

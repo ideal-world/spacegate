@@ -1,18 +1,17 @@
+use tardis::web::poem_openapi;
+use tardis::web::poem_openapi::param::Path;
+use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 use crate::model::query_dto::PluginQueryDto;
 use crate::model::vo::backend_vo::BackendRefVO;
-use crate::service::backend_ref_service::BackendRefService;
 use crate::service::plugin_service::PluginService;
-use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::{Path, Query};
-use tardis::web::poem_openapi::payload::Json;
-use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
 #[derive(Clone, Default)]
-pub struct PluginApi;
+pub struct TlsConfigApi;
 
-#[poem_openapi::OpenApi(prefix_path = "/plugin")]
-impl PluginApi {
-    /// Get Plugin List
+/// TlsConfig API
+#[poem_openapi::OpenApi(prefix_path = "/tlsConfig")]
+impl TlsConfigApi {
+    /// Get TlsConfig List
     #[oai(path = "/", method = "get")]
     async fn list(&self, ids: Query<Option<String>>, name: Query<Option<String>>, namespace: Query<Option<String>>, code: Query<Option<String>>) -> TardisApiResult<Void> {
         let _ = PluginService::list(PluginQueryDto {
@@ -22,25 +21,25 @@ impl PluginApi {
             code: code.0,
             target: None,
         })
-        .await;
+            .await;
         TardisResp::ok(Void {})
     }
 
-    /// Add Plugin
+    /// Add TlsConfig
     #[oai(path = "/", method = "post")]
     async fn add(&self, backend: Json<BackendRefVO>) -> TardisApiResult<Void> {
         PluginService::add(backend.0).await?;
         TardisResp::ok(Void {})
     }
 
-    /// Update Plugin
+    /// Update TlsConfig
     #[oai(path = "/", method = "put")]
     async fn update(&self, backend: Json<BackendRefVO>) -> TardisApiResult<Void> {
         PluginService::update(backend.0).await?;
         TardisResp::ok(Void {})
     }
 
-    /// Delete Plugin
+    /// Delete TlsConfig
     #[oai(path = "/:backend_id", method = "put")]
     async fn delete(&self, backend_id: Path<String>) -> TardisApiResult<Void> {
         PluginService::delete(&backend_id.0).await?;

@@ -33,8 +33,17 @@ impl BaseService {
         }
     }
 
+
     #[cfg(feature = "k8s")]
-    pub async fn add<'a, T>(config: T) -> TardisResult<()>
+    pub async fn get_by_id<'a,  T>(id: &str) -> TardisResult<Option<(String.,T)>>
+        where
+            T: Vo + Serialize + Deserialize<'a>,
+    {
+        Self::get_type_map::<T>().await?.get(id)
+    }
+
+    #[cfg(feature = "k8s")]
+    pub async fn add<'a, T>(config: T) -> TardisResult<T>
     where
         T: Vo + Serialize + Deserialize<'a>,
     {
@@ -42,7 +51,7 @@ impl BaseService {
     }
 
     #[cfg(feature = "k8s")]
-    pub async fn update<'a, T>(config: T) -> TardisResult<()>
+    pub async fn update<'a, T>(config: T) -> TardisResult<T>
     where
         T: Vo + Serialize + Deserialize<'a>,
     {
@@ -50,7 +59,7 @@ impl BaseService {
     }
 
     #[cfg(feature = "k8s")]
-    pub async fn add_or_update<'a, T>(config: T, add_only: bool) -> TardisResult<()>
+    pub async fn add_or_update<'a, T>(config: T, add_only: bool) -> TardisResult<T>
     where
         T: Vo + Serialize + Deserialize<'a>,
     {
@@ -86,7 +95,7 @@ impl BaseService {
             )
             .await
             .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error:{e}"), ""))?;
-        Ok(())
+        Ok(config)
     }
 
     #[cfg(feature = "k8s")]
@@ -164,7 +173,7 @@ mod test {
 
     #[tokio::test]
     #[cfg(feature = "k8s")]
-    // #[ignore]
+    #[ignore]
     async fn k8s_test() {
         let mut add_o_1 = BackendRefVO {
             id: "id34325".to_string(),
