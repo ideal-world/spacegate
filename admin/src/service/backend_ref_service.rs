@@ -8,10 +8,12 @@ use tardis::web::poem::delete;
 
 pub struct BackendRefService;
 
+impl BaseService<'_, BackendRefVO> for BackendRefService {}
+
 impl BackendRefService {
     pub(crate) async fn list(id: Option<String>, query: BackendRefQueryDto) -> TardisResult<Vec<BackendRefVO>> {
         //todo query
-        BaseService::get_type_map::<BackendRefVO>()
+        Self::get_type_map()
             .await?
             .values()
             .into_iter()
@@ -20,16 +22,16 @@ impl BackendRefService {
     }
 
     pub(crate) async fn add(add: BackendRefVO) -> TardisResult<()> {
-        BaseService::add::<BackendRefVO>(add).await?;
+        Self::add_vo(add).await?;
         Ok(())
     }
     pub(crate) async fn update(update: BackendRefVO) -> TardisResult<()> {
-        BaseService::update::<BackendRefVO>(update).await?;
+        Self::update_vo(update).await?;
         Ok(())
     }
 
     pub(crate) async fn delete(id: &str) -> TardisResult<()> {
-        BaseService::delete::<BackendRefVO>(&id).await?;
+        Self::delete_vo(&id).await?;
         Ok(())
     }
 }

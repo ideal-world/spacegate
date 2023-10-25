@@ -1,4 +1,4 @@
-use crate::model::vo::Vo;
+use crate::{constants, model::vo::Vo};
 use kernel_common::inner_model::gateway::{SgParameters, SgProtocol, SgTlsMode};
 use serde::{Deserialize, Serialize};
 use tardis::web::poem_openapi;
@@ -21,6 +21,16 @@ pub struct SgGatewayVO {
     pub listeners: Vec<SgListenerVO>,
     /// [crate::model::vo::plugin_vo::SgFilterVO]'s id
     pub filters: Option<Vec<String>>,
+}
+
+impl Vo for SgGatewayVO {
+    fn get_vo_type() -> String {
+        constants::GATEWAY_TYPE.to_string()
+    }
+
+    fn get_unique_name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
@@ -54,7 +64,7 @@ pub struct SgTlsConfigVO {
 
 impl Vo for SgTlsConfigVO {
     fn get_vo_type() -> String {
-        todo!()
+        constants::TLS_CONFIG_TYPE.to_string()
     }
 
     fn get_unique_name(&self) -> String {

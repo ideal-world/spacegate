@@ -19,7 +19,7 @@ lazy_static! {
     pub static ref TYPE_CONFIG_NAME_MAP: HashMap<&'static str, &'static str> = {
         let mut map = HashMap::new();
         map.insert(GATEWAY_TYPE, GATEWAY_CONFIG_NAME);
-map.insert(TLS_CONFIG_TYPE,TLS_CONFIG_NAME)
+        map.insert(TLS_CONFIG_TYPE, TLS_CONFIG_NAME);
         map.insert(PLUGIN_TYPE, PLUGIN_CONFIG_NAME);
         map.insert(ROUTE_TYPE, ROUTE_CONFIG_NAME);
         map.insert(BACKEND_REF_TYPE, BACKEND_REF_CONFIG_NAME);
