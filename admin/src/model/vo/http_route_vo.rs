@@ -6,7 +6,7 @@ use tardis::web::poem_openapi;
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
-pub struct SgHttpRoute {
+pub struct SgHttpRouteVo {
     /// Name of the HttpRoute. Global Unique.
     ///
     /// In k8s mode, this name MUST be unique within a namespace.
@@ -29,7 +29,7 @@ pub struct SgHttpRouteRuleVO {
     pub matches: Option<Vec<SgHttpRouteMatch>>,
     /// [crate::model::vo::plugin_vo::SgFilterVO]'s id
     pub filters: Option<Vec<String>>,
-    /// [crate::model::vo::backend_vo::BackendRefVO]'s id
+    /// [crate::model::vo::backend_vo::SgBackendRefVO]'s id
     pub backends: Option<Vec<String>>,
     /// Timeout define the timeout for requests that match this rule.
     pub timeout_ms: Option<u64>,

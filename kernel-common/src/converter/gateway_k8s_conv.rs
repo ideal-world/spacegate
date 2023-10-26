@@ -1,12 +1,18 @@
-use crate::constants::GATEWAY_CLASS_NAME;
+use crate::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
-use crate::inner_model::gateway::{SgGateway, SgParameters, SgTlsConfig, SgTlsMode};
+use crate::helper::k8s_helper::get_k8s_client;
+use crate::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode};
 use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference, TlsModeType};
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use k8s_openapi::ByteString;
+use kube::{Api, ResourceExt};
 use std::collections::BTreeMap;
+use std::str::FromStr;
+use tardis::basic::error::TardisError;
+use tardis::basic::result::TardisResult;
+use tardis::futures_util::future::join_all;
 use tardis::TardisFuns;
 
 impl SgGateway {
@@ -32,8 +38,8 @@ impl SgGateway {
                         hostname: l.hostname,
                         port: l.port,
                         protocol: l.protocol.to_string(),
-                        tls: l.tls.map(|l| {
-                            let (tls_config, secret) = l.to_kube_tls(namespace);
+                        tls: l.tls.map(|tls| {
+                            let (tls_config, secret) = tls.to_kube_tls(namespace);
                             secrets.push(secret);
                             tls_config
                         }),
@@ -70,28 +76,56 @@ impl SgGateway {
 
         (gateway, secrets, sgfilters)
     }
+
+    pub async fn from_kube_gateway(gateway: Gateway) -> TardisResult<SgGateway> {
+        //todo filters
+        let filters = None;
+        let result = SgGateway {
+            name: gateway.name_any(),
+            parameters: SgParameters::from_kube_gateway(&gateway),
+            listeners: join_all(
+                gateway
+                    .spec
+                    .listeners
+                    .into_iter()
+                    .map(|listener| async move {
+                        let tls = match listener.tls {
+                            Some(tls) => SgTlsConfig::from_kube_tls(tls).await?,
+                            None => None,
+                        };
+                        let sg_listener = SgListener {
+                            name: listener.name,
+                            ip: None,
+                            port: listener.port,
+                            protocol: match listener.protocol.to_lowercase().as_str() {
+                                "http" => SgProtocol::Http,
+                                "https" => SgProtocol::Https,
+                                "ws" => SgProtocol::Ws,
+                                _ => {
+                                    return Err(TardisError::not_implemented(
+                                        &format!("[SG.Config] Gateway [spec.listener.protocol={}] not supported yet", listener.protocol),
+                                        "",
+                                    ))
+                                }
+                            },
+                            tls,
+                            hostname: listener.hostname,
+                        };
+                        Ok(sg_listener)
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .into_iter()
+            .map(|listener| listener.expect("[SG.Config] Unexpected none: listener"))
+            .collect(),
+            filters,
+        };
+        Ok(result)
+    }
 }
 
 impl SgParameters {
-    pub fn from_kube_gateway(gateway: &Gateway) -> Self {
-        let gateway_annotations = gateway.metadata.annotations.clone();
-        if let Some(gateway_annotations) = gateway_annotations {
-            SgParameters {
-                redis_url: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string()),
-                log_level: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
-                lang: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
-                ignore_tls_verification: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
-            }
-        } else {
-            SgParameters {
-                redis_url: None,
-                log_level: None,
-                lang: None,
-                ignore_tls_verification: None,
-            }
-        }
-    }
-
     pub(crate) fn to_kube_gateway(self) -> BTreeMap<String, String> {
         let mut ann = BTreeMap::new();
         if let Some(redis_url) = self.redis_url {
@@ -110,6 +144,25 @@ impl SgParameters {
             );
         }
         ann
+    }
+
+    pub fn from_kube_gateway(gateway: &Gateway) -> Self {
+        let gateway_annotations = gateway.metadata.annotations.clone();
+        if let Some(gateway_annotations) = gateway_annotations {
+            SgParameters {
+                redis_url: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string()),
+                log_level: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
+                lang: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
+                ignore_tls_verification: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
+            }
+        } else {
+            SgParameters {
+                redis_url: None,
+                log_level: None,
+                lang: None,
+                ignore_tls_verification: None,
+            }
+        }
     }
 }
 
@@ -149,13 +202,53 @@ impl SgTlsConfig {
             },
         )
     }
+
+    pub async fn from_kube_tls(tls: GatewayTlsConfig) -> TardisResult<Option<Self>> {
+        let certificate_ref = tls
+            .certificate_refs
+            .as_ref()
+            .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
+            .get(0)
+            .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
+        let secret_api: Api<Secret> = Api::namespaced(get_k8s_client().await?, certificate_ref.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()));
+        let result = if let Some(secret_obj) =
+            secret_api.get_opt(&certificate_ref.name).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        {
+            let secret_data =
+                secret_obj.data.ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data is required", certificate_ref.name), ""))?;
+            let tls_crt = secret_data
+                .get("tls.crt")
+                .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.crt] is required", certificate_ref.name), ""))?;
+            let tls_key = secret_data
+                .get("tls.key")
+                .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), ""))?;
+            Some(SgTlsConfig {
+                mode: SgTlsMode::from(tls.mode).unwrap_or_default(),
+                key: String::from_utf8(tls_key.0.clone()).expect("[SG.Config] Gateway tls secret [tls.key] is not valid utf8"),
+                cert: String::from_utf8(tls_crt.0.clone()).expect("[SG.Config] Gateway tls secret [tls.cert] is not valid utf8"),
+            })
+        } else {
+            TardisError::not_found(&format!("[SG.admin] Gateway have tls secret [{}], but not found!", certificate_ref.name), "");
+            None
+        };
+        Ok(result)
+    }
 }
 
 impl SgTlsMode {
-    pub(crate) fn to_kube_tls_mode_type(self) -> TlsModeType {
+    pub fn to_kube_tls_mode_type(self) -> TlsModeType {
         match self {
             SgTlsMode::Terminate => "Terminate".to_string(),
             SgTlsMode::Passthrough => "Passthrough".to_string(),
         }
+    }
+
+    pub fn from(mode: Option<String>) -> Option<Self> {
+        if let Some(mode) = mode {
+            if let Ok(mode) = SgTlsMode::from_str(&mode) {
+                return Some(mode);
+            }
+        }
+        None
     }
 }

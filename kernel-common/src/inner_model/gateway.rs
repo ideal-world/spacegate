@@ -116,14 +116,3 @@ impl FromStr for SgTlsMode {
         }
     }
 }
-
-impl SgTlsMode {
-    pub fn from(mode: Option<String>) -> Option<Self> {
-        if let Some(mode) = mode {
-            if let Ok(mode) = SgTlsMode::from_str(&mode) {
-                return Some(mode);
-            }
-        }
-        None
-    }
-}

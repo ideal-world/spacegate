@@ -1,31 +1,31 @@
 use crate::model::query_dto::BackendRefQueryDto;
-use crate::model::vo::backend_vo::BackendRefVO;
-use crate::service::base_service::BaseService;
+use crate::model::vo::backend_vo::SgBackendRefVO;
+use crate::service::base_service::VoBaseService;
 use std::process::id;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::web::poem::delete;
 
-pub struct BackendRefService;
+pub struct BackendRefServiceVo;
 
-impl BaseService<'_, BackendRefVO> for BackendRefService {}
+impl VoBaseService<SgBackendRefVO> for BackendRefServiceVo {}
 
-impl BackendRefService {
-    pub(crate) async fn list(id: Option<String>, query: BackendRefQueryDto) -> TardisResult<Vec<BackendRefVO>> {
+impl BackendRefServiceVo {
+    pub(crate) async fn list(id: Option<String>, query: BackendRefQueryDto) -> TardisResult<Vec<SgBackendRefVO>> {
         //todo query
-        Self::get_type_map()
+        Self::get_str_type_map()
             .await?
             .values()
             .into_iter()
             .map(|v| serde_json::from_str(v).map_err(|e| TardisError::bad_request(&format!(""), "")))
-            .collect::<TardisResult<Vec<BackendRefVO>>>()
+            .collect::<TardisResult<Vec<SgBackendRefVO>>>()
     }
 
-    pub(crate) async fn add(add: BackendRefVO) -> TardisResult<()> {
+    pub(crate) async fn add(add: SgBackendRefVO) -> TardisResult<()> {
         Self::add_vo(add).await?;
         Ok(())
     }
-    pub(crate) async fn update(update: BackendRefVO) -> TardisResult<()> {
+    pub(crate) async fn update(update: SgBackendRefVO) -> TardisResult<()> {
         Self::update_vo(update).await?;
         Ok(())
     }

@@ -6,7 +6,7 @@ use tardis::web::poem_openapi;
 
 /// BackendRef defines how a HTTPRoute should forward an HTTP request.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
-pub struct BackendRefVO {
+pub struct SgBackendRefVO {
     /// unique by id
     pub id: String,
     /// Name is the kubernetes service name OR url host.
@@ -28,7 +28,7 @@ pub struct BackendRefVO {
     pub filters: Option<Vec<String>>,
 }
 
-impl Vo for BackendRefVO {
+impl Vo for SgBackendRefVO {
     fn get_vo_type() -> String {
         constants::BACKEND_REF_TYPE.to_string()
     }

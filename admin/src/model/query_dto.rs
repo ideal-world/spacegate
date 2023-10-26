@@ -29,6 +29,7 @@ impl ToFields for GatewayQueryDto {
     }
 }
 
+#[derive(Default)]
 pub struct PluginQueryDto {
     pub ids: Option<Vec<String>>,
     pub name: Option<String>,

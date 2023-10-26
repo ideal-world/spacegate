@@ -16,7 +16,7 @@ readme = "./README.md"
 k8s = ["kube", "k8s-openapi", "k8s-gateway-api","kernel-common/k8s"]
 
 [dependencies]
-tardis = { workspace = true ,features = ["web-server"]}
+tardis = { workspace = true ,features = ["web-server","crypto"]}
 serde.workspace = true
 serde_json.workspace = true
 

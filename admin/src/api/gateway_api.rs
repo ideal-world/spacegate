@@ -1,9 +1,5 @@
-use crate::model::query_dto::GatewayQueryDto;
-use crate::model::vo::backend_vo::BackendRefVO;
 use crate::model::vo::gateway_vo::SgGatewayVO;
-use crate::service::gateway_service::GatewayService;
-use crate::service::plugin_service::PluginService;
-use kernel_common::inner_model::gateway::SgGateway;
+use crate::service::gateway_service::GatewayServiceVo;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
@@ -17,22 +13,22 @@ pub struct GatewayApi;
 impl GatewayApi {
     /// Add Gateway
     #[oai(path = "/", method = "post")]
-    async fn add(&self, backend: Json<BackendRefVO>) -> TardisApiResult<Void> {
-        GatewayService::add(backend.0).await?;
+    async fn add(&self, add: Json<SgGatewayVO>) -> TardisApiResult<Void> {
+        GatewayServiceVo::add(add.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update Gateway
     #[oai(path = "/", method = "put")]
     async fn update(&self, backend: Json<SgGatewayVO>) -> TardisApiResult<Void> {
-        GatewayService::update(backend.0).await?;
+        GatewayServiceVo::update(backend.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Delete Gateway
     #[oai(path = "/", method = "delete")]
-    async fn delete(&self, namespace: Query<Option<String>>, name: Query<String>) -> TardisApiResult<Void> {
-        GatewayService::delete(namespace.0, &name.0).await?;
+    async fn delete(&self, name: Query<String>) -> TardisApiResult<Void> {
+        GatewayServiceVo::delete(&name.0).await?;
         TardisResp::ok(Void {})
     }
 }
