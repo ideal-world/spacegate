@@ -1,5 +1,6 @@
 use crate::model::query_dto::GatewayQueryDto;
 use crate::model::vo::backend_vo::BackendRefVO;
+use crate::model::vo::gateway_vo::SgGatewayVO;
 use crate::service::gateway_service::GatewayService;
 use crate::service::plugin_service::PluginService;
 use kernel_common::inner_model::gateway::SgGateway;
@@ -7,7 +8,6 @@ use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
-use crate::model::vo::gateway_vo::SgGatewayVO;
 
 #[derive(Clone, Default)]
 pub struct GatewayApi;

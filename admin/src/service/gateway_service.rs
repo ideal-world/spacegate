@@ -45,8 +45,35 @@ impl GatewayService {
     }
 
     pub async fn update(update: SgGatewayVO) -> TardisResult<()> {
-        let mut datas = Self::get_type_map().await?.remove(&update.get_unique_name());
+        if let Some(old_gateway_str) = Self::get_type_map().await?.remove(&update.get_unique_name()) {
+        } else {
+            return Err(TardisError::not_found("", ""));
+        };
 
+        Ok(())
+    }
+
+    pub async fn add(add: SgGatewayVO) -> TardisResult<()> {
+        Self::add_vo(add).await?;
+
+        Ok(())
+    }
+
+    pub async fn delete(id: &str) -> TardisResult<()> {
+        //
+        Self::delete_vo(id).await?;
+
+        Ok(())
+    }
+    pub async fn delete(namespace: Option<String>, name: &str) -> TardisResult<()> {
+        #[cfg(feature = "k8s")]
+        {
+            let gateway_api: Api<Gateway> = Self::get_gateway_api(&namespace).await?;
+
+            gateway_api.delete(name, &DeleteParams::default()).await.map_err(|e| TardisError::io_error(&format!("[SG.admin] delete error:{e}"), ""))?;
+        }
+        #[cfg(not(feature = "k8s"))]
+        {}
         Ok(())
     }
 }
@@ -130,23 +157,6 @@ impl GatewayService {
 //         {}
 //         Ok(edit)
 //     }
-
-//     pub async fn delete(namespace: Option<String>, name: &str) -> TardisResult<()> {
-//         #[cfg(feature = "k8s")]
-//         {
-//             let gateway_api: Api<Gateway> = Self::get_gateway_api(&namespace).await?;
-
-//             gateway_api.delete(name, &DeleteParams::default()).await.map_err(|e| TardisError::io_error(&format!("[SG.admin] delete error:{e}"), ""))?;
-//         }
-//         #[cfg(not(feature = "k8s"))]
-//         {}
-//         Ok(())
-//     }
-
-//     #[cfg(feature = "k8s")]
-//     async fn get_gateway_api(namespace: &Option<String>) -> TardisResult<Api<Gateway>> {
-//         Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
-//     }
 //     //todo try to compress with kernel::config::config_by_k8s
 //     #[cfg(feature = "k8s")]
 //     pub async fn kube_to(gateway_list: Vec<Gateway>) -> TardisResult<Vec<SgGateway>> {
@@ -228,3 +238,8 @@ impl GatewayService {
 //         Ok(result)
 //     }
 // }
+
+#[cfg(feature = "k8s")]
+async fn get_gateway_api(namespace: &Option<String>) -> TardisResult<Api<Gateway>> {
+    Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
+}

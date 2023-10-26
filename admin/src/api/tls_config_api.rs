@@ -1,9 +1,9 @@
-use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::Path;
-use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 use crate::model::query_dto::PluginQueryDto;
 use crate::model::vo::backend_vo::BackendRefVO;
 use crate::service::plugin_service::PluginService;
+use tardis::web::poem_openapi;
+use tardis::web::poem_openapi::param::Path;
+use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
 #[derive(Clone, Default)]
 pub struct TlsConfigApi;
@@ -21,7 +21,7 @@ impl TlsConfigApi {
             code: code.0,
             target: None,
         })
-            .await;
+        .await;
         TardisResp::ok(Void {})
     }
 

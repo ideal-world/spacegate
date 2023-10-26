@@ -1,21 +1,14 @@
 #[cfg(feature = "k8s")]
-use crate::helper::{get_k8s_client, WarpKubeResult};
-use crate::model::query_dto::{BackendRefQueryDto, PluginQueryDto};
-use crate::model::vo::backend_vo::BackendRefVO;
+use crate::helper::get_k8s_client;
+use crate::model::query_dto::PluginQueryDto;
 use crate::model::vo::plugin_vo::SgFilterVO;
-#[cfg(feature = "k8s")]
-use crate::model::ToFields;
 use crate::service::base_service::BaseService;
 #[cfg(feature = "k8s")]
 use kernel_common::constants::DEFAULT_NAMESPACE;
 #[cfg(feature = "k8s")]
-use kernel_common::converter::plugin_k8s_conv::SgSingeFilter;
-use kernel_common::inner_model::plugin_filter::SgRouteFilter;
-#[cfg(feature = "k8s")]
 use kernel_common::k8s_crd::sg_filter::SgFilter;
 #[cfg(feature = "k8s")]
-use kube::{api::ListParams, api::PostParams, Api, ResourceExt};
-use std::collections::HashMap;
+use kube::Api;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
