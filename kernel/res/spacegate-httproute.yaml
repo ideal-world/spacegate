@@ -886,7 +886,7 @@ spec:
                               default: 5000
                               description: TimeoutMs specifies the timeout for backend by milliseconds
                               format: int32
-                              maximum: 1000000
+                              maximum: 10000000
                               minimum: 1
                               type: integer
                           required:
@@ -1640,7 +1640,7 @@ spec:
                         default: 5000
                         description: TimeoutMs specifies the timeout for rules by milliseconds
                         format: int32
-                        maximum: 1000000
+                        maximum: 10000000
                         minimum: 1
                         type: integer
                     type: object
