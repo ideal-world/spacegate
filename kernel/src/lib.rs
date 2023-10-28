@@ -34,14 +34,17 @@ pub mod helpers;
 pub mod instance;
 pub mod plugins;
 
+#[inline]
 pub async fn startup_k8s(namespace: Option<String>) -> TardisResult<()> {
     startup(true, namespace, None).await
 }
 
+#[inline]
 pub async fn startup_native(conf_uri: String, check_interval_sec: u64) -> TardisResult<()> {
     startup(false, Some(conf_uri), Some(check_interval_sec)).await
 }
 
+#[inline]
 pub async fn startup_simplify(conf_path: String, check_interval_sec: u64) -> TardisResult<()> {
     startup(false, Some(conf_path), Some(check_interval_sec)).await
 }
