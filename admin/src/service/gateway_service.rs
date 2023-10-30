@@ -8,7 +8,7 @@ use std::process::id;
 
 use crate::model::vo::gateway_vo::SgGatewayVO;
 use crate::model::vo::Vo;
-use crate::service::plugin_service::PluginServiceVo;
+use crate::service::plugin_service::PluginVoService;
 #[cfg(feature = "k8s")]
 use k8s_gateway_api::Gateway;
 #[cfg(feature = "k8s")]
@@ -28,19 +28,21 @@ use crate::model::vo_converter::VoConv;
 use kernel_common::helper::k8s_helper::{parse_k8s_obj_unique, WarpKubeResult};
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
+use crate::helper::find_add_delete;
 
 use super::base_service::VoBaseService;
 
-pub struct GatewayServiceVo;
+pub struct GatewayVoService;
 
-impl VoBaseService<SgGatewayVO> for GatewayServiceVo {}
+impl VoBaseService<SgGatewayVO> for GatewayVoService {}
 
-impl GatewayServiceVo {
+impl GatewayVoService {
     pub async fn list(query: GatewayQueryDto) -> TardisResult<Vec<SgGatewayVO>> {
         let query = query.to_instance()?;
-        Ok(Self::get_type_map().await?.into_values().into_iter().filter(|g| if let Some(q_name) = &query.name { q_name.is_match(&g.name) } else { true }
-            &&if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }&&
-            if let Some(q_hostname) = &query.hostname {
+        Ok(Self::get_type_map().await?.into_values().into_iter().filter(|g|
+            if let Some(q_name) = &query.name { q_name.is_match(&g.name) } else { true }
+                && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }
+                && if let Some(q_hostname) = &query.hostname {
                 g.listeners.iter().any(|l| if let Some(l_hostname)=&l.hostname{q_hostname.is_match(l_hostname)}else { false })
             } else { true })
             .collect())
@@ -67,18 +69,19 @@ impl GatewayServiceVo {
                 secret_api.create(&PostParams::default(), &s).await.map_err(|e| TardisError::io_error(&format!("[SG.admin] error:{e}"), ""))?;
             }
 
-            PluginServiceVo::add_sgfilter_vec(sgfilters).await?;
+            PluginVoService::add_sgfilter_vec(sgfilters).await?;
         }
         Self::add_vo(add).await
     }
 
     pub async fn update_by_id(id: &str) -> TardisResult<()> {
         let gateway_o = Self::get_by_id(&id).await?;
-        GatewayServiceVo::update(gateway_o).await
+        GatewayVoService::update(gateway_o).await
     }
 
     pub async fn update(update: SgGatewayVO) -> TardisResult<()> {
-        let gateway_o = Self::get_by_id(&update.get_unique_name()).await?;
+        let old_gateway = Self::get_by_id(&update.get_unique_name()).await?;
+        let (add,delete)=find_add_delete(update.);
         //todo
         Ok(())
     }

@@ -1,5 +1,5 @@
 use crate::model::vo::gateway_vo::SgTlsConfigVO;
-use crate::service::tls_config_service::TlsConfigServiceVo;
+use crate::service::tls_config_service::TlsConfigVoService;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::{Path, Query};
 use tardis::web::poem_openapi::payload::Json;
@@ -28,21 +28,21 @@ impl TlsConfigApi {
     /// Add TlsConfig
     #[oai(path = "/", method = "post")]
     async fn add(&self, tls_config: Json<SgTlsConfigVO>) -> TardisApiResult<Void> {
-        TlsConfigServiceVo::add(tls_config.0).await?;
+        TlsConfigVoService::add(tls_config.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update TlsConfig
     #[oai(path = "/", method = "put")]
     async fn update(&self, tls_config: Json<SgTlsConfigVO>) -> TardisApiResult<Void> {
-        TlsConfigServiceVo::update(tls_config.0).await?;
+        TlsConfigVoService::update(tls_config.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Delete TlsConfig
     #[oai(path = "/:backend_id", method = "put")]
     async fn delete(&self, tls_config_id: Path<String>) -> TardisApiResult<Void> {
-        TlsConfigServiceVo::delete(&tls_config_id.0).await?;
+        TlsConfigVoService::delete(&tls_config_id.0).await?;
         TardisResp::ok(Void {})
     }
 }

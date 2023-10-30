@@ -1,16 +1,14 @@
 use crate::model::query_dto::BackendRefQueryDto;
 use crate::model::vo::backend_vo::SgBackendRefVO;
 use crate::service::base_service::VoBaseService;
-use std::process::id;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
-use tardis::web::poem::delete;
 
-pub struct BackendRefServiceVo;
+pub struct BackendRefVoService;
 
-impl VoBaseService<SgBackendRefVO> for BackendRefServiceVo {}
+impl VoBaseService<SgBackendRefVO> for BackendRefVoService {}
 
-impl BackendRefServiceVo {
+impl BackendRefVoService {
     pub(crate) async fn list(id: Option<String>, query: BackendRefQueryDto) -> TardisResult<Vec<SgBackendRefVO>> {
         //todo query
         Self::get_str_type_map()

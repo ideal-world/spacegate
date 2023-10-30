@@ -16,11 +16,11 @@ use kube::ResourceExt;
 use std::collections::HashMap;
 use tardis::basic::result::TardisResult;
 
-pub struct PluginServiceVo;
+pub struct PluginVoService;
 
-impl VoBaseService<SgFilterVO> for PluginServiceVo {}
+impl VoBaseService<SgFilterVO> for PluginVoService {}
 
-impl PluginServiceVo {
+impl PluginVoService {
     pub(crate) async fn list(query: PluginQueryDto) -> TardisResult<Vec<SgFilterVO>> {
         //todo query
         Ok(Self::get_type_map()

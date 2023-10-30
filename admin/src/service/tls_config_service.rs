@@ -5,13 +5,13 @@ use crate::service::base_service::VoBaseService;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
-use super::gateway_service::GatewayServiceVo;
+use super::gateway_service::GatewayVoService;
 
-pub struct TlsConfigServiceVo;
+pub struct TlsConfigVoService;
 
-impl VoBaseService<SgTlsConfigVO> for TlsConfigServiceVo {}
+impl VoBaseService<SgTlsConfigVO> for TlsConfigVoService {}
 
-impl TlsConfigServiceVo {
+impl TlsConfigVoService {
     pub(crate) async fn list(query: SgTlsConfigQueryVO) -> TardisResult<Vec<SgTlsConfigVO>> {
         //todo query
         Self::get_str_type_map()
@@ -34,7 +34,7 @@ impl TlsConfigServiceVo {
                 .map_err(|e| TardisError::bad_request(&format!("[SG.admin] Deserialization {}:{} failed:{e}", SgTlsConfigVO::get_vo_type(), unique_name), ""))?;
             if let Some(ids) = o.ref_ids {
                 for ref_id in ids {
-                    GatewayServiceVo::update_by_id(&ref_id).await?;
+                    GatewayVoService::update_by_id(&ref_id).await?;
                 }
             }
             Self::update_vo(update).await?;

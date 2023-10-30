@@ -2,8 +2,8 @@ use crate::model::query_dto::PluginQueryDto;
 use crate::model::vo::gateway_vo::{SgGatewayVO, SgListenerVO, SgTlsConfigVO};
 use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
-use crate::service::plugin_service::PluginServiceVo;
-use crate::service::tls_config_service::TlsConfigServiceVo;
+use crate::service::plugin_service::PluginVoService;
+use crate::service::tls_config_service::TlsConfigVoService;
 use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgTlsConfig};
 use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use tardis::async_trait::async_trait;
@@ -17,7 +17,7 @@ impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
         let filters = if let Some(filter_strs) = self.filters {
             Some(
                 join_all(
-                    PluginServiceVo::list(PluginQueryDto {
+                    PluginVoService::list(PluginQueryDto {
                         ids: Some(filter_strs),
                         ..Default::default()
                     })
@@ -50,7 +50,7 @@ impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
 impl VoConv<SgListener, SgListenerVO> for SgListenerVO {
     async fn to_model(self) -> TardisResult<SgListener> {
         let tls = if let Some(tls_id) = self.tls {
-            Some(TlsConfigServiceVo::get_by_id(&tls_id).await?.to_model().await?)
+            Some(TlsConfigVoService::get_by_id(&tls_id).await?.to_model().await?)
         } else {
             None
         };
