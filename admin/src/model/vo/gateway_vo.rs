@@ -55,7 +55,7 @@ pub struct SgListenerVO {
 /// unique by id
 #[derive(Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
 pub struct SgTlsConfigVO {
-    pub id: String,
+    pub name: String,
     pub mode: SgTlsMode,
     pub key: String,
     pub cert: String,
@@ -68,6 +68,6 @@ impl Vo for SgTlsConfigVO {
     }
 
     fn get_unique_name(&self) -> String {
-        self.id.clone()
+        self.name.clone()
     }
 }

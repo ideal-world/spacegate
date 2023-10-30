@@ -127,7 +127,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     });
 
     async fn watch_http_spaceroute(http_route_obj: HttpSpaceroute, http_route_objs_versions: &HashMap<String, String>, http_route_apis: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
-        log::trace!("[SG.Config] http_route config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&http_route_obj));
+        log::trace!(
+            "[SG.Config] http_route config watch tiger. name:{}",
+            kernel_common::helper::k8s_helper::get_k8s_obj_unique(&http_route_obj)
+        );
         if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
             == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
         {
@@ -166,7 +169,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             return;
         };
 
-        log::debug!("[SG.Config] Http route:{} config change found", k8s_helper::get_k8s_obj_unique(&http_route_obj));
+        log::debug!(
+            "[SG.Config] Http route:{} config change found",
+            kernel_common::helper::k8s_helper::get_k8s_obj_unique(&http_route_obj)
+        );
 
         overload_http_route(gateway_obj, (&http_route_apis.0, &http_route_apis.1)).await;
     }
@@ -212,7 +218,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
-            log::trace!("[SG.Config] filter_api config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&filter_obj));
+            log::trace!(
+                "[SG.Config] filter_api config watch tiger. name:{}",
+                kernel_common::helper::k8s_helper::get_k8s_obj_unique(&filter_obj)
+            );
             if sg_filter_objs_versions.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == filter_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
@@ -318,7 +327,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 continue;
             }
 
-            log::trace!("[SG.Config] SgFilter config:{} change found", k8s_helper::get_k8s_obj_unique(&filter_obj));
+            log::trace!(
+                "[SG.Config] SgFilter config:{} change found",
+                kernel_common::helper::k8s_helper::get_k8s_obj_unique(&filter_obj)
+            );
 
             let http_route_api = (
                 &Api::all(get_client().await.expect("[SG.Config] Failed to get client")),
@@ -546,38 +558,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                     .listeners
                     .into_iter()
                     .map(|listener| async move {
-                        let tls = match listener.tls {
-                            Some(tls) => {
-                                let certificate_ref = tls
-                                    .certificate_refs
-                                    .as_ref()
-                                    .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
-                                    .get(0)
-                                    .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
-                                let secret_api: Api<Secret> = if let Some(namespace) = &certificate_ref.namespace {
-                                    Api::namespaced(get_client().await?, namespace)
-                                } else {
-                                    Api::all(get_client().await?)
-                                };
-                                let secret_obj =
-                                    secret_api.get(&certificate_ref.name).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?;
-                                let secret_data = secret_obj
-                                    .data
-                                    .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data is required", certificate_ref.name), ""))?;
-                                let tls_crt = secret_data.get("tls.crt").ok_or_else(|| {
-                                    TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.crt] is required", certificate_ref.name), "")
-                                })?;
-                                let tls_key = secret_data.get("tls.key").ok_or_else(|| {
-                                    TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), "")
-                                })?;
-                                Some(SgTlsConfig {
-                                    mode: SgTlsMode::from(tls.mode).unwrap_or_default(),
-                                    key: String::from_utf8(tls_key.0.clone()).expect("[SG.Config] Gateway tls secret [tls.key] is not valid utf8"),
-                                    cert: String::from_utf8(tls_crt.0.clone()).expect("[SG.Config] Gateway tls secret [tls.cert] is not valid utf8"),
-                                })
-                            }
-                            None => None,
-                        };
+                        let tls = if let Some(tls) = listener.tls { SgTlsConfig::from_kube_tls(tls).await? } else { None };
                         let sg_listener = SgListener {
                             name: listener.name,
                             ip: None,
@@ -958,6 +939,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
         .map(|filters| filters.into_iter().map(|filter| filter.expect("Unreachable code")).collect_vec())
 }
 
+//todo move to common
 fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<Option<Vec<HttpRouteFilter>>> {
     filters
         .map(|filters| {

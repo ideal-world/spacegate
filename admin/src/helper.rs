@@ -17,10 +17,23 @@ pub fn fuzzy_regex(query: impl AsRef<str>) -> TardisResult<Regex> {
     Ok(Regex::new(&format!("^{}$", query))?.into())
 }
 
-pub fn find_add_delete(new: Vec<String>, old: Vec<String>) -> (Vec<String>, Vec<String>) {
-    let add: Vec<String> = new.iter().filter(|item| !old.contains(item)).cloned().collect();
+pub fn find_add_delete<T>(new: Vec<T>, old: Vec<T>) -> (Vec<T>, Vec<T>)
+where
+    T: std::cmp::PartialEq + std::clone::Clone,
+{
+    if new.is_empty() && old.is_empty() {
+        return (vec![], vec![]);
+    }
+    if new.is_empty() {
+        return (vec![], old);
+    }
+    if old.is_empty() {
+        return (new, vec![]);
+    }
 
-    let delete: Vec<String> = old.into_iter().filter(|item| !new.contains(item)).collect();
+    let add: Vec<T> = new.iter().filter(|item| !old.contains(item)).cloned().collect();
+
+    let delete: Vec<T> = old.into_iter().filter(|item| !new.contains(item)).collect();
 
     (add, delete)
 }

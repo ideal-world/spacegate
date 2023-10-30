@@ -74,6 +74,7 @@ impl VoConv<SgListener, SgListenerVO> for SgListenerVO {
 impl VoConv<SgTlsConfig, SgTlsConfigVO> for SgTlsConfigVO {
     async fn to_model(self) -> TardisResult<SgTlsConfig> {
         Ok(SgTlsConfig {
+            name: self.name,
             mode: self.mode,
             key: self.key,
             cert: self.cert,
@@ -82,7 +83,7 @@ impl VoConv<SgTlsConfig, SgTlsConfigVO> for SgTlsConfigVO {
 
     async fn from_model(model: SgTlsConfig) -> TardisResult<SgTlsConfigVO> {
         Ok(SgTlsConfigVO {
-            id: TardisFuns::crypto.digest.md5(&format!("{}{}{}", model.mode.clone().to_kube_tls_mode_type().to_string(), model.key, model.cert))?,
+            name: model.name,
             mode: model.mode,
             key: model.key,
             cert: model.cert,

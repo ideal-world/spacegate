@@ -1,6 +1,7 @@
 use crate::model::query_dto::SgTlsConfigQueryVO;
 use crate::model::vo::gateway_vo::SgTlsConfigVO;
 use crate::model::vo::Vo;
+use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
@@ -23,6 +24,9 @@ impl TlsConfigVoService {
     }
 
     pub(crate) async fn add(add: SgTlsConfigVO) -> TardisResult<()> {
+        let add_model = add.clone().to_model().await?;
+        #[cfg(feature = "k8s")]
+        {}
         Self::add_vo(add).await?;
         Ok(())
     }
@@ -44,20 +48,27 @@ impl TlsConfigVoService {
         Ok(())
     }
 
-    pub(crate) async fn add_ref_ids(id: &str, ref_ids: &[String]) -> TardisResult<()> {
-        let mut ref_ids = ref_ids.to_vec();
+    /// delete:true means delete, false means add
+    pub(crate) async fn modify_ref_ids(id: &str, ref_id: &str, delete: bool) -> TardisResult<()> {
         if let Some(o_str) = Self::get_str_type_map().await?.remove(id) {
             let mut o: SgTlsConfigVO =
                 serde_json::from_str(&o_str).map_err(|e| TardisError::bad_request(&format!("[SG.admin] Deserialization {}:{id} failed:{e}", SgTlsConfigVO::get_vo_type()), ""))?;
             if let Some(ids) = &mut o.ref_ids {
-                ref_ids.append(ids);
-                o.ref_ids = Some(ref_ids);
+                if delete {
+                    ids.retain(|id| id != ref_id);
+                } else {
+                    ids.push(ref_id.to_string());
+                }
             } else {
-                o.ref_ids = Some(ref_ids);
+                if delete {
+                    return Err(TardisError::not_found("delete failed", ""));
+                } else {
+                    o.ref_ids = Some(vec![ref_id.to_string()]);
+                }
             }
             Self::update_vo(o).await?;
         } else {
-            return Err(TardisError::not_found("", ""));
+            return Err(TardisError::not_found(&format!("can not find tls:{id}"), ""));
         };
         Ok(())
     }

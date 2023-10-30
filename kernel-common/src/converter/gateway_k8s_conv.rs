@@ -216,6 +216,7 @@ impl SgTlsConfig {
         let result = if let Some(secret_obj) =
             secret_api.get_opt(&certificate_ref.name).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
         {
+            let secret_un = get_k8s_obj_unique(&secret_obj);
             let secret_data =
                 secret_obj.data.ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data is required", certificate_ref.name), ""))?;
             let tls_crt = secret_data
@@ -225,6 +226,7 @@ impl SgTlsConfig {
                 .get("tls.key")
                 .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), ""))?;
             Some(SgTlsConfig {
+                name: secret_un,
                 mode: SgTlsMode::from(tls.mode).unwrap_or_default(),
                 key: String::from_utf8(tls_key.0.clone()).expect("[SG.Config] Gateway tls secret [tls.key] is not valid utf8"),
                 cert: String::from_utf8(tls_crt.0.clone()).expect("[SG.Config] Gateway tls secret [tls.cert] is not valid utf8"),

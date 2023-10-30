@@ -92,6 +92,11 @@ impl Display for SgProtocol {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgTlsConfig {
+    /// Name of the Secret. Global Unique.
+    ///
+    /// In k8s mode, this name MUST be unique within a namespace.
+    /// format see [k8s_helper::format_k8s_obj_unique]
+    pub name: String,
     pub mode: SgTlsMode,
     pub key: String,
     pub cert: String,
