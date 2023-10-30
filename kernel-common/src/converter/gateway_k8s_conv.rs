@@ -1,6 +1,6 @@
 use crate::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
-use crate::helper::k8s_helper::get_k8s_client;
+use crate::helper::k8s_helper::{get_k8s_client, get_k8s_obj_unique, parse_k8s_obj_unique};
 use crate::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode};
 use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference, TlsModeType};
@@ -16,14 +16,16 @@ use tardis::futures_util::future::join_all;
 use tardis::TardisFuns;
 
 impl SgGateway {
-    pub fn to_kube_gateway(self, namespace: &str) -> (Gateway, Vec<Secret>, Vec<SgSingeFilter>) {
+    pub fn to_kube_gateway(self) -> (Gateway, Vec<Secret>, Vec<SgSingeFilter>) {
+        let (namespace, raw_name) = parse_k8s_obj_unique(&self.name);
+
         let mut secrets: Vec<Secret> = vec![];
 
         let gateway = Gateway {
             metadata: ObjectMeta {
                 annotations: Some(self.parameters.to_kube_gateway()),
                 labels: None,
-                name: Some(self.name.clone()),
+                name: Some(raw_name),
                 owner_references: None,
                 self_link: None,
                 ..Default::default()
@@ -39,7 +41,7 @@ impl SgGateway {
                         port: l.port,
                         protocol: l.protocol.to_string(),
                         tls: l.tls.map(|tls| {
-                            let (tls_config, secret) = tls.to_kube_tls(namespace);
+                            let (tls_config, secret) = tls.to_kube_tls(&namespace);
                             secrets.push(secret);
                             tls_config
                         }),
@@ -81,7 +83,7 @@ impl SgGateway {
         //todo filters
         let filters = None;
         let result = SgGateway {
-            name: gateway.name_any(),
+            name: get_k8s_obj_unique(&gateway),
             parameters: SgParameters::from_kube_gateway(&gateway),
             listeners: join_all(
                 gateway

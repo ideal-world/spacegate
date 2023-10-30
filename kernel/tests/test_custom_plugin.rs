@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use spacegate_kernel::plugins::context::SgRoutePluginContext;
 use spacegate_kernel::plugins::filters::SgPluginFilterInitDto;
 use spacegate_kernel::{def_filter, plugins::filters::SgPluginFilter};
+use tardis::config::config_dto::WebClientModuleConfig;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     tokio::{self, time::sleep},

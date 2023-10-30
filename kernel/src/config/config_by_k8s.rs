@@ -245,7 +245,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    gateway_obj_map.insert(k8s_helper::get_k8s_obj_unique(&gateway_obj), gateway_obj);
+                    gateway_obj_map.insert(helper::k8s_helper::get_k8s_obj_unique(&gateway_obj), gateway_obj);
                 };
                 if target_ref.kind.eq_ignore_ascii_case("httpspaceroute") {
                     let http_route_api: Api<HttpSpaceroute> = Api::namespaced(
@@ -275,7 +275,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    let key = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+                    let key = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
                     if gateway_obj_map.get(&key).is_none() && http_route_rel_gateway_map.get(&key).is_none() {
                         http_route_rel_gateway_map.insert(key, gateway_obj);
                     }
@@ -308,7 +308,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    let key = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+                    let key = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
                     if gateway_obj_map.get(&key).is_none() && http_route_rel_gateway_map.get(&key).is_none() {
                         http_route_rel_gateway_map.insert(key, gateway_obj);
                     }
@@ -409,7 +409,7 @@ async fn get_http_spaceroute_by_api(
 }
 
 async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
-    let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+    let gateway_unique = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_api: Api<Gateway> = Api::namespaced(
         get_client().await.expect("[SG.Config] Failed to get client"),
         gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
@@ -451,7 +451,7 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
 }
 
 async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
-    let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+    let gateway_unique = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_config = process_gateway_config(vec![gateway_obj])
         .await
         .expect("[SG.Config] Failed to process gateway config for http_route parent ref")

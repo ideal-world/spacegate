@@ -6,7 +6,7 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::api::PostParams;
 use kube::Api;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use tardis::async_trait::async_trait;
 use tardis::basic::error::TardisError;
@@ -134,6 +134,7 @@ where
     }
 }
 
+//todo remove
 // impl BaseService {
 //     #[cfg(feature = "k8s")]
 //     pub async fn get_type_map<'a, T>() -> TardisResult<HashMap<String, String>>

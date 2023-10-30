@@ -1,10 +1,15 @@
-use kube::Client;
+use kube::{Client, ResourceExt};
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
 /// In k8s, names of resources need to be unique within a namespace
 pub fn format_k8s_obj_unique(namespace: Option<&String>, name: &str) -> String {
     format!("{}.{}", namespace.unwrap_or(&"default".to_string()), name)
+}
+
+/// Get k8s object unique by object
+pub fn get_k8s_obj_unique(obj: &impl kube::Resource) -> String {
+    format_k8s_obj_unique(obj.namespace().as_ref(), obj.name_any().as_str())
 }
 
 /// Parse namespace and name from k8s unique name

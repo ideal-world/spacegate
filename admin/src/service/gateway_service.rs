@@ -1,6 +1,6 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
-use crate::model::query_dto::GatewayQueryDto;
+use crate::model::query_dto::{GatewayQueryDto, ToInstance};
 #[cfg(feature = "k8s")]
 use crate::model::ToFields;
 use std::clone;
@@ -36,11 +36,20 @@ pub struct GatewayServiceVo;
 impl VoBaseService<SgGatewayVO> for GatewayServiceVo {}
 
 impl GatewayServiceVo {
+    pub async fn list(query: GatewayQueryDto) -> TardisResult<Vec<SgGatewayVO>> {
+        let query = query.to_instance()?;
+        Ok(Self::get_type_map().await?.into_values().into_iter().filter(|g| if let Some(q_name) = &query.name { q_name.is_match(&g.name) } else { true }
+            &&if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }&&
+            if let Some(q_hostname) = &query.hostname {
+                g.listeners.iter().any(|l| if let Some(l_hostname)=&l.hostname{q_hostname.is_match(l_hostname)}else { false })
+            } else { true })
+            .collect())
+    }
     pub async fn add(add: SgGatewayVO) -> TardisResult<SgGatewayVO> {
         #[cfg(feature = "k8s")]
         {
-            let (namespace, name) = parse_k8s_obj_unique(&add.get_unique_name());
-            let (gateway, secrets, sgfilters) = add.clone().to_model().await?.to_kube_gateway(&namespace);
+            let (namespace, _) = parse_k8s_obj_unique(&add.get_unique_name());
+            let (gateway, secrets, sgfilters) = add.clone().to_model().await?.to_kube_gateway();
 
             let (gateway_api, secret_api): (Api<Gateway>, Api<Secret>) =
                 (Api::namespaced(get_k8s_client().await?, &namespace), Api::namespaced(get_k8s_client().await?, &namespace));
