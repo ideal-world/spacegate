@@ -1,37 +1,23 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
 use crate::model::query_dto::{GatewayQueryDto, ToInstance};
-#[cfg(feature = "k8s")]
-use crate::model::ToFields;
-use std::clone;
-use std::process::id;
-
-use crate::model::vo::gateway_vo::{SgGatewayVO, SgTlsConfigVO};
+use crate::model::vo::gateway_vo::SgGatewayVO;
 use crate::model::vo::Vo;
-use crate::service::plugin_service::PluginVoService;
 #[cfg(feature = "k8s")]
 use k8s_gateway_api::Gateway;
 #[cfg(feature = "k8s")]
-use k8s_openapi::api::core::v1::Secret;
-#[cfg(feature = "k8s")]
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
-#[cfg(feature = "k8s")]
 use kernel_common::constants::DEFAULT_NAMESPACE;
-use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode};
 #[cfg(feature = "k8s")]
 use kube::api::{DeleteParams, PostParams};
 
 #[cfg(feature = "k8s")]
-use kube::{api::ListParams, Api, ResourceExt};
+use kube::Api;
 
+use super::base_service::VoBaseService;
 use crate::helper::find_add_delete;
 use crate::model::vo_converter::VoConv;
 use kernel_common::helper::k8s_helper::{parse_k8s_obj_unique, WarpKubeResult};
-use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
-
-use super::base_service::VoBaseService;
-use super::tls_config_service::TlsConfigVoService;
 
 pub struct GatewayVoService;
 
@@ -55,23 +41,11 @@ impl GatewayVoService {
             let (namespace, _) = parse_k8s_obj_unique(&add.get_unique_name());
             let (gateway, secrets, sgfilters) = add_model.to_kube_gateway();
 
-            let (gateway_api, secret_api): (Api<Gateway>, Api<Secret>) =
-                (Api::namespaced(get_k8s_client().await?, &namespace), Api::namespaced(get_k8s_client().await?, &namespace));
+            let gateway_api: Api<Gateway> = Api::namespaced(get_k8s_client().await?, &namespace);
 
-            let result_gateway = gateway_api.create(&PostParams::default(), &gateway).await.map_err(|e| TardisError::io_error(&format!("[SG.admin] error:{e}"), ""))?;
+            let _ = gateway_api.create(&PostParams::default(), &gateway).await.warp_result_by_method("Add Gateway")?;
 
-            for mut s in secrets {
-                s.metadata.owner_references = Some(vec![OwnerReference {
-                    api_version: "gateway.networking.k8s.io/v1beta1".to_string(),
-                    kind: "Gateway".to_string(),
-                    name: result_gateway.name_any(),
-                    uid: result_gateway.uid().expect("Can not get create gateway uid"),
-                    ..Default::default()
-                }]);
-                secret_api.create(&PostParams::default(), &s).await.map_err(|e| TardisError::io_error(&format!("[SG.admin] error:{e}"), ""))?;
-            }
-
-            PluginVoService::add_sgfilter_vec(sgfilters).await?;
+            //todo update filter ref
         }
         Self::add_vo(add).await
     }
@@ -84,12 +58,6 @@ impl GatewayVoService {
     pub async fn update(update: SgGatewayVO) -> TardisResult<()> {
         let update_un = &update.get_unique_name();
         let old_gateway = Self::get_by_id(update_un).await?;
-        let (add_tls, delete_tls) = find_add_delete(
-            update.listeners.iter().map(|l| l.tls.clone().unwrap_or_default()).filter(|tls| !tls.is_empty()).collect(),
-            old_gateway.listeners.iter().map(|l| l.tls.clone().unwrap_or_default()).filter(|tls| !tls.is_empty()).collect(),
-        );
-        Self::add_tls_config(update_un, add_tls).await?;
-        Self::delete_tls_config(update_un, delete_tls).await?;
 
         let (add, delete) = find_add_delete(update.filters.clone().unwrap_or_default(), old_gateway.filters.unwrap_or_default());
 
@@ -97,28 +65,29 @@ impl GatewayVoService {
         #[cfg(feature = "k8s")]
         {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
-            let (gateway_api, secret_api): (Api<Gateway>, Api<Secret>) =
-                (Api::namespaced(get_k8s_client().await?, &namespace), Api::namespaced(get_k8s_client().await?, &namespace));
+            let gateway_api: Api<Gateway> = Api::namespaced(get_k8s_client().await?, &namespace);
             let (update_gateway, update_secret, update_filter) = update_sg_gateway.to_kube_gateway();
             gateway_api.replace(&name, &PostParams::default(), &update_gateway).await.warp_result_by_method("Replace Gateway")?;
+
+            //todo update filter ref
         }
         Self::update_vo(update).await?;
         Ok(())
     }
 
-    pub async fn add_tls_config(id: &str, adds: Vec<String>) -> TardisResult<()> {
-        for add in adds {
-            TlsConfigVoService::modify_ref_ids(&add, id, false);
-        }
-        Ok(())
-    }
-
-    pub async fn delete_tls_config(id: &str, deletes: Vec<String>) -> TardisResult<()> {
-        for delete in deletes {
-            TlsConfigVoService::modify_ref_ids(&delete, id, true);
-        }
-        Ok(())
-    }
+    // pub async fn add_tls_config(id: &str, adds: Vec<String>) -> TardisResult<()> {
+    //     for add in adds {
+    //         TlsConfigVoService::modify_ref_ids(&add, id, false).await?;
+    //     }
+    //     Ok(())
+    // }
+    //
+    // pub async fn delete_tls_config(id: &str, deletes: Vec<String>) -> TardisResult<()> {
+    //     for delete in deletes {
+    //         TlsConfigVoService::modify_ref_ids(&delete, id, true).await?;
+    //     }
+    //     Ok(())
+    // }
 
     #[cfg(feature = "k8s")]
     pub async fn delete(id: &str) -> TardisResult<()> {

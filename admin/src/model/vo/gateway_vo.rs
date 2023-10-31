@@ -45,29 +45,14 @@ pub struct SgListenerVO {
     pub port: u16,
     /// Protocol specifies the network protocol this listener expects to receive.
     pub protocol: SgProtocol,
-    /// SgTlsConfig's id refers to the TLS configuration.
-    pub tls: Option<String>,
+    pub tls: Option<SgTlsConfigVO>,
     /// `HostName` is used to define the host on which the listener accepts requests.
     pub hostname: Option<String>,
 }
 
-/// GatewayTLSConfig describes a TLS configuration.
-/// unique by id
 #[derive(Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
 pub struct SgTlsConfigVO {
+    /// SgTlsConfigVo's name refers to the SecretVo.
     pub name: String,
     pub mode: SgTlsMode,
-    pub key: String,
-    pub cert: String,
-    pub ref_ids: Option<Vec<String>>,
-}
-
-impl Vo for SgTlsConfigVO {
-    fn get_vo_type() -> String {
-        constants::TLS_CONFIG_TYPE.to_string()
-    }
-
-    fn get_unique_name(&self) -> String {
-        self.name.clone()
-    }
 }

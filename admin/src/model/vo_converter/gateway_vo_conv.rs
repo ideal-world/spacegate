@@ -3,13 +3,11 @@ use crate::model::vo::gateway_vo::{SgGatewayVO, SgListenerVO, SgTlsConfigVO};
 use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use crate::service::plugin_service::PluginVoService;
-use crate::service::tls_config_service::TlsConfigVoService;
-use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgTlsConfig};
-use kernel_common::inner_model::plugin_filter::SgRouteFilter;
+use crate::service::secret_service::TlsConfigVoService;
+use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgTls, SgTlsConfig};
 use tardis::async_trait::async_trait;
 use tardis::basic::result::TardisResult;
 use tardis::futures_util::future::join_all;
-use tardis::TardisFuns;
 
 #[async_trait]
 impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
@@ -49,8 +47,11 @@ impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
 #[async_trait]
 impl VoConv<SgListener, SgListenerVO> for SgListenerVO {
     async fn to_model(self) -> TardisResult<SgListener> {
-        let tls = if let Some(tls_id) = self.tls {
-            Some(TlsConfigVoService::get_by_id(&tls_id).await?.to_model().await?)
+        let tls = if let Some(tls) = self.tls {
+            Some(SgTlsConfig {
+                mode: tls.mode,
+                tls: TlsConfigVoService::get_by_id(&tls.name).await?.to_model().await?,
+            })
         } else {
             None
         };
@@ -65,29 +66,22 @@ impl VoConv<SgListener, SgListenerVO> for SgListenerVO {
         })
     }
 
-    async fn from_model(model: SgListener) -> TardisResult<SgListenerVO> {
-        todo!()
-    }
-}
-
-#[async_trait]
-impl VoConv<SgTlsConfig, SgTlsConfigVO> for SgTlsConfigVO {
-    async fn to_model(self) -> TardisResult<SgTlsConfig> {
-        Ok(SgTlsConfig {
-            name: self.name,
-            mode: self.mode,
-            key: self.key,
-            cert: self.cert,
-        })
-    }
-
-    async fn from_model(model: SgTlsConfig) -> TardisResult<SgTlsConfigVO> {
-        Ok(SgTlsConfigVO {
+    async fn from_model(model: SgListener) -> TardisResult<Self> {
+        let tls = if let Some(tls) = model.tls {
+            Some(SgTlsConfigVO {
+                name: tls.tls.name,
+                mode: tls.mode,
+            })
+        } else {
+            None
+        };
+        Ok(SgListenerVO {
             name: model.name,
-            mode: model.mode,
-            key: model.key,
-            cert: model.cert,
-            ref_ids: None,
+            ip: model.ip,
+            port: model.port,
+            protocol: model.protocol,
+            tls,
+            hostname: model.hostname,
         })
     }
 }

@@ -2,6 +2,7 @@ pub mod backend_vo;
 pub mod gateway_vo;
 pub mod http_route_vo;
 pub mod plugin_vo;
+pub mod tls_vo;
 
 /// Vo is a base until for admin.
 /// Vo is the smallest operable and storage unit in admin.

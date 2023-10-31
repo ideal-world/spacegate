@@ -90,16 +90,9 @@ impl Display for SgProtocol {
 
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgTlsConfig {
-    /// Name of the Secret. Global Unique.
-    ///
-    /// In k8s mode, this name MUST be unique within a namespace.
-    /// format see [k8s_helper::format_k8s_obj_unique]
-    pub name: String,
     pub mode: SgTlsMode,
-    pub key: String,
-    pub cert: String,
+    pub tls: SgTls,
 }
 
 #[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default)]
@@ -120,4 +113,16 @@ impl FromStr for SgTlsMode {
             _ => Err(TardisError::bad_request("SgTlsMode parse error", "")),
         }
     }
+}
+
+/// SgTls describes a TLS.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SgTls {
+    /// Name of the Secret. Global Unique.
+    ///
+    /// In k8s mode, this name MUST be unique within a namespace.
+    /// format see [k8s_helper::format_k8s_obj_unique]
+    pub name: String,
+    pub key: String,
+    pub cert: String,
 }

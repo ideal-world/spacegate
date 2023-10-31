@@ -1,7 +1,7 @@
 use crate::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
 use crate::helper::k8s_helper::{get_k8s_client, get_k8s_obj_unique, parse_k8s_obj_unique};
-use crate::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode};
+use crate::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTls, SgTlsConfig, SgTlsMode};
 use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference, TlsModeType};
 use k8s_openapi::api::core::v1::Secret;
@@ -13,6 +13,7 @@ use std::str::FromStr;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::futures_util::future::join_all;
+use tardis::web::poem::options;
 use tardis::TardisFuns;
 
 impl SgGateway {
@@ -41,9 +42,17 @@ impl SgGateway {
                         port: l.port,
                         protocol: l.protocol.to_string(),
                         tls: l.tls.map(|tls| {
-                            let (tls_config, secret) = tls.to_kube_tls(&namespace);
-                            secrets.push(secret);
-                            tls_config
+                            let (namespace, name) = parse_k8s_obj_unique(&tls.tls.name);
+                            GatewayTlsConfig {
+                                mode: Some(tls.mode.to_kube_tls_mode_type()),
+                                certificate_refs: Some(vec![SecretObjectReference {
+                                    kind: Some("Secret".to_string()),
+                                    name,
+                                    namespace: Some(namespace),
+                                    ..Default::default()
+                                }]),
+                                options: None,
+                            }
                         }),
                         allowed_routes: None,
                     })
@@ -92,7 +101,16 @@ impl SgGateway {
                     .into_iter()
                     .map(|listener| async move {
                         let tls = match listener.tls {
-                            Some(tls) => SgTlsConfig::from_kube_tls(tls).await?,
+                            Some(tls_config) => {
+                                if let Some(tls) = SgTls::from_kube_tls(tls_config.certificate_refs).await? {
+                                    Some(SgTlsConfig {
+                                        mode: SgTlsMode::from(tls_config.mode).unwrap_or_default(),
+                                        tls,
+                                    })
+                                } else {
+                                    None
+                                }
+                            }
                             None => None,
                         };
                         let sg_listener = SgListener {
@@ -168,46 +186,28 @@ impl SgParameters {
     }
 }
 
-impl SgTlsConfig {
-    pub fn to_kube_tls(self, namespace: &str) -> (GatewayTlsConfig, Secret) {
-        let tls_name = TardisFuns::field.nanoid_custom(
-            10,
-            &[
-                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5',
-                '6', '7', '8', '9',
-            ],
-        );
-        (
-            GatewayTlsConfig {
-                mode: Some(self.mode.to_kube_tls_mode_type()),
-                certificate_refs: Some(vec![SecretObjectReference {
-                    kind: Some("Secret".to_string()),
-                    name: tls_name.clone(),
-                    namespace: Some(namespace.to_string()),
-                    ..Default::default()
-                }]),
+impl SgTls {
+    pub fn to_kube_tls(self) -> Secret {
+        let (namespace, raw_name) = parse_k8s_obj_unique(&self.name);
+        Secret {
+            data: Some(BTreeMap::from([
+                ("tls.key".to_string(), ByteString(self.key.as_bytes().to_vec())),
+                ("tls.crt".to_string(), ByteString(self.cert.as_bytes().to_vec())),
+            ])),
+            metadata: ObjectMeta {
+                annotations: None,
+                labels: None,
+                name: Some(raw_name),
+                namespace: Some(namespace),
                 ..Default::default()
             },
-            Secret {
-                data: Some(BTreeMap::from([
-                    ("tls.key".to_string(), ByteString(self.key.as_bytes().to_vec())),
-                    ("tls.crt".to_string(), ByteString(self.cert.as_bytes().to_vec())),
-                ])),
-                metadata: ObjectMeta {
-                    annotations: None,
-                    labels: None,
-                    name: Some(tls_name),
-                    ..Default::default()
-                },
-                type_: Some("kubernetes.io/tls".to_string()),
-                ..Default::default()
-            },
-        )
+            type_: Some("kubernetes.io/tls".to_string()),
+            ..Default::default()
+        }
     }
 
-    pub async fn from_kube_tls(tls: GatewayTlsConfig) -> TardisResult<Option<Self>> {
+    pub async fn from_kube_tls(tls: Option<Vec<SecretObjectReference>>) -> TardisResult<Option<Self>> {
         let certificate_ref = tls
-            .certificate_refs
             .as_ref()
             .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
             .get(0)
@@ -225,9 +225,8 @@ impl SgTlsConfig {
             let tls_key = secret_data
                 .get("tls.key")
                 .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), ""))?;
-            Some(SgTlsConfig {
+            Some(SgTls {
                 name: secret_un,
-                mode: SgTlsMode::from(tls.mode).unwrap_or_default(),
                 key: String::from_utf8(tls_key.0.clone()).expect("[SG.Config] Gateway tls secret [tls.key] is not valid utf8"),
                 cert: String::from_utf8(tls_crt.0.clone()).expect("[SG.Config] Gateway tls secret [tls.cert] is not valid utf8"),
             })
