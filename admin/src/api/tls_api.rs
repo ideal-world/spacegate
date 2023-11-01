@@ -1,6 +1,5 @@
-use crate::model::vo::gateway_vo::SgTlsConfigVO;
-use crate::model::vo::tls_vo::SgTlsVO;
 use crate::service::secret_service::TlsConfigVoService;
+use kernel_common::inner_model::gateway::SgTls;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::{Path, Query};
 use tardis::web::poem_openapi::payload::Json;
@@ -28,14 +27,14 @@ impl TlsApi {
 
     /// Add Tls
     #[oai(path = "/", method = "post")]
-    async fn add(&self, tls_config: Json<SgTlsVO>) -> TardisApiResult<Void> {
+    async fn add(&self, tls_config: Json<SgTls>) -> TardisApiResult<Void> {
         TlsConfigVoService::add(tls_config.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update Tls
     #[oai(path = "/", method = "put")]
-    async fn update(&self, tls_config: Json<SgTlsVO>) -> TardisApiResult<Void> {
+    async fn update(&self, tls_config: Json<SgTls>) -> TardisApiResult<Void> {
         TlsConfigVoService::update(tls_config.0).await?;
         TardisResp::ok(Void {})
     }

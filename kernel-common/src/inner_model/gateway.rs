@@ -117,6 +117,7 @@ impl FromStr for SgTlsMode {
 
 /// SgTls describes a TLS.
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgTls {
     /// Name of the Secret. Global Unique.
     ///

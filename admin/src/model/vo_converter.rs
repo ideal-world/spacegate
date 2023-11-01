@@ -3,7 +3,6 @@ use tardis::basic::result::TardisResult;
 
 pub mod gateway_vo_conv;
 pub mod plugin_vo_conv;
-pub mod tls_vo_conv;
 
 #[async_trait]
 pub trait VoConv<M, S>

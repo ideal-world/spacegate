@@ -1,5 +1,6 @@
+use crate::model::vo::plugin_vo::SgFilterVO;
 use crate::{constants, model::vo::Vo};
-use kernel_common::inner_model::gateway::{SgParameters, SgProtocol, SgTlsMode};
+use kernel_common::inner_model::gateway::{SgParameters, SgProtocol, SgTls, SgTlsMode};
 use serde::{Deserialize, Serialize};
 use tardis::web::poem_openapi;
 
@@ -20,7 +21,13 @@ pub struct SgGatewayVO {
     /// that are bound on this Gateway’s addresses.
     pub listeners: Vec<SgListenerVO>,
     /// [crate::model::vo::plugin_vo::SgFilterVO]'s id
-    pub filters: Option<Vec<String>>,
+    pub filters: Vec<String>,
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    pub tls: Vec<SgTls>,
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    pub filter_vos: Vec<SgFilterVO>,
 }
 
 impl Vo for SgGatewayVO {
@@ -48,6 +55,9 @@ pub struct SgListenerVO {
     pub tls: Option<SgTlsConfigVO>,
     /// `HostName` is used to define the host on which the listener accepts requests.
     pub hostname: Option<String>,
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    pub tls_vo: Option<SgTls>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]

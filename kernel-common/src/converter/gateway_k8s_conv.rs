@@ -7,14 +7,12 @@ use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretOb
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use k8s_openapi::ByteString;
-use kube::{Api, ResourceExt};
+use kube::Api;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::futures_util::future::join_all;
-use tardis::web::poem::options;
-use tardis::TardisFuns;
 
 impl SgGateway {
     pub fn to_kube_gateway(self) -> (Gateway, Vec<Secret>, Vec<SgSingeFilter>) {
