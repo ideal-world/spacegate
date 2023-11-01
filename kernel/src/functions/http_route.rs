@@ -375,6 +375,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         &gateway_inst.filters,
         matched_rule_inst,
         matched_match_inst,
+        backend,
     )
     .await?;
 
@@ -702,8 +703,9 @@ async fn process_req_filters_http(
     global_filters: &[(String, BoxSgPluginFilter)],
     matched_rule_inst: Option<&SgHttpRouteRuleInst>,
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
+    matched_backend_inst: Option<&SgBackendInst>,
 ) -> TardisResult<SgRoutePluginContext> {
-    let ctx = SgRoutePluginContext::new_http(
+    let mut ctx = SgRoutePluginContext::new_http(
         request.method().clone(),
         request.uri().clone(),
         request.version(),
@@ -713,6 +715,9 @@ async fn process_req_filters_http(
         gateway_name,
         matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::clone_from(m, matched_match_inst)),
     );
+    if let Some(back_inst) = matched_backend_inst {
+        ctx.set_chose_backend_inst(back_inst);
+    }
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
 

@@ -606,12 +606,20 @@ impl SgRoutePluginContext {
         self.action = action;
     }
 
-    pub fn set_chose_backend(&mut self, chose_backend: &SgBackendInst) {
-        self.chosen_backend = Some(AvailableBackendInst::clone_from(chose_backend));
+    pub fn set_chose_backend_inst(&mut self, chose_backend: &SgBackendInst) {
+        self.set_chose_backend(AvailableBackendInst::clone_from(chose_backend));
+    }
+
+    pub fn set_chose_backend(&mut self, chose_backend: AvailableBackendInst) {
+        self.chosen_backend = Some(chose_backend);
+    }
+
+    pub fn get_chose_backend(&self) -> Option<AvailableBackendInst> {
+        self.chosen_backend.clone()
     }
 
     pub fn get_chose_backend_name(&self) -> Option<String> {
-        self.chosen_backend.clone().map(|b| b.name_or_host)
+        self.get_chose_backend().map(|b| b.name_or_host)
     }
 
     pub fn get_available_backend(&self) -> Vec<&AvailableBackendInst> {
@@ -640,6 +648,10 @@ impl SgRoutePluginContext {
 
     pub fn set_cert_info(&mut self, cert_info: SGIdentInfo) {
         self.ident_info = Some(cert_info);
+    }
+
+    pub fn get_remote_addr(&self) -> SocketAddr {
+        self.request.remote_addr
     }
 
     #[cfg(feature = "cache")]
