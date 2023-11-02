@@ -339,6 +339,7 @@ mod tests {
                 "127.0.0.1:8080".parse().unwrap(),
                 "test_gate1".to_string(),
                 None,
+                None,
             )
         }
 

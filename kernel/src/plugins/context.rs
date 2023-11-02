@@ -25,10 +25,10 @@ pub struct ChosenHttpRouteRuleInst {
 }
 
 impl ChosenHttpRouteRuleInst {
-    pub fn clone_from(chose_route_rule: &SgHttpRouteRuleInst, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> Self {
+    pub fn cloned_from(chose_route_rule: &SgHttpRouteRuleInst, matched_match_inst: Option<&SgHttpRouteMatchInst>) -> Self {
         Self {
             matched_match: matched_match_inst.cloned(),
-            available_backends: chose_route_rule.backends.as_ref().map(|bs| bs.iter().map(AvailableBackendInst::clone_from).collect::<Vec<_>>()).unwrap_or_default(),
+            available_backends: chose_route_rule.backends.as_ref().map(|bs| bs.iter().map(AvailableBackendInst::cloned_from).collect::<Vec<_>>()).unwrap_or_default(),
             timeout_ms: chose_route_rule.timeout_ms,
         }
     }
@@ -47,7 +47,7 @@ pub struct AvailableBackendInst {
 }
 
 impl AvailableBackendInst {
-    fn clone_from(value: &SgBackendInst) -> Self {
+    pub fn cloned_from(value: &SgBackendInst) -> Self {
         Self {
             name_or_host: value.name_or_host.clone(),
             namespace: value.namespace.clone(),
@@ -499,6 +499,7 @@ impl SgRoutePluginContext {
         remote_addr: SocketAddr,
         gateway_name: String,
         chose_route_rule: Option<ChosenHttpRouteRuleInst>,
+        chose_backend: Option<AvailableBackendInst>,
     ) -> Self {
         Self {
             request_id: TardisFuns::field.nanoid(),
@@ -508,7 +509,7 @@ impl SgRoutePluginContext {
             action: SgRouteFilterRequestAction::None,
             gateway_name,
             chosen_route_rule: chose_route_rule,
-            chosen_backend: None,
+            chosen_backend: chose_backend,
             request_kind: SgPluginFilterKind::Http,
             ident_info: None,
         }
@@ -606,8 +607,12 @@ impl SgRoutePluginContext {
         self.action = action;
     }
 
+    pub fn get_chose_route_rule(self) -> Option<ChosenHttpRouteRuleInst> {
+        self.chosen_route_rule
+    }
+
     pub fn set_chose_backend_inst(&mut self, chose_backend: &SgBackendInst) {
-        self.set_chose_backend(AvailableBackendInst::clone_from(chose_backend));
+        self.set_chose_backend(AvailableBackendInst::cloned_from(chose_backend));
     }
 
     pub fn set_chose_backend(&mut self, chose_backend: AvailableBackendInst) {

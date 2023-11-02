@@ -15,6 +15,7 @@ use crate::{
 use http::{header::UPGRADE, HeaderValue, Request, Response};
 use hyper::{Body, StatusCode};
 
+use crate::plugins::context::AvailableBackendInst;
 use itertools::Itertools;
 use std::sync::{Arc, OnceLock};
 use std::vec::Vec;
@@ -393,7 +394,7 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
             None => log::info!("[SG.Request] matched no backend"),
         }
 
-        http_client::request(&gateway_inst.client, backend, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
+        http_client::request(&gateway_inst.client, rule_timeout, ctx.get_action() == &SgRouteFilterRequestAction::Redirect, ctx).await?
     };
 
     if log::level_enabled!(log::Level::TRACE) {
@@ -705,7 +706,7 @@ async fn process_req_filters_http(
     matched_match_inst: Option<&SgHttpRouteMatchInst>,
     matched_backend_inst: Option<&SgBackendInst>,
 ) -> TardisResult<SgRoutePluginContext> {
-    let mut ctx = SgRoutePluginContext::new_http(
+    let ctx = SgRoutePluginContext::new_http(
         request.method().clone(),
         request.uri().clone(),
         request.version(),
@@ -713,11 +714,9 @@ async fn process_req_filters_http(
         request.into_body(),
         remote_addr,
         gateway_name,
-        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::clone_from(m, matched_match_inst)),
+        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::cloned_from(m, matched_match_inst)),
+        matched_backend_inst.map(|b| AvailableBackendInst::cloned_from(b)),
     );
-    if let Some(back_inst) = matched_backend_inst {
-        ctx.set_chose_backend_inst(back_inst);
-    }
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
 
@@ -740,7 +739,7 @@ async fn process_req_filters_ws(
         request.headers().clone(),
         remote_addr,
         gateway_name,
-        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::clone_from(m, matched_match_inst)),
+        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::cloned_from(m, matched_match_inst)),
     );
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }

@@ -69,6 +69,7 @@ impl SgPluginFilter for SgFilterInject {
                 .unwrap_or(real_url);
             new_req_headers.remove(SG_INJECT_REAL_METHOD);
             new_req_headers.remove(SG_INJECT_REAL_URL);
+            let chose_backend = ctx.get_chose_backend();
             ctx = SgRoutePluginContext::new_http(
                 new_req_method,
                 new_req_url,
@@ -77,7 +78,8 @@ impl SgPluginFilter for SgFilterInject {
                 resp.into_body(),
                 *ctx.request.get_remote_addr(),
                 ctx.get_gateway_name(),
-                None,
+                ctx.get_chose_route_rule(),
+                chose_backend,
             )
         }
         Ok((true, ctx))
@@ -131,6 +133,7 @@ mod tests {
             Body::from("理想世界".as_bytes()),
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
+            None,
             None,
         );
 
