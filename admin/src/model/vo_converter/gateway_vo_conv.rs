@@ -4,7 +4,7 @@ use crate::model::vo::plugin_vo::SgFilterVO;
 use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use crate::service::plugin_service::PluginVoService;
-use crate::service::secret_service::TlsConfigVoService;
+use crate::service::secret_service::TlsVoService;
 use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_obj_unique};
 use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgTls, SgTlsConfig};
 use tardis::async_trait::async_trait;
@@ -77,7 +77,7 @@ impl VoConv<SgListener, SgListenerVO> for SgListenerVO {
         let tls = if let Some(tls) = self.tls {
             Some(SgTlsConfig {
                 mode: tls.mode,
-                tls: TlsConfigVoService::get_by_id(&tls.name).await?,
+                tls: TlsVoService::get_by_id(&tls.name).await?,
             })
         } else {
             None

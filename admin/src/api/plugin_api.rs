@@ -40,9 +40,9 @@ impl PluginApi {
     }
 
     /// Delete Plugin
-    #[oai(path = "/:backend_id", method = "put")]
-    async fn delete(&self, backend_id: Path<String>) -> TardisApiResult<Void> {
-        PluginVoService::delete(&backend_id.0).await?;
+    #[oai(path = "/:plugin_id", method = "put")]
+    async fn delete(&self, plugin_id: Path<String>) -> TardisApiResult<Void> {
+        PluginVoService::delete(&plugin_id.0).await?;
         TardisResp::ok(Void {})
     }
 }

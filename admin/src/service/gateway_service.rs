@@ -27,7 +27,7 @@ impl GatewayVoService {
     pub async fn list(query: GatewayQueryDto) -> TardisResult<Vec<SgGatewayVO>> {
         let query = query.to_instance()?;
         Ok(Self::get_type_map().await?.into_values().into_iter().filter(|g|
-            if let Some(q_name) = &query.name { q_name.is_match(&g.name) } else { true }
+            if let Some(q_name) = &query.names { q_name.iter().any(|q|q.is_match(&g.name)) } else { true }
                 && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }
                 && if let Some(q_hostname) = &query.hostname {
                 g.listeners.iter().any(|l| if let Some(l_hostname)=&l.hostname{q_hostname.is_match(l_hostname)}else { false })
@@ -57,9 +57,6 @@ impl GatewayVoService {
 
     pub async fn update(update: SgGatewayVO) -> TardisResult<()> {
         let update_un = &update.get_unique_name();
-        let old_gateway = Self::get_by_id(update_un).await?;
-
-        let (add, delete) = find_add_delete(update.filters.clone().unwrap_or_default(), old_gateway.filters.unwrap_or_default());
 
         let update_sg_gateway = update.clone().to_model().await?;
         #[cfg(feature = "k8s")]

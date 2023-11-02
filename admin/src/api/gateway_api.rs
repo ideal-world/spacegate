@@ -15,9 +15,9 @@ pub struct GatewayApi;
 impl GatewayApi {
     /// Get Gateway List
     #[oai(path = "/", method = "get")]
-    async fn list(&self, name: Query<Option<String>>, port: Query<Option<String>>, hostname: Query<Option<String>>) -> TardisApiResult<Vec<SgGatewayVO>> {
+    async fn list(&self, names: Query<Option<Vec<String>>>, port: Query<Option<String>>, hostname: Query<Option<String>>) -> TardisApiResult<Vec<SgGatewayVO>> {
         let result = GatewayVoService::list(GatewayQueryDto {
-            name: name.0,
+            names: names.0,
             port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|e| TardisError::bad_request("bad port format", ""))?,
             hostname: hostname.0,
         })

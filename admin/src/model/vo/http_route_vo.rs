@@ -1,3 +1,5 @@
+use crate::constants;
+use crate::model::vo::Vo;
 use kernel_common::inner_model::http_route::SgHttpRouteMatch;
 use serde::{Deserialize, Serialize};
 use tardis::web::poem_openapi;
@@ -20,6 +22,16 @@ pub struct SgHttpRouteVo {
     pub filters: Option<Vec<String>>,
     /// Rules are a list of HTTP matchers, filters and actions.
     pub rules: Option<Vec<SgHttpRouteRuleVO>>,
+}
+
+impl Vo for SgHttpRouteVo {
+    fn get_vo_type() -> String {
+        constants::ROUTE_TYPE.to_string()
+    }
+
+    fn get_unique_name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 /// HTTPRouteRule defines semantics for matching an HTTP request based on conditions (matches), processing it (filters), and forwarding the request to an API object

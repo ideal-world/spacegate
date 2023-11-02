@@ -17,7 +17,7 @@ pub struct BackendRefQueryDto {
 
 #[derive(Default)]
 pub struct GatewayQueryDto {
-    pub name: Option<String>,
+    pub names: Option<Vec<String>>,
     pub port: Option<u16>,
     pub hostname: Option<String>,
 }
@@ -25,7 +25,7 @@ pub struct GatewayQueryDto {
 impl ToInstance<GatewayQueryInst> for GatewayQueryDto {
     fn to_instance(self) -> TardisResult<GatewayQueryInst> {
         Ok(GatewayQueryInst {
-            name: self.name.map(fuzzy_regex).transpose()?,
+            names: self.names.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
             port: self.port,
             hostname: self.hostname.map(fuzzy_regex).transpose()?,
         })
@@ -33,7 +33,7 @@ impl ToInstance<GatewayQueryInst> for GatewayQueryDto {
 }
 
 pub struct GatewayQueryInst {
-    pub name: Option<Regex>,
+    pub names: Option<Vec<Regex>>,
     pub port: Option<u16>,
     pub hostname: Option<Regex>,
 }
@@ -53,7 +53,23 @@ impl Instance for GatewayQueryInst {}
 //     }
 // }
 
-pub struct SgTlsConfigQueryVO {}
+#[derive(Default)]
+pub struct SgTlsQueryVO {
+    pub names: Option<Vec<String>>,
+}
+
+impl ToInstance<SgTlsQueryVOInst> for SgTlsQueryVO {
+    fn to_instance(self) -> TardisResult<SgTlsQueryVOInst> {
+        Ok(SgTlsQueryVOInst {
+            names: self.names.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
+        })
+    }
+}
+
+pub struct SgTlsQueryVOInst {
+    pub names: Option<Vec<Regex>>,
+}
+impl Instance for SgTlsQueryVOInst {}
 
 #[derive(Default)]
 pub struct PluginQueryDto {

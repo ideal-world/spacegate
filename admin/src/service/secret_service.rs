@@ -1,4 +1,4 @@
-use crate::model::query_dto::SgTlsConfigQueryVO;
+use crate::model::query_dto::{SgTlsQueryVO, ToInstance};
 use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
 use k8s_openapi::api::core::v1::Secret;
@@ -9,18 +9,24 @@ use kube::Api;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
-pub struct TlsConfigVoService;
+pub struct TlsVoService;
 
-impl VoBaseService<SgTls> for TlsConfigVoService {}
+impl VoBaseService<SgTls> for TlsVoService {}
 
-impl TlsConfigVoService {
-    pub(crate) async fn list(query: SgTlsConfigQueryVO) -> TardisResult<Vec<SgTls>> {
-        //todo query
-        Self::get_str_type_map()
+impl TlsVoService {
+    pub(crate) async fn list(query: SgTlsQueryVO) -> TardisResult<Vec<SgTls>> {
+        let query = query.to_instance()?;
+        Self::get_type_map()
             .await?
-            .values()
+            .into_values()
             .into_iter()
-            .map(|v| serde_json::from_str(v).map_err(|e| TardisError::bad_request(&format!(""), "")))
+            .filter(|t| {
+                if let Some(q_names) = query.names {
+                    q_names.iter().any(|q| q.is_match(&t.name))
+                } else {
+                    true
+                }
+            })
             .collect::<TardisResult<Vec<SgTls>>>()
     }
 
