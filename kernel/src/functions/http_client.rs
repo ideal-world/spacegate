@@ -98,7 +98,7 @@ pub async fn request(
         let url = format!("{}://{}{}{}", scheme, host, port, ctx.request.get_uri().path_and_query().map(|p| p.as_str()).unwrap_or(""));
         let timeout_ms = if let Some(timeout_ms) = backend.timeout_ms { Some(timeout_ms) } else { rule_timeout_ms };
         ctx = do_request(client, &url, timeout_ms, ctx).await?;
-        ctx.set_chose_backend(backend);
+        ctx.set_chose_backend_inst(backend);
     }
     Ok(ctx)
 }

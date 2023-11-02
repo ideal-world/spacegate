@@ -360,7 +360,7 @@ mod tests {
             Some(ChosenHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst { ..Default::default() }, None)),
         );
 
-        ctx.set_chose_backend(&mock_backend);
+        ctx.set_chose_backend_inst(&mock_backend);
 
         let ctx = ctx.resp_from_error(TardisError::bad_request("mock resp error", ""));
         let (is_ok, ctx) = stats.resp_filter("id1", ctx).await.unwrap();

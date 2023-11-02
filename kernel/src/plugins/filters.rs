@@ -52,7 +52,7 @@ macro_rules! def_filter {
             fn get_code(&self) -> &'static str {
                 CODE
             }
-            fn inst(&self, spec: serde_json::Value) -> TardisResult<$crate::plugins::filters::BoxSgPluginFilter> {
+            fn inst(&self, spec: serde_json::Value) -> tardis::basic::result::TardisResult<$crate::plugins::filters::BoxSgPluginFilter> {
                 let filter = tardis::TardisFuns::json.json_to_obj::<$filter_type>(spec)?;
                 Ok(filter.boxed())
             }
