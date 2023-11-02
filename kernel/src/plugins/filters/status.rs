@@ -357,7 +357,8 @@ mod tests {
             Body::empty(),
             "127.0.0.1:8080".parse().unwrap(),
             gateway_name.clone(),
-            Some(ChosenHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst { ..Default::default() }, None)),
+            Some(ChosenHttpRouteRuleInst::cloned_from(&SgHttpRouteRuleInst { ..Default::default() }, None)),
+            None,
         );
 
         ctx.set_chose_backend_inst(&mock_backend);

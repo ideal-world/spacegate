@@ -14,8 +14,6 @@ use tardis::{
     tokio::time::timeout,
 };
 
-use crate::instance::SgBackendInst;
-
 const DEFAULT_TIMEOUT_MS: u64 = 5000;
 
 static DEFAULT_CLIENT: OnceLock<Client<HttpsConnector<HttpConnector>>> = OnceLock::new();
@@ -79,7 +77,6 @@ fn default_client() -> &'static Client<HttpsConnector<HttpConnector>> {
 
 pub async fn request(
     client: &Client<HttpsConnector<HttpConnector>>,
-    backend: Option<&SgBackendInst>,
     rule_timeout_ms: Option<u64>,
     redirect: bool,
     mut ctx: SgRoutePluginContext,
@@ -87,7 +84,7 @@ pub async fn request(
     if redirect {
         ctx = do_request(client, &ctx.request.get_uri().to_string(), rule_timeout_ms, ctx).await?;
     }
-    if let Some(backend) = backend {
+    if let Some(backend) = ctx.get_chose_backend() {
         let scheme = backend.protocol.as_ref().unwrap_or(&SgProtocol::Http);
         let host = format!("{}{}", backend.name_or_host, backend.namespace.as_ref().map(|n| format!(".{n}")).unwrap_or("".to_string()));
         let port = if (backend.port == 0 || backend.port == 80) && scheme == &SgProtocol::Http || (backend.port == 0 || backend.port == 443) && scheme == &SgProtocol::Https {
@@ -98,7 +95,7 @@ pub async fn request(
         let url = format!("{}://{}{}{}", scheme, host, port, ctx.request.get_uri().path_and_query().map(|p| p.as_str()).unwrap_or(""));
         let timeout_ms = if let Some(timeout_ms) = backend.timeout_ms { Some(timeout_ms) } else { rule_timeout_ms };
         ctx = do_request(client, &url, timeout_ms, ctx).await?;
-        ctx.set_chose_backend_inst(backend);
+        ctx.set_chose_backend(backend);
     }
     Ok(ctx)
 }
@@ -159,15 +156,14 @@ pub async fn raw_request(
 }
 
 #[cfg(test)]
-
 mod tests {
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;
     use tardis::{basic::result::TardisResult, tokio};
 
+    use crate::plugins::context::AvailableBackendInst;
     use crate::{
         functions::http_client::{init, request},
-        instance::SgBackendInst,
         plugins::context::SgRoutePluginContext,
     };
     use hyper::{client::HttpConnector, Client};
@@ -181,11 +177,6 @@ mod tests {
         // test simple
         let mut resp = retry_test_request(
             client,
-            Some(&SgBackendInst {
-                name_or_host: "www.baidu.com".to_string(),
-                port: 80,
-                ..Default::default()
-            }),
             None,
             false,
             SgRoutePluginContext::new_http(
@@ -197,6 +188,11 @@ mod tests {
                 "127.0.0.1:8080".parse().unwrap(),
                 "".to_string(),
                 None,
+                Some(AvailableBackendInst {
+                    name_or_host: "www.baidu.com".to_string(),
+                    port: 80,
+                    ..Default::default()
+                }),
             ),
         )
         .await?;
@@ -207,11 +203,6 @@ mod tests {
         // test get
         let mut resp = retry_test_request(
             client,
-            Some(&SgBackendInst {
-                name_or_host: "httpbin.org".to_string(),
-                port: 80,
-                ..Default::default()
-            }),
             Some(20000),
             false,
             SgRoutePluginContext::new_http(
@@ -223,6 +214,11 @@ mod tests {
                 "127.0.0.1:8080".parse().unwrap(),
                 "".to_string(),
                 None,
+                Some(AvailableBackendInst {
+                    name_or_host: "httpbin.org".to_string(),
+                    port: 80,
+                    ..Default::default()
+                }),
             ),
         )
         .await?;
@@ -233,12 +229,6 @@ mod tests {
         // test post with tls
         let mut resp = retry_test_request(
             client,
-            Some(&SgBackendInst {
-                name_or_host: "postman-echo.com".to_string(),
-                protocol: Some(SgProtocol::Https),
-                port: 443,
-                ..Default::default()
-            }),
             Some(20000),
             false,
             SgRoutePluginContext::new_http(
@@ -250,6 +240,12 @@ mod tests {
                 "127.0.0.1:8080".parse().unwrap(),
                 "".to_string(),
                 None,
+                Some(AvailableBackendInst {
+                    name_or_host: "postman-echo.com".to_string(),
+                    protocol: Some(SgProtocol::Https),
+                    port: 443,
+                    ..Default::default()
+                }),
             ),
         )
         .await?;
@@ -261,11 +257,6 @@ mod tests {
         // test timeout
         let resp = retry_test_request(
             client,
-            Some(&SgBackendInst {
-                name_or_host: "postman-echo.com".to_string(),
-                port: 80,
-                ..Default::default()
-            }),
             Some(5),
             false,
             SgRoutePluginContext::new_http(
@@ -277,6 +268,11 @@ mod tests {
                 "127.0.0.1:8080".parse().unwrap(),
                 "".to_string(),
                 None,
+                Some(AvailableBackendInst {
+                    name_or_host: "postman-echo.com".to_string(),
+                    port: 80,
+                    ..Default::default()
+                }),
             ),
         )
         .await
@@ -285,13 +281,6 @@ mod tests {
 
         let mut resp = retry_test_request(
             client,
-            Some(&SgBackendInst {
-                name_or_host: "postman-echo.com".to_string(),
-                port: 443,
-                protocol: Some(SgProtocol::Https),
-                timeout_ms: Some(20000),
-                ..Default::default()
-            }),
             Some(20000),
             false,
             SgRoutePluginContext::new_http(
@@ -303,6 +292,13 @@ mod tests {
                 "127.0.0.1:8080".parse().unwrap(),
                 "".to_string(),
                 None,
+                Some(AvailableBackendInst {
+                    name_or_host: "postman-echo.com".to_string(),
+                    port: 443,
+                    protocol: Some(SgProtocol::Https),
+                    timeout_ms: Some(20000),
+                    ..Default::default()
+                }),
             ),
         )
         .await?;
@@ -313,7 +309,6 @@ mod tests {
         // test redirect
         let mut resp = retry_test_request(
             client,
-            None,
             Some(20000),
             true,
             SgRoutePluginContext::new_http(
@@ -324,6 +319,7 @@ mod tests {
                 Body::empty(),
                 "127.0.0.1:8080".parse().unwrap(),
                 "".to_string(),
+                None,
                 None,
             ),
         )
@@ -340,7 +336,6 @@ mod tests {
     // it may be due to the failure of the external url, so add retry
     async fn retry_test_request(
         client: &Client<HttpsConnector<HttpConnector>>,
-        backend: Option<&SgBackendInst>,
         rule_timeout_ms: Option<u64>,
         redirect: bool,
         mut ctx: SgRoutePluginContext,
@@ -348,9 +343,9 @@ mod tests {
         let clone_body = ctx.request.dump_body().await?;
         let mut clone_ctx = ctx.clone();
         clone_ctx.request.set_body(clone_body);
-        let mut result = request(client, backend, rule_timeout_ms, redirect, ctx).await?;
+        let mut result = request(client, rule_timeout_ms, redirect, ctx).await?;
         if !result.response.get_status_code().is_success() {
-            result = request(client, backend, rule_timeout_ms, redirect, clone_ctx).await?;
+            result = request(client, rule_timeout_ms, redirect, clone_ctx).await?;
         }
         Ok(result)
     }

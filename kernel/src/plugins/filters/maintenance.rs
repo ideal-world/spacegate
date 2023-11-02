@@ -199,6 +199,7 @@ mod test {
             "192.168.1.123:10000".parse().unwrap(),
             String::new(),
             None,
+            None,
         );
         assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(), &SgRouteFilterRequestAction::None);
 
@@ -210,6 +211,7 @@ mod test {
             Body::empty(),
             "192.168.2.123:10000".parse().unwrap(),
             String::new(),
+            None,
             None,
         );
         assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(), &SgRouteFilterRequestAction::Response);

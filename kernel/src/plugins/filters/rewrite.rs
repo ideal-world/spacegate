@@ -98,7 +98,8 @@ mod tests {
             Body::empty(),
             "127.0.0.1:8080".parse().unwrap(),
             "".to_string(),
-            Some(ChosenHttpRouteRuleInst::clone_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
+            Some(ChosenHttpRouteRuleInst::cloned_from(&SgHttpRouteRuleInst::default(), Some(&matched))),
+            None,
         );
 
         let (is_continue, ctx) = filter.req_filter("", ctx).await.unwrap();
