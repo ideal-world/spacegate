@@ -20,9 +20,11 @@ def_filter!("maintenance", SgFilterMaintenanceDef, SgFilterMaintenance);
 #[serde(default)]
 pub struct SgFilterMaintenance {
     enabled_time_range: Option<Vec<Range<NaiveTime>>>,
-    exclude_ip_range: Option<Vec<IpNet>>,
+    exclude_ip_range: Option<Vec<String>>,
     title: String,
     msg: String,
+    #[serde(skip)]
+    exclude_ip_net: Option<Vec<IpNet>>,
 }
 
 impl SgFilterMaintenance {
@@ -49,7 +51,7 @@ impl SgFilterMaintenance {
 
     /// If the parameter ip is within the setting range, return true
     pub fn check_ip(&self, ip: &IpAddr) -> bool {
-        if let Some(ips) = &self.exclude_ip_range {
+        if let Some(ips) = &self.exclude_ip_net {
             ips.iter().any(|allow_ip| allow_ip.contains(ip))
         } else {
             false
@@ -64,6 +66,7 @@ impl Default for SgFilterMaintenance {
             exclude_ip_range: None,
             title: "System Maintenance".to_string(),
             msg: "We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly./n Thank you for your patience, understanding, and support.".to_string(),
+            exclude_ip_net: None,
         }
     }
 }
@@ -77,6 +80,10 @@ impl SgPluginFilter for SgFilterMaintenance {
         }
     }
     async fn init(&mut self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
+        if let Some(ip) = &self.exclude_ip_range {
+            let ip_net = ip.iter().filter_map(|ip| ip.parse::<IpNet>().or(ip.parse::<IpAddr>().map(IpNet::from)).ok()).collect();
+            self.exclude_ip_net = Some(ip_net);
+        }
         Ok(())
     }
 
@@ -158,7 +165,7 @@ mod test {
     use crate::plugins::context::SgRouteFilterRequestAction;
     use crate::plugins::context::SgRoutePluginContext;
     use crate::plugins::filters::maintenance::SgFilterMaintenanceDef;
-    use crate::plugins::filters::SgPluginFilterDef;
+    use crate::plugins::filters::{SgAttachedLevel, SgPluginFilterDef, SgPluginFilterInitDto};
     use http::{HeaderMap, Method, Uri, Version};
     use hyper::Body;
     use serde_json::json;
@@ -170,7 +177,7 @@ mod test {
         let now = Local::now();
         let duration = Duration::seconds(100);
         let end_time = now + duration;
-        let maintenance = SgFilterMaintenanceDef {}
+        let mut maintenance = SgFilterMaintenanceDef {}
             .inst(json!({
               "enabled_time_range": [
                 {
@@ -179,15 +186,26 @@ mod test {
                 },
                 {
                   "start":now.format("%H:%M:%S").to_string() ,
-                  "end": end_time.format("%H:%M:%S").to_string() ,
+                  "end": end_time.format("%H:%M:%S").to_string()
                 }
               ],
               "exclude_ip_range": [
                    "192.168.1.0/24",
-                   "10.0.0.0/16"
+                   "10.0.0.0/16",
+                   "172.30.30.30"
               ]
             }
             ))
+            .unwrap();
+
+        maintenance
+            .init(&SgPluginFilterInitDto {
+                gateway_name: "".to_string(),
+                gateway_parameters: Default::default(),
+                http_route_rules: vec![],
+                attached_level: SgAttachedLevel::Gateway,
+            })
+            .await
             .unwrap();
 
         let ctx = SgRoutePluginContext::new_http(
@@ -215,5 +233,18 @@ mod test {
             None,
         );
         assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(), &SgRouteFilterRequestAction::Response);
+
+        let ctx = SgRoutePluginContext::new_http(
+            Method::POST,
+            Uri::from_static("http://sg.idealworld.group"),
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Body::empty(),
+            "172.30.30.30:10000".parse().unwrap(),
+            String::new(),
+            None,
+            None,
+        );
+        assert_eq!(maintenance.req_filter("", ctx).await.unwrap().1.get_action(), &SgRouteFilterRequestAction::None);
     }
 }
