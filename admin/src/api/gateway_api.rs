@@ -1,4 +1,4 @@
-use crate::model::query_dto::GatewayQueryDto;
+use crate::model::query_dto::{GatewayQueryDto, ToInstance};
 use crate::model::vo::gateway_vo::SgGatewayVO;
 use crate::service::gateway_service::GatewayVoService;
 use tardis::basic::error::TardisError;
@@ -15,12 +15,15 @@ pub struct GatewayApi;
 impl GatewayApi {
     /// Get Gateway List
     #[oai(path = "/", method = "get")]
-    async fn list(&self, names: Query<Option<Vec<String>>>, port: Query<Option<String>>, hostname: Query<Option<String>>) -> TardisApiResult<Vec<SgGatewayVO>> {
-        let result = GatewayVoService::list(GatewayQueryDto {
-            names: names.0,
-            port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|e| TardisError::bad_request("bad port format", ""))?,
-            hostname: hostname.0,
-        })
+    async fn list(&self, names: Query<Option<String>>, port: Query<Option<String>>, hostname: Query<Option<String>>) -> TardisApiResult<Vec<SgGatewayVO>> {
+        let result = GatewayVoService::list(
+            GatewayQueryDto {
+                names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
+                port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|e| TardisError::bad_request("bad port format", ""))?,
+                hostname: hostname.0,
+            }
+            .to_instance()?,
+        )
         .await?;
         TardisResp::ok(result)
     }

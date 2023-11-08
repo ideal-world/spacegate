@@ -1,6 +1,6 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
-use crate::model::query_dto::{GatewayQueryDto, ToInstance};
+use crate::model::query_dto::{GatewayQueryDto, GatewayQueryInst, ToInstance};
 use crate::model::vo::gateway_vo::SgGatewayVO;
 use crate::model::vo::Vo;
 #[cfg(feature = "k8s")]
@@ -25,8 +25,7 @@ pub struct GatewayVoService;
 impl VoBaseService<SgGatewayVO> for GatewayVoService {}
 
 impl GatewayVoService {
-    pub async fn list(query: GatewayQueryDto) -> TardisResult<Vec<SgGatewayVO>> {
-        let query = query.to_instance()?;
+    pub async fn list(query: GatewayQueryInst) -> TardisResult<Vec<SgGatewayVO>> {
         Ok(Self::get_type_map().await?.into_values().into_iter().filter(|g|
             if let Some(q_name) = &query.names { q_name.iter().any(|q|q.is_match(&g.name)) } else { true }
                 && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }

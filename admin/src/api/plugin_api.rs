@@ -13,13 +13,24 @@ pub struct PluginApi;
 impl PluginApi {
     /// Get Plugin List
     #[oai(path = "/", method = "get")]
-    async fn list(&self, ids: Query<Option<String>>, name: Query<Option<String>>, namespace: Query<Option<String>>, code: Query<Option<String>>) -> TardisApiResult<Void> {
+    async fn list(
+        &self,
+        ids: Query<Option<String>>,
+        name: Query<Option<String>>,
+        namespace: Query<Option<String>>,
+        code: Query<Option<String>>,
+        target_name: Query<Option<String>>,
+        target_kind: Query<Option<String>>,
+        target_namespace: Query<Option<String>>,
+    ) -> TardisApiResult<Void> {
         let _ = PluginVoService::list(PluginQueryDto {
             ids: ids.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
             name: name.0,
             namespace: namespace.0,
             code: code.0,
-            target: None,
+            target_name: target_name.0,
+            target_kind: target_kind.0,
+            target_namespace: target_namespace.0,
         })
         .await;
         TardisResp::ok(Void {})

@@ -1,9 +1,6 @@
-use crate::model::query_dto::GatewayQueryDto;
-use crate::model::vo::gateway_vo::SgHttpRouteVo;
+use crate::model::query_dto::{HttpRouteQueryDto, ToInstance};
 use crate::model::vo::http_route_vo::SgHttpRouteVo;
-use crate::service::gateway_service::HttpRouteVoService;
 use crate::service::route_service::HttpRouteVoService;
-use tardis::basic::error::TardisError;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
@@ -16,14 +13,21 @@ pub struct HttprouteApi;
 impl HttprouteApi {
     /// Get Httproute List
     #[oai(path = "/", method = "get")]
-    async fn list(&self, names: Query<Option<Vec<String>>>, port: Query<Option<String>>, hostname: Query<Option<String>>) -> TardisApiResult<Vec<SgHttpRouteVo>> {
+    async fn list(
+        &self,
+        names: Query<Option<String>>,
+        gateway_name: Query<Option<String>>,
+        hostnames: Query<Option<String>>,
+        filter_ids: Query<Option<String>>,
+    ) -> TardisApiResult<Vec<SgHttpRouteVo>> {
         let result = HttpRouteVoService::list(
-            "",
-            GatewayQueryDto {
-                names: names.0,
-                port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|e| TardisError::bad_request("bad port format", ""))?,
-                hostname: hostname.0,
-            },
+            HttpRouteQueryDto {
+                names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
+                gateway_name: gateway_name.0,
+                hostnames: hostnames.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
+                filter_ids: filter_ids.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
+            }
+            .to_instance()?,
         )
         .await?;
         TardisResp::ok(result)

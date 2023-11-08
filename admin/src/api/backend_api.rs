@@ -1,4 +1,4 @@
-use crate::model::query_dto::BackendRefQueryDto;
+use crate::model::query_dto::{BackendRefQueryDto, ToInstance};
 use crate::model::vo::backend_vo::SgBackendRefVO;
 use crate::service::backend_ref_service::BackendRefVoService;
 use tardis::web::poem::web::Query;
@@ -15,13 +15,13 @@ pub struct BackendApi;
 impl BackendApi {
     /// Get Backend List
     #[oai(path = "/", method = "get")]
-    async fn list(&self, name: Query<Option<String>>, namespace: Query<Option<String>>) -> TardisApiResult<Vec<SgBackendRefVO>> {
+    async fn list(&self, names: Query<Option<String>>, namespace: Query<Option<String>>) -> TardisApiResult<Vec<SgBackendRefVO>> {
         let result = BackendRefVoService::list(
-            namespace.0.clone(),
             BackendRefQueryDto {
-                name: name.0,
+                names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
                 namespace: namespace.0,
-            },
+            }
+            .to_instance()?,
         )
         .await?;
         TardisResp::ok(result)

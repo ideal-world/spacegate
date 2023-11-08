@@ -1,6 +1,6 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
-use crate::model::query_dto::PluginQueryDto;
+use crate::model::query_dto::{PluginQueryDto, PluginQueryInst};
 use crate::model::vo::plugin_vo::SgFilterVO;
 use crate::service::base_service::VoBaseService;
 #[cfg(feature = "k8s")]
@@ -14,6 +14,7 @@ use kube::api::{ListParams, PostParams};
 use kube::Api;
 use kube::ResourceExt;
 use std::collections::HashMap;
+use std::ptr::eq;
 use tardis::basic::result::TardisResult;
 
 pub struct PluginVoService;
@@ -21,19 +22,21 @@ pub struct PluginVoService;
 impl VoBaseService<SgFilterVO> for PluginVoService {}
 
 impl PluginVoService {
-    pub(crate) async fn list(query: PluginQueryDto) -> TardisResult<Vec<SgFilterVO>> {
-        //todo query
-        Ok(Self::get_type_map()
-            .await?
-            .into_values()
-            .into_iter()
-            .filter(|f| if let Some(ids) = &query.ids { ids.contains(&f.id) } else { true }
-                && query.name.eq(&f.name)
-                && if let Some(code) = &query.code {
-                code.eq(&f.code)
-            }else { true }
-            )
-            .collect::<Vec<SgFilterVO>>())
+    pub(crate) async fn list(query: PluginQueryInst) -> TardisResult<Vec<SgFilterVO>> {
+        let map = Self::get_type_map().await?;
+        if query.ids.is_some() && query.namespace.is_none() && query.code.is_none() && query.target_kind.is_none() && query.target_name.is_none() && query.target_kind.is_none() {
+            Ok(map.into_values().collect())
+        } else {
+            Ok(map
+                .into_values()
+                .into_iter()
+                .filter(|f| {
+                    query.ids.as_ref().map_or(true, |ids| ids.iter().any(|id| id.is_match(&f.id)))
+                        && query.name.as_ref().map_or(true, |name| f.name.as_ref().map_or(false, |f_name| name.is_match(&f_name)))
+                        && query.code.as_ref().map_or(true, |code| code.is_match(&f.code))
+                })
+                .collect::<Vec<SgFilterVO>>())
+        }
     }
 
     pub(crate) async fn add(add: SgFilterVO) -> TardisResult<()> {

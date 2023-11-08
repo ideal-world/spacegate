@@ -1,4 +1,4 @@
-use crate::model::query_dto::BackendRefQueryDto;
+use crate::model::query_dto::{BackendRefQueryDto, BackendRefQueryInst};
 use crate::model::vo::backend_vo::SgBackendRefVO;
 use crate::service::base_service::VoBaseService;
 use tardis::basic::error::TardisError;
@@ -9,14 +9,27 @@ pub struct BackendRefVoService;
 impl VoBaseService<SgBackendRefVO> for BackendRefVoService {}
 
 impl BackendRefVoService {
-    pub(crate) async fn list(id: Option<String>, query: BackendRefQueryDto) -> TardisResult<Vec<SgBackendRefVO>> {
-        //todo query
-        Self::get_str_type_map()
+    pub(crate) async fn list(query: BackendRefQueryInst) -> TardisResult<Vec<SgBackendRefVO>> {
+        Ok(Self::get_type_map()
             .await?
-            .values()
+            .into_values()
             .into_iter()
-            .map(|v| serde_json::from_str(v).map_err(|e| TardisError::bad_request(&format!(""), "")))
-            .collect::<TardisResult<Vec<SgBackendRefVO>>>()
+            .filter(|b|
+                if let Some(q_names) = &query.names {
+                    q_names.iter().any(|q| q.is_match(&b.name_or_host))
+                } else {
+                    true
+                } &&
+                    if let Some(namespace) = &query.namespace {
+                        if let Some(b_namespace)=&b.namespace{
+                            namespace.is_match(&b_namespace)
+                        }
+                        else { false }
+                } else {
+                    true
+                }
+            )
+            .collect())
     }
 
     pub(crate) async fn add(add: SgBackendRefVO) -> TardisResult<()> {

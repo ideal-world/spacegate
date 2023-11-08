@@ -1,4 +1,4 @@
-use crate::model::query_dto::{SgTlsQueryVO, ToInstance};
+use crate::model::query_dto::{SgTlsQueryInst, SgTlsQueryVO, ToInstance};
 use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
 use k8s_openapi::api::core::v1::Secret;
@@ -14,20 +14,13 @@ pub struct TlsVoService;
 impl VoBaseService<SgTls> for TlsVoService {}
 
 impl TlsVoService {
-    pub(crate) async fn list(query: SgTlsQueryVO) -> TardisResult<Vec<SgTls>> {
-        let query = query.to_instance()?;
-        Self::get_type_map()
-            .await?
-            .into_values()
-            .into_iter()
-            .filter(|t| {
-                if let Some(q_names) = query.names {
-                    q_names.iter().any(|q| q.is_match(&t.name))
-                } else {
-                    true
-                }
-            })
-            .collect::<TardisResult<Vec<SgTls>>>()
+    pub(crate) async fn list(query: SgTlsQueryInst) -> TardisResult<Vec<SgTls>> {
+        let map = Self::get_type_map().await?;
+        if query.names.is_none() {
+            Ok(map.into_values().collect())
+        } else {
+            Ok(map.into_values().into_iter().filter(|t| query.names.as_ref().map_or(true, |names| names.iter().any(|n| n.is_match(&t.name)))).collect::<Vec<SgTls>>())
+        }
     }
 
     pub(crate) async fn add(add: SgTls) -> TardisResult<()> {

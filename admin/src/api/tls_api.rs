@@ -1,4 +1,4 @@
-use crate::model::query_dto::{PluginQueryDto, SgTlsQueryVO};
+use crate::model::query_dto::{PluginQueryDto, SgTlsQueryVO, ToInstance};
 use crate::service::secret_service::TlsVoService;
 use kernel_common::inner_model::gateway::SgTls;
 use tardis::web::poem_openapi;
@@ -15,9 +15,12 @@ impl TlsApi {
     /// Get Tls List
     #[oai(path = "/", method = "get")]
     async fn list(&self, names: Query<Option<String>>) -> TardisApiResult<Vec<SgTls>> {
-        let result = TlsVoService::list(SgTlsQueryVO {
-            names: names.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
-        })
+        let result = TlsVoService::list(
+            SgTlsQueryVO {
+                names: names.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
+            }
+            .to_instance()?,
+        )
         .await?;
         TardisResp::ok(result)
     }
