@@ -16,6 +16,7 @@ use kube::Api;
 use super::base_service::VoBaseService;
 use crate::helper::find_add_delete;
 use crate::model::vo_converter::VoConv;
+use crate::service::plugin_service::PluginVoService;
 use kernel_common::helper::k8s_helper::{parse_k8s_obj_unique, WarpKubeResult};
 use tardis::basic::result::TardisResult;
 
@@ -39,13 +40,13 @@ impl GatewayVoService {
         #[cfg(feature = "k8s")]
         {
             let (namespace, _) = parse_k8s_obj_unique(&add.get_unique_name());
-            let (gateway, secrets, sgfilters) = add_model.to_kube_gateway();
+            let (gateway, _, sgfilters) = add_model.to_kube_gateway();
 
             let gateway_api: Api<Gateway> = Api::namespaced(get_k8s_client().await?, &namespace);
 
             let _ = gateway_api.create(&PostParams::default(), &gateway).await.warp_result_by_method("Add Gateway")?;
 
-            //todo update filter ref
+            PluginVoService::add_sgfilter_vec(sgfilters).await?
         }
         Self::add_vo(add).await
     }
