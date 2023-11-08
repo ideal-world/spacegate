@@ -39,7 +39,7 @@ impl GatewayVoService {
         #[cfg(feature = "k8s")]
         {
             let (namespace, _) = parse_k8s_obj_unique(&add.get_unique_name());
-            let (gateway, _, sgfilters) = add_model.to_kube_gateway();
+            let (gateway, sgfilters) = add_model.to_kube_gateway();
 
             let gateway_api: Api<Gateway> = Api::namespaced(get_k8s_client().await?, &namespace);
 
@@ -63,7 +63,7 @@ impl GatewayVoService {
         {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
             let gateway_api: Api<Gateway> = Api::namespaced(get_k8s_client().await?, &namespace);
-            let (update_gateway, update_secret, update_filter) = update_sg_gateway.to_kube_gateway();
+            let (update_gateway, update_filter) = update_sg_gateway.to_kube_gateway();
             gateway_api.replace(&name, &PostParams::default(), &update_gateway).await.warp_result_by_method("Replace Gateway")?;
 
             //todo update filter ref

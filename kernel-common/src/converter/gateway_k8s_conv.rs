@@ -15,10 +15,8 @@ use tardis::basic::result::TardisResult;
 use tardis::futures_util::future::join_all;
 
 impl SgGateway {
-    pub fn to_kube_gateway(self) -> (Gateway, Vec<Secret>, Vec<SgSingeFilter>) {
+    pub fn to_kube_gateway(self) -> (Gateway, Vec<SgSingeFilter>) {
         let (namespace, raw_name) = parse_k8s_obj_unique(&self.name);
-
-        let mut secrets: Vec<Secret> = vec![];
 
         let gateway = Gateway {
             metadata: ObjectMeta {
@@ -83,7 +81,7 @@ impl SgGateway {
             vec![]
         };
 
-        (gateway, secrets, sgfilters)
+        (gateway, sgfilters)
     }
 
     pub async fn from_kube_gateway(gateway: Gateway) -> TardisResult<SgGateway> {

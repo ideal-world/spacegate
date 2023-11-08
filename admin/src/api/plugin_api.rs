@@ -1,4 +1,4 @@
-use crate::model::query_dto::PluginQueryDto;
+use crate::model::query_dto::{PluginQueryDto, ToInstance};
 use crate::model::vo::plugin_vo::SgFilterVO;
 use crate::service::plugin_service::PluginVoService;
 use tardis::web::poem_openapi;
@@ -23,15 +23,18 @@ impl PluginApi {
         target_kind: Query<Option<String>>,
         target_namespace: Query<Option<String>>,
     ) -> TardisApiResult<Void> {
-        let _ = PluginVoService::list(PluginQueryDto {
-            ids: ids.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
-            name: name.0,
-            namespace: namespace.0,
-            code: code.0,
-            target_name: target_name.0,
-            target_kind: target_kind.0,
-            target_namespace: target_namespace.0,
-        })
+        let _ = PluginVoService::list(
+            PluginQueryDto {
+                ids: ids.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
+                name: name.0,
+                namespace: namespace.0,
+                code: code.0,
+                target_name: target_name.0,
+                target_kind: target_kind.0,
+                target_namespace: target_namespace.0,
+            }
+            .to_instance()?,
+        )
         .await;
         TardisResp::ok(Void {})
     }

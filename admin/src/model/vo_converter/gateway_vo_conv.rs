@@ -1,4 +1,4 @@
-use crate::model::query_dto::PluginQueryDto;
+use crate::model::query_dto::{PluginQueryDto, ToInstance};
 use crate::model::vo::gateway_vo::{SgGatewayVO, SgListenerVO, SgTlsConfigVO};
 use crate::model::vo::plugin_vo::SgFilterVO;
 use crate::model::vo_converter::VoConv;
@@ -17,10 +17,13 @@ impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
         let filters = if !self.filters.is_empty() {
             Some(
                 join_all(
-                    PluginVoService::list(PluginQueryDto {
-                        ids: Some(self.filters),
-                        ..Default::default()
-                    })
+                    PluginVoService::list(
+                        PluginQueryDto {
+                            ids: Some(self.filters),
+                            ..Default::default()
+                        }
+                        .to_instance()?,
+                    )
                     .await?
                     .into_iter()
                     .map(|f| f.to_model())
