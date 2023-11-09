@@ -1,4 +1,4 @@
-use crate::model::query_dto::{PluginQueryDto, SgTlsQueryVO, ToInstance};
+use crate::model::query_dto::{SgTlsQueryVO, ToInstance};
 use crate::service::secret_service::TlsVoService;
 use kernel_common::inner_model::gateway::SgTls;
 use tardis::web::poem_openapi;

@@ -37,6 +37,7 @@ pub struct GatewayQueryDto {
     pub names: Option<Vec<String>>,
     pub port: Option<u16>,
     pub hostname: Option<String>,
+    pub tls_ids: Option<Vec<String>>,
 }
 
 impl ToInstance<GatewayQueryInst> for GatewayQueryDto {
@@ -45,6 +46,7 @@ impl ToInstance<GatewayQueryInst> for GatewayQueryDto {
             names: self.names.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
             port: self.port,
             hostname: self.hostname.map(fuzzy_regex).transpose()?,
+            tls_ids: self.tls_ids.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
         })
     }
 }
@@ -53,6 +55,7 @@ pub struct GatewayQueryInst {
     pub names: Option<Vec<Regex>>,
     pub port: Option<u16>,
     pub hostname: Option<Regex>,
+    pub tls_ids: Option<Vec<Regex>>,
 }
 impl Instance for GatewayQueryInst {}
 

@@ -1,6 +1,7 @@
-use crate::model::query_dto::{SgTlsQueryInst, SgTlsQueryVO, ToInstance};
+use crate::model::query_dto::{GatewayQueryDto, GatewayQueryInst, SgTlsQueryInst, SgTlsQueryVO, ToInstance};
 use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
+use crate::service::gateway_service::GatewayVoService;
 use k8s_openapi::api::core::v1::Secret;
 use kernel_common::helper::k8s_helper::{get_k8s_client, parse_k8s_obj_unique, WarpKubeResult};
 use kernel_common::inner_model::gateway::SgTls;
@@ -39,8 +40,8 @@ impl TlsVoService {
     pub(crate) async fn update(update: SgTls) -> TardisResult<()> {
         let unique_name = update.get_unique_name();
         if let Some(old_str) = Self::get_str_type_map().await?.remove(&unique_name) {
-            let mut o: SgTls = serde_json::from_str(&old_str)
-                .map_err(|e| TardisError::bad_request(&format!("[SG.admin] Deserialization {}:{} failed:{e}", SgTls::get_vo_type(), unique_name), ""))?;
+            // let mut o: SgTls = serde_json::from_str(&old_str)
+            //     .map_err(|e| TardisError::bad_request(&format!("[SG.admin] Deserialization {}:{} failed:{e}", SgTls::get_vo_type(), unique_name), ""))?;
             #[cfg(feature = "k8s")]
             {
                 let (namespace, name) = parse_k8s_obj_unique(&unique_name);
@@ -51,8 +52,7 @@ impl TlsVoService {
             Self::update_vo(update).await?;
             Ok(())
         } else {
-            //todo
-            Err(TardisError::not_found("", ""))
+            Err(TardisError::not_found(&format!("[admin.service] Update tls {} not found", unique_name), ""))
         }
     }
 
@@ -63,7 +63,18 @@ impl TlsVoService {
             let secret_api: Api<Secret> = Api::namespaced(get_k8s_client().await?, &namespace);
             secret_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method(&format!("Delete Secret"))?;
         }
-        Self::delete_vo(&id).await?;
-        Ok(())
+        let gateways = GatewayVoService::list(GatewayQueryDto { ..Default::default() }.to_instance()?).await?;
+        if gateways.is_empty() {
+            Self::delete_vo(&id).await?;
+            Ok(())
+        } else {
+            Err(TardisError::bad_request(
+                &format!(
+                    "[admin.service] Delete tls {id} is used by gateway:{}",
+                    gateways.iter().map(|g| g.get_unique_name()).collect::<Vec<String>>().join(",")
+                ),
+                "",
+            ))
+        }
     }
 }
