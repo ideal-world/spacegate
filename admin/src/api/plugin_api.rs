@@ -1,6 +1,6 @@
 use crate::model::add_dto::{SgFilterAddVo, ToVo};
 use crate::model::query_dto::{PluginQueryDto, ToInstance};
-use crate::model::vo::plugin_vo::SgFilterVO;
+use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::service::plugin_service::PluginVoService;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::{Path, Query};
@@ -23,8 +23,8 @@ impl PluginApi {
         target_name: Query<Option<String>>,
         target_kind: Query<Option<String>>,
         target_namespace: Query<Option<String>>,
-    ) -> TardisApiResult<Void> {
-        let _ = PluginVoService::list(
+    ) -> TardisApiResult<Vec<SgFilterVo>> {
+        let result = PluginVoService::list(
             PluginQueryDto {
                 ids: ids.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
                 name: name.0,
@@ -36,22 +36,20 @@ impl PluginApi {
             }
             .to_instance()?,
         )
-        .await;
-        TardisResp::ok(Void {})
+        .await?;
+        TardisResp::ok(result)
     }
 
     /// Add Plugin
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgFilterAddVo>) -> TardisApiResult<Void> {
-        PluginVoService::add(add.0.to_vo()?).await?;
-        TardisResp::ok(Void {})
+    async fn add(&self, add: Json<SgFilterAddVo>) -> TardisApiResult<SgFilterVo> {
+        TardisResp::ok(PluginVoService::add(add.0.to_vo()?).await?)
     }
 
     /// Update Plugin
     #[oai(path = "/", method = "put")]
-    async fn update(&self, update: Json<SgFilterVO>) -> TardisApiResult<Void> {
-        PluginVoService::update(update.0).await?;
-        TardisResp::ok(Void {})
+    async fn update(&self, update: Json<SgFilterVo>) -> TardisApiResult<SgFilterVo> {
+        TardisResp::ok(PluginVoService::update(update.0).await?)
     }
 
     /// Delete Plugin

@@ -18,10 +18,10 @@ pub struct SgHttpRouteVo {
     pub gateway_name: String,
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
-    /// [crate::model::vo::plugin_vo::SgFilterVO]'s id
+    /// [crate::model::vo::plugin_vo::SgFilterVo]'s id
     pub filters: Option<Vec<String>>,
     /// Rules are a list of HTTP matchers, filters and actions.
-    pub rules: Option<Vec<SgHttpRouteRuleVO>>,
+    pub rules: Option<Vec<SgHttpRouteRuleVo>>,
 }
 
 impl Vo for SgHttpRouteVo {
@@ -36,10 +36,10 @@ impl Vo for SgHttpRouteVo {
 
 /// HTTPRouteRule defines semantics for matching an HTTP request based on conditions (matches), processing it (filters), and forwarding the request to an API object
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
-pub struct SgHttpRouteRuleVO {
+pub struct SgHttpRouteRuleVo {
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,
-    /// [crate::model::vo::plugin_vo::SgFilterVO]'s id
+    /// [crate::model::vo::plugin_vo::SgFilterVo]'s id
     pub filters: Option<Vec<String>>,
     /// [crate::model::vo::backend_vo::SgBackendRefVo]'s id
     pub backends: Option<Vec<String>>,

@@ -1,6 +1,6 @@
-use crate::model::vo::gateway_vo::{SgGatewayVo, SgListenerVO};
-use crate::model::vo::http_route_vo::{SgHttpRouteRuleVO, SgHttpRouteVo};
-use crate::model::vo::plugin_vo::SgFilterVO;
+use crate::model::vo::gateway_vo::{SgGatewayVo, SgListenerVo};
+use crate::model::vo::http_route_vo::{SgHttpRouteRuleVo, SgHttpRouteVo};
+use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::model::vo::Vo;
 use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, get_k8s_obj_unique};
 use kernel_common::inner_model::gateway::SgParameters;
@@ -21,9 +21,9 @@ pub struct SgFilterAddVo {
     pub spec: Value,
 }
 
-impl ToVo<SgFilterVO> for SgFilterAddVo {
-    fn to_vo(self) -> TardisResult<SgFilterVO> {
-        Ok(SgFilterVO {
+impl ToVo<SgFilterVo> for SgFilterAddVo {
+    fn to_vo(self) -> TardisResult<SgFilterVo> {
+        Ok(SgFilterVo {
             id: TardisFuns::field.nanoid(),
             code: self.code,
             name: self.name,

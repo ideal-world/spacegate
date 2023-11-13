@@ -12,7 +12,7 @@ use tardis::web::poem_openapi;
 /// 3. Rule level, which works on all requests under the same gateway routing rule
 /// 4. Backend level, which works on all requests under the same backend
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
-pub struct SgFilterVO {
+pub struct SgFilterVo {
     /// unique by id
     pub id: String,
     /// Filter code, Used to match the corresponding filter.
@@ -24,7 +24,7 @@ pub struct SgFilterVO {
     pub spec: Value,
 }
 
-impl Vo for SgFilterVO {
+impl Vo for SgFilterVo {
     fn get_vo_type() -> String {
         constants::PLUGIN_TYPE.to_string()
     }

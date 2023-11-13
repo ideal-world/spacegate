@@ -1,12 +1,13 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
 use crate::model::query_dto::{PluginQueryDto, PluginQueryInst};
-use crate::model::vo::plugin_vo::SgFilterVO;
+use crate::model::vo::plugin_vo::SgFilterVo;
+use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
 #[cfg(feature = "k8s")]
 use kernel_common::constants::DEFAULT_NAMESPACE;
 use kernel_common::converter::plugin_k8s_conv::SgSingeFilter;
-use kernel_common::helper::k8s_helper::WarpKubeResult;
+use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult};
 use kernel_common::k8s_crd::sg_filter::K8sSgFilterSpecFilter;
 #[cfg(feature = "k8s")]
 use kernel_common::k8s_crd::sg_filter::SgFilter;
@@ -22,12 +23,12 @@ pub struct PluginVoService;
 #[cfg(feature = "k8s")]
 pub struct PluginK8sService;
 
-impl VoBaseService<SgFilterVO> for PluginVoService {}
+impl VoBaseService<SgFilterVo> for PluginVoService {}
 
 impl PluginVoService {
-    pub(crate) async fn list(query: PluginQueryInst) -> TardisResult<Vec<SgFilterVO>> {
+    pub(crate) async fn list(query: PluginQueryInst) -> TardisResult<Vec<SgFilterVo>> {
         let map = Self::get_type_map().await?;
-        if query.ids.is_some() && query.namespace.is_none() && query.code.is_none() && query.target_kind.is_none() && query.target_name.is_none() && query.target_kind.is_none() {
+        if query.ids.is_none() && query.namespace.is_none() && query.code.is_none() && query.target_kind.is_none() && query.target_name.is_none() && query.target_kind.is_none() {
             Ok(map.into_values().collect())
         } else {
             Ok(map
@@ -38,17 +39,15 @@ impl PluginVoService {
                         && query.name.as_ref().map_or(true, |name| f.name.as_ref().map_or(false, |f_name| name.is_match(&f_name)))
                         && query.code.as_ref().map_or(true, |code| code.is_match(&f.code))
                 })
-                .collect::<Vec<SgFilterVO>>())
+                .collect::<Vec<SgFilterVo>>())
         }
     }
 
-    pub(crate) async fn add(add: SgFilterVO) -> TardisResult<()> {
-        Self::add_vo(add).await?;
-        Ok(())
+    pub(crate) async fn add(add: SgFilterVo) -> TardisResult<SgFilterVo> {
+        Ok(Self::add_vo(add).await?)
     }
-    pub(crate) async fn update(update: SgFilterVO) -> TardisResult<()> {
-        Self::update_vo(update).await?;
-        Ok(())
+    pub(crate) async fn update(update: SgFilterVo) -> TardisResult<SgFilterVo> {
+        Ok(Self::update_vo(update).await?)
     }
 
     pub(crate) async fn delete(id: &str) -> TardisResult<()> {
@@ -73,7 +72,7 @@ impl PluginK8sService {
             let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
                 filter_list
             } else {
-                let filter_list = filter_api.list(&ListParams::default()).await.warp_result_by_method("list")?;
+                let filter_list = filter_api.list(&ListParams::default()).await.warp_result_by_method("add_sgfilter list")?;
                 filter_map.insert(sf.namespace.clone(), filter_list);
                 filter_map.get(&sf.namespace).expect("")
             };
@@ -81,10 +80,10 @@ impl PluginK8sService {
             if let Some(mut query_sf) = namespace_filter.items.clone().into_iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)) {
                 if !query_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
                     query_sf.spec.target_refs.push(sf.target_ref.clone());
-                    filter_api.replace(&query_sf.name_any(), &PostParams::default(), &query_sf).await.warp_result_by_method("replace")?;
+                    filter_api.replace(&query_sf.name_any(), &PostParams::default(), &query_sf).await.warp_result_by_method("add_sgfilter replace")?;
                 }
             } else {
-                filter_api.create(&PostParams::default(), &sf.to_sg_filter()).await.warp_result_by_method("create")?;
+                filter_api.create(&PostParams::default(), &sf.to_sg_filter()).await.warp_result_by_method("add_sgfilter create")?;
             }
         }
 
@@ -99,7 +98,7 @@ impl PluginK8sService {
             let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
                 filter_list
             } else {
-                let filter_list = filter_api.list(&ListParams::default()).await.warp_result_by_method("list")?;
+                let filter_list = filter_api.list(&ListParams::default()).await.warp_result_by_method("update_sgfilter list")?;
                 filter_map.insert(sf.namespace.clone(), filter_list);
                 filter_map.get(&sf.namespace).expect("")
             };
@@ -114,12 +113,12 @@ impl PluginK8sService {
                                 enable: true,
                                 config: sf.filter.config.clone(),
                             };
-                            filter_api.replace(&old_sf.name_any(), &PostParams::default(), &old_sf).await.warp_result_by_method("replace")?;
+                            filter_api.replace(&old_sf.name_any(), &PostParams::default(), &old_sf).await.warp_result_by_method("update_sgfilter replace")?;
                         }
                     }
                 }
             } else {
-                filter_api.create(&PostParams::default(), &sf.to_sg_filter()).await.warp_result_by_method("create")?;
+                filter_api.create(&PostParams::default(), &sf.to_sg_filter()).await.warp_result_by_method("update_sgfilter create")?;
             }
         }
         Ok(())
@@ -133,7 +132,7 @@ impl PluginK8sService {
             let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
                 filter_list
             } else {
-                let filter_list = filter_api.list(&ListParams::default()).await.warp_result_by_method("list")?;
+                let filter_list = filter_api.list(&ListParams::default()).await.warp_result_by_method("delete_sgfilter list")?;
                 filter_map.insert(sf.namespace.clone(), filter_list);
                 filter_map.get(&sf.namespace).expect("")
             };
@@ -141,7 +140,7 @@ impl PluginK8sService {
             if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
                 if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
                     old_sf.spec.target_refs.retain(|t_r| t_r != &sf.target_ref);
-                    filter_api.replace(&old_sf.name_any(), &PostParams::default(), &old_sf).await.warp_result_by_method("replace")?;
+                    filter_api.replace(&old_sf.name_any(), &PostParams::default(), &old_sf).await.warp_result_by_method("delete_sgfilter replace")?;
                 }
             }
         }

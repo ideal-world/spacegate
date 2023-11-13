@@ -29,16 +29,14 @@ impl BackendApi {
 
     /// Add Backend
     #[oai(path = "/", method = "post")]
-    async fn add(&self, backend: Json<SgBackendRefVo>) -> TardisApiResult<Void> {
-        BackendRefVoService::add(backend.0).await?;
-        TardisResp::ok(Void {})
+    async fn add(&self, backend: Json<SgBackendRefVo>) -> TardisApiResult<SgBackendRefVo> {
+        TardisResp::ok(BackendRefVoService::add(backend.0).await?)
     }
 
     /// update Backend
     #[oai(path = "/", method = "put")]
-    async fn update(&self, backend: Json<SgBackendRefVo>) -> TardisApiResult<Void> {
-        BackendRefVoService::update(backend.0).await?;
-        TardisResp::ok(Void {})
+    async fn update(&self, backend: Json<SgBackendRefVo>) -> TardisApiResult<SgBackendRefVo> {
+        TardisResp::ok(BackendRefVoService::update(backend.0).await?)
     }
 
     /// delete Backend

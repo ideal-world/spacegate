@@ -3,7 +3,7 @@ use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
 use crate::service::gateway_service::GatewayVoService;
 use k8s_openapi::api::core::v1::Secret;
-use kernel_common::helper::k8s_helper::{get_k8s_client, parse_k8s_obj_unique, WarpKubeResult};
+use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, get_k8s_client, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult};
 use kernel_common::inner_model::gateway::SgTls;
 use kube::api::{DeleteParams, PostParams};
 use kube::Api;
@@ -24,11 +24,16 @@ impl TlsVoService {
         }
     }
 
-    pub(crate) async fn add(add: SgTls) -> TardisResult<()> {
-        let add_model = add.clone();
+    pub(crate) async fn add(mut add: SgTls) -> TardisResult<()> {
         #[cfg(feature = "k8s")]
         {
-            let (namespace, _) = parse_k8s_obj_unique(&add.get_unique_name());
+            let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
+            add.name = format_k8s_obj_unique(Some(&namespace), &raw_nmae);
+        }
+        let mut add_model = add.clone();
+        #[cfg(feature = "k8s")]
+        {
+            let (namespace, _) = parse_k8s_unique_or_default(&add.get_unique_name());
             let secret_api: Api<Secret> = Api::namespaced(get_k8s_client().await?, &namespace);
             let s = add_model.to_kube_tls();
             secret_api.create(&PostParams::default(), &s).await.warp_result_by_method(&format!("Add Secret"))?;

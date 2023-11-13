@@ -1,6 +1,6 @@
 use crate::model::query_dto::{PluginQueryDto, ToInstance};
-use crate::model::vo::gateway_vo::{SgGatewayVo, SgListenerVO, SgTlsConfigVO};
-use crate::model::vo::plugin_vo::SgFilterVO;
+use crate::model::vo::gateway_vo::{SgGatewayVo, SgListenerVo, SgTlsConfigVo};
+use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use crate::service::plugin_service::PluginVoService;
@@ -46,12 +46,12 @@ impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
 
     async fn from_model(model: SgGateway) -> TardisResult<SgGatewayVo> {
         let (namespace, _) = parse_k8s_obj_unique(&model.name);
-        let listeners = join_all(model.listeners.into_iter().map(|l| SgListenerVO::from_model(l)).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?;
+        let listeners = join_all(model.listeners.into_iter().map(|l| SgListenerVo::from_model(l)).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?;
         let tls = listeners.iter().map(|l| l.tls_vo.clone()).filter(|t| t.is_some()).map(|t| t.unwrap()).collect::<Vec<_>>();
         let filter_vo = if let Some(filters) = model.filters {
             filters
                 .into_iter()
-                .map(|f| SgFilterVO {
+                .map(|f| SgFilterVo {
                     id: format_k8s_obj_unique(Some(&namespace), &f.code),
                     code: f.code,
                     name: f.name,
@@ -75,7 +75,7 @@ impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
 }
 
 #[async_trait]
-impl VoConv<SgListener, SgListenerVO> for SgListenerVO {
+impl VoConv<SgListener, SgListenerVo> for SgListenerVo {
     async fn to_model(self) -> TardisResult<SgListener> {
         let tls = if let Some(tls) = self.tls {
             Some(SgTlsConfig {
@@ -97,12 +97,12 @@ impl VoConv<SgListener, SgListenerVO> for SgListenerVO {
     }
 
     async fn from_model(model: SgListener) -> TardisResult<Self> {
-        Ok(SgListenerVO {
+        Ok(SgListenerVo {
             name: model.name,
             ip: model.ip,
             port: model.port,
             protocol: model.protocol,
-            tls: model.tls.clone().map(|t| SgTlsConfigVO { name: t.tls.name, mode: t.mode }),
+            tls: model.tls.clone().map(|t| SgTlsConfigVo { name: t.tls.name, mode: t.mode }),
             hostname: model.hostname,
             tls_vo: model.tls.map(|t| SgTls {
                 name: t.tls.name,

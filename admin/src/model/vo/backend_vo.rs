@@ -24,7 +24,7 @@ pub struct SgBackendRefVo {
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
     /// Weight is not a percentage and the sum of weights does not need to equal 100.
     pub weight: Option<u16>,
-    /// [crate::model::vo::plugin_vo::SgFilterVO]'s id
+    /// [crate::model::vo::plugin_vo::SgFilterVo]'s id
     pub filters: Option<Vec<String>>,
 }
 

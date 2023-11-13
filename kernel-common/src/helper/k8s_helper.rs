@@ -23,6 +23,18 @@ pub fn parse_k8s_obj_unique(unique_name: &str) -> (String, String) {
     (result[0].to_string(), result[1].to_string())
 }
 
+/// Try parse namespace and name from k8s unique name
+/// return (namespace, name)
+/// If parse failed,return (DEFAULT_NAMESPACE, name)
+pub fn parse_k8s_unique_or_default(unique_name: &str) -> (String, String) {
+    let result = unique_name.split('.').collect::<Vec<&str>>();
+    if result.len() != 2 {
+        (DEFAULT_NAMESPACE.to_string(), unique_name.to_string())
+    } else {
+        (result[0].to_string(), result[1].to_string())
+    }
+}
+
 /// Warp `kube::Result` to `TardisResult`
 pub trait WarpKubeResult<T> {
     fn warp_result(self) -> TardisResult<T>;

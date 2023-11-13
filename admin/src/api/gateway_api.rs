@@ -37,16 +37,14 @@ impl GatewayApi {
 
     /// Add Gateway
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgGatewayVo>) -> TardisApiResult<Void> {
-        GatewayVoService::add(add.0).await?;
-        TardisResp::ok(Void {})
+    async fn add(&self, add: Json<SgGatewayVo>) -> TardisApiResult<SgGatewayVo> {
+        TardisResp::ok(GatewayVoService::add(add.0).await?)
     }
 
     /// Update Gateway
     #[oai(path = "/", method = "put")]
-    async fn update(&self, backend: Json<SgGatewayVo>) -> TardisApiResult<Void> {
-        GatewayVoService::update(backend.0).await?;
-        TardisResp::ok(Void {})
+    async fn update(&self, update: Json<SgGatewayVo>) -> TardisApiResult<SgGatewayVo> {
+        TardisResp::ok(GatewayVoService::update(update.0).await?)
     }
 
     /// Delete Gateway
