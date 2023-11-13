@@ -107,8 +107,7 @@ impl PluginK8sService {
             if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
                 if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
                     if let Some(mut old_filter) = old_sf.spec.filters.iter().find(|qsf| qsf.code == sf.filter.code) {
-                        //todo
-                        if old_filter.name != sf.name {
+                        if old_filter.name != sf.filter.name && old_filter.config != sf.filter.config {
                             old_filter = &K8sSgFilterSpecFilter {
                                 code: sf.filter.code.clone(),
                                 name: sf.filter.name.clone(),
@@ -119,6 +118,8 @@ impl PluginK8sService {
                         }
                     }
                 }
+            } else {
+                filter_api.create(&PostParams::default(), &sf.to_sg_filter()).await.warp_result_by_method("create")?;
             }
         }
         Ok(())
@@ -136,7 +137,13 @@ impl PluginK8sService {
                 filter_map.insert(sf.namespace.clone(), filter_list);
                 filter_map.get(&sf.namespace).expect("")
             };
-            //todo
+
+            if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
+                if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
+                    old_sf.spec.target_refs.retain(|t_r| t_r != &sf.target_ref);
+                    filter_api.replace(&old_sf.name_any(), &PostParams::default(), &old_sf).await.warp_result_by_method("replace")?;
+                }
+            }
         }
         Ok(())
     }

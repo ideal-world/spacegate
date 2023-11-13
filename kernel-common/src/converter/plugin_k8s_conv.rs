@@ -1,3 +1,4 @@
+use crate::constants::DEFAULT_NAMESPACE;
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "k8s")]
@@ -25,7 +26,7 @@ impl PartialEq<Self> for SgSingeFilter {
             && self.filter.code == other.filter.code
             && self.target_ref.kind == other.target_ref.kind
             && self.target_ref.name == other.target_ref.name
-            && self.target_ref.namespace.as_ref().unwrap_or(&"default".to_string()) == other.target_ref.namespace.as_ref().unwrap_or(&"default".to_string())
+            && self.target_ref.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()) == other.target_ref.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())
     }
 }
 

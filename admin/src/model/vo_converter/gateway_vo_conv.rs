@@ -1,5 +1,5 @@
 use crate::model::query_dto::{PluginQueryDto, ToInstance};
-use crate::model::vo::gateway_vo::{SgGatewayVO, SgListenerVO, SgTlsConfigVO};
+use crate::model::vo::gateway_vo::{SgGatewayVo, SgListenerVO, SgTlsConfigVO};
 use crate::model::vo::plugin_vo::SgFilterVO;
 use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
@@ -12,7 +12,7 @@ use tardis::basic::result::TardisResult;
 use tardis::futures_util::future::join_all;
 
 #[async_trait]
-impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
+impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
     async fn to_model(self) -> TardisResult<SgGateway> {
         let filters = if !self.filters.is_empty() {
             Some(
@@ -44,7 +44,7 @@ impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
         })
     }
 
-    async fn from_model(model: SgGateway) -> TardisResult<SgGatewayVO> {
+    async fn from_model(model: SgGateway) -> TardisResult<SgGatewayVo> {
         let (namespace, _) = parse_k8s_obj_unique(&model.name);
         let listeners = join_all(model.listeners.into_iter().map(|l| SgListenerVO::from_model(l)).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?;
         let tls = listeners.iter().map(|l| l.tls_vo.clone()).filter(|t| t.is_some()).map(|t| t.unwrap()).collect::<Vec<_>>();
@@ -63,7 +63,7 @@ impl VoConv<SgGateway, SgGatewayVO> for SgGatewayVO {
         };
         let filters = filter_vo.iter().map(|f| f.id.clone()).collect();
 
-        Ok(SgGatewayVO {
+        Ok(SgGatewayVo {
             name: model.name,
             parameters: model.parameters,
             listeners,

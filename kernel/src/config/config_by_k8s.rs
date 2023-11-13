@@ -22,7 +22,7 @@ use crate::{do_startup, functions::http_route, shutdown};
 use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::helpers::k8s_helper;
 use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
-use kernel_common::constants::GATEWAY_CLASS_NAME;
+use kernel_common::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
 use kernel_common::helper;
 use kernel_common::helper::k8s_helper::WarpKubeResult;
 use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
@@ -136,11 +136,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         {
             let named_http_route_api: Api<HttpRoute> = Api::namespaced(
                 get_client().await.expect("[SG.Config] Failed to get client"),
-                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
+                http_route_obj.namespace().as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
             );
             let named_http_space_route_api: Api<HttpSpaceroute> = Api::namespaced(
                 get_client().await.expect("[SG.Config] Failed to get client"),
-                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
+                http_route_obj.namespace().as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
             );
             if named_http_space_route_api.get(&http_route_obj.name_any()).await.ok().is_some() || named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
                 // ignore the original object

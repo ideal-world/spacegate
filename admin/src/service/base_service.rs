@@ -290,7 +290,7 @@ pub async fn get_config_map_api() -> TardisResult<Api<ConfigMap>> {
 
 #[cfg(test)]
 mod test {
-    use crate::model::vo::backend_vo::SgBackendRefVO;
+    use crate::model::vo::backend_vo::SgBackendRefVo;
     use crate::model::vo::Vo;
     use crate::service::backend_ref_service::BackendRefVoService;
     use crate::service::base_service::VoBaseService;
@@ -300,7 +300,7 @@ mod test {
     #[cfg(feature = "k8s")]
     #[ignore]
     async fn k8s_test() {
-        let mut add_o_1 = SgBackendRefVO {
+        let mut add_o_1 = SgBackendRefVo {
             id: "id34325".to_string(),
             name_or_host: "backend_name".to_string(),
             namespace: None,
@@ -313,13 +313,13 @@ mod test {
         BackendRefVoService::add_vo(add_o_1.clone()).await.unwrap();
         assert!(BackendRefVoService::add_vo(add_o_1.clone()).await.is_err());
 
-        let get_o_1 = serde_json::from_str::<SgBackendRefVO>(&BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
+        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(&BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
         assert_eq!(get_o_1.port, add_o_1.port);
 
         add_o_1.port = 1832;
         BackendRefVoService::update_vo(add_o_1.clone()).await.unwrap();
 
-        let get_o_1 = serde_json::from_str::<SgBackendRefVO>(&BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
+        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(&BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
         assert_eq!(get_o_1.port, add_o_1.port);
 
         BackendRefVoService::delete_vo(&add_o_1.get_unique_name()).await.unwrap();

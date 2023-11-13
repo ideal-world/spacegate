@@ -1,15 +1,15 @@
 use crate::model::query_dto::{BackendRefQueryDto, BackendRefQueryInst};
-use crate::model::vo::backend_vo::SgBackendRefVO;
+use crate::model::vo::backend_vo::SgBackendRefVo;
 use crate::service::base_service::VoBaseService;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
 pub struct BackendRefVoService;
 
-impl VoBaseService<SgBackendRefVO> for BackendRefVoService {}
+impl VoBaseService<SgBackendRefVo> for BackendRefVoService {}
 
 impl BackendRefVoService {
-    pub(crate) async fn list(query: BackendRefQueryInst) -> TardisResult<Vec<SgBackendRefVO>> {
+    pub(crate) async fn list(query: BackendRefQueryInst) -> TardisResult<Vec<SgBackendRefVo>> {
         Ok(Self::get_type_map()
             .await?
             .into_values()
@@ -32,11 +32,11 @@ impl BackendRefVoService {
             .collect())
     }
 
-    pub(crate) async fn add(add: SgBackendRefVO) -> TardisResult<()> {
+    pub(crate) async fn add(add: SgBackendRefVo) -> TardisResult<()> {
         Self::add_vo(add).await?;
         Ok(())
     }
-    pub(crate) async fn update(update: SgBackendRefVO) -> TardisResult<()> {
+    pub(crate) async fn update(update: SgBackendRefVo) -> TardisResult<()> {
         Self::update_vo(update).await?;
         Ok(())
     }

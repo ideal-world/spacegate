@@ -1,10 +1,11 @@
+use crate::constants::DEFAULT_NAMESPACE;
 use kube::{Client, ResourceExt};
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
 /// In k8s, names of resources need to be unique within a namespace
 pub fn format_k8s_obj_unique(namespace: Option<&String>, name: &str) -> String {
-    format!("{}.{}", namespace.unwrap_or(&"default".to_string()), name)
+    format!("{}.{}", namespace.unwrap_or(&DEFAULT_NAMESPACE.to_string()), name)
 }
 
 /// Get k8s object unique by object

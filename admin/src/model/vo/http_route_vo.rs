@@ -41,7 +41,7 @@ pub struct SgHttpRouteRuleVO {
     pub matches: Option<Vec<SgHttpRouteMatch>>,
     /// [crate::model::vo::plugin_vo::SgFilterVO]'s id
     pub filters: Option<Vec<String>>,
-    /// [crate::model::vo::backend_vo::SgBackendRefVO]'s id
+    /// [crate::model::vo::backend_vo::SgBackendRefVo]'s id
     pub backends: Option<Vec<String>>,
     /// Timeout define the timeout for requests that match this rule.
     pub timeout_ms: Option<u64>,

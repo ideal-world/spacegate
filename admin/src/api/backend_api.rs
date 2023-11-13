@@ -1,5 +1,5 @@
 use crate::model::query_dto::{BackendRefQueryDto, ToInstance};
-use crate::model::vo::backend_vo::SgBackendRefVO;
+use crate::model::vo::backend_vo::SgBackendRefVo;
 use crate::service::backend_ref_service::BackendRefVoService;
 use tardis::web::poem::web::Query;
 use tardis::web::poem_openapi;
@@ -15,7 +15,7 @@ pub struct BackendApi;
 impl BackendApi {
     /// Get Backend List
     #[oai(path = "/", method = "get")]
-    async fn list(&self, names: Query<Option<String>>, namespace: Query<Option<String>>) -> TardisApiResult<Vec<SgBackendRefVO>> {
+    async fn list(&self, names: Query<Option<String>>, namespace: Query<Option<String>>) -> TardisApiResult<Vec<SgBackendRefVo>> {
         let result = BackendRefVoService::list(
             BackendRefQueryDto {
                 names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
@@ -29,14 +29,14 @@ impl BackendApi {
 
     /// Add Backend
     #[oai(path = "/", method = "post")]
-    async fn add(&self, backend: Json<SgBackendRefVO>) -> TardisApiResult<Void> {
+    async fn add(&self, backend: Json<SgBackendRefVo>) -> TardisApiResult<Void> {
         BackendRefVoService::add(backend.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// update Backend
     #[oai(path = "/", method = "put")]
-    async fn update(&self, backend: Json<SgBackendRefVO>) -> TardisApiResult<Void> {
+    async fn update(&self, backend: Json<SgBackendRefVo>) -> TardisApiResult<Void> {
         BackendRefVoService::update(backend.0).await?;
         TardisResp::ok(Void {})
     }

@@ -1,3 +1,4 @@
+use crate::model::add_dto::{SgFilterAddVo, ToVo};
 use crate::model::query_dto::{PluginQueryDto, ToInstance};
 use crate::model::vo::plugin_vo::SgFilterVO;
 use crate::service::plugin_service::PluginVoService;
@@ -41,8 +42,8 @@ impl PluginApi {
 
     /// Add Plugin
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgFilterVO>) -> TardisApiResult<Void> {
-        PluginVoService::add(add.0).await?;
+    async fn add(&self, add: Json<SgFilterAddVo>) -> TardisApiResult<Void> {
+        PluginVoService::add(add.0.to_vo()?).await?;
         TardisResp::ok(Void {})
     }
 

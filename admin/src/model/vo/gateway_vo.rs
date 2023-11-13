@@ -9,7 +9,7 @@ use tardis::web::poem_openapi;
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1beta1.Gateway)
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
-pub struct SgGatewayVO {
+pub struct SgGatewayVo {
     /// Name of the Gateway. Global Unique.
     ///
     /// In k8s mode, this name MUST be unique within a namespace.
@@ -30,7 +30,7 @@ pub struct SgGatewayVO {
     pub filter_vos: Vec<SgFilterVO>,
 }
 
-impl Vo for SgGatewayVO {
+impl Vo for SgGatewayVo {
     fn get_vo_type() -> String {
         constants::GATEWAY_TYPE.to_string()
     }

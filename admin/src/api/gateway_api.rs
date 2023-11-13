@@ -1,5 +1,5 @@
 use crate::model::query_dto::{GatewayQueryDto, ToInstance};
-use crate::model::vo::gateway_vo::SgGatewayVO;
+use crate::model::vo::gateway_vo::SgGatewayVo;
 use crate::service::gateway_service::GatewayVoService;
 use tardis::basic::error::TardisError;
 use tardis::web::poem_openapi;
@@ -21,7 +21,7 @@ impl GatewayApi {
         port: Query<Option<String>>,
         hostname: Query<Option<String>>,
         tls_ids: Query<Option<String>>,
-    ) -> TardisApiResult<Vec<SgGatewayVO>> {
+    ) -> TardisApiResult<Vec<SgGatewayVo>> {
         let result = GatewayVoService::list(
             GatewayQueryDto {
                 names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
@@ -37,14 +37,14 @@ impl GatewayApi {
 
     /// Add Gateway
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgGatewayVO>) -> TardisApiResult<Void> {
+    async fn add(&self, add: Json<SgGatewayVo>) -> TardisApiResult<Void> {
         GatewayVoService::add(add.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update Gateway
     #[oai(path = "/", method = "put")]
-    async fn update(&self, backend: Json<SgGatewayVO>) -> TardisApiResult<Void> {
+    async fn update(&self, backend: Json<SgGatewayVo>) -> TardisApiResult<Void> {
         GatewayVoService::update(backend.0).await?;
         TardisResp::ok(Void {})
     }

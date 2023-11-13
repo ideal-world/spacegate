@@ -1,7 +1,7 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
 use crate::model::query_dto::{GatewayQueryDto, GatewayQueryInst, ToInstance};
-use crate::model::vo::gateway_vo::SgGatewayVO;
+use crate::model::vo::gateway_vo::SgGatewayVo;
 use crate::model::vo::Vo;
 #[cfg(feature = "k8s")]
 use k8s_gateway_api::Gateway;
@@ -24,10 +24,10 @@ use tardis::basic::result::TardisResult;
 
 pub struct GatewayVoService;
 
-impl VoBaseService<SgGatewayVO> for GatewayVoService {}
+impl VoBaseService<SgGatewayVo> for GatewayVoService {}
 
 impl GatewayVoService {
-    pub async fn list(query: GatewayQueryInst) -> TardisResult<Vec<SgGatewayVO>> {
+    pub async fn list(query: GatewayQueryInst) -> TardisResult<Vec<SgGatewayVo>> {
         Ok(Self::get_type_map().await?.into_values().into_iter().filter(|g|
             if let Some(q_name) = &query.names { q_name.iter().any(|q|q.is_match(&g.name)) } else { true }
                 && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }
@@ -36,7 +36,7 @@ impl GatewayVoService {
             } else { true })
             .collect())
     }
-    pub async fn add(add: SgGatewayVO) -> TardisResult<SgGatewayVO> {
+    pub async fn add(add: SgGatewayVo) -> TardisResult<SgGatewayVo> {
         let add_model = add.clone().to_model().await?;
         #[cfg(feature = "k8s")]
         {
@@ -57,7 +57,7 @@ impl GatewayVoService {
         GatewayVoService::update(gateway_o).await
     }
 
-    pub async fn update(update: SgGatewayVO) -> TardisResult<()> {
+    pub async fn update(update: SgGatewayVo) -> TardisResult<()> {
         let update_un = &update.get_unique_name();
 
         let update_sg_gateway = update.clone().to_model().await?;

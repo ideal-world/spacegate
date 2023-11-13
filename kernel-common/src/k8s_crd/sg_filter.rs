@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use k8s_openapi::schemars::JsonSchema;
 use kube::CustomResource;
 
+use crate::constants::DEFAULT_NAMESPACE;
 use serde_json::value::Value;
 
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
@@ -23,7 +24,7 @@ pub struct K8sSgFilterSpecFilter {
     pub config: Value,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecTargetRef {
     /// # FilterTarget Kind
@@ -34,4 +35,12 @@ pub struct K8sSgFilterSpecTargetRef {
     pub kind: String,
     pub name: String,
     pub namespace: Option<String>,
+}
+
+impl PartialEq for K8sSgFilterSpecTargetRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.kind == other.kind
+            && self.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()) == other.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())
+    }
 }

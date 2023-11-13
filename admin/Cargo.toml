@@ -14,6 +14,7 @@ readme = "./README.md"
 
 [features]
 k8s = ["kube", "k8s-openapi", "k8s-gateway-api","kernel-common/k8s"]
+doc=["tardis/openapi-rapidoc"]
 
 [dependencies]
 tardis = { workspace = true ,features = ["web-server","crypto"]}

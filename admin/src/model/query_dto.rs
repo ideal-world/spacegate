@@ -2,7 +2,6 @@ use crate::helper::fuzzy_regex;
 use crate::model::base_dto::TargetRefDTO;
 #[cfg(feature = "k8s")]
 use crate::model::ToFields;
-use k8s_openapi::merge_strategies::list::map;
 use tardis::basic::result::TardisResult;
 use tardis::regex::Regex;
 
