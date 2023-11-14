@@ -2,6 +2,7 @@ use tardis::async_trait::async_trait;
 use tardis::basic::result::TardisResult;
 
 pub mod gateway_vo_conv;
+pub mod http_route_conv;
 pub mod plugin_vo_conv;
 
 #[async_trait]

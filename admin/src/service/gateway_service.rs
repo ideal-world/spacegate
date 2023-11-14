@@ -41,7 +41,7 @@ impl GatewayVoService {
             let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
             add.name = format_k8s_obj_unique(Some(&namespace), &raw_nmae);
         }
-        let mut add_model = add.clone().to_model().await?;
+        let add_model = add.clone().to_model().await?;
         #[cfg(feature = "k8s")]
         {
             let (namespace, _) = parse_k8s_unique_or_default(&add.get_unique_name());

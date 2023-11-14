@@ -24,7 +24,7 @@ use crate::helpers::k8s_helper;
 use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
 use kernel_common::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
 use kernel_common::helper;
-use kernel_common::helper::k8s_helper::WarpKubeResult;
+use kernel_common::helper::k8s_helper::{get_k8s_obj_unique, WarpKubeResult};
 use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
 use kernel_common::inner_model::{
     gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
@@ -669,6 +669,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
             http_route_obj.spec.inner.parent_refs.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].name
         );
         let http_route_config = SgHttpRoute {
+            name: get_k8s_obj_unique(&http_route_obj),
             gateway_name: rel_gateway_name,
             hostnames: http_route_obj.spec.hostnames.clone(),
             filters: if let Some(name) = &http_route_obj.metadata.name {

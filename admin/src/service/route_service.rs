@@ -1,6 +1,7 @@
 use crate::model::query_dto::HttpRouteQueryInst;
 use crate::model::vo::http_route_vo::SgHttpRouteVo;
 use crate::model::vo::Vo;
+use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_unique_or_default};
 use tardis::basic::result::TardisResult;
@@ -38,6 +39,11 @@ impl HttpRouteVoService {
         {
             let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
             add.name = format_k8s_obj_unique(Some(&namespace), &raw_nmae);
+        }
+        let add_model = add.clone().to_model().await?;
+        #[cfg(feature = "k8s")]
+        {
+            add_model
         }
         Self::add_vo(add).await?;
         Ok(())

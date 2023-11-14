@@ -1,5 +1,23 @@
 use crate::constants::DEFAULT_NAMESPACE;
+use crate::inner_model::plugin_filter::SgRouteFilter;
+use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use std::hash::{Hash, Hasher};
+
+impl SgRouteFilter {
+    pub fn to_singe_filter(self, target: K8sSgFilterSpecTargetRef) -> SgSingeFilter {
+        SgSingeFilter {
+            name: self.name,
+            namespace: target.namespace.unwrap_or(DEFAULT_NAMESPACE.to_string()),
+            filter: K8sSgFilterSpecFilter {
+                code: self.code,
+                name: None,
+                enable: true,
+                config: self.spec,
+            },
+            target_ref: target,
+        }
+    }
+}
 
 #[cfg(feature = "k8s")]
 #[derive(Clone)]
