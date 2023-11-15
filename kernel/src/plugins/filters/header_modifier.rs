@@ -1,11 +1,10 @@
 use async_trait::async_trait;
 use http::HeaderName;
-use std::collections::HashMap;
 
 use super::{SgPluginFilter, SgPluginFilterAccept, SgPluginFilterInitDto, SgPluginFilterKind, SgRoutePluginContext};
 use crate::def_filter;
 use kernel_common::gatewayapi_support_filter::{SgFilterHeaderModifier, SgFilterHeaderModifierKind};
-use serde::{Deserialize, Serialize};
+
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 

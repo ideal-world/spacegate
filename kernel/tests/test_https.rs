@@ -1,6 +1,6 @@
 use std::{env, time::Duration, vec};
 
-use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode};
+use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgProtocol, SgTls, SgTlsConfig, SgTlsMode};
 use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
 use serde_json::{json, Value};
 use tardis::{
@@ -107,8 +107,11 @@ async fn test_https() -> TardisResult<()> {
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
                         mode: SgTlsMode::Terminate,
-                        key: TLS_RSA_KEY.to_string(),
-                        cert: TLS_CERT.to_string(),
+                        tls: SgTls {
+                            name: "test_tls".to_string(),
+                            key: TLS_RSA_KEY.to_string(),
+                            cert: TLS_CERT.to_string(),
+                        },
                     }),
                     ..Default::default()
                 },
@@ -117,8 +120,11 @@ async fn test_https() -> TardisResult<()> {
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
                         mode: SgTlsMode::Terminate,
-                        key: TLS_PKCS8_KEY.to_string(),
-                        cert: TLS_EC_CERT.to_string(),
+                        tls: SgTls {
+                            name: "test_tls1".to_string(),
+                            key: TLS_PKCS8_KEY.to_string(),
+                            cert: TLS_EC_CERT.to_string(),
+                        },
                     }),
                     ..Default::default()
                 },
@@ -127,8 +133,11 @@ async fn test_https() -> TardisResult<()> {
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
                         mode: SgTlsMode::Terminate,
-                        key: TLS_EC_KEY.to_string(),
-                        cert: TLS_EC_CERT.to_string(),
+                        tls: SgTls {
+                            name: "".to_string(),
+                            key: TLS_EC_KEY.to_string(),
+                            cert: TLS_EC_CERT.to_string(),
+                        },
                     }),
                     ..Default::default()
                 },

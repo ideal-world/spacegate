@@ -10,7 +10,7 @@ impl SgRouteFilter {
     pub fn to_singe_filter(self, target: K8sSgFilterSpecTargetRef) -> SgSingeFilter {
         SgSingeFilter {
             name: self.name,
-            namespace: target.namespace.unwrap_or(DEFAULT_NAMESPACE.to_string()),
+            namespace: target.namespace.clone().unwrap_or(DEFAULT_NAMESPACE.to_string()),
             filter: K8sSgFilterSpecFilter {
                 code: self.code,
                 name: None,

@@ -1,6 +1,6 @@
 use std::{env, time::Duration, vec};
 
-use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode};
+use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgProtocol, SgTls, SgTlsConfig, SgTlsMode};
 use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
 use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use serde_json::{json, Value};
@@ -30,8 +30,11 @@ async fn test_compression() -> TardisResult<()> {
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
                         mode: SgTlsMode::Terminate,
-                        key: TLS_KEY.to_string(),
-                        cert: TLS_CERT.to_string(),
+                        tls: SgTls {
+                            name: "test_tls".to_string(),
+                            key: TLS_KEY.to_string(),
+                            cert: TLS_CERT.to_string(),
+                        },
                     }),
                     ..Default::default()
                 },

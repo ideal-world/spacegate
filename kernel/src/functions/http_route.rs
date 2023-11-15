@@ -714,7 +714,7 @@ async fn process_req_filters_http(
         remote_addr,
         gateway_name,
         matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::cloned_from(m, matched_match_inst)),
-        matched_backend_inst.map(|b| AvailableBackendInst::cloned_from(b)),
+        matched_backend_inst.map(AvailableBackendInst::cloned_from),
     );
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }

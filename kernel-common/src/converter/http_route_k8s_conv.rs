@@ -5,8 +5,8 @@ use crate::inner_model::http_route::{
     SgHttpRouteRule,
 };
 use crate::k8s_crd::http_spaceroute::{BackendRef, HttpBackendRef, HttpRouteRule, HttpSpaceroute, HttpSpacerouteSpec};
-use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
-use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Gateway, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRouteMatch, ParentReference};
+use crate::k8s_crd::sg_filter::K8sSgFilterSpecTargetRef;
+use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRouteMatch, ParentReference};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use tardis::basic::result::TardisResult;
 
@@ -16,33 +16,9 @@ impl SgHttpRoute {
 
         let (gateway_namespace, gateway_name) = parse_k8s_obj_unique(&self.gateway_name);
 
-        let httproute = HttpSpaceroute {
-            metadata: ObjectMeta {
-                labels: None,
-                name: Some(raw_name),
-                owner_references: None,
-                self_link: None,
-                ..Default::default()
-            },
-            spec: HttpSpacerouteSpec {
-                inner: CommonRouteSpec {
-                    parent_refs: Some(vec![ParentReference {
-                        group: None,
-                        kind: Some("Gateway".to_string()),
-                        namespace: Some(gateway_namespace),
-                        name: gateway_name,
-                        section_name: None,
-                        port: None,
-                    }]),
-                },
-                hostnames: self.hostnames,
-                rules: self.rules.map(|r_vec| r_vec.into_iter().map(|r| r.to_kube_httproute()).collect::<Vec<_>>()),
-            },
-            status: None,
-        };
-
         let mut sgfilters: Vec<SgSingeFilter> = self
             .rules
+            .as_ref()
             .map(|r_vec| {
                 r_vec
                     .iter()
@@ -72,11 +48,12 @@ impl SgHttpRoute {
                                     .iter()
                                     .map(|b| {
                                         b.filters
+                                            .as_ref()
                                             .map(|b_f_vec| {
                                                 b_f_vec
                                                     .iter()
                                                     .map(|b_f| {
-                                                        b_f.to_singe_filter(K8sSgFilterSpecTargetRef {
+                                                        b_f.clone().to_singe_filter(K8sSgFilterSpecTargetRef {
                                                             kind: "HTTPSpaceroute".to_string(),
                                                             name: self.name.clone(),
                                                             namespace: Some(namespace.to_string()),
@@ -117,6 +94,31 @@ impl SgHttpRoute {
                 })
                 .unwrap_or_default(),
         );
+
+        let httproute = HttpSpaceroute {
+            metadata: ObjectMeta {
+                labels: None,
+                name: Some(raw_name),
+                owner_references: None,
+                self_link: None,
+                ..Default::default()
+            },
+            spec: HttpSpacerouteSpec {
+                inner: CommonRouteSpec {
+                    parent_refs: Some(vec![ParentReference {
+                        group: None,
+                        kind: Some("Gateway".to_string()),
+                        namespace: Some(gateway_namespace),
+                        name: gateway_name,
+                        section_name: None,
+                        port: None,
+                    }]),
+                },
+                hostnames: self.hostnames,
+                rules: self.rules.map(|r_vec| r_vec.into_iter().map(|r| r.to_kube_httproute()).collect::<Vec<_>>()),
+            },
+            status: None,
+        };
         (httproute, sgfilters)
     }
 
@@ -209,7 +211,7 @@ impl SgHttpQueryMatch {
 
 impl SgBackendRef {
     //todo excluding SgFilter.
-    pub(crate) fn to_kube_httproute(&self) -> HttpBackendRef {
+    pub(crate) fn to_kube_httproute(self) -> HttpBackendRef {
         HttpBackendRef {
             backend_ref: Some(BackendRef {
                 weight: None,

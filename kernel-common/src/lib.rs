@@ -1,7 +1,6 @@
 pub mod constants;
 #[cfg(feature = "k8s")]
 pub mod converter;
-#[cfg(feature = "k8s")]
 pub mod gatewayapi_support_filter;
 pub mod helper;
 pub mod inner_model;
