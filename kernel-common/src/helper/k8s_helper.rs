@@ -1,4 +1,4 @@
-use crate::constants::DEFAULT_NAMESPACE;
+use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
 use kube::{Client, ResourceExt};
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;

@@ -1,4 +1,5 @@
-use crate::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
+use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
+use crate::constants::k8s_constants::GATEWAY_CLASS_NAME;
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
 use crate::helper::k8s_helper::{get_k8s_client, get_k8s_obj_unique, parse_k8s_obj_unique};
 use crate::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTls, SgTlsConfig, SgTlsMode};
@@ -145,17 +146,17 @@ impl SgParameters {
     pub(crate) fn to_kube_gateway(self) -> BTreeMap<String, String> {
         let mut ann = BTreeMap::new();
         if let Some(redis_url) = self.redis_url {
-            ann.insert(crate::constants::GATEWAY_ANNOTATION_REDIS_URL.to_string(), redis_url);
+            ann.insert(crate::constants::k8s_constants::GATEWAY_ANNOTATION_REDIS_URL.to_string(), redis_url);
         }
         if let Some(log_level) = self.log_level {
-            ann.insert(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL.to_string(), log_level);
+            ann.insert(crate::constants::k8s_constants::GATEWAY_ANNOTATION_LOG_LEVEL.to_string(), log_level);
         }
         if let Some(lang) = self.lang {
-            ann.insert(crate::constants::GATEWAY_ANNOTATION_LANGUAGE.to_string(), lang);
+            ann.insert(crate::constants::k8s_constants::GATEWAY_ANNOTATION_LANGUAGE.to_string(), lang);
         }
         if let Some(ignore_tls_verification) = self.ignore_tls_verification {
             ann.insert(
-                crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION.to_string(),
+                crate::constants::k8s_constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION.to_string(),
                 ignore_tls_verification.to_string(),
             );
         }
@@ -166,10 +167,10 @@ impl SgParameters {
         let gateway_annotations = gateway.metadata.annotations.clone();
         if let Some(gateway_annotations) = gateway_annotations {
             SgParameters {
-                redis_url: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string()),
-                log_level: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
-                lang: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
-                ignore_tls_verification: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
+                redis_url: gateway_annotations.get(crate::constants::k8s_constants::GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string()),
+                log_level: gateway_annotations.get(crate::constants::k8s_constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
+                lang: gateway_annotations.get(crate::constants::k8s_constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
+                ignore_tls_verification: gateway_annotations.get(crate::constants::k8s_constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
             }
         } else {
             SgParameters {

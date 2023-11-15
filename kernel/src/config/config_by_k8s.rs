@@ -3,7 +3,6 @@ use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
 use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
-use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::ListParams,
     runtime::{watcher, WatchStreamExt},
@@ -21,13 +20,13 @@ use crate::{do_startup, functions::http_route, shutdown};
 
 use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::helpers::k8s_helper;
-use crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind;
-use kernel_common::constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
+use kernel_common::constants::k8s_constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
+use kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind;
 use kernel_common::helper;
 use kernel_common::helper::k8s_helper::{get_k8s_obj_unique, WarpKubeResult};
 use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
 use kernel_common::inner_model::{
-    gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
+    gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig},
     http_route::{
         SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
         SgHttpRouteRule,
@@ -854,8 +853,8 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                             SgRouteFilter {
                                 code: crate::plugins::filters::header_modifier::CODE.to_string(),
                                 name: None,
-                                spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::header_modifier::SgFilterHeaderModifier {
-                                    kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Request,
+                                spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier {
+                                    kind: kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind::Request,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: request_header_modifier.remove,
                                 })?,
@@ -876,8 +875,8 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                             SgRouteFilter {
                                 code: crate::plugins::filters::header_modifier::CODE.to_string(),
                                 name: None,
-                                spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::header_modifier::SgFilterHeaderModifier {
-                                    kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Response,
+                                spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier {
+                                    kind: kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind::Response,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: response_header_modifier.remove,
                                 })?,
@@ -950,7 +949,7 @@ fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<
                     let http_route_filter = match filter.code.as_str() {
                         crate::plugins::filters::header_modifier::CODE => {
                             let header_modifier = TardisFuns::json
-                                .json_to_obj::<crate::plugins::filters::header_modifier::SgFilterHeaderModifier>(filter.spec)
+                                .json_to_obj::<kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier>(filter.spec)
                                 .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
                             match header_modifier.kind {
                                 SgFilterHeaderModifierKind::Request => HttpRouteFilter::RequestHeaderModifier {

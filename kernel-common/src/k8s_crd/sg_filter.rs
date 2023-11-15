@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use k8s_openapi::schemars::JsonSchema;
 use kube::CustomResource;
 
-use crate::constants::DEFAULT_NAMESPACE;
+use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
 use serde_json::value::Value;
 
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]

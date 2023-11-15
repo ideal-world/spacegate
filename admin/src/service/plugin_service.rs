@@ -5,7 +5,7 @@ use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
 #[cfg(feature = "k8s")]
-use kernel_common::constants::DEFAULT_NAMESPACE;
+use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 use kernel_common::converter::plugin_k8s_conv::SgSingeFilter;
 use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult};
 use kernel_common::k8s_crd::sg_filter::K8sSgFilterSpecFilter;

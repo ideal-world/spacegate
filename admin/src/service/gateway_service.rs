@@ -6,7 +6,7 @@ use crate::model::vo::Vo;
 #[cfg(feature = "k8s")]
 use k8s_gateway_api::Gateway;
 #[cfg(feature = "k8s")]
-use kernel_common::constants::DEFAULT_NAMESPACE;
+use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 #[cfg(feature = "k8s")]
 use kube::api::{DeleteParams, PostParams};
 use std::collections::HashSet;

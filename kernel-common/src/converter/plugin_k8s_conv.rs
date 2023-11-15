@@ -1,7 +1,10 @@
-use crate::constants::DEFAULT_NAMESPACE;
+use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
+use crate::gatewayapi_support_filter::{SgFilterHeaderModifier, SgFilterHeaderModifierKind};
 use crate::inner_model::plugin_filter::SgRouteFilter;
 use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
+use k8s_gateway_api::{HttpHeader, HttpRequestHeaderFilter, HttpRouteFilter};
 use std::hash::{Hash, Hasher};
+use tardis::TardisFuns;
 
 impl SgRouteFilter {
     pub fn to_singe_filter(self, target: K8sSgFilterSpecTargetRef) -> SgSingeFilter {
@@ -15,6 +18,33 @@ impl SgRouteFilter {
                 config: self.spec,
             },
             target_ref: target,
+        }
+    }
+
+    pub fn to_http_route_filter(self) -> Option<HttpRouteFilter> {
+        if &self.code == "header_modifier" {
+            if let Ok(header) = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(self.spec) {
+                let header_filter = HttpRequestHeaderFilter {
+                    set: header.sets.map(|header_map| header_map.into_iter().map(|(k, v)| HttpHeader { name: k, value: v }).collect()),
+                    add: None,
+                    remove: header.remove,
+                };
+                match header.kind {
+                    SgFilterHeaderModifierKind::Request => Some(HttpRouteFilter::RequestHeaderModifier {
+                        request_header_modifier: header_filter,
+                    }),
+                    SgFilterHeaderModifierKind::Response => Some(HttpRouteFilter::ResponseHeaderModifier {
+                        response_header_modifier: header_filter,
+                    }),
+                }
+            } else {
+                None
+            }
+            //todo
+            // } else if &self.code == "redirect" {
+            //     if let Ok(header) = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(self.spec) {}
+        } else {
+            None
         }
     }
 }
