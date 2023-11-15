@@ -3,12 +3,12 @@ use http::HeaderName;
 
 use super::{SgPluginFilter, SgPluginFilterAccept, SgPluginFilterInitDto, SgPluginFilterKind, SgRoutePluginContext};
 use crate::def_filter;
-use kernel_common::gatewayapi_support_filter::{SgFilterHeaderModifier, SgFilterHeaderModifierKind};
+use kernel_common::gatewayapi_support_filter::{SgFilterHeaderModifier, SgFilterHeaderModifierKind, SG_FILTER_HEADER_MODIFIER_CODE};
 
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
-def_filter!("header_modifier", SgFilterHeaderModifierDef, SgFilterHeaderModifier);
+def_filter!(SG_FILTER_HEADER_MODIFIER_CODE, SgFilterHeaderModifierDef, SgFilterHeaderModifier);
 
 #[async_trait]
 impl SgPluginFilter for SgFilterHeaderModifier {

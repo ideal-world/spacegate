@@ -1,8 +1,10 @@
 use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
-use crate::gatewayapi_support_filter::{SgFilterHeaderModifier, SgFilterHeaderModifierKind};
-use crate::inner_model::plugin_filter::SgRouteFilter;
+use crate::gatewayapi_support_filter::{
+    SgFilterHeaderModifier, SgFilterHeaderModifierKind, SgFilterRedirect, SgFilterRewrite, SG_FILTER_HEADER_MODIFIER_CODE, SG_FILTER_REDIRECT_CODE, SG_FILTER_REWRITE_CODE,
+};
+use crate::inner_model::plugin_filter::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
 use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
-use k8s_gateway_api::{HttpHeader, HttpRequestHeaderFilter, HttpRouteFilter};
+use k8s_gateway_api::{HttpHeader, HttpPathModifier, HttpRequestHeaderFilter, HttpRequestRedirectFilter, HttpRouteFilter, HttpUrlRewriteFilter};
 use std::hash::{Hash, Hasher};
 use tardis::TardisFuns;
 
@@ -22,7 +24,7 @@ impl SgRouteFilter {
     }
 
     pub fn to_http_route_filter(self) -> Option<HttpRouteFilter> {
-        if &self.code == "header_modifier" {
+        if &self.code == SG_FILTER_HEADER_MODIFIER_CODE {
             if let Ok(header) = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(self.spec) {
                 let header_filter = HttpRequestHeaderFilter {
                     set: header.sets.map(|header_map| header_map.into_iter().map(|(k, v)| HttpHeader { name: k, value: v }).collect()),
@@ -40,11 +42,42 @@ impl SgRouteFilter {
             } else {
                 None
             }
-            //todo
-            // } else if &self.code == "redirect" {
-            //     if let Ok(header) = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(self.spec) {}
+        } else if &self.code == SG_FILTER_REDIRECT_CODE {
+            if let Ok(redirect) = TardisFuns::json.json_to_obj::<SgFilterRedirect>(self.spec) {
+                Some(HttpRouteFilter::RequestRedirect {
+                    request_redirect: HttpRequestRedirectFilter {
+                        scheme: redirect.scheme,
+                        hostname: redirect.hostname,
+                        path: redirect.path.map(|p| p.to_http_path_modifier()),
+                        port: redirect.port,
+                        status_code: redirect.status_code,
+                    },
+                })
+            } else {
+                None
+            }
+        } else if &self.code == SG_FILTER_REWRITE_CODE {
+            if let Ok(rewrite) = TardisFuns::json.json_to_obj::<SgFilterRewrite>(self.spec) {
+                Some(HttpRouteFilter::URLRewrite {
+                    url_rewrite: HttpUrlRewriteFilter {
+                        hostname: rewrite.hostname,
+                        path: rewrite.path.map(|p| p.to_http_path_modifier()),
+                    },
+                })
+            } else {
+                None
+            }
         } else {
             None
+        }
+    }
+}
+
+impl SgHttpPathModifier {
+    pub fn to_http_path_modifier(self) -> HttpPathModifier {
+        match self.kind {
+            SgHttpPathModifierType::ReplaceFullPath => HttpPathModifier::ReplaceFullPath { replace_full_path: self.value },
+            SgHttpPathModifierType::ReplacePrefixMatch => HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: self.value },
         }
     }
 }

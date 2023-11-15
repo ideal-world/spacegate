@@ -79,7 +79,7 @@ async fn test_webscoket() -> TardisResult<()> {
                 filters: Some(vec![SgRouteFilter {
                     code: "rewrite".to_string(),
                     name: None,
-                    spec: TardisFuns::json.obj_to_json(&filters::rewrite::SgFilterRewrite {
+                    spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterRewrite {
                         hostname: None,
                         path: Some(plugin_filter::SgHttpPathModifier {
                             kind: plugin_filter::SgHttpPathModifierType::ReplacePrefixMatch,
