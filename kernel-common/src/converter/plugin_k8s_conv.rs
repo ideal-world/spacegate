@@ -9,20 +9,31 @@ use std::hash::{Hash, Hasher};
 use tardis::TardisFuns;
 
 impl SgRouteFilter {
-    pub fn to_singe_filter(self, target: K8sSgFilterSpecTargetRef) -> SgSingeFilter {
-        SgSingeFilter {
-            name: self.name,
-            namespace: target.namespace.clone().unwrap_or(DEFAULT_NAMESPACE.to_string()),
-            filter: K8sSgFilterSpecFilter {
-                code: self.code,
-                name: None,
-                enable: true,
-                config: self.spec,
-            },
-            target_ref: target,
+    /// # to_singe_filter
+    /// `to_single_filter` method and [SgRouteFilter::to_http_route_filter] method both convert from
+    /// `SgRouteFilter`to the k8s model. The difference lies in that `to_single_filter` only includes
+    /// the k8s object of `SGFilter`, whereas `to_http_route_filter` is used to convert to `HttpRouteFilter`,
+    /// a filter defined in the Gateway API.
+    pub fn to_singe_filter(self, target: K8sSgFilterSpecTargetRef) -> Option<SgSingeFilter> {
+        if self.code == SG_FILTER_HEADER_MODIFIER_CODE || self.code == SG_FILTER_REDIRECT_CODE || self.code == SG_FILTER_REWRITE_CODE {
+            None
+        } else {
+            Some(SgSingeFilter {
+                name: self.name,
+                namespace: target.namespace.clone().unwrap_or(DEFAULT_NAMESPACE.to_string()),
+                filter: K8sSgFilterSpecFilter {
+                    code: self.code,
+                    name: None,
+                    enable: true,
+                    config: self.spec,
+                },
+                target_ref: target,
+            })
         }
     }
 
+    /// # to_http_route_filter
+    /// ref [SgRouteFilter::to_singe_filter]
     pub fn to_http_route_filter(self) -> Option<HttpRouteFilter> {
         if &self.code == SG_FILTER_HEADER_MODIFIER_CODE {
             if let Ok(header) = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(self.spec) {

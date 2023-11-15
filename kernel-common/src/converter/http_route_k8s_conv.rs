@@ -1,5 +1,7 @@
+use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
 use crate::helper::k8s_helper::{get_k8s_obj_unique, parse_k8s_obj_unique};
+use crate::inner_model::gateway::SgProtocol;
 use crate::inner_model::http_route::{
     SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
     SgHttpRouteRule,
@@ -29,7 +31,7 @@ impl SgHttpRoute {
                             .map(|filters| {
                                 filters
                                     .into_iter()
-                                    .map(|f| {
+                                    .filter_map(|f| {
                                         f.to_singe_filter(K8sSgFilterSpecTargetRef {
                                             kind: "HTTPSpaceroute".to_string(),
                                             name: self.name.clone(),
@@ -52,7 +54,7 @@ impl SgHttpRoute {
                                             .map(|b_f_vec| {
                                                 b_f_vec
                                                     .iter()
-                                                    .map(|b_f| {
+                                                    .filter_map(|b_f| {
                                                         b_f.clone().to_singe_filter(K8sSgFilterSpecTargetRef {
                                                             kind: "HTTPSpaceroute".to_string(),
                                                             name: self.name.clone(),
@@ -83,7 +85,7 @@ impl SgHttpRoute {
                 .map(|filters| {
                     filters
                         .into_iter()
-                        .map(|f| {
+                        .filter_map(|f| {
                             f.to_singe_filter(K8sSgFilterSpecTargetRef {
                                 kind: "HTTPSpaceroute".to_string(),
                                 name: self.name.clone(),
@@ -135,7 +137,8 @@ impl SgHttpRoute {
 }
 
 impl SgHttpRouteRule {
-    /// `SgHttpRouteRule` to `HttpRouteRule`, excluding SgFilter.
+    /// # to_kube_httproute
+    /// `SgHttpRouteRule` to `HttpRouteRule`, include `HttpRouteFilter` and  excluding `SgFilter`.
     pub(crate) fn to_kube_httproute(self) -> HttpRouteRule {
         HttpRouteRule {
             matches: self.matches.map(|m_vec| m_vec.into_iter().map(|m| m.to_kube_httproute()).flatten().collect::<Vec<_>>()),
@@ -210,21 +213,32 @@ impl SgHttpQueryMatch {
 }
 
 impl SgBackendRef {
-    //todo excluding SgFilter.
     pub(crate) fn to_kube_httproute(self) -> HttpBackendRef {
+        let kind = if self.namespace.is_none() {
+            match self.protocol {
+                Some(SgProtocol::Http) => Some(BANCKEND_KIND_EXTERNAL_HTTP.to_string()),
+                Some(SgProtocol::Https) => Some(BANCKEND_KIND_EXTERNAL_HTTPS.to_string()),
+                Some(SgProtocol::Ws) => Some(BANCKEND_KIND_EXTERNAL.to_string()),
+                Some(SgProtocol::Wss) => Some(BANCKEND_KIND_EXTERNAL.to_string()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         HttpBackendRef {
             backend_ref: Some(BackendRef {
-                weight: None,
-                timeout_ms: None,
+                weight: self.weight,
+                timeout_ms: self.timeout_ms,
                 inner: BackendObjectReference {
                     group: None,
-                    kind: None,
+                    kind,
                     name: self.name_or_host,
                     namespace: self.namespace,
-                    port: None,
+                    port: Some(self.port),
                 },
             }),
-            filters: None,
+            filters: self.filters.map(|f_vec| f_vec.into_iter().filter_map(|f| f.to_http_route_filter()).collect()),
         }
     }
 }

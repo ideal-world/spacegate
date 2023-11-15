@@ -18,9 +18,9 @@ use tardis::{
 
 use crate::{do_startup, functions::http_route, shutdown};
 
-use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::helpers::k8s_helper;
 use kernel_common::constants::k8s_constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
+use kernel_common::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind;
 use kernel_common::helper;
 use kernel_common::helper::k8s_helper::{get_k8s_obj_unique, WarpKubeResult};
