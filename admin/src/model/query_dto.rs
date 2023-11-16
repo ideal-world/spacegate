@@ -1,7 +1,5 @@
 use crate::helper::fuzzy_regex;
-use crate::model::base_dto::TargetRefDTO;
-#[cfg(feature = "k8s")]
-use crate::model::ToFields;
+
 use tardis::basic::result::TardisResult;
 use tardis::regex::Regex;
 
@@ -10,6 +8,7 @@ pub trait ToInstance<T: Instance> {
     fn to_instance(self) -> TardisResult<T>;
 }
 
+#[derive(Default)]
 pub struct BackendRefQueryDto {
     pub(crate) names: Option<Vec<String>>,
     pub(crate) namespace: Option<String>,

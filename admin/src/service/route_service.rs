@@ -5,11 +5,16 @@ use crate::model::vo::Vo;
 use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use crate::service::plugin_service::PluginK8sService;
-use k8s_gateway_api::Gateway;
-use kernel_common::converter::plugin_k8s_conv::SgSingeFilter;
-use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult};
-use kernel_common::k8s_crd::http_spaceroute::HttpSpaceroute;
+
+#[cfg(feature = "k8s")]
+use kernel_common::{
+    converter::plugin_k8s_conv::SgSingeFilter,
+    helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult},
+    k8s_crd::http_spaceroute::HttpSpaceroute,
+};
+#[cfg(feature = "k8s")]
 use kube::api::{DeleteParams, PostParams};
+#[cfg(feature = "k8s")]
 use kube::Api;
 use std::collections::HashSet;
 use tardis::basic::result::TardisResult;
@@ -26,16 +31,13 @@ impl HttpRouteVoService {
                 map.into_values().collect()
             } else {
                 map.into_values()
-                    .into_iter()
                     .filter(|r| {
                         query.names.as_ref().map_or(true, |names| names.iter().any(|n| n.is_match(&r.name)))
                             && query.gateway_name.as_ref().map_or(true, |gateway_name| gateway_name.is_match(&r.gateway_name))
                             && query.hostnames.as_ref().map_or(true, |hostnames| {
                                 r.hostnames.as_ref().map_or(false, |r_hostnames| hostnames.iter().any(|hn| r_hostnames.iter().any(|rn| hn.is_match(rn))))
                             })
-                            && query.filter_ids.as_ref().map_or(true, |filter_ids| {
-                                r.filters.as_ref().map_or(false, |r_filters| filter_ids.iter().any(|f_id| r_filters.iter().any(|rf| f_id.is_match(rf))))
-                            })
+                            && query.filter_ids.as_ref().map_or(true, |filter_ids| r.filters.iter().any(|f_id| filter_ids.iter().any(|rf| rf.is_match(f_id))))
                     })
                     .collect::<Vec<SgHttpRouteVo>>()
             },
@@ -59,7 +61,7 @@ impl HttpRouteVoService {
 
             PluginK8sService::add_sgfilter_vec(&sgfilters.iter().collect::<Vec<_>>()).await?
         }
-        Ok(Self::add_vo(add).await?)
+        Self::add_vo(add).await
     }
     pub(crate) async fn update(update: SgHttpRouteVo) -> TardisResult<SgHttpRouteVo> {
         let update_un = &update.get_unique_name();
@@ -75,7 +77,7 @@ impl HttpRouteVoService {
 
             Self::update_httproute_filter(old_sg_httproute.to_kube_httproute().1, update_filter).await?;
         }
-        Ok(Self::update_vo(update).await?)
+        Self::update_vo(update).await
     }
 
     pub(crate) async fn delete(id: &str) -> TardisResult<()> {
@@ -86,7 +88,7 @@ impl HttpRouteVoService {
 
             http_route_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete HttpSpaceroute")?;
 
-            let old_sg_httproute = Self::get_by_id(&id).await?.to_model().await?;
+            let old_sg_httproute = Self::get_by_id(id).await?.to_model().await?;
             let (_, f_v) = old_sg_httproute.to_kube_httproute();
             PluginK8sService::delete_sgfilter_vec(&f_v.iter().collect::<Vec<_>>()).await?;
         }

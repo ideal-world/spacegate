@@ -19,9 +19,9 @@ pub struct SgHttpRouteVo {
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
     /// [crate::model::vo::plugin_vo::SgFilterVo]'s id
-    pub filters: Option<Vec<String>>,
+    pub filters: Vec<String>,
     /// Rules are a list of HTTP matchers, filters and actions.
-    pub rules: Option<Vec<SgHttpRouteRuleVo>>,
+    pub rules: Vec<SgHttpRouteRuleVo>,
 }
 
 impl Vo for SgHttpRouteVo {
@@ -40,9 +40,9 @@ pub struct SgHttpRouteRuleVo {
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,
     /// [crate::model::vo::plugin_vo::SgFilterVo]'s id
-    pub filters: Option<Vec<String>>,
+    pub filters: Vec<String>,
     /// [crate::model::vo::backend_vo::SgBackendRefVo]'s id
-    pub backends: Option<Vec<String>>,
+    pub backends: Vec<String>,
     /// Timeout define the timeout for requests that match this rule.
     pub timeout_ms: Option<u64>,
 }

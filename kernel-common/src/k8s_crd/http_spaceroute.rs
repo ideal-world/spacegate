@@ -1,5 +1,5 @@
 use crate::constants;
-use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Group, Hostname, HttpRoute, HttpRouteFilter, HttpRouteMatch, Kind, Namespace, ObjectName, PortNumber, RouteStatus};
+use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Hostname, HttpRoute, HttpRouteFilter, HttpRouteMatch, RouteStatus};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use std::collections::BTreeMap;
 

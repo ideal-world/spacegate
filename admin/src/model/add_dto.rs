@@ -1,9 +1,6 @@
-use crate::model::vo::gateway_vo::{SgGatewayVo, SgListenerVo};
-use crate::model::vo::http_route_vo::{SgHttpRouteRuleVo, SgHttpRouteVo};
 use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::model::vo::Vo;
-use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, get_k8s_obj_unique};
-use kernel_common::inner_model::gateway::SgParameters;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tardis::basic::result::TardisResult;

@@ -1,10 +1,11 @@
 use crate::constants::TYPE_CONFIG_NAME_MAP;
+#[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
 use crate::model::vo::Vo;
-use k8s_openapi::api::core::v1::ConfigMap;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::api::PostParams;
-use kube::Api;
+#[cfg(feature = "k8s")]
+use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
+#[cfg(feature = "k8s")]
+use kube::{api::PostParams, Api};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -75,7 +76,7 @@ where
     {
         let id = config.get_unique_name();
         let mut datas = Self::get_str_type_map().await?;
-        if let Some(_) = datas.get(&id) {
+        if datas.get(&id).is_some() {
             if add_only {
                 return Err(TardisError::bad_request(&format!("[SG.admin] {}:{} already exists", T::get_vo_type(), id), ""));
             } else {
@@ -110,7 +111,7 @@ where
 
     async fn delete_vo(config_id: &str) -> TardisResult<()> {
         let mut datas = Self::get_str_type_map().await?;
-        if let Some(_) = datas.remove(config_id) {
+        if datas.remove(config_id).is_some() {
             get_config_map_api()
                 .await?
                 .replace(
@@ -313,13 +314,13 @@ mod test {
         BackendRefVoService::add_vo(add_o_1.clone()).await.unwrap();
         assert!(BackendRefVoService::add_vo(add_o_1.clone()).await.is_err());
 
-        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(&BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
+        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
         assert_eq!(get_o_1.port, add_o_1.port);
 
         add_o_1.port = 1832;
         BackendRefVoService::update_vo(add_o_1.clone()).await.unwrap();
 
-        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(&BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
+        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
         assert_eq!(get_o_1.port, add_o_1.port);
 
         BackendRefVoService::delete_vo(&add_o_1.get_unique_name()).await.unwrap();

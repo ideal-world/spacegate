@@ -13,9 +13,9 @@ pub async fn get_k8s_client() -> TardisResult<Client> {
 
 /// Convert fuzzy search queries into regular instance
 pub fn fuzzy_regex(query: impl AsRef<str>) -> TardisResult<Regex> {
-    let fuzzy_ = Regex::new(r#"(?<frist>[^\\]?)\*(?<last>\w*)"#)?;
+    let fuzzy_ = Regex::new(r"(?<frist>[^\\]?)\*(?<last>\w*)")?;
     let query = fuzzy_.replace_all(query.as_ref(), |caps: &regex::Captures| format!("{}.*{}", &caps["frist"], &caps["last"]));
-    Ok(Regex::new(&format!("^{}$", query))?.into())
+    Ok(Regex::new(&format!("^{}$", query))?)
 }
 
 pub fn find_add_delete<T>(new: Vec<T>, old: Vec<T>) -> (Vec<T>, Vec<T>)

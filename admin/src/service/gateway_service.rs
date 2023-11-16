@@ -1,6 +1,6 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
-use crate::model::query_dto::{GatewayQueryDto, GatewayQueryInst, ToInstance};
+use crate::model::query_dto::GatewayQueryInst;
 use crate::model::vo::gateway_vo::SgGatewayVo;
 use crate::model::vo::Vo;
 #[cfg(feature = "k8s")]
@@ -17,7 +17,9 @@ use kube::Api;
 use super::base_service::VoBaseService;
 use crate::model::vo_converter::VoConv;
 use crate::service::plugin_service::PluginK8sService;
+#[cfg(feature = "k8s")]
 use kernel_common::converter::plugin_k8s_conv::SgSingeFilter;
+#[cfg(feature = "k8s")]
 use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult};
 use tardis::basic::result::TardisResult;
 
@@ -27,7 +29,7 @@ impl VoBaseService<SgGatewayVo> for GatewayVoService {}
 
 impl GatewayVoService {
     pub async fn list(query: GatewayQueryInst) -> TardisResult<Vec<SgGatewayVo>> {
-        Ok(Self::get_type_map().await?.into_values().into_iter().filter(|g|
+        Ok(Self::get_type_map().await?.into_values().filter(|g|
             if let Some(q_name) = &query.names { q_name.iter().any(|q|q.is_match(&g.name)) } else { true }
                 && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }
                 && if let Some(q_hostname) = &query.hostname {
@@ -57,7 +59,7 @@ impl GatewayVoService {
     }
 
     pub async fn update_by_id(id: &str) -> TardisResult<SgGatewayVo> {
-        let gateway_o = Self::get_by_id(&id).await?;
+        let gateway_o = Self::get_by_id(id).await?;
         GatewayVoService::update(gateway_o).await
     }
 
@@ -75,7 +77,7 @@ impl GatewayVoService {
 
             Self::update_gateway_filter(old_sg_gateway.to_kube_gateway().1, update_filter).await?;
         }
-        Ok(Self::update_vo(update).await?)
+        Self::update_vo(update).await
     }
 
     pub async fn delete(id: &str) -> TardisResult<()> {
@@ -86,7 +88,7 @@ impl GatewayVoService {
 
             gateway_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete Gateway")?;
 
-            let old_sg_gateway = Self::get_by_id(&id).await?.to_model().await?;
+            let old_sg_gateway = Self::get_by_id(id).await?.to_model().await?;
             let (_, f_v) = old_sg_gateway.to_kube_gateway();
             PluginK8sService::delete_sgfilter_vec(&f_v.iter().collect::<Vec<_>>()).await?;
         }

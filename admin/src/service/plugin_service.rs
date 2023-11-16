@@ -1,22 +1,19 @@
 #[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
-use crate::model::query_dto::{PluginQueryDto, PluginQueryInst};
+use crate::model::query_dto::PluginQueryInst;
 use crate::model::vo::plugin_vo::SgFilterVo;
-use crate::model::vo::Vo;
+
 use crate::service::base_service::VoBaseService;
 #[cfg(feature = "k8s")]
-use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
-use kernel_common::converter::plugin_k8s_conv::SgSingeFilter;
-use kernel_common::helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult};
-use kernel_common::k8s_crd::sg_filter::K8sSgFilterSpecFilter;
+use kernel_common::{
+    constants::k8s_constants::DEFAULT_NAMESPACE, converter::plugin_k8s_conv::SgSingeFilter, helper::k8s_helper::WarpKubeResult, k8s_crd::sg_filter::K8sSgFilterSpecFilter,
+    k8s_crd::sg_filter::SgFilter,
+};
 #[cfg(feature = "k8s")]
-use kernel_common::k8s_crd::sg_filter::SgFilter;
 use kube::api::{ListParams, PostParams};
 #[cfg(feature = "k8s")]
-use kube::Api;
-use kube::ResourceExt;
+use kube::{Api, ResourceExt};
 use std::collections::HashMap;
-use std::ptr::eq;
 use tardis::basic::result::TardisResult;
 
 pub struct PluginVoService;
@@ -33,10 +30,9 @@ impl PluginVoService {
         } else {
             Ok(map
                 .into_values()
-                .into_iter()
                 .filter(|f| {
                     query.ids.as_ref().map_or(true, |ids| ids.iter().any(|id| id.is_match(&f.id)))
-                        && query.name.as_ref().map_or(true, |name| f.name.as_ref().map_or(false, |f_name| name.is_match(&f_name)))
+                        && query.name.as_ref().map_or(true, |name| f.name.as_ref().map_or(false, |f_name| name.is_match(f_name)))
                         && query.code.as_ref().map_or(true, |code| code.is_match(&f.code))
                 })
                 .collect::<Vec<SgFilterVo>>())
@@ -44,10 +40,10 @@ impl PluginVoService {
     }
 
     pub(crate) async fn add(add: SgFilterVo) -> TardisResult<SgFilterVo> {
-        Ok(Self::add_vo(add).await?)
+        Self::add_vo(add).await
     }
     pub(crate) async fn update(update: SgFilterVo) -> TardisResult<SgFilterVo> {
-        Ok(Self::update_vo(update).await?)
+        Self::update_vo(update).await
     }
 
     pub(crate) async fn delete(id: &str) -> TardisResult<()> {
@@ -103,7 +99,7 @@ impl PluginK8sService {
                 filter_map.get(&sf.namespace).expect("")
             };
 
-            if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
+            if let Some(old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
                 if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
                     if let Some(mut old_filter) = old_sf.spec.filters.iter().find(|qsf| qsf.code == sf.filter.code) {
                         if old_filter.name != sf.filter.name && old_filter.config != sf.filter.config {

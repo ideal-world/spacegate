@@ -1,8 +1,40 @@
+use crate::model::query_dto::{PluginQueryDto, ToInstance};
 use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::model::vo_converter::VoConv;
+use crate::service::plugin_service::PluginVoService;
 use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use tardis::async_trait::async_trait;
 use tardis::basic::result::TardisResult;
+use tardis::futures_util::future::join_all;
+
+pub struct SgFilterVoConv {}
+
+impl SgFilterVoConv {
+    pub(crate) async fn ids_to_filter(filters: Vec<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
+        Ok(if filters.is_empty() {
+            Some(
+                join_all(
+                    PluginVoService::list(
+                        PluginQueryDto {
+                            ids: Some(filters),
+                            ..Default::default()
+                        }
+                        .to_instance()?,
+                    )
+                    .await?
+                    .into_iter()
+                    .map(|f| f.to_model())
+                    .collect::<Vec<_>>(),
+                )
+                .await
+                .into_iter()
+                .collect::<TardisResult<Vec<_>>>()?,
+            )
+        } else {
+            None
+        })
+    }
+}
 
 #[async_trait]
 impl VoConv<SgRouteFilter, SgFilterVo> for SgFilterVo {
@@ -14,7 +46,7 @@ impl VoConv<SgRouteFilter, SgFilterVo> for SgFilterVo {
         })
     }
 
-    async fn from_model(model: SgRouteFilter) -> TardisResult<SgFilterVo> {
+    async fn from_model(_model: SgRouteFilter) -> TardisResult<SgFilterVo> {
         todo!()
     }
 }

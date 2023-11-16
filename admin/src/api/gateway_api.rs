@@ -25,7 +25,7 @@ impl GatewayApi {
         let result = GatewayVoService::list(
             GatewayQueryDto {
                 names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
-                port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|e| TardisError::bad_request("bad port format", ""))?,
+                port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|_e| TardisError::bad_request("bad port format", ""))?,
                 hostname: hostname.0,
                 tls_ids: tls_ids.0.map(|tls_ids| tls_ids.split(',').map(|tls_id| tls_id.to_string()).collect()),
             }
