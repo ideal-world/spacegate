@@ -8,12 +8,14 @@ pub const TLS_CONFIG_NAME: &str = "tls-config";
 pub const PLUGIN_CONFIG_NAME: &str = "plugin-config";
 pub const ROUTE_CONFIG_NAME: &str = "route-config";
 pub const BACKEND_REF_CONFIG_NAME: &str = "backend-ref-config";
+pub const CLUSTER_CONFIG_NAME: &str = "k8s-cluster-config";
 
 pub const GATEWAY_TYPE: &str = "Gateway";
 pub const TLS_CONFIG_TYPE: &str = "TlsConfig";
 pub const PLUGIN_TYPE: &str = "Plugin";
 pub const ROUTE_TYPE: &str = "Route";
 pub const BACKEND_REF_TYPE: &str = "BackendRef";
+pub const CLUSTER_TYPE: &str = "Cluster";
 
 lazy_static! {
     pub static ref TYPE_CONFIG_NAME_MAP: HashMap<&'static str, &'static str> = {

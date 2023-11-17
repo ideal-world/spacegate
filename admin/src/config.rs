@@ -5,6 +5,21 @@ use tardis::serde::{Deserialize, Serialize};
 pub struct SpacegateAdminConfig {
     #[cfg(feature = "k8s")]
     pub k8s_config: Option<K8sConfig>,
+    /// # `KUBECONFIG`
+    ///
+    /// ## Alternative operations
+    ///
+    /// ### Linux/macOS:
+    /// ```bash
+    /// export KUBECONFIG=/path/to/your/config
+    ///```
+    ///
+    /// ### Windows:
+    /// ```cmd
+    /// set KUBECONFIG=<C>:\path\to\your\config
+    /// ```
+    #[cfg(feature = "k8s")]
+    pub kube_config: Option<String>,
 }
 
 #[cfg(feature = "k8s")]

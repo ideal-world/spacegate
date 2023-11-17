@@ -1,7 +1,14 @@
 use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
-use kube::{Client, ResourceExt};
+use kube::config::{KubeConfigOptions, Kubeconfig};
+use kube::{Client, Config, ResourceExt};
+use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
+use tardis::tokio::sync::RwLock;
+
+lazy_static! {
+    static ref GLOBAL_CLIENT: RwLock<Option<Client>> = RwLock::default();
+}
 
 /// In k8s, names of resources need to be unique within a namespace
 pub fn format_k8s_obj_unique(namespace: Option<&String>, name: &str) -> String {
@@ -51,7 +58,30 @@ impl<T> WarpKubeResult<T> for kube::Result<T> {
     }
 }
 
-//todo 可配置化 request merge with admin::helper::get_k8s_client()
-pub async fn get_k8s_client() -> TardisResult<Client> {
-    Client::try_default().await.map_err(|error| TardisError::wrap(&format!("[SG.admin] Get kubernetes client error: {error:?}"), ""))
+pub async fn get_base_k8s_client() -> TardisResult<Client> {
+    let global = GLOBAL_CLIENT.read().await;
+    if let Some(client) = global.as_ref() {
+        Ok(client.clone())
+    } else {
+        Client::try_default().await.map_err(|error| TardisError::wrap(&format!("[SG.admin] Get kubernetes client error: {error:?}"), ""))
+    }
+}
+
+pub async fn set_k8s_client_by_file(path: &str) -> TardisResult<()> {
+    let kube_config = Kubeconfig::read_from(path).map_err(|e| TardisError::conflict(&format!("[SG.admin] Read kubernetes config error:{e}"), ""))?;
+    set_k8s_client_by_config(kube_config).await?;
+
+    Ok(())
+}
+
+pub async fn set_k8s_client_by_config(kube_config: Kubeconfig) -> TardisResult<()> {
+    let config = Config::from_custom_kubeconfig(kube_config, &KubeConfigOptions::default())
+        .await
+        .map_err(|e| TardisError::conflict(&format!("[SG.admin] Parse kubernetes config error:{e}"), ""))?;
+
+    let client = Client::try_from(config).map_err(|e| TardisError::conflict(&format!("[SG.admin] Create kubernetes client error:{e}"), ""))?;
+    let mut golabl = GLOBAL_CLIENT.write().await;
+    *golabl = Some(client);
+
+    Ok(())
 }
