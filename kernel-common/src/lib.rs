@@ -1,3 +1,4 @@
+pub mod client;
 pub mod constants;
 #[cfg(feature = "k8s")]
 pub mod converter;

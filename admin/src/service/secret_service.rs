@@ -1,11 +1,13 @@
+use crate::helper::get_k8s_client;
 use crate::model::query_dto::{GatewayQueryDto, SgTlsQueryInst, ToInstance};
 use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
 use crate::service::gateway_service::GatewayVoService;
 use k8s_openapi::api::core::v1::Secret;
+use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 #[cfg(feature = "k8s")]
 use kernel_common::{
-    helper::k8s_helper::{format_k8s_obj_unique, get_base_k8s_client, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult},
+    helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult},
     inner_model::gateway::SgTls,
 };
 use kube::api::{DeleteParams, PostParams};
@@ -37,7 +39,7 @@ impl TlsVoService {
         #[cfg(feature = "k8s")]
         {
             let (namespace, _) = parse_k8s_unique_or_default(&add.get_unique_name());
-            let secret_api: Api<Secret> = Api::namespaced(get_base_k8s_client().await?, &namespace);
+            let secret_api: Api<Secret> = Self::get_secret_api(&Some(namespace)).await?;
             let s = add_model.to_kube_tls();
             secret_api.create(&PostParams::default(), &s).await.warp_result_by_method("Add Secret")?;
         }
@@ -51,7 +53,7 @@ impl TlsVoService {
             #[cfg(feature = "k8s")]
             {
                 let (namespace, name) = parse_k8s_obj_unique(&unique_name);
-                let secret_api: Api<Secret> = Api::namespaced(get_base_k8s_client().await?, &namespace);
+                let secret_api: Api<Secret> = Self::get_secret_api(&Some(namespace)).await?;
                 let s = update.clone().to_kube_tls();
                 secret_api.replace(&name, &PostParams::default(), &s).await.warp_result_by_method("Update Secret")?;
             }
@@ -66,7 +68,7 @@ impl TlsVoService {
         #[cfg(feature = "k8s")]
         {
             let (namespace, name) = parse_k8s_obj_unique(id);
-            let secret_api: Api<Secret> = Api::namespaced(get_base_k8s_client().await?, &namespace);
+            let secret_api: Api<Secret> = Self::get_secret_api(&Some(namespace)).await?;
             secret_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete Secret")?;
         }
         let gateways = GatewayVoService::list(GatewayQueryDto { ..Default::default() }.to_instance()?).await?;
@@ -82,5 +84,10 @@ impl TlsVoService {
                 "",
             ))
         }
+    }
+
+    #[cfg(feature = "k8s")]
+    async fn get_secret_api(namespace: &Option<String>) -> TardisResult<Api<Secret>> {
+        Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
     }
 }

@@ -13,7 +13,7 @@ use kernel_common::{
 use kube::api::{ListParams, PostParams};
 #[cfg(feature = "k8s")]
 use kube::{Api, ResourceExt};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tardis::basic::result::TardisResult;
 
 pub struct PluginVoService;
@@ -42,6 +42,7 @@ impl PluginVoService {
     pub(crate) async fn add(add: SgFilterVo) -> TardisResult<SgFilterVo> {
         Self::add_vo(add).await
     }
+
     pub(crate) async fn update(update: SgFilterVo) -> TardisResult<SgFilterVo> {
         Self::update_vo(update).await
     }
@@ -50,20 +51,32 @@ impl PluginVoService {
         Self::delete_vo(id).await?;
         Ok(())
     }
-
-    #[cfg(feature = "k8s")]
-    #[inline]
-    pub async fn get_filter_api(namespace: &Option<String>) -> TardisResult<Api<SgFilter>> {
-        Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
-    }
 }
 
 #[cfg(feature = "k8s")]
 impl PluginK8sService {
+    pub(crate) async fn update_filter_changes(old: Vec<SgSingeFilter>, update: Vec<SgSingeFilter>) -> TardisResult<()> {
+        if old.is_empty() && update.is_empty() {
+            return Ok(());
+        }
+
+        let old_set: HashSet<_> = old.into_iter().collect();
+        let update_set: HashSet<_> = update.into_iter().collect();
+
+        let update_vec: Vec<_> = old_set.intersection(&update_set).collect();
+        PluginK8sService::update_sgfilter_vec(&update_vec).await?;
+        let add_vec: Vec<_> = update_set.difference(&old_set).collect();
+        PluginK8sService::add_sgfilter_vec(&add_vec).await?;
+        let delete_vec: Vec<_> = old_set.difference(&update_set).collect();
+        PluginK8sService::delete_sgfilter_vec(&delete_vec).await?;
+
+        Ok(())
+    }
+
     pub async fn add_sgfilter_vec(sgfilters: &[&SgSingeFilter]) -> TardisResult<()> {
         let mut filter_map = HashMap::new();
         for sf in sgfilters {
-            let filter_api: Api<SgFilter> = PluginVoService::get_filter_api(&Some(sf.namespace.clone())).await?;
+            let filter_api: Api<SgFilter> = Self::get_filter_api(&Some(sf.namespace.clone())).await?;
 
             let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
                 filter_list
@@ -89,7 +102,7 @@ impl PluginK8sService {
     pub async fn update_sgfilter_vec(sgfilters: &[&SgSingeFilter]) -> TardisResult<()> {
         let mut filter_map = HashMap::new();
         for sf in sgfilters {
-            let filter_api: Api<SgFilter> = PluginVoService::get_filter_api(&Some(sf.namespace.clone())).await?;
+            let filter_api: Api<SgFilter> = Self::get_filter_api(&Some(sf.namespace.clone())).await?;
 
             let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
                 filter_list
@@ -123,7 +136,7 @@ impl PluginK8sService {
     pub async fn delete_sgfilter_vec(sgfilters: &[&SgSingeFilter]) -> TardisResult<()> {
         let mut filter_map = HashMap::new();
         for sf in sgfilters {
-            let filter_api: Api<SgFilter> = PluginVoService::get_filter_api(&Some(sf.namespace.clone())).await?;
+            let filter_api: Api<SgFilter> = Self::get_filter_api(&Some(sf.namespace.clone())).await?;
 
             let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
                 filter_list
@@ -141,5 +154,10 @@ impl PluginK8sService {
             }
         }
         Ok(())
+    }
+
+    #[inline]
+    pub async fn get_filter_api(namespace: &Option<String>) -> TardisResult<Api<SgFilter>> {
+        Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
     }
 }

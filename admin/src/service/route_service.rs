@@ -6,9 +6,10 @@ use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use crate::service::plugin_service::PluginK8sService;
 
+use k8s_openapi::api::core::v1::Secret;
+use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 #[cfg(feature = "k8s")]
 use kernel_common::{
-    converter::plugin_k8s_conv::SgSingeFilter,
     helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult},
     k8s_crd::http_spaceroute::HttpSpaceroute,
 };
@@ -16,7 +17,6 @@ use kernel_common::{
 use kube::api::{DeleteParams, PostParams};
 #[cfg(feature = "k8s")]
 use kube::Api;
-use std::collections::HashSet;
 use tardis::basic::result::TardisResult;
 
 pub struct HttpRouteVoService;
@@ -75,7 +75,7 @@ impl HttpRouteVoService {
             let (update_httproute, update_filter) = update_sg_httproute.to_kube_httproute();
             http_route_api.replace(&name, &PostParams::default(), &update_httproute).await.warp_result_by_method("Replace HttpSpaceroute")?;
 
-            Self::update_httproute_filter(old_sg_httproute.to_kube_httproute().1, update_filter).await?;
+            PluginK8sService::update_filter_changes(old_sg_httproute.to_kube_httproute().1, update_filter).await?;
         }
         Self::update_vo(update).await
     }
@@ -84,7 +84,7 @@ impl HttpRouteVoService {
         let (namespace, name) = parse_k8s_obj_unique(id);
         #[cfg(feature = "k8s")]
         {
-            let http_route_api: Api<HttpSpaceroute> = Api::namespaced(get_k8s_client().await?, &namespace);
+            let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(&Some(namespace)).await?;
 
             http_route_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete HttpSpaceroute")?;
 
@@ -96,23 +96,9 @@ impl HttpRouteVoService {
         Ok(())
     }
 
-    //todo 和gateway_service 里的那个合并
     #[cfg(feature = "k8s")]
-    async fn update_httproute_filter(old: Vec<SgSingeFilter>, update: Vec<SgSingeFilter>) -> TardisResult<()> {
-        if old.is_empty() && update.is_empty() {
-            return Ok(());
-        }
-
-        let old_set: HashSet<_> = old.into_iter().collect();
-        let update_set: HashSet<_> = update.into_iter().collect();
-
-        let update_vec: Vec<_> = old_set.intersection(&update_set).collect();
-        PluginK8sService::update_sgfilter_vec(&update_vec).await?;
-        let add_vec: Vec<_> = update_set.difference(&old_set).collect();
-        PluginK8sService::add_sgfilter_vec(&add_vec).await?;
-        let delete_vec: Vec<_> = old_set.difference(&update_set).collect();
-        PluginK8sService::delete_sgfilter_vec(&delete_vec).await?;
-
-        Ok(())
+    #[inline]
+    async fn get_spaceroute_api(namespace: &Option<String>) -> TardisResult<Api<HttpSpaceroute>> {
+        Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
     }
 }

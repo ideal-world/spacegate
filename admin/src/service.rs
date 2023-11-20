@@ -4,3 +4,4 @@ pub(crate) mod gateway_service;
 pub(crate) mod plugin_service;
 pub(crate) mod route_service;
 pub(crate) mod secret_service;
+pub(crate) mod spacegate_manage_service;

@@ -4,6 +4,7 @@ use tardis::basic::result::TardisResult;
 use tardis::web::web_server::{TardisWebServer, WebServerModule};
 
 pub(crate) async fn init(web_server: &TardisWebServer) -> TardisResult<()> {
+    // todo 根据现有的k8s资源初始化成VO
     init_api(web_server).await
 }
 

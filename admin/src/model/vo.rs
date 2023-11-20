@@ -1,8 +1,8 @@
 pub mod backend_vo;
 pub mod gateway_vo;
 pub mod http_route_vo;
-pub mod k8s_cluster_vo;
 pub mod plugin_vo;
+pub mod spacegate_inst_vo;
 pub mod tls_vo;
 
 /// Vo is a base until for admin.

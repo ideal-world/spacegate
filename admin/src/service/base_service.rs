@@ -1,10 +1,7 @@
 use crate::constants::TYPE_CONFIG_NAME_MAP;
-#[cfg(feature = "k8s")]
 use crate::helper::get_k8s_client;
 use crate::model::vo::Vo;
-#[cfg(feature = "k8s")]
 use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
-#[cfg(feature = "k8s")]
 use kube::{api::PostParams, Api};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -54,7 +51,6 @@ where
         }
     }
 
-    #[cfg(feature = "k8s")]
     async fn add_vo(config: T) -> TardisResult<T>
     where
         T: 'async_trait,
@@ -62,7 +58,6 @@ where
         Self::add_or_update_vo(config, true).await
     }
 
-    #[cfg(feature = "k8s")]
     async fn update_vo(config: T) -> TardisResult<T>
     where
         T: 'async_trait,
@@ -135,125 +130,6 @@ where
     }
 }
 
-//todo remove
-// impl BaseService {
-//     #[cfg(feature = "k8s")]
-//     pub async fn get_type_map<'a, T>() -> TardisResult<HashMap<String, String>>
-//     where
-//         T: Vo + Deserialize<'a>,
-//     {
-//         if let Some(t_config) =
-//             get_config_map_api().await?.get_opt(&get_config_name::<T>()).await.map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error: {e}"), ""))?
-//         {
-//             if let Some(b_map) = t_config.data {
-//                 Ok(b_map.into_iter().collect())
-//             } else {
-//                 Ok(HashMap::new())
-//             }
-//         } else {
-//             init_config_map_by_t::<T>().await?;
-//             Ok(HashMap::new())
-//         }
-//     }
-
-//     pub async fn get_by_id<T>(id: &str) -> TardisResult<String>
-//     where
-//         T: Vo + Deserialize<'a>,
-//     {
-//         if let Some(t_str) = BaseService::get_type_map::<T>().await?.remove(id) {
-//             Ok(t_str)
-//         } else {
-//             Err(TardisError::not_found("", ""))
-//         }
-//     }
-
-//     #[cfg(feature = "k8s")]
-//     pub async fn add<'a, T>(config: T) -> TardisResult<T>
-//     where
-//         T: Vo + Serialize + Deserialize<'a>,
-//     {
-//         Self::add_or_update::<T>(config, true).await
-//     }
-
-//     #[cfg(feature = "k8s")]
-//     pub async fn update<'a, T>(config: T) -> TardisResult<T>
-//     where
-//         T: Vo + Serialize + Deserialize<'a>,
-//     {
-//         Self::add_or_update::<T>(config, false).await
-//     }
-
-//     #[cfg(feature = "k8s")]
-//     pub async fn add_or_update<'a, T>(config: T, add_only: bool) -> TardisResult<T>
-//     where
-//         T: Vo + Serialize + Deserialize<'a>,
-//     {
-//         let id = config.get_unique_name();
-//         let mut datas = Self::get_type_map::<T>().await?;
-//         if let Some(_) = datas.get(&id) {
-//             if add_only {
-//                 return Err(TardisError::bad_request(&format!("[SG.admin] {}:{} already exists", T::get_vo_type(), id), ""));
-//             } else {
-//                 log::debug!("[SG.admin] add_or_update {}:{} exists , will update", T::get_vo_type(), id);
-//             }
-//         } else {
-//             log::debug!("[SG.admin] add_or_update {}:{} not exists , will add", T::get_vo_type(), id);
-//         }
-
-//         datas.insert(
-//             id.clone(),
-//             serde_json::to_string(&config).map_err(|e| TardisError::bad_request(&format!("Serialization to json failed:{e}"), ""))?,
-//         );
-//         get_config_map_api()
-//             .await?
-//             .replace(
-//                 &get_config_name::<T>(),
-//                 &PostParams::default(),
-//                 &ConfigMap {
-//                     data: Some(datas.into_iter().collect()),
-//                     metadata: ObjectMeta {
-//                         name: Some(get_config_name::<T>()),
-//                         ..Default::default()
-//                     },
-//                     ..Default::default()
-//                 },
-//             )
-//             .await
-//             .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error:{e}"), ""))?;
-//         Ok(config)
-//     }
-
-//     #[cfg(feature = "k8s")]
-//     pub async fn delete<'a, T>(config_id: &str) -> TardisResult<()>
-//     where
-//         T: Vo + Serialize + Deserialize<'a>,
-//     {
-//         let mut datas = Self::get_type_map::<T>().await?;
-//         if let Some(_) = datas.remove(config_id) {
-//             get_config_map_api()
-//                 .await?
-//                 .replace(
-//                     &get_config_name::<T>(),
-//                     &PostParams::default(),
-//                     &ConfigMap {
-//                         data: Some(datas.into_iter().collect()),
-//                         metadata: ObjectMeta {
-//                             name: Some(get_config_name::<T>()),
-//                             ..Default::default()
-//                         },
-//                         ..Default::default()
-//                     },
-//                 )
-//                 .await
-//                 .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error:{e}"), ""))?;
-//         } else {
-//             log::debug!("{}:{} already not exists", T::get_vo_type(), config_id);
-//         }
-//         Ok(())
-//     }
-// }
-
-#[cfg(feature = "k8s")]
 pub async fn init_config_map_by_t<T>() -> TardisResult<()>
 where
     T: Vo,
@@ -276,7 +152,6 @@ where
     Ok(())
 }
 
-#[cfg(feature = "k8s")]
 pub fn get_config_name<T>() -> String
 where
     T: Vo,
@@ -284,9 +159,14 @@ where
     TYPE_CONFIG_NAME_MAP.get(T::get_vo_type().as_str()).expect("").to_string()
 }
 
-#[cfg(feature = "k8s")]
+//todo get_k8s_client
 pub async fn get_config_map_api() -> TardisResult<Api<ConfigMap>> {
     Ok(Api::namespaced(get_k8s_client().await?, "spacegate"))
+}
+
+#[cfg(all(feature = "cache", not(feature = "k8s")))]
+pub async fn get_redis_client() -> TardisResult {
+    //todo
 }
 
 #[cfg(test)]
@@ -298,7 +178,6 @@ mod test {
     use tardis::tokio;
 
     #[tokio::test]
-    #[cfg(feature = "k8s")]
     #[ignore]
     async fn k8s_test() {
         let mut add_o_1 = SgBackendRefVo {

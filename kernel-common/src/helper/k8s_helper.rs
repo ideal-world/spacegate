@@ -67,21 +67,32 @@ pub async fn get_base_k8s_client() -> TardisResult<Client> {
     }
 }
 
-pub async fn set_k8s_client_by_file(path: &str) -> TardisResult<()> {
+/// # Set Base kube client by file path
+/// It only needs to be set once during initialization,
+/// which conflicts with `set_base_k8s_client_by_config`
+pub async fn set_base_k8s_client_by_file(path: &str) -> TardisResult<()> {
     let kube_config = Kubeconfig::read_from(path).map_err(|e| TardisError::conflict(&format!("[SG.admin] Read kubernetes config error:{e}"), ""))?;
-    set_k8s_client_by_config(kube_config).await?;
+    set_base_k8s_client_by_config(kube_config).await?;
 
     Ok(())
 }
 
-pub async fn set_k8s_client_by_config(kube_config: Kubeconfig) -> TardisResult<()> {
-    let config = Config::from_custom_kubeconfig(kube_config, &KubeConfigOptions::default())
-        .await
-        .map_err(|e| TardisError::conflict(&format!("[SG.admin] Parse kubernetes config error:{e}"), ""))?;
-
-    let client = Client::try_from(config).map_err(|e| TardisError::conflict(&format!("[SG.admin] Create kubernetes client error:{e}"), ""))?;
+/// # Set Base kube client by `Kubeconfig`
+/// It only needs to be set once during initialization,
+/// which conflicts with `set_base_k8s_client_by_file`
+pub async fn set_base_k8s_client_by_config(kube_config: Kubeconfig) -> TardisResult<()> {
+    let client = get_k8s_client_by_config(kube_config).await?;
     let mut golabl = GLOBAL_CLIENT.write().await;
     *golabl = Some(client);
 
     Ok(())
+}
+
+/// # Get kube client by `Kubeconfig`
+/// Instantiate `Kubeconfig` as client
+pub async fn get_k8s_client_by_config(kube_config: Kubeconfig) -> TardisResult<Client> {
+    let config = Config::from_custom_kubeconfig(kube_config, &KubeConfigOptions::default())
+        .await
+        .map_err(|e| TardisError::conflict(&format!("[SG.admin] Parse kubernetes config error:{e}"), ""))?;
+    Ok(Client::try_from(config).map_err(|e| TardisError::conflict(&format!("[SG.admin] Create kubernetes client error:{e}"), ""))?)
 }
