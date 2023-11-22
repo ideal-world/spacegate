@@ -8,14 +8,11 @@ use crate::service::plugin_service::PluginK8sService;
 
 use k8s_openapi::api::core::v1::Secret;
 use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
-#[cfg(feature = "k8s")]
 use kernel_common::{
     helper::k8s_helper::{format_k8s_obj_unique, parse_k8s_obj_unique, parse_k8s_unique_or_default, WarpKubeResult},
     k8s_crd::http_spaceroute::HttpSpaceroute,
 };
-#[cfg(feature = "k8s")]
 use kube::api::{DeleteParams, PostParams};
-#[cfg(feature = "k8s")]
 use kube::Api;
 use tardis::basic::result::TardisResult;
 
@@ -24,8 +21,8 @@ pub struct HttpRouteVoService;
 impl VoBaseService<SgHttpRouteVo> for HttpRouteVoService {}
 
 impl HttpRouteVoService {
-    pub(crate) async fn list(query: HttpRouteQueryInst) -> TardisResult<Vec<SgHttpRouteVo>> {
-        let map = Self::get_type_map().await?;
+    pub(crate) async fn list(clinet_name: &str, query: HttpRouteQueryInst) -> TardisResult<Vec<SgHttpRouteVo>> {
+        let map = Self::get_type_map(clinet_name).await?;
         Ok(
             if query.names.is_none() && query.gateway_name.is_none() && query.hostnames.is_none() && query.filter_ids.is_none() {
                 map.into_values().collect()
@@ -44,7 +41,7 @@ impl HttpRouteVoService {
         )
     }
 
-    pub(crate) async fn add(mut add: SgHttpRouteVo) -> TardisResult<SgHttpRouteVo> {
+    pub(crate) async fn add(clinet_name: &str, mut add: SgHttpRouteVo) -> TardisResult<SgHttpRouteVo> {
         #[cfg(feature = "k8s")]
         {
             let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
@@ -61,13 +58,13 @@ impl HttpRouteVoService {
 
             PluginK8sService::add_sgfilter_vec(&sgfilters.iter().collect::<Vec<_>>()).await?
         }
-        Self::add_vo(add).await
+        Self::add_vo(clinet_name, add).await
     }
-    pub(crate) async fn update(update: SgHttpRouteVo) -> TardisResult<SgHttpRouteVo> {
+    pub(crate) async fn update(clinet_name: &str, update: SgHttpRouteVo) -> TardisResult<SgHttpRouteVo> {
         let update_un = &update.get_unique_name();
 
         let update_sg_httproute = update.clone().to_model().await?;
-        let old_sg_httproute = Self::get_by_id(&update.name).await?.to_model().await?;
+        let old_sg_httproute = Self::get_by_id(clinet_name, &update.name).await?.to_model().await?;
         #[cfg(feature = "k8s")]
         {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
@@ -77,10 +74,10 @@ impl HttpRouteVoService {
 
             PluginK8sService::update_filter_changes(old_sg_httproute.to_kube_httproute().1, update_filter).await?;
         }
-        Self::update_vo(update).await
+        Self::update_vo(clinet_name, update).await
     }
 
-    pub(crate) async fn delete(id: &str) -> TardisResult<()> {
+    pub(crate) async fn delete(clinet_name: &str, id: &str) -> TardisResult<()> {
         let (namespace, name) = parse_k8s_obj_unique(id);
         #[cfg(feature = "k8s")]
         {
@@ -92,13 +89,12 @@ impl HttpRouteVoService {
             let (_, f_v) = old_sg_httproute.to_kube_httproute();
             PluginK8sService::delete_sgfilter_vec(&f_v.iter().collect::<Vec<_>>()).await?;
         }
-        Self::delete_vo(id).await?;
+        Self::delete_vo(clinet_name, id).await?;
         Ok(())
     }
 
-    #[cfg(feature = "k8s")]
     #[inline]
-    async fn get_spaceroute_api(namespace: &Option<String>) -> TardisResult<Api<HttpSpaceroute>> {
+    async fn get_spaceroute_api(clinet_name: &str, namespace: &Option<String>) -> TardisResult<Api<HttpSpaceroute>> {
         Ok(Api::namespaced(get_k8s_client().await?, namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())))
     }
 }

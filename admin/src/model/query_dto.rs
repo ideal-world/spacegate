@@ -57,20 +57,6 @@ pub struct GatewayQueryInst {
 }
 impl Instance for GatewayQueryInst {}
 
-// #[cfg(feature = "k8s")]
-// impl ToFields for GatewayQueryDto {
-//     fn to_fields_vec(&self) -> Vec<String> {
-//         let mut result = vec![];
-//         if let Some(name) = &self.name {
-//             result.push(format!("metadata.name={}", name))
-//         };
-//         if let Some(namespace) = &self.namespace {
-//             result.push(format!("metadata.namespace={}", namespace))
-//         };
-//         result
-//     }
-// }
-
 #[derive(Default)]
 pub struct SgTlsQueryVO {
     pub names: Option<Vec<String>>,
@@ -127,17 +113,6 @@ pub struct PluginQueryInst {
 
 impl Instance for PluginQueryInst {}
 
-// #[cfg(feature = "k8s")]
-// impl ToFields for PluginQueryDto {
-//     fn to_fields_vec(&self) -> Vec<String> {
-//         let mut result = vec![];
-//         if let Some(name) = &self.name {
-//             result.push(format!("metadata.name={}", name))
-//         };
-//         result
-//     }
-// }
-
 pub struct HttpRouteQueryDto {
     pub names: Option<Vec<String>>,
     pub gateway_name: Option<String>,
@@ -164,3 +139,22 @@ pub struct HttpRouteQueryInst {
 }
 
 impl Instance for HttpRouteQueryInst {}
+
+#[derive(Default)]
+pub struct SpacegateInstQueryDto {
+    pub(crate) names: Option<Vec<String>>,
+}
+
+impl ToInstance<SpacegateInstQueryInst> for SpacegateInstQueryDto {
+    fn to_instance(self) -> TardisResult<SpacegateInstQueryInst> {
+        Ok(SpacegateInstQueryInst {
+            names: self.names.map(|names| names.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
+        })
+    }
+}
+
+pub struct SpacegateInstQueryInst {
+    pub(crate) names: Option<Vec<Regex>>,
+}
+
+impl Instance for SpacegateInstQueryInst {}

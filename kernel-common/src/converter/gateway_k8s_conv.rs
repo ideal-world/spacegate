@@ -1,7 +1,9 @@
+use crate::client::k8s_client;
+use crate::client::k8s_client::k8s_clients;
 use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
 use crate::constants::k8s_constants::GATEWAY_CLASS_NAME;
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
-use crate::helper::k8s_helper::{get_base_k8s_client, get_k8s_obj_unique, parse_k8s_obj_unique};
+use crate::helper::k8s_helper::{get_k8s_obj_unique, parse_k8s_obj_unique};
 use crate::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTls, SgTlsConfig, SgTlsMode};
 use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference, TlsModeType};
@@ -85,7 +87,7 @@ impl SgGateway {
         (gateway, sgfilters)
     }
 
-    pub async fn from_kube_gateway(gateway: Gateway) -> TardisResult<SgGateway> {
+    pub async fn from_kube_gateway(client_name: &str, gateway: Gateway) -> TardisResult<SgGateway> {
         //todo filters
         let filters = None;
         let result = SgGateway {
@@ -99,7 +101,7 @@ impl SgGateway {
                     .map(|listener| async move {
                         let tls = match listener.tls {
                             Some(tls_config) => {
-                                if let Some(tls) = SgTls::from_kube_tls(tls_config.certificate_refs).await? {
+                                if let Some(tls) = SgTls::from_kube_tls(client_name, tls_config.certificate_refs).await? {
                                     Some(SgTlsConfig {
                                         mode: SgTlsMode::from(tls_config.mode).unwrap_or_default(),
                                         tls,
@@ -203,14 +205,17 @@ impl SgTls {
         }
     }
 
-    pub async fn from_kube_tls(tls: Option<Vec<SecretObjectReference>>) -> TardisResult<Option<Self>> {
+    pub async fn from_kube_tls(client_name: &str, tls: Option<Vec<SecretObjectReference>>) -> TardisResult<Option<Self>> {
         let certificate_ref = tls
             .as_ref()
             .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
             .get(0)
             .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
-        //todo client 选择有问题
-        let secret_api: Api<Secret> = Api::namespaced(get_base_k8s_client().await?, certificate_ref.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()));
+
+        let secret_api: Api<Secret> = Api::namespaced(
+            (*k8s_client::get(Some(&client_name.to_string())).await?).clone(),
+            certificate_ref.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
+        );
         let result = if let Some(secret_obj) =
             secret_api.get_opt(&certificate_ref.name).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
         {

@@ -4,27 +4,23 @@ use crate::model::query_dto::PluginQueryInst;
 use crate::model::vo::plugin_vo::SgFilterVo;
 
 use crate::service::base_service::VoBaseService;
-#[cfg(feature = "k8s")]
 use kernel_common::{
     constants::k8s_constants::DEFAULT_NAMESPACE, converter::plugin_k8s_conv::SgSingeFilter, helper::k8s_helper::WarpKubeResult, k8s_crd::sg_filter::K8sSgFilterSpecFilter,
     k8s_crd::sg_filter::SgFilter,
 };
-#[cfg(feature = "k8s")]
 use kube::api::{ListParams, PostParams};
-#[cfg(feature = "k8s")]
 use kube::{Api, ResourceExt};
 use std::collections::{HashMap, HashSet};
 use tardis::basic::result::TardisResult;
 
 pub struct PluginVoService;
-#[cfg(feature = "k8s")]
 pub struct PluginK8sService;
 
 impl VoBaseService<SgFilterVo> for PluginVoService {}
 
 impl PluginVoService {
-    pub(crate) async fn list(query: PluginQueryInst) -> TardisResult<Vec<SgFilterVo>> {
-        let map = Self::get_type_map().await?;
+    pub(crate) async fn list(clinet_name: &str, query: PluginQueryInst) -> TardisResult<Vec<SgFilterVo>> {
+        let map = Self::get_type_map(clinet_name).await?;
         if query.ids.is_none() && query.namespace.is_none() && query.code.is_none() && query.target_kind.is_none() && query.target_name.is_none() && query.target_kind.is_none() {
             Ok(map.into_values().collect())
         } else {
@@ -39,21 +35,20 @@ impl PluginVoService {
         }
     }
 
-    pub(crate) async fn add(add: SgFilterVo) -> TardisResult<SgFilterVo> {
-        Self::add_vo(add).await
+    pub(crate) async fn add(clinet_name: &str, add: SgFilterVo) -> TardisResult<SgFilterVo> {
+        Self::add_vo(clinet_name, add).await
     }
 
-    pub(crate) async fn update(update: SgFilterVo) -> TardisResult<SgFilterVo> {
-        Self::update_vo(update).await
+    pub(crate) async fn update(clinet_name: &str, update: SgFilterVo) -> TardisResult<SgFilterVo> {
+        Self::update_vo(clinet_name, update).await
     }
 
-    pub(crate) async fn delete(id: &str) -> TardisResult<()> {
-        Self::delete_vo(id).await?;
+    pub(crate) async fn delete(clinet_name: &str, id: &str) -> TardisResult<()> {
+        Self::delete_vo(clinet_name, id).await?;
         Ok(())
     }
 }
 
-#[cfg(feature = "k8s")]
 impl PluginK8sService {
     pub(crate) async fn update_filter_changes(old: Vec<SgSingeFilter>, update: Vec<SgSingeFilter>) -> TardisResult<()> {
         if old.is_empty() && update.is_empty() {

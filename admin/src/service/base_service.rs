@@ -2,6 +2,7 @@ use crate::constants::TYPE_CONFIG_NAME_MAP;
 use crate::helper::get_k8s_client;
 use crate::model::vo::Vo;
 use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
+use kernel_common::client::cache_client;
 use kube::{api::PostParams, Api};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -16,61 +17,69 @@ pub trait VoBaseService<T>
 where
     T: Vo + Serialize + Sync + Send + DeserializeOwned,
 {
-    async fn get_str_type_map() -> TardisResult<HashMap<String, String>> {
-        if let Some(t_config) =
-            get_config_map_api().await?.get_opt(&get_config_name::<T>()).await.map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error: {e}"), ""))?
-        {
-            if let Some(b_map) = t_config.data {
-                Ok(b_map.into_iter().collect())
+    async fn get_str_type_map(clinet_name: &str) -> TardisResult<HashMap<String, String>> {
+        Ok(if SpacegateManageService::client_is_kube(clinet_name).await {
+            if let Some(t_config) = get_config_map_api(clinet_name)
+                .await?
+                .get_opt(&get_config_name::<T>())
+                .await
+                .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error: {e}"), ""))?
+            {
+                if let Some(b_map) = t_config.data {
+                    b_map.into_iter().collect()
+                } else {
+                    HashMap::new()
+                }
             } else {
-                Ok(HashMap::new())
+                init_config_map_by_t::<T>(clinet_name).await?;
+                HashMap::new()
             }
         } else {
-            init_config_map_by_t::<T>().await?;
-            Ok(HashMap::new())
-        }
+            cache_client::get(clinet_name).await?.hgetall(&get_config_name::<T>()).await?
+        })
     }
 
-    async fn get_type_map() -> TardisResult<HashMap<String, T>> {
-        Ok(Self::get_str_type_map().await?.into_iter().map(|(k, v)| Ok((k, TardisFuns::json.str_to_obj::<T>(&v)?))).collect::<TardisResult<HashMap<String, T>>>()?)
+    async fn get_type_map(clinet_name: &str) -> TardisResult<HashMap<String, T>> {
+        Ok(Self::get_str_type_map(clinet_name).await?.into_iter().map(|(k, v)| Ok((k, TardisFuns::json.str_to_obj::<T>(&v)?))).collect::<TardisResult<HashMap<String, T>>>()?)
     }
 
-    async fn get_by_id_opt(id: &str) -> TardisResult<Option<T>> {
-        if let Some(t_str) = Self::get_str_type_map().await?.remove(id) {
+    async fn get_by_id_opt(clinet_name: &str, id: &str) -> TardisResult<Option<T>> {
+        //todo optimze cache hget
+        if let Some(t_str) = Self::get_str_type_map(clinet_name).await?.remove(id) {
             Ok(TardisFuns::json.str_to_obj(&t_str)?)
         } else {
             Ok(None)
         }
     }
 
-    async fn get_by_id(id: &str) -> TardisResult<T> {
-        if let Some(t) = Self::get_by_id_opt(id).await? {
+    async fn get_by_id(clinet_name: &str, id: &str) -> TardisResult<T> {
+        if let Some(t) = Self::get_by_id_opt(clinet_name, id).await? {
             Ok(t)
         } else {
             Err(TardisError::not_found(&format!("[SG.admin] Get Error: {}:{} not exists", T::get_vo_type(), id), ""))
         }
     }
 
-    async fn add_vo(config: T) -> TardisResult<T>
+    async fn add_vo(clinet_name: &str, config: T) -> TardisResult<T>
     where
         T: 'async_trait,
     {
-        Self::add_or_update_vo(config, true).await
+        Self::add_or_update_vo(clinet_name, config, true).await
     }
 
-    async fn update_vo(config: T) -> TardisResult<T>
+    async fn update_vo(clinet_name: &str, config: T) -> TardisResult<T>
     where
         T: 'async_trait,
     {
-        Self::add_or_update_vo(config, false).await
+        Self::add_or_update_vo(clinet_name, config, false).await
     }
 
-    async fn add_or_update_vo(config: T, add_only: bool) -> TardisResult<T>
+    async fn add_or_update_vo(client_name: &str, config: T, add_only: bool) -> TardisResult<T>
     where
         T: 'async_trait,
     {
         let id = config.get_unique_name();
-        let mut datas = Self::get_str_type_map().await?;
+        let mut datas = Self::get_str_type_map(client_name).await?;
         if datas.get(&id).is_some() {
             if add_only {
                 return Err(TardisError::bad_request(&format!("[SG.admin] {}:{} already exists", T::get_vo_type(), id), ""));
@@ -80,33 +89,9 @@ where
         } else {
             log::debug!("[SG.admin] add_or_update {}:{} not exists , will add", T::get_vo_type(), id);
         }
-
-        datas.insert(
-            id.clone(),
-            serde_json::to_string(&config).map_err(|e| TardisError::bad_request(&format!("Serialization to json failed:{e}"), ""))?,
-        );
-        get_config_map_api()
-            .await?
-            .replace(
-                &get_config_name::<T>(),
-                &PostParams::default(),
-                &ConfigMap {
-                    data: Some(datas.into_iter().collect()),
-                    metadata: ObjectMeta {
-                        name: Some(get_config_name::<T>()),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            )
-            .await
-            .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error:{e}"), ""))?;
-        Ok(config)
-    }
-
-    async fn delete_vo(config_id: &str) -> TardisResult<()> {
-        let mut datas = Self::get_str_type_map().await?;
-        if datas.remove(config_id).is_some() {
+        let config_str = serde_json::to_string(&config).map_err(|e| TardisError::bad_request(&format!("Serialization to json failed:{e}"), ""))?;
+        if SpacegateManageService::client_is_kube(clinet_name).await {
+            datas.insert(id.clone(), config_str);
             get_config_map_api()
                 .await?
                 .replace(
@@ -124,17 +109,46 @@ where
                 .await
                 .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error:{e}"), ""))?;
         } else {
-            log::debug!("{}:{} already not exists", T::get_vo_type(), config_id);
+            cache_client::get(client_name).await?.hset(&get_config_name::<T>(), id, config_str).await?;
+        }
+        Ok(config)
+    }
+
+    async fn delete_vo(client_name: &str, config_id: &str) -> TardisResult<()> {
+        if SpacegateManageService::client_is_kube(clinet_name).await {
+            let mut datas = Self::get_str_type_map(client_name).await?;
+            if datas.remove(config_id).is_some() {
+                get_config_map_api()
+                    .await?
+                    .replace(
+                        &get_config_name::<T>(),
+                        &PostParams::default(),
+                        &ConfigMap {
+                            data: Some(datas.into_iter().collect()),
+                            metadata: ObjectMeta {
+                                name: Some(get_config_name::<T>()),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                    .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error:{e}"), ""))?;
+            } else {
+                log::debug!("{}:{} already not exists", T::get_vo_type(), config_id);
+            }
+        } else {
+            cache_client::get(client_name).await?.hdel(&get_config_name::<T>(), config_id).await?;
         }
         Ok(())
     }
 }
 
-pub async fn init_config_map_by_t<T>() -> TardisResult<()>
+pub async fn init_config_map_by_t<T>(clinet_name: &str) -> TardisResult<()>
 where
     T: Vo,
 {
-    get_config_map_api()
+    get_config_map_api(clinet_name)
         .await?
         .create(
             &PostParams::default(),
@@ -152,6 +166,7 @@ where
     Ok(())
 }
 
+#[inline]
 pub fn get_config_name<T>() -> String
 where
     T: Vo,
@@ -159,14 +174,9 @@ where
     TYPE_CONFIG_NAME_MAP.get(T::get_vo_type().as_str()).expect("").to_string()
 }
 
-//todo get_k8s_client
-pub async fn get_config_map_api() -> TardisResult<Api<ConfigMap>> {
-    Ok(Api::namespaced(get_k8s_client().await?, "spacegate"))
-}
-
-#[cfg(all(feature = "cache", not(feature = "k8s")))]
-pub async fn get_redis_client() -> TardisResult {
-    //todo
+#[inline]
+pub async fn get_config_map_api(name: &str) -> TardisResult<Api<ConfigMap>> {
+    Ok(Api::namespaced(k8s_client::get(Some(name)), KUBE_VO_NAMESPACE))
 }
 
 #[cfg(test)]
@@ -179,7 +189,7 @@ mod test {
 
     #[tokio::test]
     #[ignore]
-    async fn k8s_test() {
+    async fn test() {
         let mut add_o_1 = SgBackendRefVo {
             id: "id34325".to_string(),
             name_or_host: "backend_name".to_string(),
@@ -190,18 +200,20 @@ mod test {
             weight: None,
             filters: None,
         };
-        BackendRefVoService::add_vo(add_o_1.clone()).await.unwrap();
-        assert!(BackendRefVoService::add_vo(add_o_1.clone()).await.is_err());
+        BackendRefVoService::add_vo(DEFAULT_CLIENT_NAME, add_o_1.clone()).await.unwrap();
+        assert!(BackendRefVoService::add_vo(DEFAULT_CLIENT_NAME, add_o_1.clone()).await.is_err());
 
-        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
+        let get_o_1 =
+            serde_json::from_str::<SgBackendRefVo>(BackendRefVoService::get_str_type_map(DEFAULT_CLIENT_NAME).await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
         assert_eq!(get_o_1.port, add_o_1.port);
 
         add_o_1.port = 1832;
-        BackendRefVoService::update_vo(add_o_1.clone()).await.unwrap();
+        BackendRefVoService::update_vo(DEFAULT_CLIENT_NAME, add_o_1.clone()).await.unwrap();
 
-        let get_o_1 = serde_json::from_str::<SgBackendRefVo>(BackendRefVoService::get_str_type_map().await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
+        let get_o_1 =
+            serde_json::from_str::<SgBackendRefVo>(BackendRefVoService::get_str_type_map(DEFAULT_CLIENT_NAME).await.unwrap().get(&add_o_1.get_unique_name()).unwrap()).unwrap();
         assert_eq!(get_o_1.port, add_o_1.port);
 
-        BackendRefVoService::delete_vo(&add_o_1.get_unique_name()).await.unwrap();
+        BackendRefVoService::delete_vo(DEFAULT_CLIENT_NAME, &add_o_1.get_unique_name()).await.unwrap();
     }
 }

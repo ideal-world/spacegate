@@ -25,8 +25,8 @@ pub struct GatewayVoService;
 impl VoBaseService<SgGatewayVo> for GatewayVoService {}
 
 impl GatewayVoService {
-    pub async fn list(query: GatewayQueryInst) -> TardisResult<Vec<SgGatewayVo>> {
-        Ok(Self::get_type_map().await?.into_values().filter(|g|
+    pub async fn list(clinet_name: &str, query: GatewayQueryInst) -> TardisResult<Vec<SgGatewayVo>> {
+        Ok(Self::get_type_map(clinet_name,).await?.into_values().filter(|g|
             if let Some(q_name) = &query.names { q_name.iter().any(|q|q.is_match(&g.name)) } else { true }
                 && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }
                 && if let Some(q_hostname) = &query.hostname {
@@ -34,7 +34,7 @@ impl GatewayVoService {
             } else { true })
             .collect())
     }
-    pub async fn add(mut add: SgGatewayVo) -> TardisResult<SgGatewayVo> {
+    pub async fn add(clinet_name: &str, mut add: SgGatewayVo) -> TardisResult<SgGatewayVo> {
         #[cfg(feature = "k8s")]
         {
             let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
@@ -52,19 +52,19 @@ impl GatewayVoService {
 
             PluginK8sService::add_sgfilter_vec(&sgfilters.iter().collect::<Vec<_>>()).await?
         }
-        Self::add_vo(add).await
+        Self::add_vo(clinet_name, add).await
     }
 
-    pub async fn update_by_id(id: &str) -> TardisResult<SgGatewayVo> {
-        let gateway_o = Self::get_by_id(id).await?;
-        GatewayVoService::update(gateway_o).await
+    pub async fn update_by_id(clinet_name: &str, id: &str) -> TardisResult<SgGatewayVo> {
+        let gateway_o = Self::get_by_id(clinet_name, id).await?;
+        GatewayVoService::update(clinet_name, gateway_o).await
     }
 
-    pub async fn update(update: SgGatewayVo) -> TardisResult<SgGatewayVo> {
+    pub async fn update(clinet_name: &str, update: SgGatewayVo) -> TardisResult<SgGatewayVo> {
         let update_un = &update.get_unique_name();
 
         let update_sg_gateway = update.clone().to_model().await?;
-        let old_sg_gateway = Self::get_by_id(&update.name).await?.to_model().await?;
+        let old_sg_gateway = Self::get_by_id(clinet_name, &update.name).await?.to_model().await?;
         #[cfg(feature = "k8s")]
         {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
@@ -74,10 +74,10 @@ impl GatewayVoService {
 
             PluginK8sService::update_filter_changes(old_sg_gateway.to_kube_gateway().1, update_filter).await?;
         }
-        Self::update_vo(update).await
+        Self::update_vo(clinet_name, update).await
     }
 
-    pub async fn delete(id: &str) -> TardisResult<()> {
+    pub async fn delete(clinet_name: &str, id: &str) -> TardisResult<()> {
         let (namespace, name) = parse_k8s_obj_unique(id);
         #[cfg(feature = "k8s")]
         {
@@ -89,7 +89,7 @@ impl GatewayVoService {
             let (_, f_v) = old_sg_gateway.to_kube_gateway();
             PluginK8sService::delete_sgfilter_vec(&f_v.iter().collect::<Vec<_>>()).await?;
         }
-        Self::delete_vo(id).await?;
+        Self::delete_vo(clinet_name, id).await?;
 
         Ok(())
     }

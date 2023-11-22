@@ -1,12 +1,13 @@
 use crate::config::k8s_config::K8sConfig;
 use serde::Deserializer;
-use tardis::config::config_dto::CacheConfig;
 use tardis::serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SpacegateAdminConfig {
-    pub cache_config: Option<CacheConfig>,
+    /// If enable is true , then must use k8s configmap.
+    /// Otherwise , use cache.
+    pub is_kube: bool,
 
     #[serde(flatten)]
     pub kube_config: AdminK8sConfig,
@@ -15,10 +16,6 @@ pub struct SpacegateAdminConfig {
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AdminK8sConfig {
-    /// If enable is true , then must use k8s configmap.
-    /// Otherwise , just try k8s.
-    pub enable: bool,
-
     pub k8s_config: Option<K8sConfig>,
     /// # `KUBECONFIG`
     ///
