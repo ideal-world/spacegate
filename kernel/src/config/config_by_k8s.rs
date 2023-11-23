@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::str::FromStr;
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
@@ -19,11 +20,13 @@ use tardis::{
 use crate::{do_startup, functions::http_route, shutdown};
 
 use crate::helpers::k8s_helper;
+use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use kernel_common::constants::k8s_constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
 use kernel_common::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind;
 use kernel_common::helper;
 use kernel_common::helper::k8s_helper::{get_k8s_obj_unique, WarpKubeResult};
+use kernel_common::inner_model::gateway::{SgTls, SgTlsMode};
 use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
 use kernel_common::inner_model::{
     gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig},
@@ -557,7 +560,6 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                     .listeners
                     .into_iter()
                     .map(|listener| async move {
-                        let tls = if let Some(tls) = listener.tls { SgTlsConfig::from_kube_tls(tls).await? } else { None };
                         let sg_listener = SgListener {
                             name: listener.name,
                             ip: None,
@@ -573,7 +575,18 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                                     ))
                                 }
                             },
-                            tls,
+                            tls: if let Some(tls_config) = listener.tls {
+                                if let Some(tls) = SgTls::from_kube_tls(DEFAULT_CLIENT_NAME, tls_config.certificate_refs).await? {
+                                    Some(SgTlsConfig {
+                                        mode: tls_config.mode.map(|m| SgTlsMode::from_str(&m)).transpose()?.unwrap_or(SgTlsMode::default()),
+                                        tls,
+                                    })
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            },
                             hostname: listener.hostname,
                         };
                         Ok(sg_listener)
