@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use http::StatusCode;
-use kernel_common::gatewayapi_support_filter::SgFilterRedirect;
+use kernel_common::gatewayapi_support_filter::{SgFilterRedirect, SG_FILTER_REDIRECT_CODE};
 
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;

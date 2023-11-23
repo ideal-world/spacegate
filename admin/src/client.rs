@@ -4,10 +4,9 @@ use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use kernel_common::client::{cache_client, k8s_client};
 use kube::config::Kubeconfig;
 use lazy_static::lazy_static;
-use std::mem;
-use std::sync::RwLock;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
+use tardis::tokio::sync::RwLock;
 use tardis::TardisFunsInst;
 
 lazy_static! {
@@ -38,18 +37,3 @@ pub async fn get_base_is_kube() -> TardisResult<bool> {
     let is_kube = BASE_CLIENT_IS_KUBE.read().await;
     Ok(is_kube)
 }
-
-// pub fn add_k8s_config(config: K8sClusterConfig) -> TardisResult<()> {
-//     for _ in 0..100 {
-//         if let Ok(mut kube_config) = KUBECONFIG.try_write() {
-//             let mut swap_config = Kubeconfig::default();
-//             mem::swap(&mut swap_config, &mut kube_config);
-//             swap_config = swap_config.merge(config.to_kubeconfig()).map_err(|e| TardisError::wrap(&format!("kubeconfig parse error:{e}"), ""))?;
-//
-//             mem::swap(&mut swap_config, &mut kube_config);
-//             return Ok(());
-//         };
-//     }
-//
-//     Err(TardisError::conflict("[SG.admin] add config: get lock time out", ""))
-// }

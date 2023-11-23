@@ -25,7 +25,7 @@ impl Vo for InstConfigVo {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, poem_openapi::Enum)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone, poem_openapi::Enum)]
 pub enum InstConfigType {
     K8sClusterConfig,
     RedisConfig,

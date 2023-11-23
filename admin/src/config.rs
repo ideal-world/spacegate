@@ -11,6 +11,9 @@ pub struct SpacegateAdminConfig {
 
     #[serde(flatten)]
     pub kube_config: AdminK8sConfig,
+
+    #[serde(flatten)]
+    pub basic_auth: Option<BasicAuth>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]

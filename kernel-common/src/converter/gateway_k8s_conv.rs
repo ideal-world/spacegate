@@ -1,5 +1,4 @@
 use crate::client::k8s_client;
-use crate::client::k8s_client::k8s_clients;
 use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
 use crate::constants::k8s_constants::GATEWAY_CLASS_NAME;
 use crate::converter::plugin_k8s_conv::SgSingeFilter;

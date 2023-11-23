@@ -1,7 +1,7 @@
 use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use async_trait::async_trait;
-use kernel_common::gatewayapi_support_filter::SgFilterRewrite;
+use kernel_common::gatewayapi_support_filter::{SgFilterRewrite, SG_FILTER_REWRITE_CODE};
 use kernel_common::inner_model::plugin_filter::SgHttpPathModifier;
 use serde::{Deserialize, Serialize};
 use tardis::basic::{error::TardisError, result::TardisResult};
