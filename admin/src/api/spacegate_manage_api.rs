@@ -18,9 +18,8 @@ impl SpacegateSelectApi {
     /// Select Spacegate Inst
     #[oai(path = "/", method = "post")]
     async fn add(&self, name: Query<String>) -> TardisApiResult<Void> {
-        SpacegateManageService::check(name.0).await?;
-        set_client_name().await;
-        TardisResp::ok(Void {})
+        SpacegateManageService::check(&name.0).await?;
+        TardisResp::ok(set_client_name(name.0).await?)
     }
 }
 

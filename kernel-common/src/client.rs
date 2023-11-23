@@ -158,11 +158,12 @@ pub mod k8s_client {
         Ok(())
     }
 
-    pub async fn get(name: Option<&String>) -> TardisResult<Arc<kube::Client>> {
-        {
-            let read = k8s_clients().read().await;
-            read.get(name.unwrap_or(&DEFAULT_CLIENT_NAME.to_string())).cloned().ok_or_else(|| TardisError::bad_request("[SG.common] Get k8s client failed", ""))
+    pub async fn get(mut name: &str) -> TardisResult<Arc<kube::Client>> {
+        if name.is_empty() {
+            name = DEFAULT_CLIENT_NAME;
         }
+        let read = k8s_clients().read().await;
+        read.get(name).cloned().ok_or_else(|| TardisError::bad_request("[SG.common] Get k8s client failed", ""))
     }
 
     /// # Get kube client by `Kubeconfig`

@@ -3,7 +3,9 @@ use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use serde::{Deserialize, Serialize};
 use tardis::web::poem::{self, handler, web::headers::HeaderMapExt, Endpoint, Middleware};
 
+pub(crate) mod auth_api;
 pub(crate) mod backend_api;
+pub(crate) mod dashboard_api;
 pub(crate) mod gateway_api;
 pub(crate) mod plugin_api;
 pub(crate) mod route_api;

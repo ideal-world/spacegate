@@ -112,7 +112,7 @@ impl GatewayVoService {
 
     async fn get_gateway_api(client_name: &str, namespace: &Option<String>) -> TardisResult<Api<Gateway>> {
         Ok(Api::namespaced(
-            (*k8s_client::get(client_name)).clone(),
+            (*k8s_client::get(client_name).await?).clone(),
             namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
         ))
     }

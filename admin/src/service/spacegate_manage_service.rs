@@ -10,6 +10,7 @@ use kernel_common::client::k8s_client;
 use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 use kernel_common::helper::k8s_helper::get_k8s_obj_unique;
+use kube::client::AuthError;
 use kube::Api;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
@@ -33,14 +34,14 @@ impl SpacegateManageService {
     }
 
     pub(crate) async fn add(add: InstConfigVo) -> TardisResult<InstConfigVo> {
-        if add.get_unique_name() == DEFAULT_CLIENT_NAME {
+        if add.get_unique_name() == DEFAULT_CLIENT_NAME || add.get_unique_name().is_empty() {
             return Err(TardisError::bad_request(&format!("[admin.service] client name {DEFAULT_CLIENT_NAME} is not allowed"), ""));
         }
         Self::add_vo(DEFAULT_CLIENT_NAME, add).await
     }
 
     pub(crate) async fn update(update: InstConfigVo) -> TardisResult<InstConfigVo> {
-        if update.get_unique_name() == DEFAULT_CLIENT_NAME {
+        if update.get_unique_name() == DEFAULT_CLIENT_NAME || add.get_unique_name().is_empty() {
             return Err(TardisError::bad_request(&format!("[admin.service] client name {DEFAULT_CLIENT_NAME} is not allowed"), ""));
         }
         let unique_name = update.get_unique_name();
@@ -53,6 +54,18 @@ impl SpacegateManageService {
 
     pub(crate) async fn delete(id: &str) -> TardisResult<()> {
         Self::delete_vo(DEFAULT_CLIENT_NAME, id).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn check(id: &str) -> TardisResult<()> {
+        if Self::list(SpacegateInstQueryInst {
+            names: Some(vec![id.to_string()]),
+        })
+        .await?
+        .is_empty()
+        {
+            return Errors::bad_request(&format!("[admin.service] spacegate inst [{}] not found", id), "");
+        };
         Ok(())
     }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::api::{gateway_api, plugin_api, route_api};
+use crate::api::{auth_api, gateway_api, plugin_api, route_api, spacegate_manage_api, tls_api};
 use crate::client::init_client;
 use crate::config::SpacegateAdminConfig;
 use crate::constants;
@@ -18,10 +18,18 @@ pub(crate) async fn init(web_server: &TardisWebServer) -> TardisResult<()> {
 }
 
 async fn init_api(config: Arc<SpacegateAdminConfig>, web_server: &TardisWebServer) -> TardisResult<()> {
-    let module = if let Some(basic_auth) = config.basic_auth {
-        WebServerModule::from((gateway_api::GatewayApi, plugin_api::PluginApi, route_api::HttprouteApi)).middleware(basic_auth)
+    let mut module = WebServerModule::from((
+        gateway_api::GatewayApi,
+        plugin_api::PluginApi,
+        route_api::HttprouteApi,
+        tls_api::TlsApi,
+        auth_api::AuthApi,
+        spacegate_manage_api::SpacegateManageApi,
+    ));
+    module = if let Some(basic_auth) = config.basic_auth {
+        module.middleware(basic_auth)
     } else {
-        WebServerModule::from((gateway_api::GatewayApi, plugin_api::PluginApi, route_api::HttprouteApi))
+        module
     };
     web_server.add_module(constants::DOMAIN_CODE, module).await;
     Ok(())

@@ -88,7 +88,7 @@ impl TlsVoService {
 
     async fn get_secret_api(client_name: &str, namespace: &Option<String>) -> TardisResult<Api<Secret>> {
         Ok(Api::namespaced(
-            (*k8s_client::get(client_name)).clone(),
+            (*k8s_client::get(client_name).await?).clone(),
             namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
         ))
     }

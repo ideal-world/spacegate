@@ -117,7 +117,7 @@ impl HttpRouteVoService {
     #[inline]
     async fn get_spaceroute_api(client_name: &str, namespace: &Option<String>) -> TardisResult<Api<HttpSpaceroute>> {
         Ok(Api::namespaced(
-            (*k8s_client::get(client_name)).clone(),
+            (*k8s_client::get(client_name).await?).clone(),
             namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
         ))
     }

@@ -177,7 +177,7 @@ where
 
 #[inline]
 pub async fn get_config_map_api(name: &str) -> TardisResult<Api<ConfigMap>> {
-    Ok(Api::namespaced(k8s_client::get(Some(name)), KUBE_VO_NAMESPACE))
+    Ok(Api::namespaced(k8s_client::get(name.await?), KUBE_VO_NAMESPACE))
 }
 
 #[cfg(test)]
