@@ -1,6 +1,6 @@
 #[cfg(feature = "k8s")]
 use kube::Client;
-use tardis::basic::error::TardisError;
+
 use tardis::basic::result::TardisResult;
 use tardis::regex;
 use tardis::regex::Regex;
