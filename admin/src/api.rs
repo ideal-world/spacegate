@@ -1,7 +1,7 @@
 use k8s_openapi::http::StatusCode;
-use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
+
 use serde::{Deserialize, Serialize};
-use tardis::web::poem::{self, handler, web::headers::HeaderMapExt, Endpoint, Middleware};
+use tardis::web::poem::{self, web::headers::HeaderMapExt, Endpoint, Middleware};
 
 pub(crate) mod auth_api;
 pub(crate) mod backend_api;
@@ -23,8 +23,8 @@ pub(crate) mod tls_api;
 //     session.set("client_name", name);
 // }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub(crate) struct BasicAuth {
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct BasicAuth {
     username: String,
     password: String,
 }
@@ -41,7 +41,7 @@ impl<E: Endpoint> Middleware<E> for BasicAuth {
     }
 }
 
-struct BasicAuthEndpoint<E> {
+pub struct BasicAuthEndpoint<E> {
     ep: E,
     username: String,
     password: String,

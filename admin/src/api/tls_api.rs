@@ -15,7 +15,10 @@ impl TlsApi {
     /// Get Tls List
     #[oai(path = "/", method = "get")]
     async fn list(&self, names: Query<Option<String>>) -> TardisApiResult<Vec<SgTls>> {
+        //todo client_name
+        let client_name = "";
         let result = TlsVoService::list(
+            client_name,
             SgTlsQueryVO {
                 names: names.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
             }
@@ -28,21 +31,27 @@ impl TlsApi {
     /// Add Tls
     #[oai(path = "/", method = "post")]
     async fn add(&self, tls_config: Json<SgTls>) -> TardisApiResult<Void> {
-        TlsVoService::add(tls_config.0).await?;
+        //todo client_name
+        let client_name = "";
+        TlsVoService::add(client_name, tls_config.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update Tls
     #[oai(path = "/", method = "put")]
     async fn update(&self, tls_config: Json<SgTls>) -> TardisApiResult<Void> {
-        TlsVoService::update(tls_config.0).await?;
+        //todo client_name
+        let client_name = "";
+        TlsVoService::update(client_name, tls_config.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Delete Tls
     #[oai(path = "/:backend_id", method = "put")]
     async fn delete(&self, tls_config_id: Path<String>) -> TardisApiResult<Void> {
-        TlsVoService::delete(&tls_config_id.0).await?;
+        //todo client_name
+        let client_name = "";
+        TlsVoService::delete(client_name, &tls_config_id.0).await?;
         TardisResp::ok(Void {})
     }
 }

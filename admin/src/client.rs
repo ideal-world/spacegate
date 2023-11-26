@@ -17,15 +17,19 @@ lazy_static! {
 
 pub async fn init_client(funs: &TardisFunsInst) -> TardisResult<()> {
     let config = funs.conf::<SpacegateAdminConfig>();
-    let is_kube = BASE_CLIENT_IS_KUBE.write().await;
+    let mut is_kube = BASE_CLIENT_IS_KUBE.write().await;
     *is_kube = config.is_kube;
     if config.is_kube {
         if let Some(path) = &config.kube_config.kube_config {
             k8s_client::inst_by_path(DEFAULT_CLIENT_NAME, path).await?;
         } else if let Some(k8s_config) = &config.kube_config.k8s_config {
-            k8s_client::inst(DEFAULT_CLIENT_NAME, k8s_config.to_kubeconfig()).await?;
+            k8s_client::inst(DEFAULT_CLIENT_NAME, k8s_config.clone().to_kubeconfig()).await?;
         } else {
-            k8s_client::inst(DEFAULT_CLIENT_NAME, Kubeconfig::read().map_err(|e| TardisError::wrap(&format!(""), ""))?).await?;
+            k8s_client::inst(
+                DEFAULT_CLIENT_NAME,
+                Kubeconfig::read().map_err(|e| TardisError::wrap(&format!("init k8s client failed:{e}"), ""))?,
+            )
+            .await?;
         }
     } else {
         cache_client::add(DEFAULT_CLIENT_NAME, funs.cache()).await?;
@@ -35,5 +39,5 @@ pub async fn init_client(funs: &TardisFunsInst) -> TardisResult<()> {
 
 pub async fn get_base_is_kube() -> TardisResult<bool> {
     let is_kube = BASE_CLIENT_IS_KUBE.read().await;
-    Ok(is_kube)
+    Ok(*is_kube)
 }

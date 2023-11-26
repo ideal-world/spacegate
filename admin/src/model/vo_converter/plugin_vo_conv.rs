@@ -10,11 +10,12 @@ use tardis::futures_util::future::join_all;
 pub struct SgFilterVoConv {}
 
 impl SgFilterVoConv {
-    pub(crate) async fn ids_to_filter(filters: Vec<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
+    pub(crate) async fn ids_to_filter(client_name: &str, filters: Vec<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
         Ok(if filters.is_empty() {
             Some(
                 join_all(
                     PluginVoService::list(
+                        client_name,
                         PluginQueryDto {
                             ids: Some(filters),
                             ..Default::default()
@@ -23,7 +24,7 @@ impl SgFilterVoConv {
                     )
                     .await?
                     .into_iter()
-                    .map(|f| f.to_model())
+                    .map(|f| f.to_model(client_name))
                     .collect::<Vec<_>>(),
                 )
                 .await
@@ -38,7 +39,7 @@ impl SgFilterVoConv {
 
 #[async_trait]
 impl VoConv<SgRouteFilter, SgFilterVo> for SgFilterVo {
-    async fn to_model(self) -> TardisResult<SgRouteFilter> {
+    async fn to_model(self, _client_name: &str) -> TardisResult<SgRouteFilter> {
         Ok(SgRouteFilter {
             code: self.code,
             name: self.name,

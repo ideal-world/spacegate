@@ -20,7 +20,10 @@ impl HttprouteApi {
         hostnames: Query<Option<String>>,
         filter_ids: Query<Option<String>>,
     ) -> TardisApiResult<Vec<SgHttpRouteVo>> {
+        //todo client_name
+        let client_name = "";
         let result = HttpRouteVoService::list(
+            client_name,
             HttpRouteQueryDto {
                 names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
                 gateway_name: gateway_name.0,
@@ -36,21 +39,27 @@ impl HttprouteApi {
     /// Add Httproute
     #[oai(path = "/", method = "post")]
     async fn add(&self, add: Json<SgHttpRouteVo>) -> TardisApiResult<Void> {
-        HttpRouteVoService::add(add.0).await?;
+        //todo client_name
+        let client_name = "";
+        HttpRouteVoService::add(client_name, add.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update Httproute
     #[oai(path = "/", method = "put")]
     async fn update(&self, backend: Json<SgHttpRouteVo>) -> TardisApiResult<Void> {
-        HttpRouteVoService::update(backend.0).await?;
+        //todo client_name
+        let client_name = "";
+        HttpRouteVoService::update(client_name, backend.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Delete Httproute
     #[oai(path = "/", method = "delete")]
     async fn delete(&self, name: Query<String>) -> TardisApiResult<Void> {
-        HttpRouteVoService::delete(&name.0).await?;
+        //todo client_name
+        let client_name = "";
+        HttpRouteVoService::delete(client_name, &name.0).await?;
         TardisResp::ok(Void {})
     }
 }

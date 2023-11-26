@@ -19,7 +19,7 @@ where
     T: Vo + Serialize + Sync + Send + DeserializeOwned,
 {
     async fn get_str_type_map(client_name: &str) -> TardisResult<HashMap<String, String>> {
-        Ok(if SpacegateManageService::client_is_kube(client_name).await {
+        Ok(if SpacegateManageService::client_is_kube(client_name).await? {
             if let Some(t_config) = get_config_map_api(client_name)
                 .await?
                 .get_opt(&get_config_name::<T>())
@@ -93,7 +93,7 @@ where
         let config_str = serde_json::to_string(&config).map_err(|e| TardisError::bad_request(&format!("Serialization to json failed:{e}"), ""))?;
         if SpacegateManageService::client_is_kube(client_name).await? {
             datas.insert(id.clone(), config_str);
-            get_config_map_api()
+            get_config_map_api(client_name)
                 .await?
                 .replace(
                     &get_config_name::<T>(),
@@ -110,16 +110,16 @@ where
                 .await
                 .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error:{e}"), ""))?;
         } else {
-            cache_client::get(client_name).await?.hset(&get_config_name::<T>(), id, config_str).await?;
+            cache_client::get(client_name).await?.hset(&get_config_name::<T>(), &id, &config_str).await?;
         }
         Ok(config)
     }
 
     async fn delete_vo(client_name: &str, config_id: &str) -> TardisResult<()> {
-        if SpacegateManageService::client_is_kube(client_name).await {
+        if SpacegateManageService::client_is_kube(client_name).await? {
             let mut datas = Self::get_str_type_map(client_name).await?;
             if datas.remove(config_id).is_some() {
-                get_config_map_api()
+                get_config_map_api(client_name)
                     .await?
                     .replace(
                         &get_config_name::<T>(),
@@ -177,7 +177,7 @@ where
 
 #[inline]
 pub async fn get_config_map_api(name: &str) -> TardisResult<Api<ConfigMap>> {
-    Ok(Api::namespaced(k8s_client::get(name.await?), KUBE_VO_NAMESPACE))
+    Ok(Api::namespaced((*k8s_client::get(name).await?).clone(), KUBE_VO_NAMESPACE))
 }
 
 #[cfg(test)]

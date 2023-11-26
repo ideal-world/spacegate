@@ -10,6 +10,6 @@ pub trait VoConv<M, S>
 where
     S: VoConv<M, S>,
 {
-    async fn to_model(self) -> TardisResult<M>;
+    async fn to_model(self, client_name: &str) -> TardisResult<M>;
     async fn from_model(model: M) -> TardisResult<S>;
 }

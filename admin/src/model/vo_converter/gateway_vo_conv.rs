@@ -11,12 +11,12 @@ use tardis::futures_util::future::join_all;
 
 #[async_trait]
 impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
-    async fn to_model(self) -> TardisResult<SgGateway> {
+    async fn to_model(self, client_name: &str) -> TardisResult<SgGateway> {
         Ok(SgGateway {
             name: self.name,
             parameters: self.parameters,
-            listeners: join_all(self.listeners.into_iter().map(|l| l.to_model()).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?,
-            filters: SgFilterVoConv::ids_to_filter(self.filters).await?,
+            listeners: join_all(self.listeners.into_iter().map(|l| l.to_model(client_name)).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?,
+            filters: SgFilterVoConv::ids_to_filter(client_name, self.filters).await?,
         })
     }
 
@@ -51,11 +51,11 @@ impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
 
 #[async_trait]
 impl VoConv<SgListener, SgListenerVo> for SgListenerVo {
-    async fn to_model(self) -> TardisResult<SgListener> {
+    async fn to_model(self, client_name: &str) -> TardisResult<SgListener> {
         let tls = if let Some(tls) = self.tls {
             Some(SgTlsConfig {
                 mode: tls.mode,
-                tls: TlsVoService::get_by_id(&tls.name).await?,
+                tls: TlsVoService::get_by_id(client_name, &tls.name).await?,
             })
         } else {
             None

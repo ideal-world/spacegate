@@ -1,16 +1,16 @@
 use crate::client::get_base_is_kube;
 use crate::constants::{KUBE_VO_NAMESPACE, TYPE_CONFIG_NAME_MAP};
-use crate::model::query_dto::{GatewayQueryDto, SpacegateInstQueryInst, ToInstance};
+use crate::model::query_dto::{SpacegateInstQueryDto, SpacegateInstQueryInst, ToInstance};
 use crate::model::vo::spacegate_inst_vo::{InstConfigType, InstConfigVo};
 use crate::model::vo::Vo;
-use crate::service::base_service::{get_config_map_api, get_config_name, VoBaseService};
-use crate::service::gateway_service::GatewayVoService;
+use crate::service::base_service::{VoBaseService};
+
 use k8s_openapi::api::core::v1::ConfigMap;
 use kernel_common::client::k8s_client;
 use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
-use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
-use kernel_common::helper::k8s_helper::get_k8s_obj_unique;
-use kube::client::AuthError;
+
+
+
 use kube::Api;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
@@ -41,7 +41,7 @@ impl SpacegateManageService {
     }
 
     pub(crate) async fn update(update: InstConfigVo) -> TardisResult<InstConfigVo> {
-        if update.get_unique_name() == DEFAULT_CLIENT_NAME || add.get_unique_name().is_empty() {
+        if update.get_unique_name() == DEFAULT_CLIENT_NAME || update.get_unique_name().is_empty() {
             return Err(TardisError::bad_request(&format!("[admin.service] client name {DEFAULT_CLIENT_NAME} is not allowed"), ""));
         }
         let unique_name = update.get_unique_name();
@@ -58,13 +58,16 @@ impl SpacegateManageService {
     }
 
     pub(crate) async fn check(id: &str) -> TardisResult<()> {
-        if Self::list(SpacegateInstQueryInst {
-            names: Some(vec![id.to_string()]),
-        })
+        if Self::list(
+            SpacegateInstQueryDto {
+                names: Some(vec![id.to_string()]),
+            }
+            .to_instance()?,
+        )
         .await?
         .is_empty()
         {
-            return Errors::bad_request(&format!("[admin.service] spacegate inst [{}] not found", id), "");
+            return Err(TardisError::bad_request(&format!("[admin.service] spacegate inst [{}] not found", id), ""));
         };
         Ok(())
     }
@@ -74,21 +77,21 @@ impl SpacegateManageService {
             get_base_is_kube().await
         } else {
             let config_str = if get_base_is_kube().await? {
-                let api: Api<ConfigMap> = Api::namespaced((*k8s_client::get(None).await?).clone(), KUBE_VO_NAMESPACE);
+                let api: Api<ConfigMap> = Api::namespaced((*k8s_client::get(DEFAULT_CLIENT_NAME).await?).clone(), KUBE_VO_NAMESPACE);
 
                 api.get_opt(TYPE_CONFIG_NAME_MAP.get(InstConfigVo::get_vo_type().as_str()).expect(""))
                     .await
                     .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error: {e}"), ""))?
-                    .ok_or(TardisError::wrap(&format!("[SG.admin] Kubernetes client error"), ""))?
+                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
                     .data
-                    .ok_or(TardisError::wrap(&format!("[SG.admin] Kubernetes client error"), ""))?
+                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
                     .remove(name)
-                    .ok_or(TardisError::wrap(&format!("[SG.admin] Kubernetes client error"), ""))?
+                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
             } else {
                 TardisFuns::cache()
                     .hget(TYPE_CONFIG_NAME_MAP.get(InstConfigVo::get_vo_type().as_str()).expect(""), name)
                     .await?
-                    .ok_or(TardisError::wrap(&format!("[SG.admin] Kubernetes client error"), ""))?
+                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
             };
             let config = TardisFuns::json.str_to_obj::<InstConfigVo>(&config_str)?;
             Ok(config.type_ == InstConfigType::K8sClusterConfig)

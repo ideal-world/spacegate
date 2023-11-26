@@ -24,7 +24,10 @@ impl PluginApi {
         target_kind: Query<Option<String>>,
         target_namespace: Query<Option<String>>,
     ) -> TardisApiResult<Vec<SgFilterVo>> {
+        //todo client_name
+        let client_name = "";
         let result = PluginVoService::list(
+            client_name,
             PluginQueryDto {
                 ids: ids.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
                 name: name.0,
@@ -43,19 +46,25 @@ impl PluginApi {
     /// Add Plugin
     #[oai(path = "/", method = "post")]
     async fn add(&self, add: Json<SgFilterAddVo>) -> TardisApiResult<SgFilterVo> {
-        TardisResp::ok(PluginVoService::add(add.0.to_vo()?).await?)
+        //todo client_name
+        let client_name = "";
+        TardisResp::ok(PluginVoService::add(client_name, add.0.to_vo()?).await?)
     }
 
     /// Update Plugin
     #[oai(path = "/", method = "put")]
     async fn update(&self, update: Json<SgFilterVo>) -> TardisApiResult<SgFilterVo> {
-        TardisResp::ok(PluginVoService::update(update.0).await?)
+        //todo client_name
+        let client_name = "";
+        TardisResp::ok(PluginVoService::update(client_name, update.0).await?)
     }
 
     /// Delete Plugin
     #[oai(path = "/:plugin_id", method = "put")]
     async fn delete(&self, plugin_id: Path<String>) -> TardisApiResult<Void> {
-        PluginVoService::delete(&plugin_id.0).await?;
+        //todo client_name
+        let client_name = "";
+        PluginVoService::delete(client_name, &plugin_id.0).await?;
         TardisResp::ok(Void {})
     }
 }

@@ -37,7 +37,7 @@ impl GatewayVoService {
             let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
             add.name = format_k8s_obj_unique(Some(&namespace), &raw_nmae);
         }
-        let add_model = add.clone().to_model().await?;
+        let add_model = add.clone().to_model(client_name).await?;
         if is_kube {
             let (namespace, _) = parse_k8s_unique_or_default(&add.get_unique_name());
             let (gateway, sgfilters) = add_model.to_kube_gateway();
@@ -68,8 +68,8 @@ impl GatewayVoService {
     pub async fn update(client_name: &str, update: SgGatewayVo) -> TardisResult<SgGatewayVo> {
         let update_un = &update.get_unique_name();
 
-        let update_sg_gateway = update.clone().to_model().await?;
-        let old_sg_gateway = Self::get_by_id(client_name, &update.name).await?.to_model().await?;
+        let update_sg_gateway = update.clone().to_model(client_name).await?;
+        let old_sg_gateway = Self::get_by_id(client_name, &update.name).await?.to_model(client_name).await?;
         let is_kube = SpacegateManageService::client_is_kube(client_name).await?;
         if is_kube {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
@@ -99,7 +99,7 @@ impl GatewayVoService {
 
             gateway_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete Gateway")?;
 
-            let old_sg_gateway = Self::get_by_id(client_name, id).await?.to_model().await?;
+            let old_sg_gateway = Self::get_by_id(client_name, id).await?.to_model(client_name).await?;
             let (_, f_v) = old_sg_gateway.to_kube_gateway();
             PluginK8sService::delete_sgfilter_vec(client_name, &f_v.iter().collect::<Vec<_>>()).await?;
         } else {

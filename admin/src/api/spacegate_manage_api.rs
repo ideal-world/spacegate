@@ -1,4 +1,3 @@
-use crate::api::set_client_name;
 use crate::model::query_dto::{SpacegateInstQueryDto, ToInstance};
 use crate::model::vo::spacegate_inst_vo::InstConfigVo;
 use crate::service::spacegate_manage_service::SpacegateManageService;
@@ -19,7 +18,9 @@ impl SpacegateSelectApi {
     #[oai(path = "/", method = "post")]
     async fn add(&self, name: Query<String>) -> TardisApiResult<Void> {
         SpacegateManageService::check(&name.0).await?;
-        TardisResp::ok(set_client_name(name.0).await?)
+        //todo set_client_name
+        // set_client_name(name.0).await?
+        TardisResp::ok(Void {})
     }
 }
 
@@ -28,33 +29,35 @@ impl SpacegateManageApi {
     /// List Spacegate Inst
     #[oai(path = "/", method = "get")]
     async fn list(&self, names: Query<Option<String>>) -> TardisApiResult<Vec<InstConfigVo>> {
-        SpacegateManageService::list(
-            SpacegateInstQueryDto {
-                names: names.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
-            }
-            .to_instance()?,
+        TardisResp::ok(
+            SpacegateManageService::list(
+                SpacegateInstQueryDto {
+                    names: names.0.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
+                }
+                .to_instance()?,
+            )
+            .await?,
         )
-        .await?;
     }
 
     /// Add Spacegate Inst
     #[oai(path = "/", method = "post")]
     async fn add(&self, add: Json<InstConfigVo>) -> TardisApiResult<Void> {
-        // SpacegateManageService::add(add.0).await?;
+        SpacegateManageService::add(add.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update Spacegate Inst
     #[oai(path = "/", method = "put")]
-    async fn update(&self, backend: Json<InstConfigVo>) -> TardisApiResult<Void> {
-        // HttpRouteVoService::update(backend.0).await?;
+    async fn update(&self, update: Json<InstConfigVo>) -> TardisApiResult<Void> {
+        SpacegateManageService::update(update.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Delete Spacegate Inst
     #[oai(path = "/", method = "delete")]
     async fn delete(&self, name: Query<String>) -> TardisApiResult<Void> {
-        // HttpRouteVoService::delete(&name.0).await?;
+        SpacegateManageService::delete(&name.0).await?;
         TardisResp::ok(Void {})
     }
 }

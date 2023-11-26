@@ -22,7 +22,10 @@ impl GatewayApi {
         hostname: Query<Option<String>>,
         tls_ids: Query<Option<String>>,
     ) -> TardisApiResult<Vec<SgGatewayVo>> {
+        //todo client_name
+        let client_name = "";
         let result = GatewayVoService::list(
+            client_name,
             GatewayQueryDto {
                 names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
                 port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|_e| TardisError::bad_request("bad port format", ""))?,
@@ -38,19 +41,25 @@ impl GatewayApi {
     /// Add Gateway
     #[oai(path = "/", method = "post")]
     async fn add(&self, add: Json<SgGatewayVo>) -> TardisApiResult<SgGatewayVo> {
-        TardisResp::ok(GatewayVoService::add(add.0).await?)
+        //todo client_name
+        let client_name = "";
+        TardisResp::ok(GatewayVoService::add(client_name, add.0).await?)
     }
 
     /// Update Gateway
     #[oai(path = "/", method = "put")]
     async fn update(&self, update: Json<SgGatewayVo>) -> TardisApiResult<SgGatewayVo> {
-        TardisResp::ok(GatewayVoService::update(update.0).await?)
+        //todo client_name
+        let client_name = "";
+        TardisResp::ok(GatewayVoService::update(client_name, update.0).await?)
     }
 
     /// Delete Gateway
     #[oai(path = "/", method = "delete")]
     async fn delete(&self, name: Query<String>) -> TardisApiResult<Void> {
-        GatewayVoService::delete(&name.0).await?;
+        //todo client_name
+        let client_name = "";
+        GatewayVoService::delete(client_name, &name.0).await?;
         TardisResp::ok(Void {})
     }
 }

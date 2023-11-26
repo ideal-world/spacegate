@@ -212,7 +212,7 @@ impl SgTls {
             .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
 
         let secret_api: Api<Secret> = Api::namespaced(
-            (*k8s_client::get(Some(&client_name.to_string())).await?).clone(),
+            (*k8s_client::get(client_name).await?).clone(),
             certificate_ref.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
         );
         let result = if let Some(secret_obj) =

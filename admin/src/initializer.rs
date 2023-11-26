@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::api::{auth_api, gateway_api, plugin_api, route_api, spacegate_manage_api, tls_api};
+use crate::api::{auth_api, gateway_api, plugin_api, route_api, spacegate_manage_api, tls_api, BasicAuth};
 use crate::client::init_client;
 use crate::config::SpacegateAdminConfig;
-use crate::constants;
+
 use crate::constants::DOMAIN_CODE;
 use tardis::basic::result::TardisResult;
 use tardis::web::web_server::{TardisWebServer, WebServerModule};
@@ -18,7 +18,7 @@ pub(crate) async fn init(web_server: &TardisWebServer) -> TardisResult<()> {
 }
 
 async fn init_api(config: Arc<SpacegateAdminConfig>, web_server: &TardisWebServer) -> TardisResult<()> {
-    let mut module = WebServerModule::from((
+    let module = WebServerModule::from((
         gateway_api::GatewayApi,
         plugin_api::PluginApi,
         route_api::HttprouteApi,
@@ -26,11 +26,10 @@ async fn init_api(config: Arc<SpacegateAdminConfig>, web_server: &TardisWebServe
         auth_api::AuthApi,
         spacegate_manage_api::SpacegateManageApi,
     ));
-    module = if let Some(basic_auth) = config.basic_auth {
-        module.middleware(basic_auth)
+    if let Some(basic_auth) = config.basic_auth.clone() {
+        web_server.add_module(DOMAIN_CODE, module.middleware::<BasicAuth>(basic_auth)).await
     } else {
-        module
+        web_server.add_module(DOMAIN_CODE, module).await
     };
-    web_server.add_module(constants::DOMAIN_CODE, module).await;
     Ok(())
 }

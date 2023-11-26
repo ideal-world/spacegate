@@ -1,5 +1,6 @@
+use crate::api::BasicAuth;
 use crate::config::k8s_config::K8sConfig;
-use serde::Deserializer;
+
 use tardis::serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -46,7 +47,7 @@ pub mod k8s_config {
         fn to_kubeconfig(self) -> T;
     }
 
-    #[derive(Default, Debug, Serialize, Deserialize, poem_openapi::Object)]
+    #[derive(Default, Debug, Clone, Serialize, Deserialize, poem_openapi::Object)]
     #[serde(default)]
     pub struct K8sConfig {
         /// Referencable names to cluster configs
@@ -56,6 +57,7 @@ pub mod k8s_config {
         #[serde(default, deserialize_with = "deserialize_null_as_default")]
         pub users: NamedAuthInfo,
     }
+
     impl ToKubeconfig<kube::config::Kubeconfig> for K8sConfig {
         fn to_kubeconfig(self) -> kube::config::Kubeconfig {
             let cluster = self.clusters.to_kubeconfig();
@@ -204,13 +206,13 @@ pub mod k8s_config {
         fn to_kubeconfig(self) -> kube::config::AuthInfo {
             kube::config::AuthInfo {
                 username: self.username,
-                password: self.password.map(|s| SecretString::new(s)),
-                token: self.token.map(|token| SecretString::new(token)),
+                password: self.password.map(SecretString::new),
+                token: self.token.map(SecretString::new),
                 token_file: self.token_file,
                 client_certificate: self.client_certificate,
                 client_certificate_data: self.client_certificate_data,
                 client_key: self.client_key,
-                client_key_data: self.client_key_data.map(|data| SecretString::new(data)),
+                client_key_data: self.client_key_data.map(SecretString::new),
                 impersonate: None,
                 impersonate_groups: None,
                 auth_provider: None,
