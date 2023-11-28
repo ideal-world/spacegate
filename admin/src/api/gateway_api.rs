@@ -2,6 +2,7 @@ use crate::model::query_dto::{GatewayQueryDto, ToInstance};
 use crate::model::vo::gateway_vo::SgGatewayVo;
 use crate::service::gateway_service::GatewayVoService;
 use tardis::basic::error::TardisError;
+use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
@@ -21,9 +22,9 @@ impl GatewayApi {
         port: Query<Option<String>>,
         hostname: Query<Option<String>>,
         tls_ids: Query<Option<String>>,
+        session: &Session,
     ) -> TardisApiResult<Vec<SgGatewayVo>> {
-        //todo client_name
-        let client_name = "";
+        let client_name = &super::get_client_name(session).await;
         let result = GatewayVoService::list(
             client_name,
             GatewayQueryDto {
@@ -40,25 +41,22 @@ impl GatewayApi {
 
     /// Add Gateway
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgGatewayVo>) -> TardisApiResult<SgGatewayVo> {
-        //todo client_name
-        let client_name = "";
+    async fn add(&self, add: Json<SgGatewayVo>, session: &Session) -> TardisApiResult<SgGatewayVo> {
+        let client_name = &super::get_client_name(session).await;
         TardisResp::ok(GatewayVoService::add(client_name, add.0).await?)
     }
 
     /// Update Gateway
     #[oai(path = "/", method = "put")]
-    async fn update(&self, update: Json<SgGatewayVo>) -> TardisApiResult<SgGatewayVo> {
-        //todo client_name
-        let client_name = "";
+    async fn update(&self, update: Json<SgGatewayVo>, session: &Session) -> TardisApiResult<SgGatewayVo> {
+        let client_name = &super::get_client_name(session).await;
         TardisResp::ok(GatewayVoService::update(client_name, update.0).await?)
     }
 
     /// Delete Gateway
     #[oai(path = "/", method = "delete")]
-    async fn delete(&self, name: Query<String>) -> TardisApiResult<Void> {
-        //todo client_name
-        let client_name = "";
+    async fn delete(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
+        let client_name = &super::get_client_name(session).await;
         GatewayVoService::delete(client_name, &name.0).await?;
         TardisResp::ok(Void {})
     }

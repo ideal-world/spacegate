@@ -2,6 +2,7 @@ use crate::model::add_dto::{SgFilterAddVo, ToVo};
 use crate::model::query_dto::{PluginQueryDto, ToInstance};
 use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::service::plugin_service::PluginVoService;
+use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::{Path, Query};
 use tardis::web::poem_openapi::payload::Json;
@@ -23,9 +24,9 @@ impl PluginApi {
         target_name: Query<Option<String>>,
         target_kind: Query<Option<String>>,
         target_namespace: Query<Option<String>>,
+        session: &Session,
     ) -> TardisApiResult<Vec<SgFilterVo>> {
-        //todo client_name
-        let client_name = "";
+        let client_name = &super::get_client_name(session).await;
         let result = PluginVoService::list(
             client_name,
             PluginQueryDto {
@@ -45,25 +46,22 @@ impl PluginApi {
 
     /// Add Plugin
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgFilterAddVo>) -> TardisApiResult<SgFilterVo> {
-        //todo client_name
-        let client_name = "";
+    async fn add(&self, add: Json<SgFilterAddVo>, session: &Session) -> TardisApiResult<SgFilterVo> {
+        let client_name = &super::get_client_name(session).await;
         TardisResp::ok(PluginVoService::add(client_name, add.0.to_vo()?).await?)
     }
 
     /// Update Plugin
     #[oai(path = "/", method = "put")]
-    async fn update(&self, update: Json<SgFilterVo>) -> TardisApiResult<SgFilterVo> {
-        //todo client_name
-        let client_name = "";
+    async fn update(&self, update: Json<SgFilterVo>, session: &Session) -> TardisApiResult<SgFilterVo> {
+        let client_name = &super::get_client_name(session).await;
         TardisResp::ok(PluginVoService::update(client_name, update.0).await?)
     }
 
     /// Delete Plugin
     #[oai(path = "/:plugin_id", method = "put")]
-    async fn delete(&self, plugin_id: Path<String>) -> TardisApiResult<Void> {
-        //todo client_name
-        let client_name = "";
+    async fn delete(&self, plugin_id: Path<String>, session: &Session) -> TardisApiResult<Void> {
+        let client_name = &super::get_client_name(session).await;
         PluginVoService::delete(client_name, &plugin_id.0).await?;
         TardisResp::ok(Void {})
     }

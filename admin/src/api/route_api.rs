@@ -1,6 +1,7 @@
 use crate::model::query_dto::{HttpRouteQueryDto, ToInstance};
 use crate::model::vo::http_route_vo::SgHttpRouteVo;
 use crate::service::route_service::HttpRouteVoService;
+use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
@@ -19,9 +20,9 @@ impl HttprouteApi {
         gateway_name: Query<Option<String>>,
         hostnames: Query<Option<String>>,
         filter_ids: Query<Option<String>>,
+        session: &Session,
     ) -> TardisApiResult<Vec<SgHttpRouteVo>> {
-        //todo client_name
-        let client_name = "";
+        let client_name = &super::get_client_name(session).await;
         let result = HttpRouteVoService::list(
             client_name,
             HttpRouteQueryDto {
@@ -38,27 +39,24 @@ impl HttprouteApi {
 
     /// Add Httproute
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgHttpRouteVo>) -> TardisApiResult<Void> {
-        //todo client_name
-        let client_name = "";
+    async fn add(&self, add: Json<SgHttpRouteVo>, session: &Session) -> TardisApiResult<Void> {
+        let client_name = &super::get_client_name(session).await;
         HttpRouteVoService::add(client_name, add.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Update Httproute
     #[oai(path = "/", method = "put")]
-    async fn update(&self, backend: Json<SgHttpRouteVo>) -> TardisApiResult<Void> {
-        //todo client_name
-        let client_name = "";
+    async fn update(&self, backend: Json<SgHttpRouteVo>, session: &Session) -> TardisApiResult<Void> {
+        let client_name = &super::get_client_name(session).await;
         HttpRouteVoService::update(client_name, backend.0).await?;
         TardisResp::ok(Void {})
     }
 
     /// Delete Httproute
     #[oai(path = "/", method = "delete")]
-    async fn delete(&self, name: Query<String>) -> TardisApiResult<Void> {
-        //todo client_name
-        let client_name = "";
+    async fn delete(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
+        let client_name = &super::get_client_name(session).await;
         HttpRouteVoService::delete(client_name, &name.0).await?;
         TardisResp::ok(Void {})
     }

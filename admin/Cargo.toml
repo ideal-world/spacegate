@@ -12,19 +12,22 @@ license.workspace = true
 edition.workspace = true
 readme = "./README.md"
 
-[features]
-doc = ["tardis/openapi-rapidoc"]
-
 [dependencies]
-tardis = { workspace = true, features = ["web-server", "crypto", "cache"] }
+tardis = { workspace = true, features = [
+  "web-server",
+  "crypto",
+  "cache",
+  "openapi-rapidoc",
+] }
 serde.workspace = true
 serde_json.workspace = true
 
-secrecy = { version = "0.8.0", features = [
-    "alloc",
-    "serde",
+secrecy = { version = "0.8.0", features = ["alloc", "serde"] }
+kernel-common = { path = "../kernel-common", features = [
+  "admin-support",
+  "k8s",
+  "cache",
 ] }
-kernel-common = { path = "../kernel-common", features = ["admin-support", "k8s","cache"] }
 kube = { workspace = true }
 k8s-openapi = { workspace = true }
 k8s-gateway-api = { workspace = true }

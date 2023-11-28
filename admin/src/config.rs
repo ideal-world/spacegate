@@ -21,12 +21,14 @@ pub struct SpacegateAdminConfig {
 #[serde(default)]
 pub struct CookieConfig {
     pub name: String,
+    pub secure: bool,
 }
 
 impl Default for CookieConfig {
     fn default() -> Self {
         CookieConfig {
             name: "spacegate-admin".to_string(),
+            secure: false,
         }
     }
 }

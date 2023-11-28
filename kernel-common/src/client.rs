@@ -50,7 +50,7 @@ pub mod cache_client {
     pub async fn get(name: &str) -> TardisResult<Arc<TardisCacheClient>> {
         {
             let read = cache_clients().read().await;
-            read.get(name).cloned().ok_or_else(|| TardisError::bad_request("[SG.common] Get cache client failed", ""))
+            read.get(name).cloned().ok_or_else(|| TardisError::bad_request(&format!("[SG.common] Get cache client [{name}] failed"), ""))
         }
     }
 

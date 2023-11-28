@@ -4,13 +4,7 @@ use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use serde::{Deserialize, Serialize};
 use tardis::web::poem::endpoint::BoxEndpoint;
 use tardis::web::poem::session::{CookieConfig, CookieSession};
-use tardis::web::poem::{
-    self, handler,
-    session::Session,
-    web::{headers::HeaderMapExt, Form},
-    Endpoint, Middleware,
-};
-use tardis::web::web_server::BoxMiddleware;
+use tardis::web::poem::{self, session::Session, web::headers::HeaderMapExt, Endpoint, Middleware};
 use tardis::TardisFuns;
 
 use crate::config::SpacegateAdminConfig;
@@ -26,17 +20,16 @@ pub(crate) mod spacegate_manage_api;
 pub(crate) mod tls_api;
 
 async fn get_client_name(session: &Session) -> String {
-    session.get::<String>("client_name").unwrap_or(DEFAULT_CLIENT_NAME.to_string()).clone()
+    if let Some(client_name) = session.get::<String>("client_name") {
+        client_name
+    } else {
+        session.set("client_name", DEFAULT_CLIENT_NAME.to_string());
+        DEFAULT_CLIENT_NAME.to_string()
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct BasicAuth;
-
-impl BasicAuth {
-    pub fn boxed() -> BoxMiddleware<'static> {
-        Box::new(BasicAuth)
-    }
-}
 
 impl Middleware<BoxEndpoint<'static>> for BasicAuth {
     type Output = BoxEndpoint<'static>;
@@ -70,17 +63,11 @@ impl<E: Endpoint> Endpoint for BasicAuthEndpoint<E> {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct CookieMW;
 
-impl CookieMW {
-    pub fn boxed() -> BoxMiddleware<'static> {
-        Box::new(CookieMW)
-    }
-}
-
 impl Middleware<BoxEndpoint<'static>> for CookieMW {
     type Output = BoxEndpoint<'static>;
 
     fn transform(&self, ep: BoxEndpoint<'static>) -> Self::Output {
         let config = TardisFuns::cs_config::<SpacegateAdminConfig>(DOMAIN_CODE);
-        Box::new(CookieSession::new(CookieConfig::new().name(&config.cookie_config.name).path("/").http_only(true)).transform(ep))
+        Box::new(CookieSession::new(CookieConfig::new().name(&config.cookie_config.name).secure(config.cookie_config.secure).path("/")).transform(ep))
     }
 }

@@ -1,4 +1,7 @@
+
+
 use crate::client::get_base_is_kube;
+use crate::config::k8s_config::ToKubeconfig;
 use crate::constants::{KUBE_VO_NAMESPACE, TYPE_CONFIG_NAME_MAP};
 use crate::model::query_dto::{SpacegateInstQueryDto, SpacegateInstQueryInst, ToInstance};
 use crate::model::vo::spacegate_inst_vo::{InstConfigType, InstConfigVo};
@@ -6,12 +9,14 @@ use crate::model::vo::Vo;
 use crate::service::base_service::VoBaseService;
 
 use k8s_openapi::api::core::v1::ConfigMap;
-use kernel_common::client::k8s_client;
 use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
+use kernel_common::client::{cache_client, k8s_client};
 
 use kube::Api;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
+
+
 use tardis::TardisFuns;
 
 pub struct SpacegateManageService;
@@ -32,26 +37,83 @@ impl SpacegateManageService {
     }
 
     pub(crate) async fn add(add: InstConfigVo) -> TardisResult<InstConfigVo> {
-        if add.get_unique_name() == DEFAULT_CLIENT_NAME || add.get_unique_name().is_empty() {
+        match add.type_ {
+            InstConfigType::K8sClusterConfig => {
+                if add.k8s_cluster_config.is_none() {
+                    return Err(TardisError::bad_request("[admin.service] k8s_cluster_config is required", ""));
+                }
+            }
+            InstConfigType::RedisConfig => {
+                if add.redis_config.is_none() {
+                    return Err(TardisError::bad_request("[admin.service] redis_config is required", ""));
+                }
+            }
+        }
+        let name = add.get_unique_name();
+        if name == DEFAULT_CLIENT_NAME || name.is_empty() {
             return Err(TardisError::bad_request(&format!("[admin.service] client name {DEFAULT_CLIENT_NAME} is not allowed"), ""));
+        }
+        match add.type_ {
+            InstConfigType::K8sClusterConfig => {
+                let config = add.k8s_cluster_config.clone().expect("").to_kubeconfig();
+
+                k8s_client::inst(name, config).await?;
+            }
+            InstConfigType::RedisConfig => {
+                cache_client::init(name, &add.redis_config.clone().expect("").url).await?;
+            }
         }
         Self::add_vo(DEFAULT_CLIENT_NAME, add).await
     }
 
     pub(crate) async fn update(update: InstConfigVo) -> TardisResult<InstConfigVo> {
+        match update.type_ {
+            InstConfigType::K8sClusterConfig => {
+                if update.k8s_cluster_config.is_none() {
+                    return Err(TardisError::bad_request("[admin.service] k8s_cluster_config is required", ""));
+                }
+            }
+            InstConfigType::RedisConfig => {
+                if update.redis_config.is_none() {
+                    return Err(TardisError::bad_request("[admin.service] redis_config is required", ""));
+                }
+            }
+        }
+
         if update.get_unique_name() == DEFAULT_CLIENT_NAME || update.get_unique_name().is_empty() {
             return Err(TardisError::bad_request(&format!("[admin.service] client name {DEFAULT_CLIENT_NAME} is not allowed"), ""));
         }
         let unique_name = update.get_unique_name();
-        if let Some(_old_str) = Self::get_str_type_map(DEFAULT_CLIENT_NAME).await?.remove(&unique_name) {
-            Self::update_vo(DEFAULT_CLIENT_NAME, update).await
-        } else {
-            Err(TardisError::not_found(&format!("[admin.service] Update tls {} not found", unique_name), ""))
+        if Self::get_str_type_map(DEFAULT_CLIENT_NAME).await?.remove(&unique_name).is_none() {
+            return Err(TardisError::not_found(&format!("[admin.service] Update tls {} not found", unique_name), ""));
         }
+
+        match update.type_ {
+            InstConfigType::K8sClusterConfig => {
+                let config = update.k8s_cluster_config.clone().expect("").to_kubeconfig();
+                k8s_client::inst(unique_name, config).await?;
+            }
+            InstConfigType::RedisConfig => {
+                cache_client::init(unique_name, &update.redis_config.clone().expect("").url).await?;
+            }
+        }
+        Self::update_vo(DEFAULT_CLIENT_NAME, update).await
     }
 
-    pub(crate) async fn delete(id: &str) -> TardisResult<()> {
-        Self::delete_vo(DEFAULT_CLIENT_NAME, id).await?;
+    pub(crate) async fn delete(name: &str) -> TardisResult<()> {
+        if name == DEFAULT_CLIENT_NAME || name.is_empty() {
+            return Err(TardisError::bad_request(&format!("[admin.service] client name {DEFAULT_CLIENT_NAME} is not allowed"), ""));
+        }
+        let old_vo = Self::get_by_id(DEFAULT_CLIENT_NAME, name).await?;
+        match old_vo.type_ {
+            InstConfigType::K8sClusterConfig => {
+                k8s_client::remove(&name).await?;
+            }
+            InstConfigType::RedisConfig => {
+                cache_client::remove(name).await?;
+            }
+        }
+        Self::delete_vo(DEFAULT_CLIENT_NAME, name).await?;
         Ok(())
     }
 
@@ -77,19 +139,20 @@ impl SpacegateManageService {
             let config_str = if get_base_is_kube().await? {
                 let api: Api<ConfigMap> = Api::namespaced((*k8s_client::get(DEFAULT_CLIENT_NAME).await?).clone(), KUBE_VO_NAMESPACE);
 
-                api.get_opt(TYPE_CONFIG_NAME_MAP.get(InstConfigVo::get_vo_type().as_str()).expect(""))
+                api.get_opt(TYPE_CONFIG_NAME_MAP.get(InstConfigVo::get_vo_type().as_str()).expect("TYPE_CONFIG_NAME_MAP is missing key"))
                     .await
-                    .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client error: {e}"), ""))?
-                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
+                    .map_err(|e| TardisError::io_error(&format!("[SG.admin] Kubernetes client get_opt error: {e}"), ""))?
+                    .ok_or_else(|| TardisError::wrap(&format!("[SG.admin] Kubernetes client error not found [{name}] config"), ""))?
                     .data
-                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
+                    .ok_or_else(|| TardisError::wrap(&format!("[SG.admin] Kubernetes client found config [{name}] but data is None"), ""))?
                     .remove(name)
-                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
+                    .ok_or_else(|| TardisError::wrap(&format!("[SG.admin] Kubernetes client found config [{name}] but cant find config:{name}"), ""))?
             } else {
-                TardisFuns::cache()
+                let cache_client = cache_client::get(DEFAULT_CLIENT_NAME).await?;
+                cache_client
                     .hget(TYPE_CONFIG_NAME_MAP.get(InstConfigVo::get_vo_type().as_str()).expect(""), name)
                     .await?
-                    .ok_or(TardisError::wrap("[SG.admin] Kubernetes client error", ""))?
+                    .ok_or_else(|| TardisError::wrap(&format!("[SG.admin] Redis client not found [{name}] config"), ""))?
             };
             let config = TardisFuns::json.str_to_obj::<InstConfigVo>(&config_str)?;
             Ok(config.type_ == InstConfigType::K8sClusterConfig)

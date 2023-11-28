@@ -42,16 +42,14 @@ impl SpacegateManageApi {
 
     /// Add Spacegate Inst
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<InstConfigVo>) -> TardisApiResult<Void> {
-        SpacegateManageService::add(add.0).await?;
-        TardisResp::ok(Void {})
+    async fn add(&self, add: Json<InstConfigVo>) -> TardisApiResult<InstConfigVo> {
+        TardisResp::ok(SpacegateManageService::add(add.0).await?)
     }
 
     /// Update Spacegate Inst
     #[oai(path = "/", method = "put")]
-    async fn update(&self, update: Json<InstConfigVo>) -> TardisApiResult<Void> {
-        SpacegateManageService::update(update.0).await?;
-        TardisResp::ok(Void {})
+    async fn update(&self, update: Json<InstConfigVo>) -> TardisApiResult<InstConfigVo> {
+        TardisResp::ok(SpacegateManageService::update(update.0).await?)
     }
 
     /// Delete Spacegate Inst

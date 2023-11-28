@@ -8,19 +8,19 @@ use tardis::web::poem_openapi;
 #[derive(Debug, Serialize, Deserialize, poem_openapi::Object)]
 pub struct InstConfigVo {
     pub type_: InstConfigType,
-    pub k8s_cluster_config: K8sClusterConfig,
-    pub redis_config: RedisConfig,
+    pub k8s_cluster_config: Option<K8sClusterConfig>,
+    pub redis_config: Option<RedisConfig>,
 }
 
 impl Vo for InstConfigVo {
     fn get_vo_type() -> String {
-        constants::CLUSTER_TYPE.to_string()
+        constants::INSTANCE_TYPE.to_string()
     }
 
     fn get_unique_name(&self) -> String {
         match &self.type_ {
-            InstConfigType::K8sClusterConfig => self.k8s_cluster_config.name.clone(),
-            InstConfigType::RedisConfig => self.redis_config.name.clone(),
+            InstConfigType::K8sClusterConfig => self.k8s_cluster_config.as_ref().expect("").name.clone(),
+            InstConfigType::RedisConfig => self.redis_config.as_ref().expect("").name.clone(),
         }
     }
 }
@@ -31,7 +31,7 @@ pub enum InstConfigType {
     RedisConfig,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, poem_openapi::Object)]
+#[derive(Debug, Default, Serialize, Clone, Deserialize, poem_openapi::Object)]
 #[serde(default)]
 pub struct K8sClusterConfig {
     /// uid
@@ -70,6 +70,5 @@ impl ToKubeconfig<kube::config::Kubeconfig> for K8sClusterConfig {
 pub struct RedisConfig {
     /// uid
     pub name: String,
-    pub auth: String,
     pub url: String,
 }

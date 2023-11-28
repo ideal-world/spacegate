@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
 use crate::api::{auth_api, gateway_api, plugin_api, route_api, spacegate_manage_api, tls_api, BasicAuth, CookieMW};
 use crate::client::init_client;
-use crate::config::SpacegateAdminConfig;
 
 use crate::constants::DOMAIN_CODE;
 use tardis::basic::result::TardisResult;
-use tardis::web::poem::session::{CookieConfig, CookieSession};
+
 use tardis::web::web_server::{TardisWebServer, WebServerModule};
 use tardis::TardisFuns;
 
@@ -25,6 +22,7 @@ async fn init_api(web_server: &TardisWebServer) -> TardisResult<()> {
         tls_api::TlsApi,
         auth_api::AuthApi,
         spacegate_manage_api::SpacegateManageApi,
+        spacegate_manage_api::SpacegateSelectApi,
     ))
     .middleware((BasicAuth, CookieMW));
 

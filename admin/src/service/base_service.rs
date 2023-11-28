@@ -19,7 +19,7 @@ where
     T: Vo + Serialize + Sync + Send + DeserializeOwned,
 {
     async fn get_str_type_map(client_name: &str) -> TardisResult<HashMap<String, String>> {
-        Ok(if SpacegateManageService::client_is_kube(client_name).await? {
+        let result = if SpacegateManageService::client_is_kube(client_name).await? {
             if let Some(t_config) = get_config_map_api(client_name)
                 .await?
                 .get_opt(&get_config_name::<T>())
@@ -37,7 +37,8 @@ where
             }
         } else {
             cache_client::get(client_name).await?.hgetall(&get_config_name::<T>()).await?
-        })
+        };
+        Ok(result)
     }
 
     async fn get_type_map(client_name: &str) -> TardisResult<HashMap<String, T>> {
