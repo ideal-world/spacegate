@@ -1,6 +1,7 @@
 use crate::model::query_dto::{SpacegateInstQueryDto, ToInstance};
 use crate::model::vo::spacegate_inst_vo::InstConfigVo;
 use crate::service::spacegate_manage_service::SpacegateManageService;
+use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
@@ -16,10 +17,9 @@ pub struct SpacegateManageApi;
 impl SpacegateSelectApi {
     /// Select Spacegate Inst
     #[oai(path = "/", method = "post")]
-    async fn add(&self, name: Query<String>) -> TardisApiResult<Void> {
+    async fn add(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
         SpacegateManageService::check(&name.0).await?;
-        //todo set_client_name
-        // set_client_name(name.0).await?
+        session.set("client_name", &name.0);
         TardisResp::ok(Void {})
     }
 }

@@ -1,4 +1,3 @@
-use crate::api::BasicAuth;
 use crate::config::k8s_config::K8sConfig;
 
 use tardis::serde::{Deserialize, Serialize};
@@ -10,11 +9,32 @@ pub struct SpacegateAdminConfig {
     /// Otherwise , use cache.
     pub is_kube: bool,
 
+    pub cookie_config: CookieConfig,
     #[serde(flatten)]
     pub kube_config: AdminK8sConfig,
 
     #[serde(flatten)]
-    pub basic_auth: Option<BasicAuth>,
+    pub basic_auth: Option<BasicAuthConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CookieConfig {
+    pub name: String,
+}
+
+impl Default for CookieConfig {
+    fn default() -> Self {
+        CookieConfig {
+            name: "spacegate-admin".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BasicAuthConfig {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]

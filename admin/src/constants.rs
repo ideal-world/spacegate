@@ -27,6 +27,7 @@ lazy_static! {
         map.insert(PLUGIN_TYPE, PLUGIN_CONFIG_NAME);
         map.insert(ROUTE_TYPE, ROUTE_CONFIG_NAME);
         map.insert(BACKEND_REF_TYPE, BACKEND_REF_CONFIG_NAME);
+        map.insert(CLUSTER_TYPE, CLUSTER_CONFIG_NAME);
         map
     };
 }

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
 use tardis::web::web_resp::{TardisApiResult, TardisResp};
 
@@ -15,7 +16,8 @@ pub struct DashboardApi;
 /// Dashboard API
 #[poem_openapi::OpenApi(prefix_path = "/")]
 impl DashboardApi {
-    async fn statistics(&self) -> TardisApiResult<Statistics> {
+    #[oai(path = "/", method = "get")]
+    async fn statistics(&self, session: &Session) -> TardisApiResult<Statistics> {
         //todo client_name
         let client_name = "";
         TardisResp::ok(Statistics {

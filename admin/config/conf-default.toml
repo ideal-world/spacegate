@@ -1,3 +1,6 @@
+[cs]
+[csm.admin]
+
 [fw]
 [fw.app]
 id = "spacegate-admin"
@@ -9,7 +12,19 @@ default_lang = "zh-cn"
 
 [fw.web_server.modules.admin]
 title = "spacegate admin"
-doc_urls = [["test env", "http://localhost:9080/"],["remote env", "http://192.168.31.164:9080/"]]
+doc_urls = [
+  [
+    "test env",
+    "http://localhost:9080/",
+  ],
+  [
+    "remote env",
+    "http://192.168.31.164:9080/",
+  ],
+]
 
 [fw.web_server]
 port = 9080
+
+[fw.cache]
+url = "redis://:@192.168.31.164:6379/0"

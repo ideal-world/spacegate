@@ -5,11 +5,6 @@ use tardis::basic::result::TardisResult;
 use tardis::regex;
 use tardis::regex::Regex;
 
-//todo remove 使用这个get_k8s_client还是common里的？
-// pub async fn get_k8s_client() -> TardisResult<Client> {
-//     Client::try_default().await.map_err(|error| TardisError::wrap(&format!("[SG.admin] Get kubernetes client error: {error:?}"), ""))
-// }
-
 /// Convert fuzzy search queries into regular instance
 pub fn fuzzy_regex(query: impl AsRef<str>) -> TardisResult<Regex> {
     let fuzzy_ = Regex::new(r"(?<frist>[^\\]?)\*(?<last>\w*)")?;

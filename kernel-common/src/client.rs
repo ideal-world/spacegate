@@ -66,16 +66,17 @@ pub mod cache_client {
         match obj_type {
             CONF_GATEWAY_KEY => client.hset(CONF_GATEWAY_KEY, obj_name, obj).await?,
             CONF_HTTP_ROUTE_KEY => {
+                let key = format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name);
                 let old_httproutes = client
-                    .lrangeall(&format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name))
+                    .lrangeall(&key)
                     .await?
                     .into_iter()
                     .map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).expect("[SG.config] Route config parse error"))
                     .collect::<Vec<SgHttpRoute>>();
                 if let Some(index) = old_httproutes.iter().position(|x| x.name == obj_name) {
-                    //todo client.lset
+                    client.lset(&key, index as isize, obj).await?;
                 } else {
-                    client.lpush(&format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name), obj).await?
+                    client.lpush(&key, obj).await?
                 }
             }
             _ => return Err(TardisError::bad_request("[SG.common] Add or update object failed: invalid obj type", "")),
@@ -89,14 +90,15 @@ pub mod cache_client {
         match obj_type {
             CONF_GATEWAY_KEY => client.hdel(CONF_GATEWAY_KEY, obj_name).await?,
             CONF_HTTP_ROUTE_KEY => {
+                let key = format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name);
                 let old_httproutes = client
-                    .lrangeall(&format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name))
+                    .lrangeall(&key)
                     .await?
                     .into_iter()
                     .map(|v| tardis::TardisFuns::json.str_to_obj::<SgHttpRoute>(&v).expect("[SG.config] Route config parse error"))
                     .collect::<Vec<SgHttpRoute>>();
                 if let Some(delete_httproute) = old_httproutes.into_iter().find(|x| x.name == obj_name) {
-                    //todo client.lrem
+                    client.lrem(&key, 1, &tardis::TardisFuns::json.obj_to_string(&delete_httproute)?).await?;
                 } else {
                     log::info!("[SG.common] delete obj not found:{}", obj_name);
                 }
