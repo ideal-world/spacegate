@@ -1,6 +1,7 @@
+use crate::api::SessionInstance;
 use crate::client::get_base_is_kube;
 use crate::config::k8s_config::ToKubeconfig;
-use crate::constants::{KUBE_VO_NAMESPACE, TYPE_CONFIG_NAME_MAP};
+use crate::constants::{KUBE_VO_NAMESPACE, SESSION_INSTACE_KEY, TYPE_CONFIG_NAME_MAP};
 use crate::model::query_dto::{SpacegateInstQueryDto, SpacegateInstQueryInst, ToInstance};
 use crate::model::vo::spacegate_inst_vo::{InstConfigType, InstConfigVo};
 use crate::model::vo::Vo;
@@ -14,6 +15,7 @@ use kube::Api;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
+use tardis::web::poem::session::Session;
 use tardis::TardisFuns;
 
 pub struct SpacegateManageService;
@@ -127,6 +129,43 @@ impl SpacegateManageService {
             return Err(TardisError::bad_request(&format!("[admin.service] spacegate inst [{}] not found", id), ""));
         };
         Ok(())
+    }
+
+    pub async fn get_instance(session: &Session) -> TardisResult<SessionInstance> {
+        if let Some(instance_str) = session.get::<String>(SESSION_INSTACE_KEY) {
+            if let Ok(instance) = TardisFuns::json.str_to_obj::<SessionInstance>(&instance_str) {
+                return Ok(instance);
+            }
+        }
+        SpacegateManageService::set_instance_name(DEFAULT_CLIENT_NAME, session).await
+    }
+
+    pub async fn set_instance_name(name: &str, session: &Session) -> TardisResult<SessionInstance> {
+        if name.is_empty() {
+            return Err(TardisError::bad_request("[admin] select name cannot be empty", ""));
+        }
+        let session_instace = if name == DEFAULT_CLIENT_NAME {
+            SessionInstance {
+                name: name.to_string(),
+                type_: if get_base_is_kube().await? {
+                    InstConfigType::K8sClusterConfig
+                } else {
+                    InstConfigType::RedisConfig
+                },
+            }
+        } else {
+            SpacegateManageService::check(name).await?;
+            SessionInstance {
+                name: name.to_string(),
+                type_: if Self::client_is_kube(name).await? {
+                    InstConfigType::K8sClusterConfig
+                } else {
+                    InstConfigType::RedisConfig
+                },
+            }
+        };
+        session.set(SESSION_INSTACE_KEY, TardisFuns::json.obj_to_string(&session_instace)?);
+        Ok(session_instace)
     }
 
     pub async fn client_is_kube(name: &str) -> TardisResult<bool> {

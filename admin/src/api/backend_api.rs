@@ -17,7 +17,7 @@ impl BackendApi {
     /// Get Backend List
     #[oai(path = "/", method = "get")]
     async fn list(&self, names: Query<Option<String>>, namespace: Query<Option<String>>, session: &Session) -> TardisApiResult<Vec<SgBackendRefVo>> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         let result = BackendRefVoService::list(
             client_name,
             BackendRefQueryDto {
@@ -33,21 +33,21 @@ impl BackendApi {
     /// Add Backend
     #[oai(path = "/", method = "post")]
     async fn add(&self, backend: Json<SgBackendRefVo>, session: &Session) -> TardisApiResult<SgBackendRefVo> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         TardisResp::ok(BackendRefVoService::add(client_name, backend.0).await?)
     }
 
     /// update Backend
     #[oai(path = "/", method = "put")]
     async fn update(&self, backend: Json<SgBackendRefVo>, session: &Session) -> TardisApiResult<SgBackendRefVo> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         TardisResp::ok(BackendRefVoService::update(client_name, backend.0).await?)
     }
 
     /// delete Backend
     #[oai(path = "/:backend_id", method = "put")]
     async fn delete(&self, backend_id: Path<String>, session: &Session) -> TardisApiResult<Void> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         BackendRefVoService::delete(client_name, &backend_id.0).await?;
         TardisResp::ok(Void {})
     }

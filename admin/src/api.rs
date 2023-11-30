@@ -1,14 +1,17 @@
 use k8s_openapi::http::StatusCode;
 
-use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use serde::{Deserialize, Serialize};
+use tardis::basic::result::TardisResult;
 use tardis::web::poem::endpoint::BoxEndpoint;
 use tardis::web::poem::session::{CookieConfig, CookieSession};
 use tardis::web::poem::{self, session::Session, web::headers::HeaderMapExt, Endpoint, Middleware};
+use tardis::web::poem_openapi;
 use tardis::TardisFuns;
 
 use crate::config::SpacegateAdminConfig;
 use crate::constants::DOMAIN_CODE;
+use crate::model::vo::spacegate_inst_vo::InstConfigType;
+use crate::service::spacegate_manage_service::SpacegateManageService;
 
 pub(crate) mod auth_api;
 pub(crate) mod backend_api;
@@ -19,13 +22,15 @@ pub(crate) mod route_api;
 pub(crate) mod spacegate_manage_api;
 pub(crate) mod tls_api;
 
-async fn get_client_name(session: &Session) -> String {
-    if let Some(client_name) = session.get::<String>("client_name") {
-        client_name
-    } else {
-        session.set("client_name", DEFAULT_CLIENT_NAME.to_string());
-        DEFAULT_CLIENT_NAME.to_string()
-    }
+#[derive(Debug, Serialize, Deserialize, poem_openapi::Object)]
+pub struct SessionInstance {
+    pub name: String,
+    pub type_: InstConfigType,
+}
+
+#[inline]
+async fn get_instance_name(session: &Session) -> TardisResult<String> {
+    Ok(SpacegateManageService::get_instance(session).await?.name)
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]

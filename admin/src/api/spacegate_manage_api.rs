@@ -2,12 +2,13 @@ use crate::model::query_dto::{SpacegateInstQueryDto, ToInstance};
 use crate::model::vo::spacegate_inst_vo::InstConfigVo;
 use crate::service::spacegate_manage_service::SpacegateManageService;
 use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
-use tardis::basic::error::TardisError;
 use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
+
+use super::SessionInstance;
 
 #[derive(Clone, Default)]
 pub struct SpacegateSelectApi;
@@ -19,27 +20,20 @@ pub struct SpacegateManageApi;
 impl SpacegateSelectApi {
     /// Get select Spacegate Inst
     #[oai(path = "/", method = "get")]
-    async fn get(&self, session: &Session) -> TardisApiResult<String> {
-        let client_name = &super::get_client_name(session).await;
-        if !client_name.is_empty() && client_name != DEFAULT_CLIENT_NAME {
-            if SpacegateManageService::check(client_name).await.is_ok() {
-                return TardisResp::ok(client_name.to_string());
+    async fn get(&self, session: &Session) -> TardisApiResult<SessionInstance> {
+        let instance = SpacegateManageService::get_instance(session).await?;
+        if !instance.name.is_empty() && instance.name != DEFAULT_CLIENT_NAME {
+            if SpacegateManageService::check(&instance.name).await.is_ok() {
+                return TardisResp::ok(instance);
             }
         }
-        session.set("client_name", DEFAULT_CLIENT_NAME);
-        TardisResp::ok(DEFAULT_CLIENT_NAME.to_string())
+        TardisResp::ok(SpacegateManageService::set_instance_name(DEFAULT_CLIENT_NAME, session).await?)
     }
 
     /// Select Spacegate Inst
     #[oai(path = "/", method = "post")]
     async fn select(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
-        if name.0.is_empty() {
-            return TardisResp::err(TardisError::bad_request("[admin] select name cannot be empty", ""));
-        }
-        if name.0 != DEFAULT_CLIENT_NAME {
-            SpacegateManageService::check(&name.0).await?;
-        }
-        session.set("client_name", &name.0);
+        SpacegateManageService::set_instance_name(&name.0, session).await?;
         TardisResp::ok(Void {})
     }
 }

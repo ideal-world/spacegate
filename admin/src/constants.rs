@@ -5,6 +5,8 @@ pub const DOMAIN_CODE: &str = "admin";
 
 pub const KUBE_VO_NAMESPACE: &str = "spacegate";
 
+pub const SESSION_INSTACE_KEY: &str = "instace_info";
+
 pub const GATEWAY_CONFIG_NAME: &str = "gateway-config";
 pub const TLS_CONFIG_NAME: &str = "tls-config";
 pub const PLUGIN_CONFIG_NAME: &str = "plugin-config";

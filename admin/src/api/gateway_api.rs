@@ -24,7 +24,7 @@ impl GatewayApi {
         tls_ids: Query<Option<String>>,
         session: &Session,
     ) -> TardisApiResult<Vec<SgGatewayVo>> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         let result = GatewayVoService::list(
             client_name,
             GatewayQueryDto {
@@ -42,21 +42,21 @@ impl GatewayApi {
     /// Add Gateway
     #[oai(path = "/", method = "post")]
     async fn add(&self, add: Json<SgGatewayVo>, session: &Session) -> TardisApiResult<SgGatewayVo> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         TardisResp::ok(GatewayVoService::add(client_name, add.0).await?)
     }
 
     /// Update Gateway
     #[oai(path = "/", method = "put")]
     async fn update(&self, update: Json<SgGatewayVo>, session: &Session) -> TardisApiResult<SgGatewayVo> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         TardisResp::ok(GatewayVoService::update(client_name, update.0).await?)
     }
 
     /// Delete Gateway
     #[oai(path = "/", method = "delete")]
     async fn delete(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         GatewayVoService::delete(client_name, &name.0).await?;
         TardisResp::ok(Void {})
     }

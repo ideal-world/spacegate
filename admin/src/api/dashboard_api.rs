@@ -18,7 +18,7 @@ pub struct DashboardApi;
 impl DashboardApi {
     #[oai(path = "/", method = "get")]
     async fn statistics(&self, session: &Session) -> TardisApiResult<Statistics> {
-        let client_name = &super::get_client_name(session).await;
+        let client_name = &super::get_instance_name(session).await?;
         TardisResp::ok(Statistics {
             gateway_count: GatewayVoService::list(
                 client_name,
