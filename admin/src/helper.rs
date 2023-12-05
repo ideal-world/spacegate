@@ -41,7 +41,9 @@ mod test {
     fn test_fuzzy_regex() {
         assert!(fuzzy_regex("*").unwrap().is_match("8435"));
         assert!(fuzzy_regex("*").unwrap().is_match("8435*erf"));
+        assert!(!fuzzy_regex("").unwrap().is_match("dsfasd"));
 
+        assert!(!fuzzy_regex("a").unwrap().is_match("sdfa435gt"));
         assert!(fuzzy_regex("a*").unwrap().is_match("a435gt"));
         assert!(!fuzzy_regex("a*").unwrap().is_match("sdfa435gt"));
 

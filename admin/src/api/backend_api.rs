@@ -2,9 +2,8 @@ use crate::model::query_dto::{BackendRefQueryDto, ToInstance};
 use crate::model::vo::backend_vo::SgBackendRefVo;
 use crate::service::backend_ref_service::BackendRefVoService;
 use tardis::web::poem::session::Session;
-use tardis::web::poem::web::Query;
 use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::Path;
+use tardis::web::poem_openapi::param::{Path, Query};
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
@@ -45,7 +44,7 @@ impl BackendApi {
     }
 
     /// delete Backend
-    #[oai(path = "/:backend_id", method = "put")]
+    #[oai(path = "/:backend_id", method = "delete")]
     async fn delete(&self, backend_id: Path<String>, session: &Session) -> TardisApiResult<Void> {
         let client_name = &super::get_instance_name(session).await?;
         BackendRefVoService::delete(client_name, &backend_id.0).await?;

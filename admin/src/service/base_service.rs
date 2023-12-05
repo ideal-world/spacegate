@@ -66,20 +66,26 @@ where
     where
         T: 'async_trait,
     {
-        Self::add_or_update_vo(client_name, config, true).await
+        Self::add_or_update_vo(client_name, config, true, false).await
     }
 
     async fn update_vo(client_name: &str, config: T) -> TardisResult<T>
     where
         T: 'async_trait,
     {
-        Self::add_or_update_vo(client_name, config, false).await
+        Self::add_or_update_vo(client_name, config, false, true).await
     }
 
-    async fn add_or_update_vo(client_name: &str, config: T, add_only: bool) -> TardisResult<T>
+    /// # add_or_update_vo
+    /// **warning**: `add_only` and `update_only` cannot be true at the same time
+    async fn add_or_update_vo(client_name: &str, config: T, add_only: bool, update_only: bool) -> TardisResult<T>
     where
         T: 'async_trait,
     {
+        if add_only && update_only {
+            panic!("add_only and update_only cannot be true at the same time");
+        }
+
         let id = config.get_unique_name();
         let mut datas = Self::get_str_type_map(client_name).await?;
         if datas.get(&id).is_some() {
@@ -89,7 +95,11 @@ where
                 log::debug!("[SG.admin] add_or_update {}:{} exists , will update", T::get_vo_type(), id);
             }
         } else {
-            log::debug!("[SG.admin] add_or_update {}:{} not exists , will add", T::get_vo_type(), id);
+            if update_only {
+                return Err(TardisError::bad_request(&format!("[SG.admin] {}:{} not exists", T::get_vo_type(), id), ""));
+            } else {
+                log::debug!("[SG.admin] add_or_update {}:{} not exists , will add", T::get_vo_type(), id);
+            }
         }
         let config_str = serde_json::to_string(&config).map_err(|e| TardisError::bad_request(&format!("Serialization to json failed:{e}"), ""))?;
         if SpacegateManageService::client_is_kube(client_name).await? {

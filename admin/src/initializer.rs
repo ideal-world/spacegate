@@ -1,4 +1,4 @@
-use crate::api::{auth_api, gateway_api, plugin_api, route_api, spacegate_manage_api, tls_api, BasicAuth, CookieMW};
+use crate::api::{auth_api, backend_api, gateway_api, plugin_api, route_api, spacegate_manage_api, tls_api, BasicAuth, CookieMW};
 use crate::client::init_client;
 
 use crate::constants::DOMAIN_CODE;
@@ -16,6 +16,7 @@ pub(crate) async fn init(web_server: &TardisWebServer) -> TardisResult<()> {
 
 async fn init_api(web_server: &TardisWebServer) -> TardisResult<()> {
     let module = WebServerModule::from((
+        backend_api::BackendApi,
         gateway_api::GatewayApi,
         plugin_api::PluginApi,
         route_api::HttprouteApi,

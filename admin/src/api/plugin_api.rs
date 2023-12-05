@@ -59,7 +59,7 @@ impl PluginApi {
     }
 
     /// Delete Plugin
-    #[oai(path = "/:plugin_id", method = "put")]
+    #[oai(path = "/:plugin_id", method = "delete")]
     async fn delete(&self, plugin_id: Path<String>, session: &Session) -> TardisApiResult<Void> {
         let client_name = &super::get_instance_name(session).await?;
         PluginVoService::delete(client_name, &plugin_id.0).await?;

@@ -4,7 +4,7 @@ use crate::service::gateway_service::GatewayVoService;
 use tardis::basic::error::TardisError;
 use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::Query;
+use tardis::web::poem_openapi::param::{Path, Query};
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
@@ -54,8 +54,8 @@ impl GatewayApi {
     }
 
     /// Delete Gateway
-    #[oai(path = "/", method = "delete")]
-    async fn delete(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
+    #[oai(path = "/:plugin_id", method = "delete")]
+    async fn delete(&self, name: Path<String>, session: &Session) -> TardisApiResult<Void> {
         let client_name = &super::get_instance_name(session).await?;
         GatewayVoService::delete(client_name, &name.0).await?;
         TardisResp::ok(Void {})
