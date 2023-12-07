@@ -1,12 +1,18 @@
+use crate::client::k8s_client;
 use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
 use crate::gatewayapi_support_filter::{
     SgFilterHeaderModifier, SgFilterHeaderModifierKind, SgFilterRedirect, SgFilterRewrite, SG_FILTER_HEADER_MODIFIER_CODE, SG_FILTER_REDIRECT_CODE, SG_FILTER_REWRITE_CODE,
 };
 use crate::inner_model::plugin_filter::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
-use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
+use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef, SgFilter};
 use k8s_gateway_api::{HttpHeader, HttpPathModifier, HttpRequestHeaderFilter, HttpRequestRedirectFilter, HttpRouteFilter, HttpUrlRewriteFilter};
+use kube::api::ListParams;
+use kube::Api;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use tardis::TardisFuns;
+use tardis::basic::error::TardisError;
+use tardis::basic::result::TardisResult;
+use tardis::{log, TardisFuns};
 
 impl SgRouteFilter {
     /// # to_singe_filter
@@ -80,6 +86,144 @@ impl SgRouteFilter {
             }
         } else {
             None
+        }
+    }
+
+    pub fn from_http_route_filter(route_filter: HttpRouteFilter) -> TardisResult<SgRouteFilter> {
+        let sg_filter = match route_filter {
+            k8s_gateway_api::HttpRouteFilter::RequestHeaderModifier { request_header_modifier } => {
+                let mut sg_sets = HashMap::new();
+                if let Some(adds) = request_header_modifier.add {
+                    for add in adds {
+                        sg_sets.insert(add.name, add.value);
+                    }
+                }
+                if let Some(sets) = request_header_modifier.set {
+                    for set in sets {
+                        sg_sets.insert(set.name, set.value);
+                    }
+                }
+                SgRouteFilter {
+                    code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
+                    name: None,
+                    spec: TardisFuns::json.obj_to_json(&SgFilterHeaderModifier {
+                        kind: SgFilterHeaderModifierKind::Request,
+                        sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
+                        remove: request_header_modifier.remove,
+                    })?,
+                }
+            }
+            k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
+                let mut sg_sets = HashMap::new();
+                if let Some(adds) = response_header_modifier.add {
+                    for add in adds {
+                        sg_sets.insert(add.name, add.value);
+                    }
+                }
+                if let Some(sets) = response_header_modifier.set {
+                    for set in sets {
+                        sg_sets.insert(set.name, set.value);
+                    }
+                }
+                SgRouteFilter {
+                    code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
+                    name: None,
+                    spec: TardisFuns::json.obj_to_json(&SgFilterHeaderModifier {
+                        kind: SgFilterHeaderModifierKind::Response,
+                        sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
+                        remove: response_header_modifier.remove,
+                    })?,
+                }
+            }
+            k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
+                code: SG_FILTER_REDIRECT_CODE.to_string(),
+                name: None,
+                spec: TardisFuns::json.obj_to_json(&SgFilterRedirect {
+                    scheme: request_redirect.scheme,
+                    hostname: request_redirect.hostname,
+                    path: request_redirect.path.map(|path| match path {
+                        k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
+                            kind: SgHttpPathModifierType::ReplaceFullPath,
+                            value: replace_full_path,
+                        },
+                        k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
+                            kind: SgHttpPathModifierType::ReplacePrefixMatch,
+                            value: replace_prefix_match,
+                        },
+                    }),
+                    port: request_redirect.port,
+                    status_code: request_redirect.status_code,
+                })?,
+            },
+            k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
+                code: SG_FILTER_REWRITE_CODE.to_string(),
+                name: None,
+                spec: TardisFuns::json.obj_to_json(&SgFilterRewrite {
+                    hostname: url_rewrite.hostname,
+                    path: url_rewrite.path.map(|path| match path {
+                        k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
+                            kind: SgHttpPathModifierType::ReplaceFullPath,
+                            value: replace_full_path,
+                        },
+                        k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
+                            kind: SgHttpPathModifierType::ReplacePrefixMatch,
+                            value: replace_prefix_match,
+                        },
+                    }),
+                })?,
+            },
+            k8s_gateway_api::HttpRouteFilter::RequestMirror { .. } => {
+                return Err(TardisError::not_implemented(
+                    "[SG.Common] HttpRoute [spec.rules.filters.type=RequestMirror] not supported yet",
+                    "",
+                ))
+            }
+            k8s_gateway_api::HttpRouteFilter::ExtensionRef { .. } => {
+                return Err(TardisError::not_implemented(
+                    "[SG.Common] HttpRoute [spec.rules.filters.type=ExtensionRef] not supported yet",
+                    "",
+                ))
+            }
+        };
+        Ok(sg_filter)
+    }
+
+    pub(crate) async fn from_crd_filters(client_name: &str, kind: &str, name: &Option<String>, namespace: &Option<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
+        let name = name.clone().ok_or_else(|| TardisError::format_error(&format!("[SG.Common] {kind} [metadata.name] is required"), ""))?;
+        let namespace = namespace.clone().unwrap_or("default".to_string());
+
+        let filter_api: Api<SgFilter> = Api::all((*k8s_client::get(client_name).await?).clone());
+        let filter_objs: Vec<SgRouteFilter> = filter_api
+            .list(&ListParams::default())
+            .await
+            .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+            .into_iter()
+            .filter(|filter_obj| {
+                filter_obj.spec.target_refs.iter().any(|target_ref| {
+                    target_ref.kind.eq_ignore_ascii_case(kind)
+                        && target_ref.name.eq_ignore_ascii_case(&name)
+                        && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
+                })
+            })
+            .flat_map(|filter_obj| {
+                filter_obj.spec.filters.into_iter().map(|filter| SgRouteFilter {
+                    code: filter.code,
+                    name: filter.name,
+                    spec: filter.config,
+                })
+            })
+            .collect();
+
+        if !filter_objs.is_empty() {
+            let mut filter_vec = String::new();
+            filter_objs.clone().into_iter().for_each(|filter| filter_vec.push_str(&format!("Filter{{code: {},name:{}}},", filter.code, filter.name.unwrap_or("None".to_string()))));
+            log::trace!("[SG.Common] {namespace}.{kind}.{name} filter found: {}", filter_vec.trim_end_matches(','));
+        }
+
+        if filter_objs.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(filter_objs))
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
+use crate::constants::{self, BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
 use crate::helper::k8s_helper::{get_k8s_obj_unique, parse_k8s_obj_unique};
 use crate::inner_model::gateway::SgProtocol;
@@ -6,10 +6,12 @@ use crate::inner_model::http_route::{
     SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
     SgHttpRouteRule,
 };
+use crate::inner_model::plugin_filter::SgRouteFilter;
 use crate::k8s_crd::http_spaceroute::{BackendRef, HttpBackendRef, HttpRouteRule, HttpSpaceroute, HttpSpacerouteSpec};
 use crate::k8s_crd::sg_filter::K8sSgFilterSpecTargetRef;
 use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRouteMatch, ParentReference};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use kube::ResourceExt;
 use tardis::basic::result::TardisResult;
 
 impl SgHttpRoute {
@@ -124,14 +126,18 @@ impl SgHttpRoute {
         (httproute, sgfilters)
     }
 
-    pub async fn from_kube_gateway(httproute: HttpSpaceroute) -> TardisResult<SgHttpRoute> {
-        //todo
+    pub async fn from_kube_httpspaceroute(client_name: &str, httproute: HttpSpaceroute) -> TardisResult<SgHttpRoute> {
+        let kind = if let Some(kind) = httproute.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
+            kind
+        } else {
+            constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
+        };
         Ok(SgHttpRoute {
             name: get_k8s_obj_unique(&httproute),
-            gateway_name: "".to_string(),
-            hostnames: None,
-            filters: None,
-            rules: None,
+            gateway_name: httproute.spec.inner.parent_refs.clone().unwrap_or_default().get(0).map(|x| x.name.clone()).unwrap_or_default(),
+            hostnames: httproute.spec.hostnames.clone(),
+            filters: SgRouteFilter::from_crd_filters(client_name, kind, &httproute.metadata.name, &httproute.metadata.namespace).await?,
+            rules: httproute.spec.rules.map(|r_vec| r_vec.into_iter().map(|r| SgHttpRouteRule::from_kube_httproute(r)).collect::<TardisResult<Vec<_>>>()).transpose()?,
         })
     }
 }
@@ -146,6 +152,18 @@ impl SgHttpRouteRule {
             backend_refs: self.backends.map(|b_vec| b_vec.into_iter().map(|b| b.to_kube_httproute()).collect::<Vec<_>>()),
             timeout_ms: self.timeout_ms,
         }
+    }
+
+    pub(crate) fn from_kube_httproute(httproute_rule: HttpRouteRule) -> TardisResult<SgHttpRouteRule> {
+        Ok(SgHttpRouteRule {
+            matches: httproute_rule.matches.map(|m_vec| m_vec.into_iter().map(|m| SgHttpRouteMatch::from_kube_httproute(m)).collect::<Vec<_>>()),
+            filters: httproute_rule.filters.map(|f_vec| f_vec.into_iter().map(|f| SgRouteFilter::from_http_route_filter(f)).collect::<TardisResult<Vec<_>>>()).transpose()?,
+            backends: httproute_rule
+                .backend_refs
+                .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<TardisResult<Vec<_>>>())
+                .transpose()?,
+            timeout_ms: httproute_rule.timeout_ms,
+        })
     }
 }
 
@@ -170,6 +188,14 @@ impl SgHttpRouteMatch {
             }]
         }
     }
+    pub(crate) fn from_kube_httproute(route_match: HttpRouteMatch) -> SgHttpRouteMatch {
+        SgHttpRouteMatch {
+            method: route_match.method.map(|m_vec| vec![m_vec]),
+            path: route_match.path.map(|p| SgHttpPathMatch::from_kube_httproute(p)),
+            header: route_match.headers.map(|h_vec| h_vec.into_iter().map(|h| SgHttpHeaderMatch::from_kube_httproute(h)).collect::<Vec<_>>()),
+            query: route_match.query_params.map(|q_vec| q_vec.into_iter().map(|q| SgHttpQueryMatch::from_kube_httproute(q)).collect::<Vec<_>>()),
+        }
+    }
 }
 
 impl SgHttpPathMatch {
@@ -178,6 +204,22 @@ impl SgHttpPathMatch {
             SgHttpPathMatchType::Exact => HttpPathMatch::Exact { value: self.value },
             SgHttpPathMatchType::Prefix => HttpPathMatch::PathPrefix { value: self.value },
             SgHttpPathMatchType::Regular => HttpPathMatch::RegularExpression { value: self.value },
+        }
+    }
+    pub(crate) fn from_kube_httproute(path_match: HttpPathMatch) -> SgHttpPathMatch {
+        match path_match {
+            HttpPathMatch::Exact { value } => SgHttpPathMatch {
+                kind: SgHttpPathMatchType::Exact,
+                value,
+            },
+            HttpPathMatch::PathPrefix { value } => SgHttpPathMatch {
+                kind: SgHttpPathMatchType::Prefix,
+                value,
+            },
+            HttpPathMatch::RegularExpression { value } => SgHttpPathMatch {
+                kind: SgHttpPathMatchType::Regular,
+                value,
+            },
         }
     }
 }
@@ -195,6 +237,20 @@ impl SgHttpHeaderMatch {
             },
         }
     }
+    pub(crate) fn from_kube_httproute(header_match: HttpHeaderMatch) -> SgHttpHeaderMatch {
+        match header_match {
+            HttpHeaderMatch::Exact { name, value } => SgHttpHeaderMatch {
+                kind: SgHttpHeaderMatchType::Exact,
+                name,
+                value,
+            },
+            HttpHeaderMatch::RegularExpression { name, value } => SgHttpHeaderMatch {
+                kind: SgHttpHeaderMatchType::Regular,
+                name,
+                value,
+            },
+        }
+    }
 }
 
 impl SgHttpQueryMatch {
@@ -207,6 +263,20 @@ impl SgHttpQueryMatch {
             SgHttpQueryMatchType::Regular => HttpQueryParamMatch::RegularExpression {
                 name: self.name,
                 value: self.value,
+            },
+        }
+    }
+    pub(crate) fn from_kube_httproute(query_match: HttpQueryParamMatch) -> SgHttpQueryMatch {
+        match query_match {
+            HttpQueryParamMatch::Exact { name, value } => SgHttpQueryMatch {
+                kind: SgHttpQueryMatchType::Exact,
+                name,
+                value,
+            },
+            HttpQueryParamMatch::RegularExpression { name, value } => SgHttpQueryMatch {
+                kind: SgHttpQueryMatchType::Regular,
+                name,
+                value,
             },
         }
     }
@@ -240,5 +310,36 @@ impl SgBackendRef {
             }),
             filters: self.filters.map(|f_vec| f_vec.into_iter().filter_map(|f| f.to_http_route_filter()).collect()),
         }
+    }
+
+    pub(crate) fn from_kube_httproute(http_backend: HttpBackendRef) -> TardisResult<Option<SgBackendRef>> {
+        http_backend
+            .backend_ref
+            .map(|backend| {
+                let external_http = BANCKEND_KIND_EXTERNAL_HTTP.to_string();
+                let external_https = BANCKEND_KIND_EXTERNAL_HTTPS.to_string();
+                let external = BANCKEND_KIND_EXTERNAL.to_string();
+
+                let protocol = match backend.inner.kind {
+                    Some(external_http) => Some(SgProtocol::Http),
+                    Some(external_https) => Some(SgProtocol::Https),
+                    Some(external) => Some(SgProtocol::Ws),
+                    Some(_) => None,
+                    None => None,
+                };
+                return Ok(SgBackendRef {
+                    name_or_host: backend.inner.name,
+                    namespace: backend.inner.namespace,
+                    port: backend.inner.port.unwrap_or(80),
+                    timeout_ms: backend.timeout_ms,
+                    protocol,
+                    weight: backend.weight,
+                    filters: http_backend
+                        .filters
+                        .map(|f_vec| f_vec.into_iter().map(|f| SgRouteFilter::from_http_route_filter(f)).collect::<TardisResult<Vec<SgRouteFilter>>>())
+                        .transpose()?,
+                });
+            })
+            .transpose()
     }
 }

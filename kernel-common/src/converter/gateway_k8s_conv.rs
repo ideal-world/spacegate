@@ -4,6 +4,7 @@ use crate::constants::k8s_constants::GATEWAY_CLASS_NAME;
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
 use crate::helper::k8s_helper::{get_k8s_obj_unique, parse_k8s_obj_unique};
 use crate::inner_model::gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTls, SgTlsConfig, SgTlsMode};
+use crate::inner_model::plugin_filter::SgRouteFilter;
 use crate::k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef};
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference, TlsModeType};
 use k8s_openapi::api::core::v1::Secret;
@@ -87,8 +88,7 @@ impl SgGateway {
     }
 
     pub async fn from_kube_gateway(client_name: &str, gateway: Gateway) -> TardisResult<SgGateway> {
-        //todo filters
-        let filters = None;
+        let filters = SgRouteFilter::from_crd_filters(client_name, "gateway", &gateway.metadata.name, &gateway.metadata.namespace).await?;
         let result = SgGateway {
             name: get_k8s_obj_unique(&gateway),
             parameters: SgParameters::from_kube_gateway(&gateway),

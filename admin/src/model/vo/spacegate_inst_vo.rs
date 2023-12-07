@@ -19,8 +19,10 @@ impl Vo for InstConfigVo {
 
     fn get_unique_name(&self) -> String {
         match &self.type_ {
-            InstConfigType::K8sClusterConfig => self.k8s_cluster_config.as_ref().expect("").name.clone(),
-            InstConfigType::RedisConfig => self.redis_config.as_ref().expect("").name.clone(),
+            InstConfigType::K8sClusterConfig => {
+                self.k8s_cluster_config.as_ref().expect(&format!("[admin] have inst config {self:?} type is k8s cluster config , but not found ")).name.clone()
+            }
+            InstConfigType::RedisConfig => self.redis_config.as_ref().expect(&format!("[admin] have inst config {self:?} type is redis config , but not found ")).name.clone(),
         }
     }
 }
