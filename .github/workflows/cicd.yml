@@ -1,6 +1,6 @@
 name: CICD
 
-on: [ push, pull_request ]
+on: [push, pull_request]
 
 env:
   ARTIFACT_DIR: release-artifacts
@@ -105,7 +105,7 @@ jobs:
 
   release-linux:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [ check ]
+    needs: [check]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -117,12 +117,7 @@ jobs:
             aarch64-unknown-linux-gnu,
             aarch64-unknown-linux-musl,
           ]
-        service:
-          [
-            spacegate-simplify,
-            spacegate-native,
-            spacegate,
-          ]
+        service: [spacegate-simplify, spacegate-native, spacegate]
     env:
       OPENSSL_DIR: /opt/openssl
     steps:
@@ -133,7 +128,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: release ${{ matrix.target }}
-          cache-targets: "false"
+          cache-targets: 'false'
 
       - name: Install openssl
         run: |
@@ -198,22 +193,13 @@ jobs:
 
   release-macos:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [ check ]
+    needs: [check]
     runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
-        target:
-          [
-            x86_64-apple-darwin,
-            aarch64-apple-darwin,
-          ]
-        service:
-          [
-            spacegate-simplify,
-            spacegate-native,
-            spacegate,
-          ]
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+        service: [spacegate-simplify, spacegate-native, spacegate]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -267,22 +253,16 @@ jobs:
 
   release-windows:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [ check ]
+    needs: [check]
     runs-on: windows-latest
     strategy:
       matrix:
-        target:
-          [
+        target: [
             #TODO openssl error
             #x86_64-pc-windows-gnu,
             x86_64-pc-windows-msvc,
           ]
-        service:
-          [
-            spacegate-simplify,
-            spacegate-native,
-            spacegate,
-          ]
+        service: [spacegate-simplify, spacegate-native, spacegate]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -344,9 +324,85 @@ jobs:
           files: |
             ${{ env.ARTIFACT_DIR }}/*.*
 
+  release-docker:
+    needs: [check]
+    runs-on: ubuntu-latest
+    name: Release docker image to registry
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build rust
+        run: cargo build --release -p spacegate
+
+      - name: Copy binary to workspace
+        run: cp ./target/release/spacegate ./services/full/res/
+
+      - name: Build and push Docker image to dockerhub
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: services/full/res/
+          dockerfile: services/full/res/Dockerfile
+          registry: docker.io
+          image: ecfront/spacegate
+          tags: ${{ github.ref_name }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+  push-docker:
+    needs: [check]
+    runs-on: ubuntu-latest
+    name: Push docker image to registry
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build rust
+        run: cargo build --release -p spacegate
+
+      - name: Copy binary to workspace
+        run: cp ./target/release/spacegate ./services/full/res/
+
+      - name: Build and push Docker image to dockerhub
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: services/full/res/
+          dockerfile: services/full/res/Dockerfile
+          registry: docker.io
+          image: ecfront/spacegate
+          tags: latest
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
   publish-lib-kernel:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [ check ]
+    needs: [check]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
