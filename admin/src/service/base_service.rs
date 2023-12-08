@@ -212,6 +212,7 @@ mod test {
             protocol: None,
             weight: None,
             filters: None,
+            filter_vos: vec![],
         };
         BackendRefVoService::add_vo(DEFAULT_CLIENT_NAME, add_o_1.clone()).await.unwrap();
         assert!(BackendRefVoService::add_vo(DEFAULT_CLIENT_NAME, add_o_1.clone()).await.is_err());

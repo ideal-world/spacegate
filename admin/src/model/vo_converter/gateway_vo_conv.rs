@@ -7,7 +7,6 @@ use crate::service::secret_service::TlsVoService;
 use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgTls, SgTlsConfig};
 use tardis::async_trait::async_trait;
 use tardis::basic::result::TardisResult;
-use tardis::futures_util::future::join_all;
 
 #[async_trait]
 impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
@@ -15,15 +14,15 @@ impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
         Ok(SgGateway {
             name: self.name,
             parameters: self.parameters,
-            listeners: join_all(self.listeners.into_iter().map(|l| l.to_model(client_name)).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?,
+            listeners: SgListenerVo::to_vec_model(client_name, self.listeners).await?,
             filters: SgFilterVoConv::ids_to_filter(client_name, self.filters).await?,
         })
     }
 
     async fn from_model(model: SgGateway) -> TardisResult<SgGatewayVo> {
-        let listeners = join_all(model.listeners.into_iter().map(SgListenerVo::from_model).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?;
-        let tls = listeners.iter().filter_map(|l| l.tls_vo.clone()).collect::<Vec<_>>();
-        let filter_vo = if let Some(filters) = model.filters {
+        let listeners = SgListenerVo::from_vec_model(Some(model.listeners)).await?;
+        let tls_vos = listeners.iter().filter_map(|l| l.tls_vo.clone()).collect::<Vec<_>>();
+        let filter_vos = if let Some(filters) = model.filters {
             filters
                 .into_iter()
                 .map(|f| SgFilterVo {
@@ -36,15 +35,15 @@ impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
         } else {
             vec![]
         };
-        let filters = filter_vo.iter().map(|f| f.id.clone()).collect();
+        let filters = filter_vos.iter().map(|f| f.id.clone()).collect();
 
         Ok(SgGatewayVo {
             name: model.name,
             parameters: model.parameters,
             listeners,
             filters,
-            tls,
-            filter_vos: filter_vo,
+            tls_vos,
+            filter_vos,
         })
     }
 }

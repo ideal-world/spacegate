@@ -4,8 +4,10 @@ use kernel_common::inner_model::gateway::SgProtocol;
 use serde::{Deserialize, Serialize};
 use tardis::web::poem_openapi;
 
+use super::plugin_vo::SgFilterVo;
+
 /// BackendRef defines how a HTTPRoute should forward an HTTP request.
-#[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[derive(Default, Debug, Eq, Hash, Serialize, Deserialize, Clone, poem_openapi::Object)]
 pub struct SgBackendRefVo {
     /// unique by id
     pub id: String,
@@ -26,6 +28,17 @@ pub struct SgBackendRefVo {
     pub weight: Option<u16>,
     /// [crate::model::vo::plugin_vo::SgFilterVo]'s id
     pub filters: Option<Vec<String>>,
+
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    #[serde(skip)]
+    pub filter_vos: Vec<SgFilterVo>,
+}
+
+impl PartialEq for SgBackendRefVo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 impl Vo for SgBackendRefVo {

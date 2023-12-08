@@ -1,9 +1,13 @@
+use std::mem;
+
 use crate::model::query_dto::{BackendRefQueryDto, ToInstance};
 use crate::model::vo::backend_vo::SgBackendRefVo;
 use crate::model::vo::http_route_vo::{SgHttpRouteRuleVo, SgHttpRouteVo};
+use crate::model::vo::plugin_vo::SgFilterVo;
 use crate::model::vo_converter::plugin_vo_conv::SgFilterVoConv;
 use crate::model::vo_converter::VoConv;
 use crate::service::backend_ref_service::BackendRefVoService;
+use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
 use tardis::async_trait::async_trait;
 use tardis::basic::result::TardisResult;
@@ -18,15 +22,29 @@ impl VoConv<SgHttpRoute, SgHttpRouteVo> for SgHttpRouteVo {
             hostnames: self.hostnames,
             filters: SgFilterVoConv::ids_to_filter(client_name, self.filters).await?,
             rules: if self.rules.is_empty() {
-                Some(join_all(self.rules.into_iter().map(|r| r.to_model(client_name)).collect::<Vec<_>>()).await.into_iter().collect::<TardisResult<Vec<_>>>()?)
+                Some(SgHttpRouteRuleVo::to_vec_model(client_name, self.rules).await?)
             } else {
                 None
             },
         })
     }
 
-    async fn from_model(_model: SgHttpRoute) -> TardisResult<SgHttpRouteVo> {
-        todo!()
+    async fn from_model(model: SgHttpRoute) -> TardisResult<SgHttpRouteVo> {
+        let mut rules = SgHttpRouteRuleVo::from_vec_model(model.rules).await?;
+        let backend_vos = rules.iter_mut().map(|r| mem::take(&mut r.backend_vos)).flatten().collect::<Vec<_>>();
+
+        let mut filter_vos = SgFilterVo::from_vec_model(model.filters).await?;
+        filter_vos.append(&mut rules.iter_mut().map(|r| mem::take(&mut r.filter_vos)).flatten().collect());
+
+        Ok(SgHttpRouteVo {
+            name: model.name,
+            gateway_name: model.gateway_name,
+            hostnames: model.hostnames,
+            filters: SgFilterVoConv::filters_to_ids(&filter_vos),
+            rules,
+            filter_vos,
+            backend_vos,
+        })
     }
 }
 
@@ -71,8 +89,20 @@ impl VoConv<SgHttpRouteRule, SgHttpRouteRuleVo> for SgHttpRouteRuleVo {
         })
     }
 
-    async fn from_model(_model: SgHttpRouteRule) -> TardisResult<SgHttpRouteRuleVo> {
-        todo!()
+    async fn from_model(model: SgHttpRouteRule) -> TardisResult<SgHttpRouteRuleVo> {
+        let mut filter_vos = SgFilterVo::from_vec_model(model.filters).await?;
+
+        let mut backend_vos = SgBackendRefVo::from_vec_model(model.backends).await?;
+        filter_vos.append(&mut backend_vos.iter_mut().map(|b| mem::take(&mut b.filter_vos)).flatten().collect());
+
+        Ok(SgHttpRouteRuleVo {
+            matches: model.matches,
+            filters: SgFilterVoConv::filters_to_ids(&filter_vos),
+            backends: backend_vos.iter().map(|b| b.id.clone()).collect(),
+            timeout_ms: model.timeout_ms,
+            filter_vos,
+            backend_vos,
+        })
     }
 }
 
@@ -90,7 +120,27 @@ impl VoConv<SgBackendRef, SgBackendRefVo> for SgBackendRefVo {
         })
     }
 
-    async fn from_model(_model: SgBackendRef) -> TardisResult<SgBackendRefVo> {
-        todo!()
+    async fn from_model(model: SgBackendRef) -> TardisResult<SgBackendRefVo> {
+        let filter_vos = SgFilterVo::from_vec_model(model.filters).await?;
+        let filters = SgFilterVoConv::filters_to_ids(&filter_vos);
+
+        Ok(SgBackendRefVo {
+            id: format!(
+                "{}-{}-{}-{}-{}",
+                model.name_or_host,
+                model.namespace.clone().unwrap_or(DEFAULT_NAMESPACE.to_string()),
+                model.port,
+                model.protocol.clone().unwrap_or_default(),
+                model.weight.clone().unwrap_or_default(),
+            ),
+            name_or_host: model.name_or_host,
+            namespace: model.namespace,
+            port: model.port,
+            timeout_ms: model.timeout_ms,
+            protocol: model.protocol,
+            weight: model.weight,
+            filters: if filters.is_empty() { None } else { Some(filters) },
+            filter_vos,
+        })
     }
 }

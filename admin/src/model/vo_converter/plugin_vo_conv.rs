@@ -35,6 +35,10 @@ impl SgFilterVoConv {
             None
         })
     }
+
+    pub(crate) fn filters_to_ids(filters: &[SgFilterVo]) -> Vec<String> {
+        filters.iter().map(|f| f.id.clone()).collect()
+    }
 }
 
 #[async_trait]
@@ -47,7 +51,12 @@ impl VoConv<SgRouteFilter, SgFilterVo> for SgFilterVo {
         })
     }
 
-    async fn from_model(_model: SgRouteFilter) -> TardisResult<SgFilterVo> {
-        todo!()
+    async fn from_model(model: SgRouteFilter) -> TardisResult<SgFilterVo> {
+        Ok(SgFilterVo {
+            id: format!("{}-{}", &model.code, &model.name.clone().unwrap_or_default(),),
+            code: model.code,
+            name: model.name,
+            spec: model.spec,
+        })
     }
 }

@@ -22,11 +22,14 @@ pub struct SgGatewayVo {
     pub listeners: Vec<SgListenerVo>,
     /// [crate::model::vo::plugin_vo::SgFilterVo]'s id
     pub filters: Vec<String>,
+
     /// Parameters are only returned in the fn from_model() wrapper
     #[oai(skip)]
-    pub tls: Vec<SgTls>,
+    #[serde(skip)]
+    pub tls_vos: Vec<SgTls>,
     /// Parameters are only returned in the fn from_model() wrapper
     #[oai(skip)]
+    #[serde(skip)]
     pub filter_vos: Vec<SgFilterVo>,
 }
 
@@ -55,8 +58,10 @@ pub struct SgListenerVo {
     pub tls: Option<SgTlsConfigVo>,
     /// `HostName` is used to define the host on which the listener accepts requests.
     pub hostname: Option<String>,
+
     /// Parameters are only returned in the fn from_model() wrapper
     #[oai(skip)]
+    #[serde(skip)]
     pub tls_vo: Option<SgTls>,
 }
 

@@ -21,6 +21,7 @@ tardis = { workspace = true, features = [
 ] }
 serde.workspace = true
 serde_json.workspace = true
+itertools.workspace = true
 
 secrecy = { version = "0.8.0", features = ["alloc", "serde"] }
 kernel-common = { path = "../kernel-common", features = [

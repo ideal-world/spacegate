@@ -61,7 +61,7 @@ pub struct SgListener {
 }
 
 /// ProtocolType defines the application protocol accepted by a Listener.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Default)]
 #[cfg_attr(feature = "admin-support", derive(poem_openapi::Enum))]
 #[serde(rename_all = "lowercase")]
 pub enum SgProtocol {
@@ -116,7 +116,7 @@ impl FromStr for SgTlsMode {
 }
 
 /// SgTls describes a TLS.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, PartialEq, Eq, Hash, Deserialize, Clone)]
 #[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgTls {
     /// Name of the Secret. Global Unique.

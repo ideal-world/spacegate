@@ -4,6 +4,8 @@ use kernel_common::inner_model::http_route::SgHttpRouteMatch;
 use serde::{Deserialize, Serialize};
 use tardis::web::poem_openapi;
 
+use super::{backend_vo::SgBackendRefVo, plugin_vo::SgFilterVo};
+
 /// HTTPRoute provides a way to route HTTP requests.
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
@@ -22,6 +24,15 @@ pub struct SgHttpRouteVo {
     pub filters: Vec<String>,
     /// Rules are a list of HTTP matchers, filters and actions.
     pub rules: Vec<SgHttpRouteRuleVo>,
+
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    #[serde(skip)]
+    pub filter_vos: Vec<SgFilterVo>,
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    #[serde(skip)]
+    pub backend_vos: Vec<SgBackendRefVo>,
 }
 
 impl Vo for SgHttpRouteVo {
@@ -45,4 +56,14 @@ pub struct SgHttpRouteRuleVo {
     pub backends: Vec<String>,
     /// Timeout define the timeout for requests that match this rule.
     pub timeout_ms: Option<u64>,
+
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    #[serde(skip)]
+    pub filter_vos: Vec<SgFilterVo>,
+
+    /// Parameters are only returned in the fn from_model() wrapper
+    #[oai(skip)]
+    #[serde(skip)]
+    pub backend_vos: Vec<SgBackendRefVo>,
 }

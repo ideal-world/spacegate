@@ -37,7 +37,7 @@ pub async fn init_client(funs: &TardisFunsInst) -> TardisResult<()> {
         } else {
             cache_client::add(DEFAULT_CLIENT_NAME, funs.cache()).await?;
         }
-        log::info!("[admin.init_client] Init base client success");
+        log::info!("[Admin.init_client] Init base client[{}] success", if config.is_kube { "k8s" } else { "cache" });
     }
     init_client_by_default_client().await?;
     Ok(())

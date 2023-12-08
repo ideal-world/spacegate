@@ -2,6 +2,7 @@ use crate::constants;
 use crate::model::vo::Vo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::hash::{Hash, Hasher};
 use tardis::web::poem_openapi;
 
 /// RouteFilter defines processing steps that must be completed during the request or response lifecycle.
@@ -11,7 +12,7 @@ use tardis::web::poem_openapi;
 /// 2. Routing level, which works on all requests under the same gateway route
 /// 3. Rule level, which works on all requests under the same gateway routing rule
 /// 4. Backend level, which works on all requests under the same backend
-#[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[derive(Default, Debug, Eq, Serialize, Deserialize, Clone, poem_openapi::Object)]
 pub struct SgFilterVo {
     /// unique by id
     pub id: String,
@@ -22,6 +23,20 @@ pub struct SgFilterVo {
     pub name: Option<String>,
     /// filter parameters.
     pub spec: Value,
+}
+
+impl Hash for SgFilterVo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.code.hash(state);
+        self.name.hash(state);
+    }
+}
+
+impl PartialEq for SgFilterVo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 impl Vo for SgFilterVo {
