@@ -6,7 +6,7 @@ use kernel_common::client::{cache_client, k8s_client};
 use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 use kube::api::{DeleteParams, PostParams};
 
-use kube::Api;
+use kube::{Api, ResourceExt};
 use tardis::TardisFuns;
 
 use super::base_service::VoBaseService;
@@ -74,7 +74,9 @@ impl GatewayVoService {
         if is_kube {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
             let gateway_api: Api<Gateway> = Self::get_gateway_api(client_name, &Some(namespace)).await?;
-            let (update_gateway, update_filter) = update_sg_gateway.to_kube_gateway();
+            let (mut update_gateway, update_filter) = update_sg_gateway.to_kube_gateway();
+            update_gateway.metadata.resource_version =
+                gateway_api.get_metadata(update_gateway.name_any().as_str()).await.warp_result_by_method("Get Metadata Before Replace Gateway")?.metadata.resource_version;
             gateway_api.replace(&name, &PostParams::default(), &update_gateway).await.warp_result_by_method("Replace Gateway")?;
 
             PluginK8sService::update_filter_changes(client_name, old_sg_gateway.to_kube_gateway().1, update_filter).await?;

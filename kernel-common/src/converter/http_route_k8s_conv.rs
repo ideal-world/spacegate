@@ -316,16 +316,15 @@ impl SgBackendRef {
         http_backend
             .backend_ref
             .map(|backend| {
-                let external_http = BANCKEND_KIND_EXTERNAL_HTTP.to_string();
-                let external_https = BANCKEND_KIND_EXTERNAL_HTTPS.to_string();
-                let external = BANCKEND_KIND_EXTERNAL.to_string();
-
-                let protocol = match backend.inner.kind {
-                    Some(external_http) => Some(SgProtocol::Http),
-                    Some(external_https) => Some(SgProtocol::Https),
-                    Some(external) => Some(SgProtocol::Ws),
-                    Some(_) => None,
-                    None => None,
+                let protocol = if let Some(kind) = backend.inner.kind.as_ref() {
+                    match kind.as_str() {
+                        BANCKEND_KIND_EXTERNAL_HTTP => Some(SgProtocol::Http),
+                        BANCKEND_KIND_EXTERNAL_HTTPS => Some(SgProtocol::Https),
+                        BANCKEND_KIND_EXTERNAL => Some(SgProtocol::Ws),
+                        _ => None,
+                    }
+                } else {
+                    None
                 };
                 return Ok(SgBackendRef {
                     name_or_host: backend.inner.name,

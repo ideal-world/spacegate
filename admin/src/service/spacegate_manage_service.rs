@@ -2,6 +2,7 @@ use crate::api::SessionInstance;
 use crate::client::get_base_is_kube;
 use crate::config::k8s_config::ToKubeconfig;
 use crate::constants::{KUBE_VO_NAMESPACE, SESSION_INSTACE_KEY, TYPE_CONFIG_NAME_MAP};
+use crate::initializer;
 use crate::model::query_dto::{SpacegateInstQueryDto, SpacegateInstQueryInst, ToInstance};
 use crate::model::vo::spacegate_inst_vo::{InstConfigType, InstConfigVo};
 use crate::model::vo::Vo;
@@ -36,6 +37,7 @@ impl SpacegateManageService {
     }
 
     pub(crate) async fn add(add: InstConfigVo) -> TardisResult<InstConfigVo> {
+        // todo init vo
         match add.type_ {
             InstConfigType::K8sClusterConfig => {
                 if add.k8s_cluster_config.is_none() {
@@ -62,6 +64,7 @@ impl SpacegateManageService {
                 cache_client::init(name, &add.redis_config.clone().expect("").url).await?;
             }
         }
+        initializer::init_config_by_single_client(&add.get_unique_name(), add.type_.clone()).await?;
         Self::add_vo(DEFAULT_CLIENT_NAME, add).await
     }
 
@@ -96,6 +99,7 @@ impl SpacegateManageService {
                 cache_client::init(unique_name, &update.redis_config.clone().expect("").url).await?;
             }
         }
+        initializer::init_config_by_single_client(&update.get_unique_name(), update.type_.clone()).await?;
         Self::update_vo(DEFAULT_CLIENT_NAME, update).await
     }
 

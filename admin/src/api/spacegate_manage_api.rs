@@ -2,6 +2,7 @@ use crate::model::query_dto::{SpacegateInstQueryDto, ToInstance};
 use crate::model::vo::spacegate_inst_vo::InstConfigVo;
 use crate::service::spacegate_manage_service::SpacegateManageService;
 use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
+use tardis::basic::error::TardisError;
 use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
 use tardis::web::poem_openapi::param::Query;
@@ -68,7 +69,14 @@ impl SpacegateManageApi {
 
     /// Delete Spacegate Inst
     #[oai(path = "/", method = "delete")]
-    async fn delete(&self, name: Query<String>) -> TardisApiResult<Void> {
+    async fn delete(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
+        let selected_client = super::get_instance_name(session).await?;
+        if name.0 == selected_client {
+            return TardisResp::err(TardisError::bad_request(
+                &format!("[Admin.service] not allow to delete selected client {}, please select another before delete", name.0),
+                "",
+            ));
+        }
         SpacegateManageService::delete(&name.0).await?;
         TardisResp::ok(Void {})
     }

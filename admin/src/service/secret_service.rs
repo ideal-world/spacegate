@@ -10,7 +10,7 @@ use kernel_common::{
     inner_model::gateway::SgTls,
 };
 use kube::api::{DeleteParams, PostParams};
-use kube::Api;
+use kube::{Api, ResourceExt};
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 
@@ -54,7 +54,9 @@ impl TlsVoService {
             if is_kube {
                 let (namespace, name) = parse_k8s_obj_unique(&unique_name);
                 let secret_api: Api<Secret> = Self::get_secret_api(client_name, &Some(namespace)).await?;
-                let s = update.clone().to_kube_tls();
+                let mut s = update.clone().to_kube_tls();
+                s.metadata.resource_version =
+                    secret_api.get_metadata(s.name_any().as_str()).await.warp_result_by_method("Get Metadata Before Update Secret")?.metadata.resource_version;
                 secret_api.replace(&name, &PostParams::default(), &s).await.warp_result_by_method("Update Secret")?;
             }
             Self::update_vo(client_name, update).await?;

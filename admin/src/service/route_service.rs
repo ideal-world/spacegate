@@ -12,7 +12,7 @@ use kernel_common::{
     k8s_crd::http_spaceroute::HttpSpaceroute,
 };
 use kube::api::{DeleteParams, PostParams};
-use kube::Api;
+use kube::{Api, ResourceExt};
 use tardis::basic::result::TardisResult;
 use tardis::TardisFuns;
 
@@ -78,7 +78,13 @@ impl HttpRouteVoService {
         if is_kube {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
             let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(client_name, &Some(namespace)).await?;
-            let (update_httproute, update_filter) = update_sg_httproute.to_kube_httproute();
+            let (mut update_httproute, update_filter) = update_sg_httproute.to_kube_httproute();
+            update_httproute.metadata.resource_version = http_route_api
+                .get_metadata(update_httproute.name_any().as_str())
+                .await
+                .warp_result_by_method("Get Metadata Before Replace HttpSpaceroute")?
+                .metadata
+                .resource_version;
             http_route_api.replace(&name, &PostParams::default(), &update_httproute).await.warp_result_by_method("Replace HttpSpaceroute")?;
 
             PluginK8sService::update_filter_changes(client_name, old_sg_httproute.to_kube_httproute().1, update_filter).await?;

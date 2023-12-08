@@ -34,13 +34,14 @@ impl VoConv<SgHttpRoute, SgHttpRouteVo> for SgHttpRouteVo {
         let backend_vos = rules.iter_mut().map(|r| mem::take(&mut r.backend_vos)).flatten().collect::<Vec<_>>();
 
         let mut filter_vos = SgFilterVo::from_vec_model(model.filters).await?;
+        let filters = SgFilterVoConv::filters_to_ids(&filter_vos);
         filter_vos.append(&mut rules.iter_mut().map(|r| mem::take(&mut r.filter_vos)).flatten().collect());
 
         Ok(SgHttpRouteVo {
             name: model.name,
             gateway_name: model.gateway_name,
             hostnames: model.hostnames,
-            filters: SgFilterVoConv::filters_to_ids(&filter_vos),
+            filters,
             rules,
             filter_vos,
             backend_vos,
@@ -91,13 +92,13 @@ impl VoConv<SgHttpRouteRule, SgHttpRouteRuleVo> for SgHttpRouteRuleVo {
 
     async fn from_model(model: SgHttpRouteRule) -> TardisResult<SgHttpRouteRuleVo> {
         let mut filter_vos = SgFilterVo::from_vec_model(model.filters).await?;
-
+        let filters = SgFilterVoConv::filters_to_ids(&filter_vos);
         let mut backend_vos = SgBackendRefVo::from_vec_model(model.backends).await?;
         filter_vos.append(&mut backend_vos.iter_mut().map(|b| mem::take(&mut b.filter_vos)).flatten().collect());
 
         Ok(SgHttpRouteRuleVo {
             matches: model.matches,
-            filters: SgFilterVoConv::filters_to_ids(&filter_vos),
+            filters,
             backends: backend_vos.iter().map(|b| b.id.clone()).collect(),
             timeout_ms: model.timeout_ms,
             filter_vos,

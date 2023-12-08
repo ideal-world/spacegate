@@ -12,6 +12,7 @@ use kernel_common::{
 use kube::api::{ListParams, PostParams};
 use kube::{Api, ResourceExt};
 use std::collections::{HashMap, HashSet};
+use std::mem;
 use tardis::basic::result::TardisResult;
 
 use super::spacegate_manage_service::SpacegateManageService;
@@ -90,7 +91,7 @@ impl PluginK8sService {
                 if let Some(mut query_sf) = namespace_filter.items.clone().into_iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)) {
                     if !query_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
                         query_sf.spec.target_refs.push(sf.target_ref.clone());
-                        filter_api.replace(&query_sf.name_any(), &PostParams::default(), &query_sf).await.warp_result_by_method("add_sgfilter replace")?;
+                        Self::replace_filter(query_sf, &filter_api, "add sgfilter replace").await?;
                     }
                 } else {
                     filter_api.create(&PostParams::default(), &sf.to_sg_filter()).await.warp_result_by_method("add_sgfilter create")?;
@@ -115,17 +116,20 @@ impl PluginK8sService {
                     filter_map.get(&sf.namespace).expect("")
                 };
 
-                if let Some(old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
+                if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
                     if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
-                        if let Some(mut old_filter) = old_sf.spec.filters.iter().find(|qsf| qsf.code == sf.filter.code) {
+                        if let Some(old_filter) = old_sf.spec.filters.iter_mut().find(|qsf| qsf.code == sf.filter.code) {
                             if old_filter.name != sf.filter.name && old_filter.config != sf.filter.config {
-                                old_filter = &K8sSgFilterSpecFilter {
-                                    code: sf.filter.code.clone(),
-                                    name: sf.filter.name.clone(),
-                                    enable: true,
-                                    config: sf.filter.config.clone(),
-                                };
-                                filter_api.replace(&old_sf.name_any(), &PostParams::default(), &old_sf).await.warp_result_by_method("update_sgfilter replace")?;
+                                let _ = mem::replace(
+                                    old_filter,
+                                    K8sSgFilterSpecFilter {
+                                        code: sf.filter.code.clone(),
+                                        name: sf.filter.name.clone(),
+                                        enable: true,
+                                        config: sf.filter.config.clone(),
+                                    },
+                                );
+                                Self::replace_filter(old_sf, &filter_api, "update sgfilter replace").await?;
                             }
                         }
                     }
@@ -155,11 +159,18 @@ impl PluginK8sService {
                 if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
                     if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
                         old_sf.spec.target_refs.retain(|t_r| t_r != &sf.target_ref);
-                        filter_api.replace(&old_sf.name_any(), &PostParams::default(), &old_sf).await.warp_result_by_method("delete_sgfilter replace")?;
+                        Self::replace_filter(old_sf, &filter_api, "delete sgfilter replace").await?;
                     }
                 }
             }
         }
+        Ok(())
+    }
+
+    async fn replace_filter(mut replace: SgFilter, filter_api: &Api<SgFilter>, fun_str: &str) -> TardisResult<()> {
+        replace.metadata.resource_version =
+            filter_api.get_metadata(replace.name_any().as_str()).await.warp_result_by_method(&format!("Get Metadata Before {fun_str}"))?.metadata.resource_version;
+        filter_api.replace(&replace.name_any(), &PostParams::default(), &replace).await.warp_result_by_method(fun_str)?;
         Ok(())
     }
 
