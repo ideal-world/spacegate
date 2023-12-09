@@ -37,7 +37,6 @@ impl SpacegateManageService {
     }
 
     pub(crate) async fn add(add: InstConfigVo) -> TardisResult<InstConfigVo> {
-        // todo init vo
         match add.type_ {
             InstConfigType::K8sClusterConfig => {
                 if add.k8s_cluster_config.is_none() {

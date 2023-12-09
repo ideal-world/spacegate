@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-#[cfg(feature = "admin-support")]
-use tardis::web::poem_openapi;
 
 /// RouteFilter defines processing steps that must be completed during the request or response lifecycle.
 ///
@@ -11,7 +9,6 @@ use tardis::web::poem_openapi;
 /// 3. Rule level, which works on all requests under the same gateway routing rule
 /// 4. Backend level, which works on all requests under the same backend
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgRouteFilter {
     /// Filter code, Used to match the corresponding filter.
     pub code: String,

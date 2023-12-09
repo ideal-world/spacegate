@@ -1,9 +1,10 @@
+
 use crate::model::query_dto::{HttpRouteQueryDto, ToInstance};
 use crate::model::vo::http_route_vo::SgHttpRouteVo;
 use crate::service::route_service::HttpRouteVoService;
 use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::Query;
+use tardis::web::poem_openapi::param::{Query, Path};
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
@@ -54,8 +55,8 @@ impl HttprouteApi {
     }
 
     /// Delete Httproute
-    #[oai(path = "/", method = "delete")]
-    async fn delete(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
+    #[oai(path = "/:name", method = "delete")]
+    async fn delete(&self, name: Path<String>, session: &Session) -> TardisApiResult<Void> {
         let client_name = &super::get_instance_name(session).await?;
         HttpRouteVoService::delete(client_name, &name.0).await?;
         TardisResp::ok(Void {})

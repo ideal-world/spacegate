@@ -54,7 +54,7 @@ impl GatewayApi {
     }
 
     /// Delete Gateway
-    #[oai(path = "/:plugin_id", method = "delete")]
+    #[oai(path = "/:name", method = "delete")]
     async fn delete(&self, name: Path<String>, session: &Session) -> TardisApiResult<Void> {
         let client_name = &super::get_instance_name(session).await?;
         GatewayVoService::delete(client_name, &name.0).await?;

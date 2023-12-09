@@ -5,7 +5,7 @@ use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use tardis::basic::error::TardisError;
 use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::Query;
+use tardis::web::poem_openapi::param::{Query, Path};
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
@@ -68,8 +68,8 @@ impl SpacegateManageApi {
     }
 
     /// Delete Spacegate Inst
-    #[oai(path = "/", method = "delete")]
-    async fn delete(&self, name: Query<String>, session: &Session) -> TardisApiResult<Void> {
+    #[oai(path = "/:name", method = "delete")]
+    async fn delete(&self, name: Path<String>, session: &Session) -> TardisApiResult<Void> {
         let selected_client = super::get_instance_name(session).await?;
         if name.0 == selected_client {
             return TardisResp::err(TardisError::bad_request(

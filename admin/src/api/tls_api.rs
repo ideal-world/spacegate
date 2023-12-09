@@ -45,7 +45,7 @@ impl TlsApi {
     }
 
     /// Delete Tls
-    #[oai(path = "/:backend_id", method = "delete")]
+    #[oai(path = "/:tls_config_id", method = "delete")]
     async fn delete(&self, tls_config_id: Path<String>, session: &Session) -> TardisApiResult<Void> {
         let client_name = &super::get_instance_name(session).await?;
         TlsVoService::delete(client_name, &tls_config_id.0).await?;
