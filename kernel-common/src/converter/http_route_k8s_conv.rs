@@ -132,12 +132,14 @@ impl SgHttpRoute {
         } else {
             constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
         };
+        let priority=httproute.annotations().get(crate::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0);
         Ok(SgHttpRoute {
             name: get_k8s_obj_unique(&httproute),
             gateway_name: httproute.spec.inner.parent_refs.clone().unwrap_or_default().get(0).map(|x| x.name.clone()).unwrap_or_default(),
             hostnames: httproute.spec.hostnames.clone(),
             filters: SgRouteFilter::from_crd_filters(client_name, kind, &httproute.metadata.name, &httproute.metadata.namespace).await?,
             rules: httproute.spec.rules.map(|r_vec| r_vec.into_iter().map(|r| SgHttpRouteRule::from_kube_httproute(r)).collect::<TardisResult<Vec<_>>>()).transpose()?,
+            priority,
         })
     }
 }

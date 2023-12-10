@@ -608,8 +608,8 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
     let mut http_route_configs = Vec::new();
     http_route_objs.sort_by(|http_route_a, http_route_b| {
         let (a_priority, b_priority) = (
-            http_route_a.annotations().get(crate::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
-            http_route_b.annotations().get(crate::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
+            http_route_a.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
+            http_route_b.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
         );
         match b_priority.cmp(&a_priority) {
             Ordering::Equal => http_route_a.metadata.creation_timestamp.cmp(&http_route_b.metadata.creation_timestamp),
@@ -680,10 +680,12 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
             },
             http_route_obj.spec.inner.parent_refs.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].name
         );
+        let priority=http_route_obj.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0);
         let http_route_config = SgHttpRoute {
             name: get_k8s_obj_unique(&http_route_obj),
             gateway_name: rel_gateway_name,
             hostnames: http_route_obj.spec.hostnames.clone(),
+            priority,
             filters: if let Some(name) = &http_route_obj.metadata.name {
                 let kind = if let Some(kind) = http_route_obj.annotations().get(kernel_common::constants::RAW_HTTP_ROUTE_KIND) {
                     kind

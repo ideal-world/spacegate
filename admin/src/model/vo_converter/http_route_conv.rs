@@ -19,6 +19,7 @@ impl VoConv<SgHttpRoute, SgHttpRouteVo> for SgHttpRouteVo {
         Ok(SgHttpRoute {
             name: self.name,
             gateway_name: self.gateway_name,
+            priority: self.priority,
             hostnames: self.hostnames,
             filters: SgFilterVoConv::ids_to_filter(client_name, self.filters).await?,
             rules: if self.rules.is_empty() {
@@ -41,6 +42,7 @@ impl VoConv<SgHttpRoute, SgHttpRouteVo> for SgHttpRouteVo {
             name: model.name,
             gateway_name: model.gateway_name,
             hostnames: model.hostnames,
+            priority: model.priority,
             filters,
             rules,
             filter_vos,
