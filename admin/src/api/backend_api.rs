@@ -15,13 +15,14 @@ pub struct BackendApi;
 impl BackendApi {
     /// Get Backend List
     #[oai(path = "/", method = "get")]
-    async fn list(&self, names: Query<Option<String>>, namespace: Query<Option<String>>, session: &Session) -> TardisApiResult<Vec<SgBackendRefVo>> {
+    async fn list(&self, names: Query<Option<String>>, namespace: Query<Option<String>>, hosts: Query<Option<String>>, session: &Session) -> TardisApiResult<Vec<SgBackendRefVo>> {
         let client_name = &super::get_instance_name(session).await?;
         let result = BackendRefVoService::list(
             client_name,
             BackendRefQueryDto {
                 names: names.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
                 namespace: namespace.0,
+                hosts: hosts.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
             }
             .to_instance()?,
         )

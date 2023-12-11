@@ -12,6 +12,7 @@ pub trait ToInstance<T: Instance> {
 pub struct BackendRefQueryDto {
     pub(crate) names: Option<Vec<String>>,
     pub(crate) namespace: Option<String>,
+    pub(crate) hosts: Option<Vec<String>>,
 }
 
 impl ToInstance<BackendRefQueryInst> for BackendRefQueryDto {
@@ -19,6 +20,7 @@ impl ToInstance<BackendRefQueryInst> for BackendRefQueryDto {
         Ok(BackendRefQueryInst {
             names: self.names.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
             namespace: self.namespace.map(fuzzy_regex).transpose()?,
+            hosts: self.hosts.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
         })
     }
 }
@@ -26,6 +28,7 @@ impl ToInstance<BackendRefQueryInst> for BackendRefQueryDto {
 pub struct BackendRefQueryInst {
     pub(crate) names: Option<Vec<Regex>>,
     pub(crate) namespace: Option<Regex>,
+    pub(crate) hosts: Option<Vec<Regex>>,
 }
 
 impl Instance for BackendRefQueryInst {}

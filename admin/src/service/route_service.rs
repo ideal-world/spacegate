@@ -13,6 +13,7 @@ use kernel_common::{
 };
 use kube::api::{DeleteParams, PostParams};
 use kube::{Api, ResourceExt};
+use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::TardisFuns;
 
@@ -44,6 +45,7 @@ impl HttpRouteVoService {
     }
 
     pub(crate) async fn add(client_name: &str, mut add: SgHttpRouteVo) -> TardisResult<SgHttpRouteVo> {
+        check_param(&add)?;
         let is_kube = SpacegateManageService::client_is_kube(client_name).await?;
         if is_kube {
             let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
@@ -69,7 +71,9 @@ impl HttpRouteVoService {
         }
         Self::add_vo(client_name, add).await
     }
+
     pub(crate) async fn update(client_name: &str, update: SgHttpRouteVo) -> TardisResult<SgHttpRouteVo> {
+        check_param(&update)?;
         let update_un = &update.get_unique_name();
 
         let update_sg_httproute = update.clone().to_model(client_name).await?;
@@ -127,4 +131,15 @@ impl HttpRouteVoService {
             namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
         ))
     }
+}
+
+#[inline]
+fn check_param(param: &SgHttpRouteVo) -> TardisResult<()> {
+    if param.gateway_name.is_empty() {
+        return Err(TardisError::bad_request("[Admin] gateway_name is empty", ""));
+    }
+    if param.name.is_empty() {
+        return Err(TardisError::bad_request("[Admin] name is empty", ""));
+    }
+    Ok(())
 }

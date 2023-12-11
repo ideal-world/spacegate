@@ -12,6 +12,8 @@ pub struct SgFilterVoConv {}
 impl SgFilterVoConv {
     pub(crate) async fn ids_to_filter(client_name: &str, filters: Vec<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
         Ok(if filters.is_empty() {
+            None
+        } else {
             Some(
                 join_all(
                     PluginVoService::list(
@@ -31,8 +33,6 @@ impl SgFilterVoConv {
                 .into_iter()
                 .collect::<TardisResult<Vec<_>>>()?,
             )
-        } else {
-            None
         })
     }
 

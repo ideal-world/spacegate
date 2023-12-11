@@ -16,18 +16,19 @@ use tardis::futures_util::future::join_all;
 #[async_trait]
 impl VoConv<SgHttpRoute, SgHttpRouteVo> for SgHttpRouteVo {
     async fn to_model(self, client_name: &str) -> TardisResult<SgHttpRoute> {
-        Ok(SgHttpRoute {
+        let result = SgHttpRoute {
             name: self.name,
             gateway_name: self.gateway_name,
             priority: self.priority,
             hostnames: self.hostnames,
             filters: SgFilterVoConv::ids_to_filter(client_name, self.filters).await?,
-            rules: if self.rules.is_empty() {
+            rules: if !self.rules.is_empty() {
                 Some(SgHttpRouteRuleVo::to_vec_model(client_name, self.rules).await?)
             } else {
                 None
             },
-        })
+        };
+        Ok(result)
     }
 
     async fn from_model(model: SgHttpRoute) -> TardisResult<SgHttpRouteVo> {
@@ -55,7 +56,7 @@ struct SgBackendRefVoConv;
 
 impl SgBackendRefVoConv {
     async fn ids_to_backends(client_name: &str, ids: Vec<String>) -> TardisResult<Option<Vec<SgBackendRef>>> {
-        Ok(if ids.is_empty() {
+        Ok(if !ids.is_empty() {
             Some(
                 join_all(
                     BackendRefVoService::list(
@@ -84,12 +85,13 @@ impl SgBackendRefVoConv {
 #[async_trait]
 impl VoConv<SgHttpRouteRule, SgHttpRouteRuleVo> for SgHttpRouteRuleVo {
     async fn to_model(self, client_name: &str) -> TardisResult<SgHttpRouteRule> {
-        Ok(SgHttpRouteRule {
+        let result = SgHttpRouteRule {
             matches: self.matches,
             filters: SgFilterVoConv::ids_to_filter(client_name, self.filters).await?,
             backends: SgBackendRefVoConv::ids_to_backends(client_name, self.backends).await?,
             timeout_ms: self.timeout_ms,
-        })
+        };
+        Ok(result)
     }
 
     async fn from_model(model: SgHttpRouteRule) -> TardisResult<SgHttpRouteRuleVo> {

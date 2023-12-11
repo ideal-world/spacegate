@@ -16,7 +16,7 @@ impl BackendRefVoService {
             .into_values()
             .filter(|b|
                 if let Some(q_names) = &query.names {
-                    q_names.iter().any(|q| q.is_match(&b.name_or_host))
+                    q_names.iter().any(|q| q.is_match(&b.id))
                 } else {
                     true
                 } &&
@@ -27,7 +27,9 @@ impl BackendRefVoService {
                         else { false }
                 } else {
                     true
-                }
+                } && query.hosts.as_ref().map_or(true, |hosts| {
+                    hosts.iter().any(|host| host.is_match(&b.name_or_host))
+                })
             )
             .collect())
     }

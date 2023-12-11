@@ -18,6 +18,8 @@ pub struct SgHttpRoute {
     pub name: String,
     /// Associated gateway name.
     pub gateway_name: String,
+    /// Priority is used to sort HTTPRoutes based on priority. Routes with higher priority are tried first.
+    pub priority: i64,
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
     /// Filters define the filters that are applied to requests that match this hostnames.

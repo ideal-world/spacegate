@@ -22,7 +22,16 @@ impl DashboardApi {
     async fn statistics(&self, session: &Session) -> TardisApiResult<Statistics> {
         let client_name = &super::get_instance_name(session).await?;
         TardisResp::ok(Statistics {
-            backend_count: BackendRefVoService::list(client_name, BackendRefQueryInst { names: None, namespace: None }).await?.len() as i64,
+            backend_count: BackendRefVoService::list(
+                client_name,
+                BackendRefQueryInst {
+                    names: None,
+                    namespace: None,
+                    hosts: None,
+                },
+            )
+            .await?
+            .len() as i64,
             gateway_count: GatewayVoService::list(
                 client_name,
                 GatewayQueryInst {
