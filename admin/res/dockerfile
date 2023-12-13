@@ -1,0 +1,20 @@
+FROM nginx:latest
+
+WORKDIR /usr/src/app
+
+COPY ./vue-admin /usr/share/nginx/html
+
+COPY ./conf-default.toml /usr/src/app/config/conf-default.toml
+COPY ./spacegate-admin /usr/src/app/spacegate-admin
+
+COPY nginx-default.conf /etc/nginx/nginx.conf
+
+
+COPY libssl1.1_1.1.1f-1ubuntu2.20_amd64.deb /usr/src/app
+RUN  dpkg -i libssl1.1_1.1.1f-1ubuntu2.20_amd64.deb
+
+
+EXPOSE 9080
+
+# 在容器启动时启动后端服务和 Nginx
+CMD ["sh", "-c", "./spacegate-admin & nginx -g 'daemon off;'"]
