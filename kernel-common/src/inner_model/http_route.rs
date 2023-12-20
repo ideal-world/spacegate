@@ -1,16 +1,25 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "admin-support")]
+use tardis::web::poem_openapi;
 
-use super::{gateway_dto::SgProtocol, plugin_filter_dto::SgRouteFilter};
+use super::{gateway::SgProtocol, plugin_filter::SgRouteFilter};
 
 /// HTTPRoute provides a way to route HTTP requests.
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgHttpRoute {
+    /// Unique Name
+    ///
+    /// In k8s mode, this name MUST be unique within a namespace.
+    /// format see [k8s_helper::format_k8s_obj_unique]
+    pub name: String,
     /// Associated gateway name.
     pub gateway_name: String,
+    /// Priority is used to sort HTTPRoutes based on priority. Routes with higher priority are tried first.
+    pub priority: i64,
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
     /// Filters define the filters that are applied to requests that match this hostnames.
@@ -34,6 +43,7 @@ pub struct SgHttpRouteRule {
 
 /// HTTPRouteMatch defines the predicate used to match requests to a given action. Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgHttpRouteMatch {
     /// Path specifies a HTTP request path matcher. If this field is not specified, a default prefix match on the “/” path is provided.
     pub path: Option<SgHttpPathMatch>,
@@ -47,6 +57,7 @@ pub struct SgHttpRouteMatch {
 
 /// HTTPPathMatch describes how to select a HTTP route by matching the HTTP request path.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgHttpPathMatch {
     /// Type specifies how to match against the path Value.
     pub kind: SgHttpPathMatchType,
@@ -56,6 +67,7 @@ pub struct SgHttpPathMatch {
 
 /// PathMatchType specifies the semantics of how HTTP paths should be compared.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Enum))]
 #[serde(rename_all = "lowercase")]
 pub enum SgHttpPathMatchType {
     /// Matches the URL path exactly and with case sensitivity.
@@ -80,6 +92,7 @@ impl fmt::Display for SgHttpPathMatchType {
 
 /// HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request headers.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgHttpHeaderMatch {
     /// Type specifies how to match against the value of the header.
     pub kind: SgHttpHeaderMatchType,
@@ -91,6 +104,7 @@ pub struct SgHttpHeaderMatch {
 
 /// HeaderMatchType specifies the semantics of how HTTP header values should be compared.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Enum))]
 #[serde(rename_all = "lowercase")]
 pub enum SgHttpHeaderMatchType {
     /// Matches the HTTP header exactly and with case sensitivity.
@@ -111,6 +125,7 @@ impl fmt::Display for SgHttpHeaderMatchType {
 
 /// HTTPQueryMatch describes how to select a HTTP route by matching HTTP query parameters.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
 pub struct SgHttpQueryMatch {
     /// Type specifies how to match against the value of the query parameter.
     pub kind: SgHttpQueryMatchType,
@@ -122,6 +137,7 @@ pub struct SgHttpQueryMatch {
 
 /// HTTPQueryMatchType specifies the semantics of how HTTP query parameter values should be compared.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "admin-support", derive(poem_openapi::Enum))]
 #[serde(rename_all = "lowercase")]
 pub enum SgHttpQueryMatchType {
     /// Matches the HTTP query parameter exactly and with case sensitivity.

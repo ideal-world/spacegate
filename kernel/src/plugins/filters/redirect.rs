@@ -1,34 +1,17 @@
 use async_trait::async_trait;
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
+use kernel_common::gatewayapi_support_filter::{SgFilterRedirect, SG_FILTER_REDIRECT_CODE};
+
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;
 
-use crate::config::plugin_filter_dto::SgHttpPathModifier;
 use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use crate::plugins::context::SgRouteFilterRequestAction;
 
 use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 
-def_filter!("redirect", SgFilterRedirectDef, SgFilterRedirect);
-
-/// RedirectFilter defines a filter that redirects a request.
-///
-/// https://gateway-api.sigs.k8s.io/geps/gep-726/
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilterRedirect {
-    /// Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.
-    pub scheme: Option<String>,
-    /// Hostname is the hostname to be used in the value of the Location header in the response. When empty, the hostname in the Host header of the request is used.
-    pub hostname: Option<String>,
-    /// Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.
-    pub path: Option<SgHttpPathModifier>,
-    /// Port is the port to be used in the value of the Location header in the response.
-    pub port: Option<u16>,
-    /// StatusCode is the HTTP status code to be used in response.
-    pub status_code: Option<u16>,
-}
+def_filter!(SG_FILTER_REDIRECT_CODE, SgFilterRedirectDef, SgFilterRedirect);
 
 #[async_trait]
 impl SgPluginFilter for SgFilterRedirect {
@@ -85,7 +68,6 @@ impl SgPluginFilter for SgFilterRedirect {
 
 mod tests {
     use crate::{
-        config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
         instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
         plugins::context::ChosenHttpRouteRuleInst,
     };
@@ -93,6 +75,8 @@ mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
+    use kernel_common::inner_model::http_route::SgHttpPathMatchType;
+    use kernel_common::inner_model::plugin_filter::{SgHttpPathModifier, SgHttpPathModifierType};
     use tardis::tokio;
 
     #[tokio::test]

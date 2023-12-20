@@ -3,9 +3,9 @@ use tardis::{
     log,
 };
 
-use crate::config::gateway_dto::SgGateway;
+use kernel_common::inner_model::gateway::SgGateway;
 
-use self::http_route_dto::SgHttpRoute;
+use kernel_common::inner_model::http_route::SgHttpRoute;
 
 #[cfg(feature = "k8s")]
 pub mod config_by_k8s;
@@ -13,13 +13,6 @@ pub mod config_by_k8s;
 pub mod config_by_local;
 #[cfg(feature = "cache")]
 pub mod config_by_redis;
-pub mod gateway_dto;
-pub mod http_route_dto;
-#[cfg(feature = "k8s")]
-pub mod k8s_crd;
-#[cfg(feature = "k8s")]
-mod k8s_crd_spaceroute;
-pub mod plugin_filter_dto;
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]

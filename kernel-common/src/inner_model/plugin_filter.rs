@@ -12,7 +12,8 @@ use serde_json::Value;
 pub struct SgRouteFilter {
     /// Filter code, Used to match the corresponding filter.
     pub code: String,
-    /// Filter name, the name of the same filter exists at different levels of configuration, only the child nodes take effect（Backend Level > Rule Level > Routing Level > Global Level）
+    /// Filter name. If the name of the same filter exists at different levels of configuration,
+    /// only the child nodes take effect（Backend Level > Rule Level > Routing Level > Global Level）
     pub name: Option<String>,
     /// filter parameters.
     pub spec: Value,
@@ -29,10 +30,14 @@ pub struct SgHttpPathModifier {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SgHttpPathModifierType {
-    /// This type of modifier indicates that the full path will be replaced by the specified value.
+    /// This type of modifier indicates that the full path will be replaced by the
+    /// specified value.
     ReplaceFullPath,
-    /// This type of modifier indicates that any prefix path matches will be replaced by the substitution value.
-    /// For example, a path with a prefix match of “/foo” and a ReplacePrefixMatch substitution of “/bar” will have the “/foo” prefix replaced with “/bar” in matching requests.
+    /// This type of modifier indicates that any prefix path matches will be
+    /// replaced by the substitution value.
+    /// For example, a path with a prefix match of “/foo” and a ReplacePrefixMatch
+    /// substitution of “/bar” will have the “/foo” prefix replaced with “/bar” in
+    /// matching requests.
     #[default]
     ReplacePrefixMatch,
 }

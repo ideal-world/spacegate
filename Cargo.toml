@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "services/*"]
+members = ["kernel", "kernel-common", "services/*", "admin"]
 resolver = "2"
 
 [profile.release]

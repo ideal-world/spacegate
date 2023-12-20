@@ -1,24 +1,4 @@
-use kube::ResourceExt;
 use std::collections::HashMap;
-
-/// In k8s, names of resources need to be unique within a namespace
-pub fn format_k8s_obj_unique(namespace: Option<&String>, name: &str) -> String {
-    format!("{}.{}", namespace.unwrap_or(&"default".to_string()), name)
-}
-
-/// Parse namespace and name from k8s unique name
-pub fn parse_k8s_obj_unique(unique_name: &str) -> (String, String) {
-    let result = unique_name.split('.').collect::<Vec<&str>>();
-    if result.len() != 2 {
-        panic!("format_k8s_obj_unique failed");
-    }
-    (result[0].to_string(), result[1].to_string())
-}
-
-/// Get k8s object unique by object
-pub(crate) fn get_k8s_obj_unique(obj: &impl kube::Resource) -> String {
-    format_k8s_obj_unique(obj.namespace().as_ref(), obj.name_any().as_str())
-}
 
 /// Get uid and version map
 pub(crate) fn get_obj_uid_version_map(resources: &[impl kube::Resource]) -> HashMap<String, String> {

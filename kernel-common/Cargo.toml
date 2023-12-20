@@ -1,0 +1,30 @@
+[package]
+name = "kernel-common"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+k8s = ["kube", "k8s-openapi", "schemars", "k8s-openapi/schemars", "k8s-gateway-api", "lazy_static"]
+admin-support = ["tardis/web-server"]
+cache = ["tardis/cache"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tardis = { workspace = true }
+
+kube = { workspace = true, optional = true }
+k8s-openapi = { workspace = true, optional = true }
+k8s-gateway-api = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+lazy_static = { workspace = true, optional = true }

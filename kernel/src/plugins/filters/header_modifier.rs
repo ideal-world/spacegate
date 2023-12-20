@@ -1,33 +1,20 @@
-use std::collections::HashMap;
-
-use super::{SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
-use crate::def_filter;
 use async_trait::async_trait;
 use http::HeaderName;
-use serde::{Deserialize, Serialize};
-use tardis::basic::{error::TardisError, result::TardisResult};
 
-def_filter!("header_modifier", SgFilterHeaderModifierDef, SgFilterHeaderModifier);
+use super::{SgPluginFilter, SgPluginFilterAccept, SgPluginFilterInitDto, SgPluginFilterKind, SgRoutePluginContext};
+use crate::def_filter;
+use kernel_common::gatewayapi_support_filter::{SgFilterHeaderModifier, SgFilterHeaderModifierKind, SG_FILTER_HEADER_MODIFIER_CODE};
 
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilterHeaderModifier {
-    pub kind: SgFilterHeaderModifierKind,
-    pub sets: Option<HashMap<String, String>>,
-    pub remove: Option<Vec<String>>,
-}
+use tardis::basic::error::TardisError;
+use tardis::basic::result::TardisResult;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
-pub enum SgFilterHeaderModifierKind {
-    #[default]
-    Request,
-    Response,
-}
+def_filter!(SG_FILTER_HEADER_MODIFIER_CODE, SgFilterHeaderModifierDef, SgFilterHeaderModifier);
 
 #[async_trait]
 impl SgPluginFilter for SgFilterHeaderModifier {
-    fn accept(&self) -> super::SgPluginFilterAccept {
-        super::SgPluginFilterAccept {
-            kind: vec![super::SgPluginFilterKind::Http],
+    fn accept(&self) -> SgPluginFilterAccept {
+        SgPluginFilterAccept {
+            kind: vec![SgPluginFilterKind::Http],
             ..Default::default()
         }
     }
@@ -78,12 +65,12 @@ impl SgPluginFilter for SgFilterHeaderModifier {
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
+    use kernel_common::gatewayapi_support_filter::{SgFilterHeaderModifier, SgFilterHeaderModifierKind};
     use std::collections::HashMap;
     use tardis::tokio;
 

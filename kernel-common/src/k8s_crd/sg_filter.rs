@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use k8s_openapi::schemars::JsonSchema;
 use kube::CustomResource;
-use serde_json::Value;
+
+use crate::constants::k8s_constants::DEFAULT_NAMESPACE;
+use serde_json::value::Value;
 
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -15,13 +17,14 @@ pub struct K8sSgFilterSpec {
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecFilter {
+    /// see [crate::inner_model::plugin_filter::SgRouteFilter].code
     pub code: String,
     pub name: Option<String>,
     pub enable: bool,
     pub config: Value,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecTargetRef {
     /// # FilterTarget Kind
@@ -32,4 +35,12 @@ pub struct K8sSgFilterSpecTargetRef {
     pub kind: String,
     pub name: String,
     pub namespace: Option<String>,
+}
+
+impl PartialEq for K8sSgFilterSpecTargetRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.kind == other.kind
+            && self.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()) == other.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())
+    }
 }

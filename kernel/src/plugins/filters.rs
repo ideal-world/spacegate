@@ -19,10 +19,10 @@ use tardis::basic::result::TardisResult;
 use tardis::url::Url;
 use tardis::{log, TardisFuns};
 
-use crate::config::gateway_dto::{SgGateway, SgParameters};
-use crate::config::http_route_dto::{SgBackendRef, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteRule};
-use crate::config::plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
 use crate::instance::SgHttpRouteMatchInst;
+use kernel_common::inner_model::gateway::{SgGateway, SgParameters};
+use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteRule};
+use kernel_common::inner_model::plugin_filter::{SgHttpPathModifier, SgHttpPathModifierType, SgRouteFilter};
 
 use super::context::SgRoutePluginContext;
 
@@ -105,6 +105,7 @@ pub async fn init(filter_configs: Vec<SgRouteFilter>, init_dto: SgPluginFilterIn
     let mut elements_to_remove = vec![];
     for filter_conf in filter_configs {
         let name = filter_conf.name.unwrap_or(TardisFuns::field.nanoid());
+        //todo k8s update sgfilter.name
         let filter_def = get_filter_def(&filter_conf.code)?;
         let filter_inst = filter_def.inst(filter_conf.spec)?;
         plugin_filters.push((format!("{}_{name}", filter_conf.code), filter_inst));
@@ -354,13 +355,11 @@ impl Default for SgPluginFilterAccept {
 #[cfg(test)]
 
 mod tests {
+    use kernel_common::inner_model::http_route::SgHttpPathMatchType;
+    use kernel_common::inner_model::plugin_filter::{SgHttpPathModifier, SgHttpPathModifierType};
     use tardis::{basic::result::TardisResult, regex::Regex};
 
     use crate::{
-        config::{
-            http_route_dto::SgHttpPathMatchType,
-            plugin_filter_dto::{SgHttpPathModifier, SgHttpPathModifierType},
-        },
         instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst},
         plugins::filters::http_common_modify_path,
     };

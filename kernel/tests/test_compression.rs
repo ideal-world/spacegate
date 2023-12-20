@@ -1,19 +1,16 @@
 use std::{env, time::Duration, vec};
 
+use kernel_common::inner_model::gateway::{SgGateway, SgListener, SgProtocol, SgTls, SgTlsConfig, SgTlsMode};
+use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
+use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use serde_json::{json, Value};
-use spacegate_kernel::{
-    config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
-        http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-        plugin_filter_dto::SgRouteFilter,
-    },
-    plugins::filters::compression::{self},
-};
+use spacegate_kernel::plugins::filters::compression::{self};
 use tardis::{
     basic::result::TardisResult,
     log::info,
     tokio::{self, time::sleep},
 };
+
 const HTTP_PORT: u16 = 8888;
 const HTTPS_PORT: u16 = 18443;
 #[tokio::test]
@@ -33,8 +30,11 @@ async fn test_compression() -> TardisResult<()> {
                     protocol: SgProtocol::Https,
                     tls: Some(SgTlsConfig {
                         mode: SgTlsMode::Terminate,
-                        key: TLS_KEY.to_string(),
-                        cert: TLS_CERT.to_string(),
+                        tls: SgTls {
+                            name: "test_tls".to_string(),
+                            key: TLS_KEY.to_string(),
+                            cert: TLS_CERT.to_string(),
+                        },
                     }),
                     ..Default::default()
                 },

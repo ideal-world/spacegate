@@ -74,6 +74,7 @@
     cd ../../../
     kubectl apply -f ./kernel/res/namespace.yaml
     kubectl apply -f ./kernel/res/gatewayclass.yaml
+    kubectl apply -f ./kernel/res/spacegate-httproute.yaml
     kubectl apply -f ./kernel/res/spacegate-gateway.yaml
     ```
 

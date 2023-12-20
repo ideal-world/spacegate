@@ -1,0 +1,35 @@
+[package]
+name = "spacegate-admin"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "./README.md"
+
+[dependencies]
+tardis = { workspace = true, features = [
+  "web-server",
+  "crypto",
+  "cache",
+  "openapi-rapidoc",
+] }
+serde.workspace = true
+serde_json.workspace = true
+itertools.workspace = true
+
+secrecy = { version = "0.8.0", features = ["alloc", "serde"] }
+kernel-common = { path = "../kernel-common", features = [
+  "admin-support",
+  "k8s",
+  "cache",
+] }
+kube = { workspace = true }
+k8s-openapi = { workspace = true }
+k8s-gateway-api = { workspace = true }
+lazy_static = { workspace = true }

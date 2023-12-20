@@ -20,12 +20,19 @@
 //! logs at most.
 
 #![warn(clippy::unwrap_used)]
-use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 use functions::{http_route, server};
 pub use http;
 pub use hyper;
+use kernel_common::{
+    client::k8s_client,
+    inner_model::{gateway::SgGateway, http_route::SgHttpRoute},
+};
 use plugins::filters::{self, SgPluginFilterDef};
-use tardis::{basic::result::TardisResult, log, tokio::signal};
+use tardis::{
+    basic::{error::TardisError, result::TardisResult},
+    log,
+    tokio::signal,
+};
 
 pub mod config;
 pub mod constants;
@@ -36,6 +43,11 @@ pub mod plugins;
 
 #[inline]
 pub async fn startup_k8s(namespace: Option<String>) -> TardisResult<()> {
+    k8s_client::inst(
+        k8s_client::DEFAULT_CLIENT_NAME,
+        kube::config::Kubeconfig::read().map_err(|e| TardisError::wrap(&format!("init k8s client failed:{e}"), ""))?,
+    )
+    .await?;
     startup(true, namespace, None).await
 }
 

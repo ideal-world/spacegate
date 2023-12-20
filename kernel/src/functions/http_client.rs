@@ -3,10 +3,11 @@ use std::{
     time::Duration,
 };
 
-use crate::{config::gateway_dto::SgProtocol, plugins::context::SgRoutePluginContext};
+use crate::plugins::context::SgRoutePluginContext;
 use http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode};
 use hyper::{client::HttpConnector, Body, Client, Error};
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
+use kernel_common::inner_model::gateway::SgProtocol;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     log,
@@ -162,12 +163,12 @@ mod tests {
 
     use crate::plugins::context::AvailableBackendInst;
     use crate::{
-        config::gateway_dto::SgProtocol,
         functions::http_client::{init, request},
         plugins::context::SgRoutePluginContext,
     };
     use hyper::{client::HttpConnector, Client};
     use hyper_rustls::HttpsConnector;
+    use kernel_common::inner_model::gateway::SgProtocol;
 
     #[tokio::test]
     async fn test_request() -> TardisResult<()> {

@@ -1,7 +1,12 @@
-use crate::constants;
-use k8s_gateway_api::{CommonRouteSpec, Group, Hostname, HttpRoute, HttpRouteFilter, HttpRouteMatch, Kind, Namespace, ObjectName, PortNumber, RouteStatus};
+use crate::{
+    constants,
+    helper::k8s_helper::{self, WarpKubeResult},
+};
+use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Hostname, HttpRoute, HttpRouteFilter, HttpRouteMatch, RouteStatus};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use std::collections::BTreeMap;
+use kube::{api::ListParams, Api, ResourceExt};
+use std::collections::{BTreeMap, HashSet};
+use tardis::basic::result::TardisResult;
 
 #[derive(Clone, Debug, Default, kube::CustomResource, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[kube(
@@ -229,37 +234,6 @@ pub struct BackendRef {
     pub inner: BackendObjectReference,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
-pub struct BackendObjectReference {
-    /// Group is the group of the referent. For example, "networking.k8s.io".
-    /// When unspecified (empty string), core API group is inferred.
-    pub group: Option<Group>,
-
-    /// Kind is kind of the referent. For example "HTTPRoute" or "Service".
-    /// Defaults to "Service" when not specified.
-    pub kind: Option<Kind>,
-
-    /// Name is the name of the referent.
-    pub name: ObjectName,
-
-    /// Namespace is the namespace of the backend. When unspecified, the local
-    /// namespace is inferred.
-    ///
-    /// Note that when a namespace is specified, a ReferencePolicy object
-    /// is required in the referent namespace to allow that namespace's
-    /// owner to accept the reference. See the ReferencePolicy documentation
-    /// for details.
-    ///
-    /// Support: Core
-    pub namespace: Option<Namespace>,
-
-    /// Port specifies the destination port number to use for this resource.
-    /// Port is required when the referent is a Kubernetes Service. For other
-    /// resources, destination port might be derived from the referent resource
-    /// or this field.
-    pub port: Option<PortNumber>,
-}
-
 impl From<HttpRoute> for HttpSpaceroute {
     fn from(http_route_obj: HttpRoute) -> Self {
         HttpSpaceroute {
@@ -308,4 +282,76 @@ impl From<HttpRoute> for HttpSpaceroute {
             status: http_route_obj.status.map(|status| HttpSpacerouteStatus { inner: status.inner }),
         }
     }
+}
+
+// todo replace kernel::config::config_by_k8s::get_http_spaceroute_by_api
+pub async fn get_http_spaceroute_by_api(
+    gateway_uniques: &[String],
+    (http_spaceroute_api, http_route_api): (&Api<HttpSpaceroute>, &Api<HttpRoute>),
+) -> TardisResult<Vec<HttpSpaceroute>> {
+    let mut http_route_objs: Vec<HttpSpaceroute> = http_spaceroute_api
+        .list(&ListParams::default())
+        .await
+        .warp_result_by_method("List HttpSpaceroute")?
+        .into_iter()
+        .filter(|http_route_obj| {
+            http_route_obj
+                .spec
+                .inner
+                .parent_refs
+                .as_ref()
+                .map(|parent_refs| {
+                    parent_refs.iter().any(|parent_ref| {
+                        let http_route_namespace = http_route_obj.namespace();
+                        gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+                            if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                                Some(namespaces)
+                            } else {
+                                http_route_namespace.as_ref()
+                            },
+                            &parent_ref.name,
+                        ))
+                    })
+                })
+                .unwrap_or(false)
+        })
+        .collect();
+    let http_spaceroute_name_namespace_set =
+        http_route_objs.iter().map(|spaceroute| format!("{}{}", spaceroute.name_any(), spaceroute.namespace().unwrap_or_default())).collect::<HashSet<String>>();
+
+    let mut add_http_route_objs: Vec<HttpSpaceroute> = http_route_api
+        .list(&ListParams::default())
+        .await
+        .warp_result_by_method("List HttpRoute")?
+        .into_iter()
+        .filter(|http_route_obj| {
+            // HTTPSpaceroute has higher priority than HTTPRoute.
+            // HTTPRoute needs to filter already existing HTTPSpaceroute ({name}{namespace} as unique)
+            http_spaceroute_name_namespace_set.get(&format!("{}{}", http_route_obj.name_any(), http_route_obj.namespace().unwrap_or_default())).is_none()
+                && http_route_obj
+                    .spec
+                    .inner
+                    .parent_refs
+                    .as_ref()
+                    .map(|parent_refs| {
+                        parent_refs.iter().any(|parent_ref| {
+                            let http_route_namespace = http_route_obj.namespace();
+                            gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+                                if let Some(namespaces) = parent_ref.namespace.as_ref() {
+                                    Some(namespaces)
+                                } else {
+                                    http_route_namespace.as_ref()
+                                },
+                                &parent_ref.name,
+                            ))
+                        })
+                    })
+                    .unwrap_or(false)
+        })
+        .map(|http_route_obj| http_route_obj.into())
+        .collect::<Vec<HttpSpaceroute>>();
+
+    http_route_objs.append(&mut add_http_route_objs);
+
+    Ok(http_route_objs)
 }

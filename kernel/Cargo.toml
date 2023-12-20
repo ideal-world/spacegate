@@ -18,9 +18,9 @@ path = "src/lib.rs"
 
 [features]
 local = ["tardis/fs"]
-cache = ["tardis/cache"]
+cache = ["tardis/cache", "kernel-common/cache"]
 ws = ["tardis/ws-client"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "cache"]
+k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "cache", "kernel-common/k8s"]
 
 [dependencies]
 serde.workspace = true
@@ -31,6 +31,7 @@ itertools.workspace = true
 urlencoding.workspace = true
 async-compression.workspace = true
 
+kernel-common = { path = "../kernel-common" }
 tardis = { workspace = true, features = ["future", "crypto", "tls"] }
 http.workspace = true
 rustls = { workspace = true, features = ["dangerous_configuration"] }
@@ -53,7 +54,7 @@ tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
 reqwest = { workspace = true }
 tracing-subscriber = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio"] }
-testcontainers-modules ={ workspace = true }
+testcontainers-modules = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

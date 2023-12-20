@@ -1,20 +1,15 @@
 use std::{env, time::Duration, vec};
 
 use async_trait::async_trait;
+use kernel_common::inner_model::gateway::SgProtocol::Https;
+use kernel_common::inner_model::gateway::{SgGateway, SgListener};
+use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpRoute, SgHttpRouteRule};
+use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use spacegate_kernel::config::gateway_dto::SgProtocol::Https;
 use spacegate_kernel::plugins::context::SgRoutePluginContext;
 use spacegate_kernel::plugins::filters::SgPluginFilterInitDto;
-use spacegate_kernel::{
-    config::{
-        gateway_dto::{SgGateway, SgListener},
-        http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-        plugin_filter_dto::SgRouteFilter,
-    },
-    def_filter,
-    plugins::filters::SgPluginFilter,
-};
+use spacegate_kernel::{def_filter, plugins::filters::SgPluginFilter};
 use tardis::config::config_dto::WebClientModuleConfig;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},

@@ -1,25 +1,15 @@
-use crate::config::plugin_filter_dto::SgHttpPathModifier;
 use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use async_trait::async_trait;
+use kernel_common::gatewayapi_support_filter::{SgFilterRewrite, SG_FILTER_REWRITE_CODE};
+use kernel_common::inner_model::plugin_filter::SgHttpPathModifier;
 use serde::{Deserialize, Serialize};
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;
 
 use super::{http_common_modify_path, SgPluginFilter, SgPluginFilterInitDto, SgRoutePluginContext};
 
-def_filter!("rewrite", SgFilterRewriteDef, SgFilterRewrite);
-
-/// RewriteFilter defines a filter that modifies a request during forwarding.
-///
-/// https://gateway-api.sigs.k8s.io/geps/gep-726/
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct SgFilterRewrite {
-    /// Hostname is the value to be used to replace the Host header value during forwarding.
-    pub hostname: Option<String>,
-    /// Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.
-    pub path: Option<SgHttpPathModifier>,
-}
+def_filter!(SG_FILTER_REWRITE_CODE, SgFilterRewriteDef, SgFilterRewrite);
 
 #[async_trait]
 impl SgPluginFilter for SgFilterRewrite {
@@ -60,7 +50,6 @@ impl SgPluginFilter for SgFilterRewrite {
 
 mod tests {
     use crate::{
-        config::{http_route_dto::SgHttpPathMatchType, plugin_filter_dto::SgHttpPathModifierType},
         instance::{SgHttpPathMatchInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
         plugins::context::ChosenHttpRouteRuleInst,
     };
@@ -68,6 +57,8 @@ mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
+    use kernel_common::inner_model::http_route::SgHttpPathMatchType;
+    use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
     use tardis::tokio;
 
     #[tokio::test]

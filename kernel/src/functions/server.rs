@@ -5,13 +5,13 @@ use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
-use crate::config::gateway_dto::{SgGateway, SgProtocol, SgTlsMode};
 use core::task::{Context, Poll};
 use http::{HeaderValue, Request, Response, StatusCode};
 use hyper::server::conn::{AddrIncoming, AddrStream};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 use hyper::{server::accept::Accept, Body};
+use kernel_common::inner_model::gateway::{SgGateway, SgProtocol, SgTlsMode};
 
 use lazy_static::lazy_static;
 use rustls::{PrivateKey, ServerConfig};
@@ -88,10 +88,10 @@ pub async fn init(gateway_conf: &SgGateway) -> TardisResult<Vec<SgServerInst>> {
             log::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
             if SgTlsMode::Terminate == tls.mode {
                 let tls_cfg = {
-                    let certs = rustls_pemfile::certs(&mut tls.cert.as_bytes())
+                    let certs = rustls_pemfile::certs(&mut tls.tls.cert.as_bytes())
                         .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls certificates not legal: {error}"), ""))?;
                     let certs = certs.into_iter().map(rustls::Certificate).collect::<Vec<_>>();
-                    let key = rustls_pemfile::read_all(&mut tls.key.as_bytes())
+                    let key = rustls_pemfile::read_all(&mut tls.tls.key.as_bytes())
                         .map_err(|error| TardisError::bad_request(&format!("[SG.Server] Tls private keys not legal: {error}"), ""))?;
                     if key.is_empty() {
                         return Err(TardisError::bad_request("[SG.Server] not found Tls private key", ""));

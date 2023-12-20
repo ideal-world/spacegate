@@ -1,9 +1,9 @@
 use std::collections::HashSet;
+use std::str::FromStr;
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
 use k8s_gateway_api::{Gateway, HttpRoute, HttpRouteFilter};
-use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::ListParams,
     runtime::{watcher, WatchStreamExt},
@@ -17,36 +17,35 @@ use tardis::{
     TardisFuns,
 };
 
-use crate::{
-    constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION},
-    do_startup,
-    functions::http_route,
-    shutdown,
-};
+use crate::{do_startup, functions::http_route, shutdown};
 
-use super::{
-    gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
-    http_route_dto::{
+use crate::helpers::k8s_helper;
+use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
+use kernel_common::constants::k8s_constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
+use kernel_common::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
+use kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind;
+use kernel_common::helper;
+use kernel_common::helper::k8s_helper::{get_k8s_obj_unique, WarpKubeResult};
+use kernel_common::inner_model::gateway::{SgTls, SgTlsMode};
+use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
+use kernel_common::inner_model::{
+    gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig},
+    http_route::{
         SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
         SgHttpRouteRule,
     },
-    k8s_crd::SgFilter,
-    plugin_filter_dto::SgRouteFilter,
+    plugin_filter,
+    plugin_filter::SgRouteFilter,
 };
-use crate::config::k8s_crd_spaceroute::HttpSpaceroute;
-use crate::constants::{
-    BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL,
-};
-use crate::helpers::k8s_helper;
+use kernel_common::k8s_crd::http_spaceroute::HttpSpaceroute;
+use kernel_common::k8s_crd::sg_filter::SgFilter;
 use lazy_static::lazy_static;
 
 lazy_static! {
     /// see [SgGateway].name
-    /// format see [k8s_helper::format_k8s_obj_unique]
+    /// format see [helper::k8s_helper::format_k8s_obj_unique]
     static ref GATEWAY_UNIQUES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
 }
-
-const GATEWAY_CLASS_NAME: &str = "spacegate";
 
 pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     let (gateway_api, http_spaceroute_api, http_route_api, filter_api): (Api<Gateway>, Api<HttpSpaceroute>, Api<HttpRoute>, Api<SgFilter>) = if let Some(namespaces) = namespaces {
@@ -68,7 +67,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let gateway_objs = gateway_api
         .list(&ListParams::default())
         .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .warp_result()?
         .into_iter()
         .filter(|gateway_obj| gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME)
         .collect::<Vec<Gateway>>();
@@ -130,17 +129,20 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     });
 
     async fn watch_http_spaceroute(http_route_obj: HttpSpaceroute, http_route_objs_versions: &HashMap<String, String>, http_route_apis: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
-        log::trace!("[SG.Config] http_route config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&http_route_obj));
+        log::trace!(
+            "[SG.Config] http_route config watch tiger. name:{}",
+            kernel_common::helper::k8s_helper::get_k8s_obj_unique(&http_route_obj)
+        );
         if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
             == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
         {
             let named_http_route_api: Api<HttpRoute> = Api::namespaced(
                 get_client().await.expect("[SG.Config] Failed to get client"),
-                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
+                http_route_obj.namespace().as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
             );
             let named_http_space_route_api: Api<HttpSpaceroute> = Api::namespaced(
                 get_client().await.expect("[SG.Config] Failed to get client"),
-                http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
+                http_route_obj.namespace().as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
             );
             if named_http_space_route_api.get(&http_route_obj.name_any()).await.ok().is_some() || named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
                 // ignore the original object
@@ -169,7 +171,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             return;
         };
 
-        log::debug!("[SG.Config] Http route:{} config change found", k8s_helper::get_k8s_obj_unique(&http_route_obj));
+        log::debug!(
+            "[SG.Config] Http route:{} config change found",
+            kernel_common::helper::k8s_helper::get_k8s_obj_unique(&http_route_obj)
+        );
 
         overload_http_route(gateway_obj, (&http_route_apis.0, &http_route_apis.1)).await;
     }
@@ -215,7 +220,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
         let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
-            log::trace!("[SG.Config] filter_api config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&filter_obj));
+            log::trace!(
+                "[SG.Config] filter_api config watch tiger. name:{}",
+                kernel_common::helper::k8s_helper::get_k8s_obj_unique(&filter_obj)
+            );
             if sg_filter_objs_versions.get(filter_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
                 == filter_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
             {
@@ -248,7 +256,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    gateway_obj_map.insert(k8s_helper::get_k8s_obj_unique(&gateway_obj), gateway_obj);
+                    gateway_obj_map.insert(helper::k8s_helper::get_k8s_obj_unique(&gateway_obj), gateway_obj);
                 };
                 if target_ref.kind.eq_ignore_ascii_case("httpspaceroute") {
                     let http_route_api: Api<HttpSpaceroute> = Api::namespaced(
@@ -278,7 +286,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    let key = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+                    let key = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
                     if gateway_obj_map.get(&key).is_none() && http_route_rel_gateway_map.get(&key).is_none() {
                         http_route_rel_gateway_map.insert(key, gateway_obj);
                     }
@@ -311,7 +319,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                     } else {
                         continue;
                     };
-                    let key = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+                    let key = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
                     if gateway_obj_map.get(&key).is_none() && http_route_rel_gateway_map.get(&key).is_none() {
                         http_route_rel_gateway_map.insert(key, gateway_obj);
                     }
@@ -321,7 +329,10 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 continue;
             }
 
-            log::trace!("[SG.Config] SgFilter config:{} change found", k8s_helper::get_k8s_obj_unique(&filter_obj));
+            log::trace!(
+                "[SG.Config] SgFilter config:{} change found",
+                kernel_common::helper::k8s_helper::get_k8s_obj_unique(&filter_obj)
+            );
 
             let http_route_api = (
                 &Api::all(get_client().await.expect("[SG.Config] Failed to get client")),
@@ -347,7 +358,7 @@ async fn get_http_spaceroute_by_api(
     let mut http_route_objs: Vec<HttpSpaceroute> = http_spaceroute_api
         .list(&ListParams::default())
         .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .warp_result_by_method("List HttpSpaceroute")?
         .into_iter()
         .filter(|http_route_obj| {
             http_route_obj
@@ -358,7 +369,7 @@ async fn get_http_spaceroute_by_api(
                 .map(|parent_refs| {
                     parent_refs.iter().any(|parent_ref| {
                         let http_route_namespace = http_route_obj.namespace();
-                        gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+                        gateway_uniques.contains(&helper::k8s_helper::format_k8s_obj_unique(
                             if let Some(namespaces) = parent_ref.namespace.as_ref() {
                                 Some(namespaces)
                             } else {
@@ -377,7 +388,7 @@ async fn get_http_spaceroute_by_api(
     let mut add_http_route_objs: Vec<HttpSpaceroute> = http_route_api
         .list(&ListParams::default())
         .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+        .warp_result_by_method("List HttpRoute")?
         .into_iter()
         .filter(|http_route_obj| {
             // HTTPSpaceroute has higher priority than HTTPRoute.
@@ -391,7 +402,7 @@ async fn get_http_spaceroute_by_api(
                     .map(|parent_refs| {
                         parent_refs.iter().any(|parent_ref| {
                             let http_route_namespace = http_route_obj.namespace();
-                            gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+                            gateway_uniques.contains(&helper::k8s_helper::format_k8s_obj_unique(
                                 if let Some(namespaces) = parent_ref.namespace.as_ref() {
                                     Some(namespaces)
                                 } else {
@@ -412,7 +423,7 @@ async fn get_http_spaceroute_by_api(
 }
 
 async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
-    let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+    let gateway_unique = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_api: Api<Gateway> = Api::namespaced(
         get_client().await.expect("[SG.Config] Failed to get client"),
         gateway_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
@@ -431,15 +442,11 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
                     let mut gateway_uniques_guard = GATEWAY_UNIQUES.write().await;
                     gateway_uniques_guard.push(gateway_config.name.clone());
                 }
-                let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&[gateway_unique], http_route_api_refs)
-                    .await
-                    .map_err(|error| TardisError::wrap(&format!("[SG.Config] Get HttpRoute Kubernetes error: {error:?}"), ""))
-                    .expect("");
+                let http_route_objs: Vec<HttpSpaceroute> =
+                    get_http_spaceroute_by_api(&[gateway_unique], http_route_api_refs).await.expect("[SG.Config] Failed to get http_spaceroute");
 
-                let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs.into_iter().collect())
-                    .await
-                    .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
-                    .expect("");
+                let http_route_configs: Vec<SgHttpRoute> =
+                    process_http_route_config(http_route_objs.into_iter().collect()).await.expect("[SG.Config] Failed to process http_route config");
                 shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
                 log::trace!("[SG.Config] Gateway config change to:{:?}", gateway_config);
                 do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] Failed to restart gateway");
@@ -457,57 +464,8 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
     }
 }
 
-// async fn watch_http_spaceroute(
-//     http_route_obj: HttpSpaceroute,
-//     http_route_objs_versions: &mut HashMap<String, String>,
-//     http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>),
-// ) {
-//     log::trace!("[SG.Config] http_route config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&http_route_obj));
-//     if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
-//         == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
-//     {
-//         let named_http_route_api: Api<HttpRoute> = Api::namespaced(
-//             get_client().await.expect("[SG.Config] Failed to get client"),
-//             http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
-//         );
-//         let named_http_space_route_api: Api<HttpSpaceroute> = Api::namespaced(
-//             get_client().await.expect("[SG.Config] Failed to get client"),
-//             http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()),
-//         );
-//         if named_http_space_route_api.get(&http_route_obj.name_any()).await.ok().is_some() || named_http_route_api.get(&http_route_obj.name_any()).await.ok().is_some() {
-//             // ignore the original object
-//             // ignore if obj is some(it's means obj is not deleted)
-//             return;
-//         }
-//     }
-//     if http_route_obj.spec.inner.parent_refs.is_none() {
-//         return;
-//     }
-//     let (rel_gateway_namespaces, rel_gateway_name) = (
-//         if let Some(namespaces) = http_route_obj.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].namespace.as_ref() {
-//             namespaces.to_string()
-//         } else {
-//             http_route_obj.namespace().as_ref().unwrap_or(&"default".to_string()).to_string()
-//         },
-//         http_route_obj.spec.inner.parent_refs.as_ref().expect("[SG.Config] http_route not fount parent ref (Gateway)")[0].name.clone(),
-//     );
-//     let gateway_api: Api<Gateway> = Api::namespaced(get_client().await.expect("[SG.Config] Failed to get client"), &rel_gateway_namespaces);
-//     let gateway_obj = if let Ok(Some(gateway_obj)) = gateway_api.get_opt(&rel_gateway_name).await {
-//         if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
-//             return;
-//         }
-//         gateway_obj
-//     } else {
-//         return;
-//     };
-//
-//     log::debug!("[SG.Config] Http route:{} config change found", k8s_helper::get_k8s_obj_unique(&http_route_obj));
-//
-//     overload_http_route(gateway_obj, http_route_api_refs).await;
-// }
-
 async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
-    let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
+    let gateway_unique = helper::k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_config = process_gateway_config(vec![gateway_obj])
         .await
         .expect("[SG.Config] Failed to process gateway config for http_route parent ref")
@@ -515,10 +473,7 @@ async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<Ht
         .expect("[SG.Config] Gateway config not found for http_route parent ref")
         .clone();
 
-    let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&[gateway_unique], http_route_api_refs)
-        .await
-        .map_err(|error| TardisError::wrap(&format!("[SG.Config] Get HttpRoute Kubernetes error: {error:?}"), ""))
-        .expect("");
+    let http_route_objs: Vec<HttpSpaceroute> = get_http_spaceroute_by_api(&[gateway_unique], http_route_api_refs).await.expect("");
 
     if http_route_objs.is_empty() {
         http_route::init(gateway_config, vec![]).await.expect("[SG.Config] Failed to re-init http_route");
@@ -597,64 +552,16 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
         // Generate gateway configuration
         let gateway_name_without_namespace = gateway_obj.metadata.name.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [metadata.name] is required", ""))?;
         let gateway_config = SgGateway {
-            name: k8s_helper::format_k8s_obj_unique(gateway_obj.namespace().as_ref(), gateway_name_without_namespace),
-            parameters: SgParameters {
-                redis_url: gateway_obj.metadata.annotations.clone().and_then(|ann| ann.get(GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string())),
-                log_level: gateway_obj
-                    .metadata
-                    .annotations
-                    .clone()
-                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string())),
-                lang: gateway_obj
-                    .metadata
-                    .annotations
-                    .clone()
-                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string())),
-                ignore_tls_verification: gateway_obj
-                    .metadata
-                    .annotations
-                    .and_then(|ann: std::collections::BTreeMap<String, String>| ann.get(GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok())),
-            },
+            name: helper::k8s_helper::format_k8s_obj_unique(gateway_obj.namespace().as_ref(), gateway_name_without_namespace),
+            parameters: SgParameters::from_kube_gateway(&gateway_obj),
             listeners: join_all(
                 gateway_obj
                     .spec
                     .listeners
                     .into_iter()
                     .map(|listener| async move {
-                        let tls = match listener.tls {
-                            Some(tls) => {
-                                let certificate_ref = tls
-                                    .certificate_refs
-                                    .as_ref()
-                                    .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
-                                    .get(0)
-                                    .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
-                                let secret_api: Api<Secret> = if let Some(namespace) = &certificate_ref.namespace {
-                                    Api::namespaced(get_client().await?, namespace)
-                                } else {
-                                    Api::all(get_client().await?)
-                                };
-                                let secret_obj =
-                                    secret_api.get(&certificate_ref.name).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?;
-                                let secret_data = secret_obj
-                                    .data
-                                    .ok_or_else(|| TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data is required", certificate_ref.name), ""))?;
-                                let tls_crt = secret_data.get("tls.crt").ok_or_else(|| {
-                                    TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.crt] is required", certificate_ref.name), "")
-                                })?;
-                                let tls_key = secret_data.get("tls.key").ok_or_else(|| {
-                                    TardisError::format_error(&format!("[SG.Config] Gateway tls secret [{}] data [tls.key] is required", certificate_ref.name), "")
-                                })?;
-                                Some(SgTlsConfig {
-                                    mode: SgTlsMode::from(tls.mode).unwrap_or_default(),
-                                    key: String::from_utf8(tls_key.0.clone()).expect("[SG.Config] Gateway tls secret [tls.key] is not valid utf8"),
-                                    cert: String::from_utf8(tls_crt.0.clone()).expect("[SG.Config] Gateway tls secret [tls.cert] is not valid utf8"),
-                                })
-                            }
-                            None => None,
-                        };
                         let sg_listener = SgListener {
-                            name: Some(listener.name),
+                            name: listener.name,
                             ip: None,
                             port: listener.port,
                             protocol: match listener.protocol.to_lowercase().as_str() {
@@ -668,7 +575,18 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                                     ))
                                 }
                             },
-                            tls,
+                            tls: if let Some(tls_config) = listener.tls {
+                                if let Some(tls) = SgTls::from_kube_tls(DEFAULT_CLIENT_NAME, tls_config.certificate_refs).await? {
+                                    Some(SgTlsConfig {
+                                        mode: tls_config.mode.map(|m| SgTlsMode::from_str(&m)).transpose()?.unwrap_or(SgTlsMode::default()),
+                                        tls,
+                                    })
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            },
                             hostname: listener.hostname,
                         };
                         Ok(sg_listener)
@@ -690,8 +608,8 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
     let mut http_route_configs = Vec::new();
     http_route_objs.sort_by(|http_route_a, http_route_b| {
         let (a_priority, b_priority) = (
-            http_route_a.annotations().get(constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
-            http_route_b.annotations().get(constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
+            http_route_a.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
+            http_route_b.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0),
         );
         match b_priority.cmp(&a_priority) {
             Ordering::Equal => http_route_a.metadata.creation_timestamp.cmp(&http_route_b.metadata.creation_timestamp),
@@ -762,14 +680,17 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
             },
             http_route_obj.spec.inner.parent_refs.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].name
         );
+        let priority=http_route_obj.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0);
         let http_route_config = SgHttpRoute {
+            name: get_k8s_obj_unique(&http_route_obj),
             gateway_name: rel_gateway_name,
             hostnames: http_route_obj.spec.hostnames.clone(),
+            priority,
             filters: if let Some(name) = &http_route_obj.metadata.name {
-                let kind = if let Some(kind) = http_route_obj.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
+                let kind = if let Some(kind) = http_route_obj.annotations().get(kernel_common::constants::RAW_HTTP_ROUTE_KIND) {
                     kind
                 } else {
-                    constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
+                    kernel_common::constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE
                 };
                 get_filters_from_cdr(kind, name, &http_route_obj.metadata.namespace).await?
             } else {
@@ -947,8 +868,8 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                             SgRouteFilter {
                                 code: crate::plugins::filters::header_modifier::CODE.to_string(),
                                 name: None,
-                                spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::header_modifier::SgFilterHeaderModifier {
-                                    kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Request,
+                                spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier {
+                                    kind: kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind::Request,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: request_header_modifier.remove,
                                 })?,
@@ -969,8 +890,8 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                             SgRouteFilter {
                                 code: crate::plugins::filters::header_modifier::CODE.to_string(),
                                 name: None,
-                                spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::header_modifier::SgFilterHeaderModifier {
-                                    kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Response,
+                                spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier {
+                                    kind: kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind::Response,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: response_header_modifier.remove,
                                 })?,
@@ -979,16 +900,16 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                         k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
                             code: crate::plugins::filters::redirect::CODE.to_string(),
                             name: None,
-                            spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::redirect::SgFilterRedirect {
+                            spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterRedirect {
                                 scheme: request_redirect.scheme,
                                 hostname: request_redirect.hostname,
                                 path: request_redirect.path.map(|path| match path {
-                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplaceFullPath,
+                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplaceFullPath,
                                         value: replace_full_path,
                                     },
-                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplacePrefixMatch,
                                         value: replace_prefix_match,
                                     },
                                 }),
@@ -999,15 +920,15 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                         k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
                             code: crate::plugins::filters::rewrite::CODE.to_string(),
                             name: None,
-                            spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::rewrite::SgFilterRewrite {
+                            spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterRewrite {
                                 hostname: url_rewrite.hostname,
                                 path: url_rewrite.path.map(|path| match path {
-                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplaceFullPath,
+                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplaceFullPath,
                                         value: replace_full_path,
                                     },
-                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => plugin_filter::SgHttpPathModifier {
+                                        kind: plugin_filter::SgHttpPathModifierType::ReplacePrefixMatch,
                                         value: replace_prefix_match,
                                     },
                                 }),
@@ -1031,6 +952,78 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                 .collect_vec()
         })
         .map(|filters| filters.into_iter().map(|filter| filter.expect("Unreachable code")).collect_vec())
+}
+
+//todo move to common
+fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<Option<Vec<HttpRouteFilter>>> {
+    filters
+        .map(|filters| {
+            filters
+                .into_iter()
+                .map(|filter| {
+                    let http_route_filter = match filter.code.as_str() {
+                        crate::plugins::filters::header_modifier::CODE => {
+                            let header_modifier = TardisFuns::json
+                                .json_to_obj::<kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier>(filter.spec)
+                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
+                            match header_modifier.kind {
+                                SgFilterHeaderModifierKind::Request => HttpRouteFilter::RequestHeaderModifier {
+                                    request_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
+                                        set: header_modifier.sets.map(|set| set.into_iter().map(|(name, value)| k8s_gateway_api::HttpHeader { name, value }).collect::<Vec<_>>()),
+                                        add: None,
+                                        remove: header_modifier.remove,
+                                    },
+                                },
+                                SgFilterHeaderModifierKind::Response => HttpRouteFilter::ResponseHeaderModifier {
+                                    response_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
+                                        set: header_modifier.sets.map(|set| set.into_iter().map(|(name, value)| k8s_gateway_api::HttpHeader { name, value }).collect::<Vec<_>>()),
+                                        add: None,
+                                        remove: header_modifier.remove,
+                                    },
+                                },
+                            }
+                        }
+                        crate::plugins::filters::rewrite::CODE => {
+                            let rewrite = TardisFuns::json
+                                .json_to_obj::<kernel_common::gatewayapi_support_filter::SgFilterRewrite>(filter.spec)
+                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
+                            HttpRouteFilter::URLRewrite {
+                                url_rewrite: k8s_gateway_api::HttpUrlRewriteFilter {
+                                    hostname: rewrite.hostname,
+                                    path: rewrite.path.map(|p| match p.kind {
+                                        SgHttpPathModifierType::ReplaceFullPath => k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path: p.value },
+                                        SgHttpPathModifierType::ReplacePrefixMatch => k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: p.value },
+                                    }),
+                                },
+                            }
+                        }
+                        crate::plugins::filters::redirect::CODE => {
+                            let redirect = TardisFuns::json
+                                .json_to_obj::<kernel_common::gatewayapi_support_filter::SgFilterRedirect>(filter.spec)
+                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
+                            HttpRouteFilter::RequestRedirect {
+                                request_redirect: k8s_gateway_api::HttpRequestRedirectFilter {
+                                    scheme: redirect.scheme,
+                                    hostname: redirect.hostname,
+                                    path: redirect.path.map(|p| match p.kind {
+                                        SgHttpPathModifierType::ReplaceFullPath => k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path: p.value },
+                                        SgHttpPathModifierType::ReplacePrefixMatch => k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: p.value },
+                                    }),
+                                    port: redirect.port,
+                                    status_code: redirect.status_code,
+                                },
+                            }
+                        }
+                        _ => return Ok(None),
+                    };
+                    Ok(Some(http_route_filter))
+                })
+                .map(|f| f.transpose())
+                .filter(|filter| filter.is_some())
+                .map(|f| f.unwrap())
+                .collect::<TardisResult<Vec<HttpRouteFilter>>>()
+        })
+        .transpose()
 }
 
 async fn get_client() -> TardisResult<Client> {

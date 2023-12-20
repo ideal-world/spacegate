@@ -9,15 +9,12 @@ use std::{
     vec,
 };
 
+use kernel_common::inner_model::gateway::{SgGateway, SgListener};
+use kernel_common::inner_model::http_route::{SgBackendRef, SgHttpPathMatch, SgHttpPathMatchType, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule};
+use kernel_common::inner_model::plugin_filter;
+use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use lazy_static::lazy_static;
 use serde_json::json;
-use spacegate_kernel::config::http_route_dto::{SgHttpPathMatch, SgHttpPathMatchType, SgHttpRouteMatch};
-use spacegate_kernel::config::plugin_filter_dto::SgRouteFilter;
-use spacegate_kernel::config::{
-    gateway_dto::{SgGateway, SgListener},
-    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-    plugin_filter_dto,
-};
 use spacegate_kernel::plugins::filters;
 use tardis::config::config_dto::WebServerCommonConfig;
 use tardis::web::web_server::WebServerModule;
@@ -82,10 +79,10 @@ async fn test_webscoket() -> TardisResult<()> {
                 filters: Some(vec![SgRouteFilter {
                     code: "rewrite".to_string(),
                     name: None,
-                    spec: TardisFuns::json.obj_to_json(&filters::rewrite::SgFilterRewrite {
+                    spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterRewrite {
                         hostname: None,
-                        path: Some(plugin_filter_dto::SgHttpPathModifier {
-                            kind: plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                        path: Some(plugin_filter::SgHttpPathModifier {
+                            kind: plugin_filter::SgHttpPathModifierType::ReplacePrefixMatch,
                             value: "/".to_string(),
                         }),
                     })?,

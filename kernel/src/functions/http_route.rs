@@ -2,10 +2,6 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use crate::instance::{SgBackendInst, SgGatewayInst, SgHttpHeaderMatchInst, SgHttpQueryMatchInst};
 use crate::{
-    config::{
-        gateway_dto::{SgGateway, SgListener},
-        http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute},
-    },
     instance::{SgHttpPathMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     plugins::{
         context::{ChosenHttpRouteRuleInst, SgRouteFilterRequestAction, SgRoutePluginContext},
@@ -17,6 +13,8 @@ use hyper::{Body, StatusCode};
 
 use crate::plugins::context::AvailableBackendInst;
 use itertools::Itertools;
+use kernel_common::inner_model::gateway::{SgGateway, SgListener};
+use kernel_common::inner_model::http_route::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType, SgHttpRoute};
 use std::sync::{Arc, OnceLock};
 use std::vec::Vec;
 use tardis::tokio::sync::RwLock;
@@ -448,7 +446,8 @@ async fn process_response_headers(mut ctx: SgRoutePluginContext) -> TardisResult
     } else {
         false
     };
-    if !is_chunked {
+
+    if !is_chunked && ctx.response.get_headers().get(http::header::CONTENT_LENGTH).is_some() {
         let response_body: Vec<u8> = ctx.response.take_body_into_bytes().await?.into();
         ctx.response.set_header(http::header::CONTENT_LENGTH, response_body.len().to_string().as_str())?;
         ctx.response.set_body(response_body);
@@ -715,7 +714,7 @@ async fn process_req_filters_http(
         remote_addr,
         gateway_name,
         matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::cloned_from(m, matched_match_inst)),
-        matched_backend_inst.map(|b| AvailableBackendInst::cloned_from(b)),
+        matched_backend_inst.map(AvailableBackendInst::cloned_from),
     );
     process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
@@ -877,10 +876,10 @@ mod tests {
 
     use http::{Method, Request};
     use hyper::Body;
+    use kernel_common::inner_model::http_route::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType};
     use tardis::regex::Regex;
 
     use crate::{
-        config::http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
         functions::http_route::{choose_backend, match_route_insts_with_hostname_priority},
         instance::{SgBackendInst, SgHttpHeaderMatchInst, SgHttpPathMatchInst, SgHttpQueryMatchInst, SgHttpRouteInst, SgHttpRouteMatchInst, SgHttpRouteRuleInst},
     };

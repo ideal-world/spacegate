@@ -13,7 +13,7 @@ This guide walks you through how to install Spacegate Kubernetes Gateway on a ge
 1. Install the Gateway API resources from the standard channel (the CRDs and the validating webhook):
 
     ```
-    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/standard-install.yaml
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
     ```
 
 1. Import kubeconfig to Secret(Optional, this step is not required if using the default `hostNetwork: true` ):
@@ -41,6 +41,12 @@ This guide walks you through how to install Spacegate Kubernetes Gateway on a ge
 
     ```
     kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/kernel/res/gatewayclass.yaml
+    ```
+
+1. Create the Spacegate Kubernetes CRD HttpSpaceroute:
+
+    ```
+    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/kernel/res/spacegate-httproute.yaml
     ```
 
 1. Deploy the Spacegate Kubernetes Gateway:
