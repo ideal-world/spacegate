@@ -1,10 +1,9 @@
-
 use crate::model::query_dto::{HttpRouteQueryDto, ToInstance};
 use crate::model::vo::http_route_vo::SgHttpRouteVo;
 use crate::service::route_service::HttpRouteVoService;
 use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::{Query, Path};
+use tardis::web::poem_openapi::param::{Path, Query};
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
@@ -20,6 +19,7 @@ impl HttprouteApi {
         names: Query<Option<String>>,
         gateway_name: Query<Option<String>>,
         hostnames: Query<Option<String>>,
+        backend_ids: Query<Option<String>>,
         filter_ids: Query<Option<String>>,
         session: &Session,
     ) -> TardisApiResult<Vec<SgHttpRouteVo>> {
@@ -31,6 +31,7 @@ impl HttprouteApi {
                 gateway_name: gateway_name.0,
                 hostnames: hostnames.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
                 filter_ids: filter_ids.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
+                backend_ids: backend_ids.0.map(|n| n.split(',').map(|n| n.to_string()).collect()),
             }
             .to_instance()?,
         )

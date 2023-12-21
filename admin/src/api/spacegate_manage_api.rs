@@ -5,7 +5,7 @@ use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use tardis::basic::error::TardisError;
 use tardis::web::poem::session::Session;
 use tardis::web::poem_openapi;
-use tardis::web::poem_openapi::param::{Query, Path};
+use tardis::web::poem_openapi::param::{Path, Query};
 use tardis::web::poem_openapi::payload::Json;
 use tardis::web::web_resp::{TardisApiResult, TardisResp, Void};
 
@@ -23,10 +23,8 @@ impl SpacegateSelectApi {
     #[oai(path = "/", method = "get")]
     async fn get(&self, session: &Session) -> TardisApiResult<SessionInstance> {
         let instance = SpacegateManageService::get_instance(session).await?;
-        if !instance.name.is_empty() && instance.name != DEFAULT_CLIENT_NAME {
-            if SpacegateManageService::check(&instance.name).await.is_ok() {
-                return TardisResp::ok(instance);
-            }
+        if !instance.name.is_empty() && instance.name != DEFAULT_CLIENT_NAME && SpacegateManageService::check(&instance.name).await.is_ok() {
+            return TardisResp::ok(instance);
         }
         TardisResp::ok(SpacegateManageService::set_instance_name(DEFAULT_CLIENT_NAME, session).await?)
     }

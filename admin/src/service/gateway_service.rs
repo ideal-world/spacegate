@@ -27,7 +27,8 @@ impl GatewayVoService {
                 && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }
                 && if let Some(q_hostname) = &query.hostname {
                 g.listeners.iter().any(|l| if let Some(l_hostname)=&l.hostname{q_hostname.is_match(l_hostname)}else { false })
-            } else { true })
+            } else { true }
+            && query.filter_ids.as_ref().map_or(true, |filter_ids| g.filters.iter().any(|f_id| filter_ids.iter().any(|rf| rf.is_match(f_id)))))
             .collect())
     }
 
@@ -58,11 +59,6 @@ impl GatewayVoService {
             .await?
         }
         Self::add_vo(client_name, add).await
-    }
-
-    pub async fn update_by_id(client_name: &str, id: &str) -> TardisResult<SgGatewayVo> {
-        let gateway_o = Self::get_by_id(client_name, id).await?;
-        GatewayVoService::update(client_name, gateway_o).await
     }
 
     pub async fn update(client_name: &str, update: SgGatewayVo) -> TardisResult<SgGatewayVo> {

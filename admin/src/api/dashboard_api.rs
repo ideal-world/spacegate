@@ -39,6 +39,7 @@ impl DashboardApi {
                     port: None,
                     hostname: None,
                     tls_ids: None,
+                    filter_ids: None,
                 },
             )
             .await?
@@ -50,6 +51,7 @@ impl DashboardApi {
                     gateway_name: None,
                     hostnames: None,
                     filter_ids: None,
+                    backend_ids: None,
                 },
             )
             .await?

@@ -22,6 +22,7 @@ impl GatewayApi {
         port: Query<Option<String>>,
         hostname: Query<Option<String>>,
         tls_ids: Query<Option<String>>,
+        filter_ids: Query<Option<String>>,
         session: &Session,
     ) -> TardisApiResult<Vec<SgGatewayVo>> {
         let client_name = &super::get_instance_name(session).await?;
@@ -32,6 +33,7 @@ impl GatewayApi {
                 port: port.0.map(|p| p.parse::<u16>()).transpose().map_err(|_e| TardisError::bad_request("bad port format", ""))?,
                 hostname: hostname.0,
                 tls_ids: tls_ids.0.map(|tls_ids| tls_ids.split(',').map(|tls_id| tls_id.to_string()).collect()),
+                filter_ids: filter_ids.0.map(|filter_ids| filter_ids.split(',').map(|filter_id| filter_id.to_string()).collect()),
             }
             .to_instance()?,
         )

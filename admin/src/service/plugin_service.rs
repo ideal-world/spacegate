@@ -1,6 +1,4 @@
-#[cfg(feature = "k8s")]
-use crate::helper::get_k8s_client;
-use crate::model::query_dto::PluginQueryInst;
+use crate::model::query_dto::{GatewayQueryDto, HttpRouteQueryDto, PluginQueryInst, ToInstance as _};
 use crate::model::vo::plugin_vo::SgFilterVo;
 
 use crate::service::base_service::VoBaseService;
@@ -14,7 +12,10 @@ use kube::{Api, ResourceExt};
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use tardis::basic::result::TardisResult;
+use tardis::futures_util::future::join_all;
 
+use super::gateway_service::GatewayVoService;
+use super::route_service::HttpRouteVoService;
 use super::spacegate_manage_service::SpacegateManageService;
 
 pub struct PluginVoService;
@@ -44,8 +45,54 @@ impl PluginVoService {
     }
 
     pub(crate) async fn update(client_name: &str, update: SgFilterVo) -> TardisResult<SgFilterVo> {
-        //todo update sgfilter or httproute\gateway
-        Self::update_vo(client_name, update).await
+        let id = update.id.clone();
+        let result = Self::update_vo(client_name, update).await?;
+
+        // update parent gateway
+        join_all(
+            GatewayVoService::list(
+                client_name,
+                GatewayQueryDto {
+                    names: None,
+                    port: None,
+                    hostname: None,
+                    tls_ids: None,
+                    filter_ids: Some(vec![id.clone()]),
+                }
+                .to_instance()?,
+            )
+            .await?
+            .iter()
+            .map(|gateway| GatewayVoService::update(client_name, gateway.clone()))
+            .collect::<Vec<_>>(),
+        )
+        .await
+        .into_iter()
+        .collect::<TardisResult<Vec<_>>>()?;
+
+        // update parent httproute
+        join_all(
+            HttpRouteVoService::list(
+                client_name,
+                HttpRouteQueryDto {
+                    names: None,
+                    gateway_name: None,
+                    hostnames: None,
+                    backend_ids: None,
+                    filter_ids: Some(vec![id]),
+                }
+                .to_instance()?,
+            )
+            .await?
+            .iter()
+            .map(|route| HttpRouteVoService::update(client_name, route.clone()))
+            .collect::<Vec<_>>(),
+        )
+        .await
+        .into_iter()
+        .collect::<TardisResult<Vec<_>>>()?;
+
+        Ok(result)
     }
 
     pub(crate) async fn delete(client_name: &str, id: &str) -> TardisResult<()> {

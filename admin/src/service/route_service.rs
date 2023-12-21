@@ -32,12 +32,18 @@ impl HttpRouteVoService {
             } else {
                 map.into_values()
                     .filter(|r| {
+                        let mut r_all_filters = r.filters.clone();
+                        r_all_filters.append(&mut r.rules.iter().flat_map(|rule| rule.filters.clone()).collect::<Vec<_>>());
+
                         query.names.as_ref().map_or(true, |names| names.iter().any(|n| n.is_match(&r.name)))
                             && query.gateway_name.as_ref().map_or(true, |gateway_name| gateway_name.is_match(&r.gateway_name))
                             && query.hostnames.as_ref().map_or(true, |hostnames| {
                                 r.hostnames.as_ref().map_or(false, |r_hostnames| hostnames.iter().any(|hn| r_hostnames.iter().any(|rn| hn.is_match(rn))))
                             })
-                            && query.filter_ids.as_ref().map_or(true, |filter_ids| r.filters.iter().any(|f_id| filter_ids.iter().any(|rf| rf.is_match(f_id))))
+                            && query.backend_ids.as_ref().map_or(true, |backend_ids| {
+                                r.rules.iter().flat_map(|rules| rules.backends.clone()).any(|backends| backend_ids.iter().any(|rb| rb.is_match(&backends)))
+                            })
+                            && query.filter_ids.as_ref().map_or(true, |filter_ids| r_all_filters.iter().any(|f_id| filter_ids.iter().any(|rf| rf.is_match(f_id))))
                     })
                     .collect::<Vec<SgHttpRouteVo>>()
             },

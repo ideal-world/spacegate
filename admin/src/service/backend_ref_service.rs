@@ -1,9 +1,12 @@
-use crate::model::query_dto::BackendRefQueryInst;
+use crate::model::query_dto::{BackendRefQueryInst, HttpRouteQueryDto, ToInstance as _};
 use crate::model::vo::backend_vo::SgBackendRefVo;
 
 use crate::service::base_service::VoBaseService;
 
 use tardis::basic::result::TardisResult;
+use tardis::futures_util::future::join_all;
+
+use super::route_service::HttpRouteVoService;
 
 pub struct BackendRefVoService;
 
@@ -38,8 +41,29 @@ impl BackendRefVoService {
         Self::add_vo(client_name, add).await
     }
     pub(crate) async fn update(client_name: &str, update: SgBackendRefVo) -> TardisResult<SgBackendRefVo> {
-        //todo update route
-        Self::update_vo(client_name, update).await
+        let id = update.id.clone();
+        let result = Self::update_vo(client_name, update).await?;
+        join_all(
+            HttpRouteVoService::list(
+                client_name,
+                HttpRouteQueryDto {
+                    names: None,
+                    gateway_name: None,
+                    hostnames: None,
+                    backend_ids: Some(vec![id]),
+                    filter_ids: None,
+                }
+                .to_instance()?,
+            )
+            .await?
+            .iter()
+            .map(|route| HttpRouteVoService::update(client_name, route.clone()))
+            .collect::<Vec<_>>(),
+        )
+        .await
+        .into_iter()
+        .collect::<TardisResult<Vec<_>>>()?;
+        Ok(result)
     }
 
     pub(crate) async fn delete(client_name: &str, id: &str) -> TardisResult<()> {
