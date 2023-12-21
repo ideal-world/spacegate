@@ -39,6 +39,7 @@ pub struct GatewayQueryDto {
     pub port: Option<u16>,
     pub hostname: Option<String>,
     pub tls_ids: Option<Vec<String>>,
+    pub filter_ids: Option<Vec<String>>,
 }
 
 impl ToInstance<GatewayQueryInst> for GatewayQueryDto {
@@ -48,6 +49,7 @@ impl ToInstance<GatewayQueryInst> for GatewayQueryDto {
             port: self.port,
             hostname: self.hostname.map(fuzzy_regex).transpose()?,
             tls_ids: self.tls_ids.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
+            filter_ids: self.filter_ids.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
         })
     }
 }
@@ -57,6 +59,7 @@ pub struct GatewayQueryInst {
     pub port: Option<u16>,
     pub hostname: Option<Regex>,
     pub tls_ids: Option<Vec<Regex>>,
+    pub filter_ids: Option<Vec<Regex>>,
 }
 impl Instance for GatewayQueryInst {}
 
@@ -120,6 +123,7 @@ pub struct HttpRouteQueryDto {
     pub names: Option<Vec<String>>,
     pub gateway_name: Option<String>,
     pub hostnames: Option<Vec<String>>,
+    pub backend_ids: Option<Vec<String>>,
     pub filter_ids: Option<Vec<String>>,
 }
 
@@ -129,6 +133,7 @@ impl ToInstance<HttpRouteQueryInst> for HttpRouteQueryDto {
             names: self.names.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
             gateway_name: self.gateway_name.map(fuzzy_regex).transpose()?,
             hostnames: self.hostnames.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
+            backend_ids: self.backend_ids.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
             filter_ids: self.filter_ids.map(|n| n.into_iter().map(fuzzy_regex).collect::<TardisResult<Vec<_>>>()).transpose()?,
         })
     }
@@ -138,6 +143,7 @@ pub struct HttpRouteQueryInst {
     pub names: Option<Vec<Regex>>,
     pub gateway_name: Option<Regex>,
     pub hostnames: Option<Vec<Regex>>,
+    pub backend_ids: Option<Vec<Regex>>,
     pub filter_ids: Option<Vec<Regex>>,
 }
 

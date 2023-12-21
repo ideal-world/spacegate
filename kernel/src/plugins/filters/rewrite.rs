@@ -2,8 +2,6 @@ use crate::def_filter;
 use crate::helpers::url_helper::UrlToUri;
 use async_trait::async_trait;
 use kernel_common::gatewayapi_support_filter::{SgFilterRewrite, SG_FILTER_REWRITE_CODE};
-use kernel_common::inner_model::plugin_filter::SgHttpPathModifier;
-use serde::{Deserialize, Serialize};
 use tardis::basic::{error::TardisError, result::TardisResult};
 use tardis::url::Url;
 
@@ -57,8 +55,8 @@ mod tests {
     use super::*;
     use http::{HeaderMap, Method, StatusCode, Uri, Version};
     use hyper::Body;
-    use kernel_common::inner_model::http_route::SgHttpPathMatchType;
     use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
+    use kernel_common::inner_model::{http_route::SgHttpPathMatchType, plugin_filter::SgHttpPathModifier};
     use tardis::tokio;
 
     #[tokio::test]

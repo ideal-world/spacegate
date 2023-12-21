@@ -26,7 +26,7 @@ impl SgHttpRoute {
             .map(|r_vec| {
                 r_vec
                     .iter()
-                    .map(|r| {
+                    .flat_map(|r| {
                         let mut route_filters_vec = r
                             .filters
                             .clone()
@@ -47,10 +47,10 @@ impl SgHttpRoute {
                         let mut b_singe_f_vec = r
                             .backends
                             .iter()
-                            .map(|b_vec| {
+                            .flat_map(|b_vec| {
                                 b_vec
                                     .iter()
-                                    .map(|b| {
+                                    .flat_map(|b| {
                                         b.filters
                                             .as_ref()
                                             .map(|b_f_vec| {
@@ -67,16 +67,13 @@ impl SgHttpRoute {
                                             })
                                             .unwrap_or_default()
                                     })
-                                    .flatten()
                                     .collect::<Vec<_>>()
                             })
-                            .flatten()
                             .collect::<Vec<_>>();
 
                         route_filters_vec.append(&mut b_singe_f_vec);
                         route_filters_vec
                     })
-                    .flatten()
                     .collect::<Vec<SgSingeFilter>>()
             })
             .unwrap_or_default();
@@ -142,7 +139,7 @@ impl SgHttpRoute {
             ),
             hostnames: httproute.spec.hostnames.clone(),
             filters: SgRouteFilter::from_crd_filters(client_name, kind, &httproute.metadata.name, &httproute.metadata.namespace).await?,
-            rules: httproute.spec.rules.map(|r_vec| r_vec.into_iter().map(|r| SgHttpRouteRule::from_kube_httproute(r)).collect::<TardisResult<Vec<_>>>()).transpose()?,
+            rules: httproute.spec.rules.map(|r_vec| r_vec.into_iter().map(SgHttpRouteRule::from_kube_httproute).collect::<TardisResult<Vec<_>>>()).transpose()?,
             priority,
         })
     }
@@ -153,7 +150,7 @@ impl SgHttpRouteRule {
     /// `SgHttpRouteRule` to `HttpRouteRule`, include `HttpRouteFilter` and  excluding `SgFilter`.
     pub(crate) fn to_kube_httproute(self) -> HttpRouteRule {
         HttpRouteRule {
-            matches: self.matches.map(|m_vec| m_vec.into_iter().map(|m| m.to_kube_httproute()).flatten().collect::<Vec<_>>()),
+            matches: self.matches.map(|m_vec| m_vec.into_iter().flat_map(|m| m.to_kube_httproute()).collect::<Vec<_>>()),
             filters: self.filters.map(|f_vec| f_vec.into_iter().filter_map(|f| f.to_http_route_filter()).collect::<Vec<_>>()),
             backend_refs: self.backends.map(|b_vec| b_vec.into_iter().map(|b| b.to_kube_httproute()).collect::<Vec<_>>()),
             timeout_ms: self.timeout_ms,
@@ -162,8 +159,8 @@ impl SgHttpRouteRule {
 
     pub(crate) fn from_kube_httproute(httproute_rule: HttpRouteRule) -> TardisResult<SgHttpRouteRule> {
         Ok(SgHttpRouteRule {
-            matches: httproute_rule.matches.map(|m_vec| m_vec.into_iter().map(|m| SgHttpRouteMatch::from_kube_httproute(m)).collect::<Vec<_>>()),
-            filters: httproute_rule.filters.map(|f_vec| f_vec.into_iter().map(|f| SgRouteFilter::from_http_route_filter(f)).collect::<TardisResult<Vec<_>>>()).transpose()?,
+            matches: httproute_rule.matches.map(|m_vec| m_vec.into_iter().map(SgHttpRouteMatch::from_kube_httproute).collect::<Vec<_>>()),
+            filters: httproute_rule.filters.map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<TardisResult<Vec<_>>>()).transpose()?,
             backends: httproute_rule
                 .backend_refs
                 .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<TardisResult<Vec<_>>>())
@@ -197,9 +194,9 @@ impl SgHttpRouteMatch {
     pub(crate) fn from_kube_httproute(route_match: HttpRouteMatch) -> SgHttpRouteMatch {
         SgHttpRouteMatch {
             method: route_match.method.map(|m_vec| vec![m_vec]),
-            path: route_match.path.map(|p| SgHttpPathMatch::from_kube_httproute(p)),
-            header: route_match.headers.map(|h_vec| h_vec.into_iter().map(|h| SgHttpHeaderMatch::from_kube_httproute(h)).collect::<Vec<_>>()),
-            query: route_match.query_params.map(|q_vec| q_vec.into_iter().map(|q| SgHttpQueryMatch::from_kube_httproute(q)).collect::<Vec<_>>()),
+            path: route_match.path.map(SgHttpPathMatch::from_kube_httproute),
+            header: route_match.headers.map(|h_vec| h_vec.into_iter().map(SgHttpHeaderMatch::from_kube_httproute).collect::<Vec<_>>()),
+            query: route_match.query_params.map(|q_vec| q_vec.into_iter().map(SgHttpQueryMatch::from_kube_httproute).collect::<Vec<_>>()),
         }
     }
 }
@@ -332,7 +329,7 @@ impl SgBackendRef {
                 } else {
                     None
                 };
-                return Ok(SgBackendRef {
+                Ok(SgBackendRef {
                     name_or_host: backend.inner.name,
                     namespace: backend.inner.namespace,
                     port: backend.inner.port.unwrap_or(80),
@@ -341,9 +338,9 @@ impl SgBackendRef {
                     weight: backend.weight,
                     filters: http_backend
                         .filters
-                        .map(|f_vec| f_vec.into_iter().map(|f| SgRouteFilter::from_http_route_filter(f)).collect::<TardisResult<Vec<SgRouteFilter>>>())
+                        .map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<TardisResult<Vec<SgRouteFilter>>>())
                         .transpose()?,
-                });
+                })
             })
             .transpose()
     }

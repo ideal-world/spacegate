@@ -2,12 +2,13 @@ use crate::constants;
 use crate::model::vo::Vo;
 use kernel_common::inner_model::gateway::SgProtocol;
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 use tardis::web::poem_openapi;
 
 use super::plugin_vo::SgFilterVo;
 
 /// BackendRef defines how a HTTPRoute should forward an HTTP request.
-#[derive(Default, Debug, Eq, Hash, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[derive(Default, Debug, Eq, Serialize, Deserialize, Clone, poem_openapi::Object)]
 pub struct SgBackendRefVo {
     /// unique by id
     pub id: String,
@@ -38,6 +39,20 @@ pub struct SgBackendRefVo {
 impl PartialEq for SgBackendRefVo {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+impl Hash for SgBackendRefVo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.name_or_host.hash(state);
+        self.namespace.hash(state);
+        self.port.hash(state);
+        self.timeout_ms.hash(state);
+        self.protocol.hash(state);
+        self.weight.hash(state);
+        self.filters.hash(state);
+        self.filter_vos.hash(state);
     }
 }
 

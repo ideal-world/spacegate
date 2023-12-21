@@ -109,7 +109,7 @@ impl SpacegateManageService {
         let old_vo = Self::get_by_id(DEFAULT_CLIENT_NAME, name).await?;
         match old_vo.type_ {
             InstConfigType::K8sClusterConfig => {
-                k8s_client::remove(&name).await?;
+                k8s_client::remove(name).await?;
             }
             InstConfigType::RedisConfig => {
                 cache_client::remove(name).await?;

@@ -100,7 +100,7 @@ pub async fn init_config_by_single_client(client_name: &str, clinet_type: InstCo
                 .filter(|gateway_obj| gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME)
                 .collect::<Vec<Gateway>>();
             let gateway_models =
-                join_all(gateway_objs.into_iter().map(|gateway_obj| async move { return SgGateway::from_kube_gateway(client_name, gateway_obj).await }).collect::<Vec<_>>())
+                join_all(gateway_objs.into_iter().map(|gateway_obj| async move { SgGateway::from_kube_gateway(client_name, gateway_obj).await }).collect::<Vec<_>>())
                     .await
                     .into_iter()
                     .collect::<TardisResult<Vec<_>>>()?;
@@ -116,7 +116,7 @@ pub async fn init_config_by_single_client(client_name: &str, clinet_type: InstCo
             (gateway_models, http_route_models)
         }
         InstConfigType::RedisConfig => {
-            let redis_client = cache_client::get(&client_name).await?;
+            let redis_client = cache_client::get(client_name).await?;
 
             let gateway_configs = redis_client.hgetall(cache_client::CONF_GATEWAY_KEY).await?;
             if gateway_configs.is_empty() {

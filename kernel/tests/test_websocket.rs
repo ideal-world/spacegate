@@ -15,7 +15,7 @@ use kernel_common::inner_model::plugin_filter;
 use kernel_common::inner_model::plugin_filter::SgRouteFilter;
 use lazy_static::lazy_static;
 use serde_json::json;
-use spacegate_kernel::plugins::filters;
+
 use tardis::config::config_dto::WebServerCommonConfig;
 use tardis::web::web_server::WebServerModule;
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;

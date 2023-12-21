@@ -23,11 +23,11 @@ use crate::helpers::k8s_helper;
 use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use kernel_common::constants::k8s_constants::{DEFAULT_NAMESPACE, GATEWAY_CLASS_NAME};
 use kernel_common::constants::{BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
-use kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind;
+
 use kernel_common::helper;
 use kernel_common::helper::k8s_helper::{get_k8s_obj_unique, WarpKubeResult};
 use kernel_common::inner_model::gateway::{SgTls, SgTlsMode};
-use kernel_common::inner_model::plugin_filter::SgHttpPathModifierType;
+
 use kernel_common::inner_model::{
     gateway::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig},
     http_route::{
@@ -176,7 +176,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             kernel_common::helper::k8s_helper::get_k8s_obj_unique(&http_route_obj)
         );
 
-        overload_http_route(gateway_obj, (&http_route_apis.0, &http_route_apis.1)).await;
+        overload_http_route(gateway_obj, ((http_route_apis.0), (http_route_apis.1))).await;
     }
 
     let http_spaceroute_api_clone = http_spaceroute_api.clone();
@@ -680,7 +680,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
             },
             http_route_obj.spec.inner.parent_refs.as_ref().ok_or_else(|| TardisError::format_error("[SG.Config] HttpRoute [spec.parentRefs] is required", ""))?[0].name
         );
-        let priority=http_route_obj.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0);
+        let priority = http_route_obj.annotations().get(kernel_common::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i64>().ok()).unwrap_or(0);
         let http_route_config = SgHttpRoute {
             name: get_k8s_obj_unique(&http_route_obj),
             gateway_name: rel_gateway_name,
@@ -952,78 +952,6 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                 .collect_vec()
         })
         .map(|filters| filters.into_iter().map(|filter| filter.expect("Unreachable code")).collect_vec())
-}
-
-//todo move to common
-fn convert_to_kube_filters(filters: Option<Vec<SgRouteFilter>>) -> TardisResult<Option<Vec<HttpRouteFilter>>> {
-    filters
-        .map(|filters| {
-            filters
-                .into_iter()
-                .map(|filter| {
-                    let http_route_filter = match filter.code.as_str() {
-                        crate::plugins::filters::header_modifier::CODE => {
-                            let header_modifier = TardisFuns::json
-                                .json_to_obj::<kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier>(filter.spec)
-                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
-                            match header_modifier.kind {
-                                SgFilterHeaderModifierKind::Request => HttpRouteFilter::RequestHeaderModifier {
-                                    request_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
-                                        set: header_modifier.sets.map(|set| set.into_iter().map(|(name, value)| k8s_gateway_api::HttpHeader { name, value }).collect::<Vec<_>>()),
-                                        add: None,
-                                        remove: header_modifier.remove,
-                                    },
-                                },
-                                SgFilterHeaderModifierKind::Response => HttpRouteFilter::ResponseHeaderModifier {
-                                    response_header_modifier: k8s_gateway_api::HttpRequestHeaderFilter {
-                                        set: header_modifier.sets.map(|set| set.into_iter().map(|(name, value)| k8s_gateway_api::HttpHeader { name, value }).collect::<Vec<_>>()),
-                                        add: None,
-                                        remove: header_modifier.remove,
-                                    },
-                                },
-                            }
-                        }
-                        crate::plugins::filters::rewrite::CODE => {
-                            let rewrite = TardisFuns::json
-                                .json_to_obj::<kernel_common::gatewayapi_support_filter::SgFilterRewrite>(filter.spec)
-                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
-                            HttpRouteFilter::URLRewrite {
-                                url_rewrite: k8s_gateway_api::HttpUrlRewriteFilter {
-                                    hostname: rewrite.hostname,
-                                    path: rewrite.path.map(|p| match p.kind {
-                                        SgHttpPathModifierType::ReplaceFullPath => k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path: p.value },
-                                        SgHttpPathModifierType::ReplacePrefixMatch => k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: p.value },
-                                    }),
-                                },
-                            }
-                        }
-                        crate::plugins::filters::redirect::CODE => {
-                            let redirect = TardisFuns::json
-                                .json_to_obj::<kernel_common::gatewayapi_support_filter::SgFilterRedirect>(filter.spec)
-                                .map_err(|error| TardisError::bad_request(&format!("[SG.Config] HttpRouteFilter [code={}] config parsing error: {error} ", filter.code), ""))?;
-                            HttpRouteFilter::RequestRedirect {
-                                request_redirect: k8s_gateway_api::HttpRequestRedirectFilter {
-                                    scheme: redirect.scheme,
-                                    hostname: redirect.hostname,
-                                    path: redirect.path.map(|p| match p.kind {
-                                        SgHttpPathModifierType::ReplaceFullPath => k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path: p.value },
-                                        SgHttpPathModifierType::ReplacePrefixMatch => k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: p.value },
-                                    }),
-                                    port: redirect.port,
-                                    status_code: redirect.status_code,
-                                },
-                            }
-                        }
-                        _ => return Ok(None),
-                    };
-                    Ok(Some(http_route_filter))
-                })
-                .map(|f| f.transpose())
-                .filter(|filter| filter.is_some())
-                .map(|f| f.unwrap())
-                .collect::<TardisResult<Vec<HttpRouteFilter>>>()
-        })
-        .transpose()
 }
 
 async fn get_client() -> TardisResult<Client> {

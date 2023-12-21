@@ -94,12 +94,10 @@ where
             } else {
                 log::debug!("[SG.admin] add_or_update {}:{} exists , will update", T::get_vo_type(), id);
             }
+        } else if update_only {
+            return Err(TardisError::bad_request(&format!("[SG.admin] {}:{} not exists", T::get_vo_type(), id), ""));
         } else {
-            if update_only {
-                return Err(TardisError::bad_request(&format!("[SG.admin] {}:{} not exists", T::get_vo_type(), id), ""));
-            } else {
-                log::debug!("[SG.admin] add_or_update {}:{} not exists , will add", T::get_vo_type(), id);
-            }
+            log::debug!("[SG.admin] add_or_update {}:{} not exists , will add", T::get_vo_type(), id);
         }
         let config_str = serde_json::to_string(&config).map_err(|e| TardisError::bad_request(&format!("Serialization to json failed:{e}"), ""))?;
         if SpacegateManageService::client_is_kube(client_name).await? {

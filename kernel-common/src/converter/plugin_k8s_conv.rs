@@ -38,6 +38,45 @@ impl SgRouteFilter {
         }
     }
 
+    pub(crate) async fn from_crd_filters(client_name: &str, kind: &str, name: &Option<String>, namespace: &Option<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
+        let name = name.clone().ok_or_else(|| TardisError::format_error(&format!("[SG.Common] {kind} [metadata.name] is required"), ""))?;
+        let namespace = namespace.clone().unwrap_or("default".to_string());
+
+        let filter_api: Api<SgFilter> = Api::all((*k8s_client::get(client_name).await?).clone());
+        let filter_objs: Vec<SgRouteFilter> = filter_api
+            .list(&ListParams::default())
+            .await
+            .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
+            .into_iter()
+            .filter(|filter_obj| {
+                filter_obj.spec.target_refs.iter().any(|target_ref| {
+                    target_ref.kind.eq_ignore_ascii_case(kind)
+                        && target_ref.name.eq_ignore_ascii_case(&name)
+                        && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
+                })
+            })
+            .flat_map(|filter_obj| {
+                filter_obj.spec.filters.into_iter().map(|filter| SgRouteFilter {
+                    code: filter.code,
+                    name: filter.name,
+                    spec: filter.config,
+                })
+            })
+            .collect();
+
+        if !filter_objs.is_empty() {
+            let mut filter_vec = String::new();
+            filter_objs.clone().into_iter().for_each(|filter| filter_vec.push_str(&format!("Filter{{code: {},name:{}}},", filter.code, filter.name.unwrap_or("None".to_string()))));
+            log::trace!("[SG.Common] {namespace}.{kind}.{name} filter found: {}", filter_vec.trim_end_matches(','));
+        }
+
+        if filter_objs.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(filter_objs))
+        }
+    }
+
     /// # to_http_route_filter
     /// ref [SgRouteFilter::to_singe_filter]
     pub fn to_http_route_filter(self) -> Option<HttpRouteFilter> {
@@ -186,45 +225,6 @@ impl SgRouteFilter {
             }
         };
         Ok(sg_filter)
-    }
-
-    pub(crate) async fn from_crd_filters(client_name: &str, kind: &str, name: &Option<String>, namespace: &Option<String>) -> TardisResult<Option<Vec<SgRouteFilter>>> {
-        let name = name.clone().ok_or_else(|| TardisError::format_error(&format!("[SG.Common] {kind} [metadata.name] is required"), ""))?;
-        let namespace = namespace.clone().unwrap_or("default".to_string());
-
-        let filter_api: Api<SgFilter> = Api::all((*k8s_client::get(client_name).await?).clone());
-        let filter_objs: Vec<SgRouteFilter> = filter_api
-            .list(&ListParams::default())
-            .await
-            .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?
-            .into_iter()
-            .filter(|filter_obj| {
-                filter_obj.spec.target_refs.iter().any(|target_ref| {
-                    target_ref.kind.eq_ignore_ascii_case(kind)
-                        && target_ref.name.eq_ignore_ascii_case(&name)
-                        && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
-                })
-            })
-            .flat_map(|filter_obj| {
-                filter_obj.spec.filters.into_iter().map(|filter| SgRouteFilter {
-                    code: filter.code,
-                    name: filter.name,
-                    spec: filter.config,
-                })
-            })
-            .collect();
-
-        if !filter_objs.is_empty() {
-            let mut filter_vec = String::new();
-            filter_objs.clone().into_iter().for_each(|filter| filter_vec.push_str(&format!("Filter{{code: {},name:{}}},", filter.code, filter.name.unwrap_or("None".to_string()))));
-            log::trace!("[SG.Common] {namespace}.{kind}.{name} filter found: {}", filter_vec.trim_end_matches(','));
-        }
-
-        if filter_objs.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(filter_objs))
-        }
     }
 }
 
