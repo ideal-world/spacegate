@@ -29,6 +29,7 @@ impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
                     id: format!("{}{}", &model.name, &f.code),
                     code: f.code,
                     name: f.name,
+                    enable: f.enable,
                     spec: f.spec,
                 })
                 .collect::<Vec<_>>()

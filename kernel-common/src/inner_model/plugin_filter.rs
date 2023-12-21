@@ -12,6 +12,8 @@ use serde_json::Value;
 pub struct SgRouteFilter {
     /// Filter code, Used to match the corresponding filter.
     pub code: String,
+    /// Filter enable flag.
+    pub enable: bool,
     /// Filter name. If the name of the same filter exists at different levels of configuration,
     /// only the child nodes take effect（Backend Level > Rule Level > Routing Level > Global Level）
     pub name: Option<String>,

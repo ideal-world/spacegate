@@ -15,6 +15,7 @@ pub trait ToVo<T: Vo> {
 pub struct SgFilterAddVo {
     pub code: String,
     pub name: Option<String>,
+    pub enable: Option<bool>,
     pub spec: Value,
 }
 
@@ -25,6 +26,7 @@ impl ToVo<SgFilterVo> for SgFilterAddVo {
             code: self.code,
             name: self.name,
             spec: self.spec,
+            enable: self.enable.unwrap_or(true),
         })
     }
 }

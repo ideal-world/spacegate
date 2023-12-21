@@ -47,6 +47,7 @@ impl VoConv<SgRouteFilter, SgFilterVo> for SgFilterVo {
         Ok(SgRouteFilter {
             code: self.code,
             name: self.name,
+            enable: self.enable,
             spec: self.spec,
         })
     }
@@ -56,6 +57,7 @@ impl VoConv<SgRouteFilter, SgFilterVo> for SgFilterVo {
             id: format!("{}-{}", &model.code, &model.name.clone().unwrap_or_default(),),
             code: model.code,
             name: model.name,
+            enable: model.enable,
             spec: model.spec,
         })
     }

@@ -829,6 +829,7 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
                 code: filter.code,
                 name: filter.name,
                 spec: filter.config,
+                enable: filter.enable,
             })
         })
         .collect();
@@ -873,6 +874,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: request_header_modifier.remove,
                                 })?,
+                                enable: true,
                             }
                         }
                         k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
@@ -890,6 +892,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                             SgRouteFilter {
                                 code: crate::plugins::filters::header_modifier::CODE.to_string(),
                                 name: None,
+                                enable: true,
                                 spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterHeaderModifier {
                                     kind: kernel_common::gatewayapi_support_filter::SgFilterHeaderModifierKind::Response,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
@@ -900,6 +903,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                         k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
                             code: crate::plugins::filters::redirect::CODE.to_string(),
                             name: None,
+                            enable: true,
                             spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterRedirect {
                                 scheme: request_redirect.scheme,
                                 hostname: request_redirect.hostname,
@@ -920,6 +924,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                         k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
                             code: crate::plugins::filters::rewrite::CODE.to_string(),
                             name: None,
+                            enable: true,
                             spec: TardisFuns::json.obj_to_json(&kernel_common::gatewayapi_support_filter::SgFilterRewrite {
                                 hostname: url_rewrite.hostname,
                                 path: url_rewrite.path.map(|path| match path {

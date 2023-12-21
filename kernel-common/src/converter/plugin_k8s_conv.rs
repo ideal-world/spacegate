@@ -30,7 +30,7 @@ impl SgRouteFilter {
                 filter: K8sSgFilterSpecFilter {
                     code: self.code,
                     name: None,
-                    enable: true,
+                    enable: self.enable,
                     config: self.spec,
                 },
                 target_ref: target,
@@ -60,6 +60,7 @@ impl SgRouteFilter {
                     code: filter.code,
                     name: filter.name,
                     spec: filter.config,
+                    enable: filter.enable,
                 })
             })
             .collect();
@@ -150,6 +151,7 @@ impl SgRouteFilter {
                         sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                         remove: request_header_modifier.remove,
                     })?,
+                    enable: true,
                 }
             }
             k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
@@ -172,11 +174,13 @@ impl SgRouteFilter {
                         sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                         remove: response_header_modifier.remove,
                     })?,
+                    enable: true,
                 }
             }
             k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
                 code: SG_FILTER_REDIRECT_CODE.to_string(),
                 name: None,
+                enable: true,
                 spec: TardisFuns::json.obj_to_json(&SgFilterRedirect {
                     scheme: request_redirect.scheme,
                     hostname: request_redirect.hostname,
@@ -197,6 +201,7 @@ impl SgRouteFilter {
             k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
                 code: SG_FILTER_REWRITE_CODE.to_string(),
                 name: None,
+                enable: true,
                 spec: TardisFuns::json.obj_to_json(&SgFilterRewrite {
                     hostname: url_rewrite.hostname,
                     path: url_rewrite.path.map(|path| match path {

@@ -56,6 +56,7 @@ async fn test_compression() -> TardisResult<()> {
                 code: compression::CODE.to_string(),
                 name: None,
                 spec: json!({}),
+                enable: true,
             }]),
             ..Default::default()
         }],
