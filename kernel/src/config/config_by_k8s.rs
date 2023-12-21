@@ -904,7 +904,7 @@ async fn get_filters_from_cdr(kind: &str, name: &str, namespace: &Option<String>
             })
         })
         .flat_map(|filter_obj| {
-            filter_obj.spec.filters.into_iter().map(|filter| SgRouteFilter {
+            filter_obj.spec.filters.into_iter().filter(|filter| filter.enable).map(|filter| SgRouteFilter {
                 code: filter.code,
                 name: filter.name,
                 spec: filter.config,
