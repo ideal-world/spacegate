@@ -71,13 +71,13 @@ jobs:
         run: cp ./target/release/spacegate-admin admin/res/ && mv admin/config/conf-default-kube.toml admin/res/conf-default.toml
 
       - name: Download front artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.FRONTEND_ARTIFACT_NAME }}
           repository: ideal-world/spacegate-admin-fe
           path: admin/res/
 
-      - name: Download front artifact
+      - name: Extract front artifact
         run: tar -xzvf admin/res/${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
 
       - name: Build and push Docker image to dockerhub
