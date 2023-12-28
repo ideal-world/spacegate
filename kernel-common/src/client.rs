@@ -1,11 +1,11 @@
 #[cfg(feature = "cache")]
 pub mod cache_client {
-    use k8s_openapi::chrono::Utc;
     use std::collections::HashMap;
     use std::sync::{Arc, OnceLock};
     use tardis::basic::error::TardisError;
     use tardis::basic::result::TardisResult;
     use tardis::cache::cache_client::TardisCacheClient;
+    use tardis::chrono::Utc;
     use tardis::config::config_dto::CacheModuleConfig;
     use tardis::log;
     use tardis::tokio::sync::RwLock;

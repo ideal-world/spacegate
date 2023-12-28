@@ -23,16 +23,13 @@
 use functions::{http_route, server};
 pub use http;
 pub use hyper;
-use kernel_common::{
-    client::k8s_client,
-    inner_model::{gateway::SgGateway, http_route::SgHttpRoute},
-};
+#[cfg(feature = "k8s")]
+use kernel_common::client::k8s_client;
+use kernel_common::inner_model::{gateway::SgGateway, http_route::SgHttpRoute};
 use plugins::filters::{self, SgPluginFilterDef};
-use tardis::{
-    basic::{error::TardisError, result::TardisResult},
-    log,
-    tokio::signal,
-};
+#[cfg(feature = "k8s")]
+use tardis::basic::error::TardisError;
+use tardis::{basic::result::TardisResult, log, tokio::signal};
 
 pub mod config;
 pub mod constants;
@@ -42,6 +39,7 @@ pub mod instance;
 pub mod plugins;
 
 #[inline]
+#[cfg(feature = "k8s")]
 pub async fn startup_k8s(namespace: Option<String>) -> TardisResult<()> {
     k8s_client::inst(
         k8s_client::DEFAULT_CLIENT_NAME,

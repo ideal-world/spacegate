@@ -14,7 +14,14 @@ rust-version.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-k8s = ["kube", "k8s-openapi", "schemars", "k8s-openapi/schemars", "k8s-gateway-api", "lazy_static"]
+k8s = [
+  "kube",
+  "k8s-openapi",
+  "schemars",
+  "k8s-openapi/schemars",
+  "k8s-gateway-api",
+  "lazy_static",
+]
 admin-support = ["tardis/web-server"]
 cache = ["tardis/cache"]
 

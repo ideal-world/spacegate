@@ -35,7 +35,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             &format!(
                 r#"{{
             "name":"test_gw",
-            "listeners":[{{"port":8888,"protocol":"http"}}],
+            "listeners":[{{"name":"listener-1","port":8888,"protocol":"http"}}],
             "parameters":{{"redis_url":"{cache_url}"}}
         }}"#
             ),
@@ -45,7 +45,9 @@ async fn test_config_by_redis() -> TardisResult<()> {
         .lpush(
             "sg:conf:route:http:test_gw",
             r#"{
+            "name":"test_http",
             "gateway_name":"test_gw",
+            "priority":0,
             "rules":[{
                 "backends":[{
                     "name_or_host":"postman-echo.com",
@@ -74,7 +76,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             &format!(
                 r#"{{
             "name":"test_gw",
-            "listeners":[{{"port":8889,"protocol":"http"}}],
+            "listeners":[{{"name":"listener-1","port":8889,"protocol":"http"}}],
             "parameters":{{"redis_url":"{cache_url}"}}
         }}"#
             ),
@@ -94,7 +96,9 @@ async fn test_config_by_redis() -> TardisResult<()> {
         .lpush(
             "sg:conf:route:http:test_gw",
             r#"{
+            "name":"test_http",
             "gateway_name":"test_gw",
+            "priority":0,
             "rules":[{
                 "backends":[{
                     "name_or_host":"postman-echo.com",
