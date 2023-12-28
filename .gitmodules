@@ -1,3 +1,0 @@
-[submodule "admin/front"]
-	path = admin/front
-	url = https://github.com/ideal-world/spacegate-admin-fe

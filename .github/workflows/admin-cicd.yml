@@ -53,35 +53,9 @@ jobs:
           haskell: true
           large-packages: true
 
-  build-frontend:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          submodules: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: cd admin/front && npm install
-
-      - name: Build
-        run: cd admin/front && npm run build
-
-      - name: Archive front artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ env.FRONTEND_ARTIFACT_NAME }}
-          path: admin/front/dist
-
   push-docker:
     if: startsWith(github.ref, 'refs/tags/') != true
-    needs: [check, build-frontend]
+    needs: [check]
     runs-on: ubuntu-latest
     steps:
       - name: Cache rust
@@ -97,7 +71,11 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: ${{ env.FRONTEND_ARTIFACT_NAME }}
-          path: admin/res/dist
+          repository: ideal-world/spacegate-admin-fe
+          path: admin/res/
+
+      - name: Download front artifact
+        run: tar -xzvf admin/res/${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
@@ -112,7 +90,7 @@ jobs:
 
   release-docker:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [check, build-frontend]
+    needs: [check]
     runs-on: ubuntu-latest
     steps:
       - name: Cache rust
