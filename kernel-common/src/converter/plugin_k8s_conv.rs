@@ -81,7 +81,7 @@ impl SgRouteFilter {
     /// # to_http_route_filter
     /// ref [SgRouteFilter::to_singe_filter]
     pub fn to_http_route_filter(self) -> Option<HttpRouteFilter> {
-        if &self.code == SG_FILTER_HEADER_MODIFIER_CODE {
+        if self.code == SG_FILTER_HEADER_MODIFIER_CODE {
             if let Ok(header) = TardisFuns::json.json_to_obj::<SgFilterHeaderModifier>(self.spec) {
                 let header_filter = HttpRequestHeaderFilter {
                     set: header.sets.map(|header_map| header_map.into_iter().map(|(k, v)| HttpHeader { name: k, value: v }).collect()),
@@ -99,7 +99,7 @@ impl SgRouteFilter {
             } else {
                 None
             }
-        } else if &self.code == SG_FILTER_REDIRECT_CODE {
+        } else if self.code == SG_FILTER_REDIRECT_CODE {
             if let Ok(redirect) = TardisFuns::json.json_to_obj::<SgFilterRedirect>(self.spec) {
                 Some(HttpRouteFilter::RequestRedirect {
                     request_redirect: HttpRequestRedirectFilter {
@@ -113,7 +113,7 @@ impl SgRouteFilter {
             } else {
                 None
             }
-        } else if &self.code == SG_FILTER_REWRITE_CODE {
+        } else if self.code == SG_FILTER_REWRITE_CODE {
             if let Ok(rewrite) = TardisFuns::json.json_to_obj::<SgFilterRewrite>(self.spec) {
                 Some(HttpRouteFilter::URLRewrite {
                     url_rewrite: HttpUrlRewriteFilter {

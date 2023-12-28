@@ -23,7 +23,7 @@ impl SgGateway {
 
         let gateway = Gateway {
             metadata: ObjectMeta {
-                annotations: Some(self.parameters.to_kube_gateway()),
+                annotations: Some(self.parameters.into_kube_gateway()),
                 labels: None,
                 name: Some(raw_name),
                 owner_references: None,
@@ -144,7 +144,7 @@ impl SgGateway {
 }
 
 impl SgParameters {
-    pub(crate) fn to_kube_gateway(self) -> BTreeMap<String, String> {
+    pub(crate) fn into_kube_gateway(self) -> BTreeMap<String, String> {
         let mut ann = BTreeMap::new();
         if let Some(redis_url) = self.redis_url {
             ann.insert(crate::constants::k8s_constants::GATEWAY_ANNOTATION_REDIS_URL.to_string(), redis_url);

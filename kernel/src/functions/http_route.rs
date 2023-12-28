@@ -364,19 +364,18 @@ pub async fn process(gateway_name: Arc<String>, req_scheme: &str, (remote_addr, 
         }
     }
 
-    let ctx = process_req_filters_http(
-        gateway_name.to_string(),
+    let ctx = SgRoutePluginContext::new_http(
+        request.method().clone(),
+        request.uri().clone(),
+        request.version(),
+        request.headers().clone(),
+        request.into_body(),
         remote_addr,
-        request,
-        backend_filters,
-        rule_filters,
-        &matched_route_inst.filters,
-        &gateway_inst.filters,
-        matched_rule_inst,
-        matched_match_inst,
-        backend,
-    )
-    .await?;
+        gateway_name.to_string(),
+        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::cloned_from(m, matched_match_inst)),
+        backend.map(AvailableBackendInst::cloned_from),
+    );
+    let ctx = process_req_filters(ctx, backend_filters, rule_filters, &matched_route_inst.filters, &gateway_inst.filters).await?;
 
     let mut ctx = if ctx.get_action() == &SgRouteFilterRequestAction::Response {
         ctx
@@ -691,32 +690,6 @@ fn match_listeners_hostname_and_port(hostname: Option<&str>, port: u16, listener
     } else {
         true
     }
-}
-
-async fn process_req_filters_http(
-    gateway_name: String,
-    remote_addr: SocketAddr,
-    request: Request<Body>,
-    backend_filters: Option<&[(String, BoxSgPluginFilter)]>,
-    rule_filters: Option<&[(String, BoxSgPluginFilter)]>,
-    route_filters: &[(String, BoxSgPluginFilter)],
-    global_filters: &[(String, BoxSgPluginFilter)],
-    matched_rule_inst: Option<&SgHttpRouteRuleInst>,
-    matched_match_inst: Option<&SgHttpRouteMatchInst>,
-    matched_backend_inst: Option<&SgBackendInst>,
-) -> TardisResult<SgRoutePluginContext> {
-    let ctx = SgRoutePluginContext::new_http(
-        request.method().clone(),
-        request.uri().clone(),
-        request.version(),
-        request.headers().clone(),
-        request.into_body(),
-        remote_addr,
-        gateway_name,
-        matched_rule_inst.map(|m| ChosenHttpRouteRuleInst::cloned_from(m, matched_match_inst)),
-        matched_backend_inst.map(AvailableBackendInst::cloned_from),
-    );
-    process_req_filters(ctx, backend_filters, rule_filters, route_filters, global_filters).await
 }
 
 #[cfg(feature = "ws")]

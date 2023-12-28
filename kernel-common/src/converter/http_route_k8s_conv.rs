@@ -116,7 +116,7 @@ impl SgHttpRoute {
                     }]),
                 },
                 hostnames: self.hostnames,
-                rules: self.rules.map(|r_vec| r_vec.into_iter().map(|r| r.to_kube_httproute()).collect::<Vec<_>>()),
+                rules: self.rules.map(|r_vec| r_vec.into_iter().map(|r| r.into_kube_httproute()).collect::<Vec<_>>()),
             },
             status: None,
         };
@@ -148,11 +148,11 @@ impl SgHttpRoute {
 impl SgHttpRouteRule {
     /// # to_kube_httproute
     /// `SgHttpRouteRule` to `HttpRouteRule`, include `HttpRouteFilter` and  excluding `SgFilter`.
-    pub(crate) fn to_kube_httproute(self) -> HttpRouteRule {
+    pub(crate) fn into_kube_httproute(self) -> HttpRouteRule {
         HttpRouteRule {
-            matches: self.matches.map(|m_vec| m_vec.into_iter().flat_map(|m| m.to_kube_httproute()).collect::<Vec<_>>()),
+            matches: self.matches.map(|m_vec| m_vec.into_iter().flat_map(|m| m.into_kube_httproute()).collect::<Vec<_>>()),
             filters: self.filters.map(|f_vec| f_vec.into_iter().filter_map(|f| f.to_http_route_filter()).collect::<Vec<_>>()),
-            backend_refs: self.backends.map(|b_vec| b_vec.into_iter().map(|b| b.to_kube_httproute()).collect::<Vec<_>>()),
+            backend_refs: self.backends.map(|b_vec| b_vec.into_iter().map(|b| b.into_kube_httproute()).collect::<Vec<_>>()),
             timeout_ms: self.timeout_ms,
         }
     }
@@ -171,22 +171,22 @@ impl SgHttpRouteRule {
 }
 
 impl SgHttpRouteMatch {
-    pub(crate) fn to_kube_httproute(self) -> Vec<HttpRouteMatch> {
+    pub(crate) fn into_kube_httproute(self) -> Vec<HttpRouteMatch> {
         if let Some(method_vec) = self.method {
             method_vec
                 .into_iter()
                 .map(|m| HttpRouteMatch {
-                    path: self.path.clone().map(|p| p.to_kube_httproute()),
-                    headers: self.header.clone().map(|h_vec| h_vec.into_iter().map(|h| h.to_kube_httproute()).collect::<Vec<_>>()),
-                    query_params: self.query.clone().map(|q_vec| q_vec.into_iter().map(|q| q.to_kube_httproute()).collect::<Vec<_>>()),
+                    path: self.path.clone().map(|p| p.into_kube_httproute()),
+                    headers: self.header.clone().map(|h_vec| h_vec.into_iter().map(|h| h.into_kube_httproute()).collect::<Vec<_>>()),
+                    query_params: self.query.clone().map(|q_vec| q_vec.into_iter().map(|q| q.into_kube_httproute()).collect::<Vec<_>>()),
                     method: Some(m),
                 })
                 .collect::<Vec<_>>()
         } else {
             vec![HttpRouteMatch {
-                path: self.path.map(|p| p.to_kube_httproute()),
-                headers: self.header.map(|h_vec| h_vec.into_iter().map(|h| h.to_kube_httproute()).collect::<Vec<_>>()),
-                query_params: self.query.map(|q_vec| q_vec.into_iter().map(|q| q.to_kube_httproute()).collect::<Vec<_>>()),
+                path: self.path.map(|p| p.into_kube_httproute()),
+                headers: self.header.map(|h_vec| h_vec.into_iter().map(|h| h.into_kube_httproute()).collect::<Vec<_>>()),
+                query_params: self.query.map(|q_vec| q_vec.into_iter().map(|q| q.into_kube_httproute()).collect::<Vec<_>>()),
                 method: None,
             }]
         }
@@ -202,7 +202,7 @@ impl SgHttpRouteMatch {
 }
 
 impl SgHttpPathMatch {
-    pub(crate) fn to_kube_httproute(self) -> HttpPathMatch {
+    pub(crate) fn into_kube_httproute(self) -> HttpPathMatch {
         match self.kind {
             SgHttpPathMatchType::Exact => HttpPathMatch::Exact { value: self.value },
             SgHttpPathMatchType::Prefix => HttpPathMatch::PathPrefix { value: self.value },
@@ -228,7 +228,7 @@ impl SgHttpPathMatch {
 }
 
 impl SgHttpHeaderMatch {
-    pub(crate) fn to_kube_httproute(self) -> HttpHeaderMatch {
+    pub(crate) fn into_kube_httproute(self) -> HttpHeaderMatch {
         match self.kind {
             SgHttpHeaderMatchType::Exact => HttpHeaderMatch::Exact {
                 name: self.name,
@@ -257,7 +257,7 @@ impl SgHttpHeaderMatch {
 }
 
 impl SgHttpQueryMatch {
-    pub(crate) fn to_kube_httproute(self) -> HttpQueryParamMatch {
+    pub(crate) fn into_kube_httproute(self) -> HttpQueryParamMatch {
         match self.kind {
             SgHttpQueryMatchType::Exact => HttpQueryParamMatch::Exact {
                 name: self.name,
@@ -286,7 +286,7 @@ impl SgHttpQueryMatch {
 }
 
 impl SgBackendRef {
-    pub(crate) fn to_kube_httproute(self) -> HttpBackendRef {
+    pub(crate) fn into_kube_httproute(self) -> HttpBackendRef {
         let kind = if self.namespace.is_none() {
             match self.protocol {
                 Some(SgProtocol::Http) => Some(BANCKEND_KIND_EXTERNAL_HTTP.to_string()),
