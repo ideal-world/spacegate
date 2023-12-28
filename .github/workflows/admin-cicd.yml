@@ -65,14 +65,11 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Change directory
-        run: cd admin/front
-
       - name: Install dependencies
-        run: npm install
+        run: cd admin/front && npm install
 
       - name: Build
-        run: npm run build
+        run: cd admin/front && npm run build
 
       - name: Archive front artifacts
         uses: actions/upload-artifact@v3
