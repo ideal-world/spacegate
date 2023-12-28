@@ -82,6 +82,18 @@ jobs:
           repository: ideal-world/spacegate-admin-fe
           path: admin/res/
           run-id: ${{ env.FRONTEND_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # - name: Download front artifact
+      #   run: |
+      #     OTHER_REPO="ideal-world/spacegate-admin-fe"
+      #     WF_NAME="cicd.yml"
+      #     ARTIFACT_NAME=${{ env.FRONTEND_ARTIFACT_NAME }}
+      #     RUN_ID=`gh run --repo ${OTHER_REPO} list --workflow ${WF_NAME} --status success --json databaseId --jq .[0].databaseId`
+      #     gh run --repo ${OTHER_REPO} download ${RUN_ID} -n ${ARTIFACT_NAME}
+      #     mv ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz admin/res/
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract front artifact
         run: tar -xzvf admin/res/${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
