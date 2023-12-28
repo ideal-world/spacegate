@@ -35,6 +35,7 @@ rules:
   - list
   - get
   - watch
+  - update
   - patch
 - apiGroups:
   - discovery.k8s.io
@@ -102,20 +103,8 @@ spec:
       serviceAccountName: spacegate-admin
       containers:
       - name: spacegate-admin
-        image: spacegate-admin:latest
+        image: ecfront/spacegate-admin:latest
         imagePullPolicy: IfNotPresent
         ports:  
         - containerPort: 9080
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: spacegate-admin
-spec:
-  selector:
-    app: spacegate-admin  # 与 Deployment 的标签选择器匹配
-  ports:
-    - protocol: TCP
-      port: 9080  # 公开给外部的端口
-      targetPort: 9080  # 对应 Deployment 中容器的端口
-  type: NodePort 
+          hostPort: 9080
