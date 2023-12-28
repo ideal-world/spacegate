@@ -84,19 +84,8 @@ jobs:
           run-id: ${{ env.FRONTEND_RUN_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Download front artifact
-      #   run: |
-      #     OTHER_REPO="ideal-world/spacegate-admin-fe"
-      #     WF_NAME="cicd.yml"
-      #     ARTIFACT_NAME=${{ env.FRONTEND_ARTIFACT_NAME }}
-      #     RUN_ID=`gh run --repo ${OTHER_REPO} list --workflow ${WF_NAME} --status success --json databaseId --jq .[0].databaseId`
-      #     gh run --repo ${OTHER_REPO} download ${RUN_ID} -n ${ARTIFACT_NAME}
-      #     mv ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz admin/res/
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Extract front artifact
-        run: tar -xzvf admin/res/${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
+        run: cd admin/res/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
@@ -126,11 +115,22 @@ jobs:
       - name: Copy artifact to workspace
         run: cp ./target/release/spacegate-admin admin/res/ && mv admin/config/conf-default-kube.toml admin/res/conf-default.toml
 
+      - name: Get front run id
+        run: |
+          run_id=$(curl https://api.github.com/repos/ideal-world/spacegate-admin-fe/actions/workflows/cicd.yml/runs\?status\=success |jq '.workflow_runs[0].id' )
+          echo "FRONTEND_RUN_ID=${run_id}" >> $GITHUB_ENV
+
       - name: Download front artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.FRONTEND_ARTIFACT_NAME }}
-          path: admin/res/dist
+          repository: ideal-world/spacegate-admin-fe
+          path: admin/res/
+          run-id: ${{ env.FRONTEND_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract front artifact
+        run: cd admin/res/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
