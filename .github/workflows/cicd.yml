@@ -363,6 +363,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
   push-docker:
+    if: startsWith(github.ref, 'refs/tags/') != true
     needs: [check]
     runs-on: ubuntu-latest
     name: Push docker image to registry

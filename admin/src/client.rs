@@ -6,7 +6,6 @@ use crate::model::vo::Vo;
 use crate::service::spacegate_manage_service::SpacegateManageService;
 use kernel_common::client::k8s_client::DEFAULT_CLIENT_NAME;
 use kernel_common::client::{cache_client, k8s_client};
-use kube::config::Kubeconfig;
 use lazy_static::lazy_static;
 use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
@@ -28,11 +27,7 @@ pub async fn init_client(funs: &TardisFunsInst) -> TardisResult<()> {
             } else if let Some(k8s_config) = &config.kube_config.k8s_config {
                 k8s_client::inst(DEFAULT_CLIENT_NAME, k8s_config.clone().to_kubeconfig()).await?;
             } else {
-                k8s_client::inst(
-                    DEFAULT_CLIENT_NAME,
-                    Kubeconfig::read().map_err(|e| TardisError::wrap(&format!("init k8s client failed:{e}"), ""))?,
-                )
-                .await?;
+                k8s_client::inst_by_default(DEFAULT_CLIENT_NAME).await?;
             }
         } else {
             cache_client::add(DEFAULT_CLIENT_NAME, funs.cache()).await?;

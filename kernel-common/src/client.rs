@@ -140,8 +140,19 @@ pub mod k8s_client {
         Ok(())
     }
 
+    /// Initialize k8s client by `~/.kube/config` or environment variables
+    pub async fn inst_by_default(name: impl Into<String>) -> TardisResult<()> {
+        let config = Config::infer().await.map_err(|e| TardisError::wrap(&format!("[SG.common] fetch default kube config failed: {e}"), ""))?;
+        let client = get_k8s_client_by_config(config)?;
+        {
+            let mut write = k8s_clients().write().await;
+            write.insert(name.into(), Arc::new(client));
+        }
+        Ok(())
+    }
+
     pub async fn inst(name: impl Into<String>, config: Kubeconfig) -> TardisResult<()> {
-        let client = get_k8s_client_by_config(config).await?;
+        let client = get_k8s_client_by_kube_config(config).await?;
         {
             let mut write = k8s_clients().write().await;
             write.insert(name.into(), Arc::new(client));
@@ -165,13 +176,19 @@ pub mod k8s_client {
         read.get(name).cloned().ok_or_else(|| TardisError::bad_request("[SG.common] Get k8s client failed", ""))
     }
 
+    /// # Get kube client by `kube_client::Config`
+    /// Instantiate `kube_client::Config` as client
+    pub fn get_k8s_client_by_config(config: Config) -> TardisResult<Client> {
+        Client::try_from(config).map_err(|e| TardisError::conflict(&format!("[SG.common] Create kubernetes client from `Config` error:{e}"), ""))
+    }
+
     /// # Get kube client by `Kubeconfig`
     /// Instantiate `Kubeconfig` as client
-    pub async fn get_k8s_client_by_config(kube_config: Kubeconfig) -> TardisResult<Client> {
+    pub async fn get_k8s_client_by_kube_config(kube_config: Kubeconfig) -> TardisResult<Client> {
         let config = Config::from_custom_kubeconfig(kube_config, &KubeConfigOptions::default())
             .await
             .map_err(|e| TardisError::conflict(&format!("[SG.common] Parse kubernetes config error:{e}"), ""))?;
-        Client::try_from(config).map_err(|e| TardisError::conflict(&format!("[SG.common] Create kubernetes client error:{e}"), ""))
+        get_k8s_client_by_config(config)
     }
 
     /// # Get kube client by file path
@@ -179,6 +196,6 @@ pub mod k8s_client {
     pub async fn get_k8s_client_by_file(path: &str) -> TardisResult<Client> {
         let kube_config = Kubeconfig::read_from(path).map_err(|e| TardisError::conflict(&format!("[SG.common] Read kubernetes config error:{e}"), ""))?;
 
-        get_k8s_client_by_config(kube_config).await
+        get_k8s_client_by_kube_config(kube_config).await
     }
 }

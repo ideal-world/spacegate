@@ -1,6 +1,3 @@
-[cs]
-[csm.admin]
-is_kube = true
 
 [fw]
 [fw.app]
@@ -14,19 +11,10 @@ default_lang = "zh-cn"
 [fw.web_server.modules.admin]
 ui_path = "/ui"
 title = "spacegate admin"
-doc_urls = [
-  [
-    "test env",
-    "http://localhost:9080/",
-  ],
-  [
-    "remote env",
-    "http://192.168.31.164:9080/",
-  ],
-]
+doc_urls = [["test env", "http://localhost:9081/"]]
 
 [fw.web_server]
 port = 9081
 
-# [fw.cache]
-# url = "redis://:@192.168.31.164:6379/0"
+[fw.cache]
+url = "redis://:@127.0.0.1:6379/0"

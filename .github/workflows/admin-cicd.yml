@@ -1,0 +1,143 @@
+name: ADMIN CICD
+
+on: [push, pull_request]
+
+env:
+  ARTIFACT_DIR: release-artifacts
+  FRONTEND_ARTIFACT_NAME: frontend-artifact
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check format
+        run: cargo fmt --all -- --check
+
+      - name: Check clippy
+        run: cargo clippy -p spacegate-admin --all-features
+
+      - name: Run rust test
+        run: cargo test -p spacegate-admin --all-features
+
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          docker-images: false
+          swap-storage: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+
+  build-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18'
+
+      - name: Change directory
+        run: cd admin/front
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Archive front artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.FRONTEND_ARTIFACT_NAME }}
+          path: admin/front/dist
+
+  push-docker:
+    if: startsWith(github.ref, 'refs/tags/') != true
+    needs: [check, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build rust
+        run: cargo build --release -p spacegate-admin
+
+      - name: Copy artifact to workspace
+        run: cp ./target/release/spacegate-admin admin/res/ && mv admin/config/conf-default-kube.toml admin/res/conf-default.toml
+
+      - name: Download front artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.FRONTEND_ARTIFACT_NAME }}
+          path: admin/res/dist
+
+      - name: Build and push Docker image to dockerhub
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: admin/res/
+          dockerfile: admin/res/Dockerfile
+          registry: docker.io
+          image: ecfront/spacegate-admin
+          tags: latest
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+  release-docker:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build rust
+        run: cargo build --release -p spacegate-admin
+
+      - name: Copy artifact to workspace
+        run: cp ./target/release/spacegate-admin admin/res/ && mv admin/config/conf-default-kube.toml admin/res/conf-default.toml
+
+      - name: Download front artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.FRONTEND_ARTIFACT_NAME }}
+          path: admin/res/dist
+
+      - name: Build and push Docker image to dockerhub
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: admin/res/
+          dockerfile: admin/res/Dockerfile
+          registry: docker.io
+          image: ecfront/spacegate-admin
+          tags: latest
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
