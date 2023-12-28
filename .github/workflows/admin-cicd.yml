@@ -55,7 +55,7 @@ jobs:
 
   push-docker:
     if: startsWith(github.ref, 'refs/tags/') != true
-    needs: [check]
+    # needs: [check]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -70,12 +70,18 @@ jobs:
       - name: Copy artifact to workspace
         run: cp ./target/release/spacegate-admin admin/res/ && mv admin/config/conf-default-kube.toml admin/res/conf-default.toml
 
+      - name: Get front run id
+        run: |
+          run_id=$(curl https://api.github.com/repos/ideal-world/spacegate-admin-fe/actions/workflows/cicd.yml/runs\?status\=success |jq '.workflow_runs[0].id' )
+          echo "FRONTEND_RUN_ID=${run_id}" >> $GITHUB_ENV
+
       - name: Download front artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.FRONTEND_ARTIFACT_NAME }}
           repository: ideal-world/spacegate-admin-fe
           path: admin/res/
+          run-id: ${{ env.FRONTEND_RUN_ID }}
 
       - name: Extract front artifact
         run: tar -xzvf admin/res/${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
