@@ -111,7 +111,7 @@ async fn test_webscoket() -> TardisResult<()> {
     let error_client_a = TardisFuns::ws_client("ws://127.0.0.1:8080/ws/broadcast/gerror/a", move |msg| async move {
         if let Message::Text(msg) = msg {
             println!("client_not_found recv:{}", msg);
-            assert_eq!(msg, r#"{"msg":"message not illegal","event":"__sys_error__"}"#);
+            assert_eq!(msg, r#"{"msg":"message illegal","event":"__sys_error__"}"#);
             ERROR_COUNTER.fetch_add(1, Ordering::SeqCst);
         }
         None
