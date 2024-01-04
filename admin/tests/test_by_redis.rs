@@ -28,8 +28,8 @@ async fn test_api_by_redis() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,tardis=trace,spacegate_admin=trace");
     tracing_subscriber::fmt::init();
 
-    let admin_port = 9081;
-    let http_client = TestHttpClient::new(&format!("http://127.0.0.1:{admin_port}")).await?;
+    let admin_port = 8080;
+    let http_client = TestHttpClient::new(&format!("http://localhost:{admin_port}")).await?;
 
     let docker = testcontainers::clients::Cli::default();
     let redis_container = TardisTestContainer::redis_custom(&docker);
