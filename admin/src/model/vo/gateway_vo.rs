@@ -9,6 +9,7 @@ use tardis::web::poem_openapi;
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1beta1.Gateway)
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[cfg_attr(feature = "test", derive(PartialEq))]
 pub struct SgGatewayVo {
     /// Name of the Gateway. Global Unique.
     ///
@@ -45,6 +46,7 @@ impl Vo for SgGatewayVo {
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[cfg_attr(feature = "test", derive(PartialEq))]
 pub struct SgListenerVo {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
     pub name: String,
@@ -66,6 +68,7 @@ pub struct SgListenerVo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[cfg_attr(feature = "test", derive(PartialEq))]
 pub struct SgTlsConfigVo {
     /// SgTlsConfigVo's name refers to the SecretVo.
     pub name: String,

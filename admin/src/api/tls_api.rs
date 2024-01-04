@@ -30,18 +30,16 @@ impl TlsApi {
 
     /// Add Tls
     #[oai(path = "/", method = "post")]
-    async fn add(&self, tls_config: Json<SgTls>, session: &Session) -> TardisApiResult<Void> {
+    async fn add(&self, tls_config: Json<SgTls>, session: &Session) -> TardisApiResult<SgTls> {
         let client_name = &super::get_instance_name(session).await?;
-        TlsVoService::add(client_name, tls_config.0).await?;
-        TardisResp::ok(Void {})
+        TardisResp::ok(TlsVoService::add(client_name, tls_config.0).await?)
     }
 
     /// Update Tls
     #[oai(path = "/", method = "put")]
-    async fn update(&self, tls_config: Json<SgTls>, session: &Session) -> TardisApiResult<Void> {
+    async fn update(&self, tls_config: Json<SgTls>, session: &Session) -> TardisApiResult<SgTls> {
         let client_name = &super::get_instance_name(session).await?;
-        TlsVoService::update(client_name, tls_config.0).await?;
-        TardisResp::ok(Void {})
+        TardisResp::ok(TlsVoService::update(client_name, tls_config.0).await?)
     }
 
     /// Delete Tls

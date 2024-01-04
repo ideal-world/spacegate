@@ -112,9 +112,9 @@ impl HttpRouteVoService {
     }
 
     pub(crate) async fn delete(client_name: &str, id: &str) -> TardisResult<()> {
-        let (namespace, name) = parse_k8s_obj_unique(id);
         let is_kube = SpacegateManageService::client_is_kube(client_name).await?;
         if is_kube {
+            let (namespace, name) = parse_k8s_obj_unique(id);
             let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(client_name, &Some(namespace)).await?;
 
             http_route_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete HttpSpaceroute")?;

@@ -10,19 +10,15 @@ use tardis::{
 
 use crate::{do_startup, functions::http_route, shutdown};
 
-use kernel_common::inner_model::{gateway::SgGateway, http_route::SgHttpRoute};
+use kernel_common::{
+    client::cache_client::{CONF_CHANGE_TRIGGER, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY},
+    inner_model::{gateway::SgGateway, http_route::SgHttpRoute},
+};
 use lazy_static::lazy_static;
 
 lazy_static! {
     static ref CHANGE_CACHE: Mutex<LruCache<String, bool>> = Mutex::new(LruCache::new(NonZeroUsize::new(100).expect("NonZeroUsize::new failed")));
 }
-
-// hash: {gateway name} -> {gateway config}
-const CONF_GATEWAY_KEY: &str = "sg:conf:gateway";
-// list: {gateway name} -> {vec<http route config>}
-const CONF_HTTP_ROUTE_KEY: &str = "sg:conf:route:http:";
-// string: {timestamp}##{changed obj}##{changed gateway name} -> None
-const CONF_CHANGE_TRIGGER: &str = "sg:conf:change:trigger:";
 
 pub async fn init(conf_url: &str, check_interval_sec: u64) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     crate::functions::cache_client::init("", conf_url).await?;

@@ -36,7 +36,7 @@ impl SgHttpRoute {
                                     .filter_map(|f| {
                                         f.to_singe_filter(K8sSgFilterSpecTargetRef {
                                             kind: "HTTPSpaceroute".to_string(),
-                                            name: self.name.clone(),
+                                            name: raw_name.clone(),
                                             namespace: Some(namespace.to_string()),
                                         })
                                     })
@@ -59,7 +59,7 @@ impl SgHttpRoute {
                                                     .filter_map(|b_f| {
                                                         b_f.clone().to_singe_filter(K8sSgFilterSpecTargetRef {
                                                             kind: "HTTPSpaceroute".to_string(),
-                                                            name: self.name.clone(),
+                                                            name: raw_name.clone(),
                                                             namespace: Some(namespace.to_string()),
                                                         })
                                                     })
@@ -87,7 +87,7 @@ impl SgHttpRoute {
                         .filter_map(|f| {
                             f.to_singe_filter(K8sSgFilterSpecTargetRef {
                                 kind: "HTTPSpaceroute".to_string(),
-                                name: self.name.clone(),
+                                name: raw_name.clone(),
                                 namespace: Some(namespace.to_string()),
                             })
                         })

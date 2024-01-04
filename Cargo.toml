@@ -33,9 +33,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = { version = "2" }
 
 # Tardis
-tardis = { version = "=0.1.0-rc.4" }
+# tardis = { version = "=0.1.0-rc.4" }
 # tardis = { path = "../tardis/tardis" }
-# tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "25baf2a" }
+tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "89e9c37" }
 
 # Http
 http = { version = "0.2" }

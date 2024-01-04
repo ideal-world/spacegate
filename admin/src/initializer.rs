@@ -34,7 +34,7 @@ use crate::{
     service::{plugin_service::PluginVoService, route_service::HttpRouteVoService, secret_service::TlsVoService, spacegate_manage_service::SpacegateManageService},
 };
 
-pub(crate) async fn init(web_server: &TardisWebServer) -> TardisResult<()> {
+pub async fn init(web_server: &TardisWebServer) -> TardisResult<()> {
     let funs = TardisFuns::inst(DOMAIN_CODE.to_string(), None);
     init_client(&funs).await?;
     init_spacegate_to_config().await?;

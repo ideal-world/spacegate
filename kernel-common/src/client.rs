@@ -12,7 +12,6 @@ pub mod cache_client {
 
     use crate::inner_model::http_route::SgHttpRoute;
 
-    //todo merge with kernel/src/config/config_by_redis.rs
     /// hash: {gateway name} -> {gateway config}
     pub const CONF_GATEWAY_KEY: &str = "sg:conf:gateway";
     /// list: {gateway name} -> {vec<http route config>}

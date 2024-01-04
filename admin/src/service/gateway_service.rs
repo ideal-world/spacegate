@@ -22,14 +22,15 @@ impl VoBaseService<SgGatewayVo> for GatewayVoService {}
 
 impl GatewayVoService {
     pub async fn list(client_name: &str, query: GatewayQueryInst) -> TardisResult<Vec<SgGatewayVo>> {
-        Ok(Self::get_type_map(client_name,).await?.into_values().filter(|g|
+        let result=Self::get_type_map(client_name,).await?.into_values().filter(|g|
             if let Some(q_name) = &query.names { q_name.iter().any(|q|q.is_match(&g.name)) } else { true }
                 && if let Some(q_port) = &query.port { g.listeners.iter().any(|l| l.port.eq( q_port)) } else { true }
-                && if let Some(q_hostname) = &query.hostname {
-                g.listeners.iter().any(|l| if let Some(l_hostname)=&l.hostname{q_hostname.is_match(l_hostname)}else { false })
-            } else { true }
+            && query.hostname.as_ref().map_or(true, |r_hostname| g.listeners.iter().any(|listener| listener.hostname.as_ref().map_or(false, |l_hostname| r_hostname.is_match(l_hostname))))
+            && query.tls_ids.as_ref().map_or(true, |tls_ids| g.listeners.iter().filter_map(|listener| listener.tls.as_ref()).any(|tls_vo|tls_ids.iter().any(|rt|rt.is_match(&tls_vo.name))))
             && query.filter_ids.as_ref().map_or(true, |filter_ids| g.filters.iter().any(|f_id| filter_ids.iter().any(|rf| rf.is_match(f_id)))))
-            .collect())
+            .collect();
+
+        Ok(result)
     }
 
     pub async fn add(client_name: &str, mut add: SgGatewayVo) -> TardisResult<SgGatewayVo> {

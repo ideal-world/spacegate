@@ -1,13 +1,5 @@
+use spacegate_admin::initializer;
 use tardis::{basic::result::TardisResult, tokio, TardisFuns};
-
-mod api;
-mod client;
-mod config;
-mod constants;
-mod helper;
-mod initializer;
-mod model;
-mod service;
 
 #[tokio::main]
 async fn main() -> TardisResult<()> {

@@ -35,7 +35,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             &format!(
                 r#"{{
             "name":"test_gw",
-            "listeners":[{{"name":"listener-1","port":8888,"protocol":"http"}}],
+            "listeners":[{{"name":"listener-1","port":8888,"protocol":"Http"}}],
             "parameters":{{"redis_url":"{cache_url}"}}
         }}"#
             ),
@@ -51,7 +51,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             "rules":[{
                 "backends":[{
                     "name_or_host":"postman-echo.com",
-                    "protocol":"https",
+                    "protocol":"Https",
                     "port":443
                 }]
             }]
@@ -76,7 +76,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             &format!(
                 r#"{{
             "name":"test_gw",
-            "listeners":[{{"name":"listener-1","port":8889,"protocol":"http"}}],
+            "listeners":[{{"name":"listener-1","port":8889,"protocol":"Http"}}],
             "parameters":{{"redis_url":"{cache_url}"}}
         }}"#
             ),
@@ -102,7 +102,7 @@ async fn test_config_by_redis() -> TardisResult<()> {
             "rules":[{
                 "backends":[{
                     "name_or_host":"postman-echo.com",
-                    "protocol":"https",
+                    "protocol":"Https",
                     "port":443
                 }]
             }]

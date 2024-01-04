@@ -12,6 +12,22 @@ license.workspace = true
 edition.workspace = true
 readme = "./README.md"
 
+[[bin]]
+name = "spacegate_admin"
+path = "src/main.rs"
+
+[lib]
+name = "spacegate_admin"
+path = "src/lib.rs"
+
+[[test]]
+name = "test_by_redis"
+required-features = ["test"]
+path = "tests/test_by_redis.rs"
+
+[features]
+test = ["kernel-common/test"]
+
 [dependencies]
 tardis = { workspace = true, features = [
   "web-server",
@@ -33,3 +49,8 @@ kube = { workspace = true }
 k8s-openapi = { workspace = true }
 k8s-gateway-api = { workspace = true }
 lazy_static = { workspace = true }
+
+[dev-dependencies]
+tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
+reqwest = { workspace = true }
+tracing-subscriber = { workspace = true }

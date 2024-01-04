@@ -3,7 +3,7 @@
 ## Summary
 
 | Resource                            | Core Support Level  | Extended Support Level | Implementation-Specific Support Level | API Version |
-|-------------------------------------|---------------------|------------------------|---------------------------------------|-------------|
+| ----------------------------------- | ------------------- | ---------------------- | ------------------------------------- | ----------- |
 | GatewayClass                        | Support             | Not supported          | Not supported                         | v1beta1     |
 | [Gateway](#gateway)                 | Partially Supported | Not supported          | Not supported                         | v1beta1     |
 | [HTTPRoute](#httproute)             | Partially Supported | Partially Supported    | Partially Supported                   | v1beta1     |
@@ -27,21 +27,21 @@ For a description of each field, visit the [Gateway API documentation](https://g
 
 Fields:
 
-* `spec`
-    * `gatewayClassName` - supported.
-    * `listeners`
-        * `name` - supported.
-        * `hostname` - supported.
-        * `port` - supported.
-        * `protocol` - partially supported. Allowed values: `HTTP`, `HTTPS` ,`WS`.
-        * `tls`
-            * `mode` - partially supported. Allowed value: `Terminate`.
-            * `certificateRefs` - The TLS certificate and key must be stored in a Secret resource of
-              type `kubernetes.io/tls`. Only a single reference is supported.
-            * `options` - not supported.
-        * `allowedRoutes` - not supported.
-    * `addresses` - not supported.
-* `status` - not supported.
+- `spec`
+  - `gatewayClassName` - supported.
+  - `listeners`
+    - `name` - supported.
+    - `hostname` - supported.
+    - `port` - supported.
+    - `protocol` - partially supported. Allowed values: `HTTP`, `HTTPS` ,`WS`.
+    - `tls`
+      - `mode` - partially supported. Allowed value: `Terminate`.
+      - `certificateRefs` - The TLS certificate and key must be stored in a Secret resource of
+        type `kubernetes.io/tls`. Only a single reference is supported.
+      - `options` - not supported.
+    - `allowedRoutes` - not supported.
+  - `addresses` - not supported.
+- `status` - not supported.
 
 ### HTTPRoute
 
@@ -50,44 +50,44 @@ Fields:
 > - Core: Partially Supported.
 > - Extended: Partially supported.
 > - Implementation-specific: Partially supported.
-    >   > Fields:
+>   > Fields:
 
-* `spec`
-    * `parentRefs` - partially supported. Kind only values `Gateway`.
-    * `hostnames` - supported.
-    * `rules`
-        * `matches`
-            * `path` - supported. Allowed: `PathPrefix` , `Exact` , `RegularExpression`.
-            * `headers` - supported. Allowed: `Exact` , `RegularExpression`.
-            * `queryParams` - supported. Allowed: `Exact` , `RegularExpression`.
-            * `method` - supported.
-        * `filters`
-            * `type` - supported.
-            * `requestRedirect` - supported .
-            * `requestHeaderModifier` - supported.
-            * `responseHeaderModifier` - supported.
-            * `urlRewrite` - supported.
-            * `requestMirror`, `extensionRef` - not supported.
-        * `backendRefs` - supported.
-            * `filters` - same as rules.filters support;
-* `status` - not supported.
+- `spec`
+  - `parentRefs` - partially supported. Kind only values `Gateway`.
+  - `hostnames` - supported.
+  - `rules`
+    - `matches`
+      - `path` - supported. Allowed: `PathPrefix` , `Exact` , `RegularExpression`.
+      - `headers` - supported. Allowed: `Exact` , `RegularExpression`.
+      - `queryParams` - supported. Allowed: `Exact` , `RegularExpression`.
+      - `method` - supported.
+    - `filters`
+      - `type` - supported.
+      - `requestRedirect` - supported .
+      - `requestHeaderModifier` - supported.
+      - `responseHeaderModifier` - supported.
+      - `urlRewrite` - supported.
+      - `requestMirror`, `extensionRef` - not supported.
+    - `backendRefs` - supported.
+      - `filters` - same as rules.filters support;
+- `status` - not supported.
 
 ### ReferenceGrant
 
 > Support Levels:
 >
 > - Core: Not Supported.
-    >   > Fields:
+>   > Fields:
 
-* `spec` - Not Supported.
-    * `to`
-        * `group`
-        * `kind`
-        * `name`
-    * `from`
-        * `group`
-        * `kind`
-        * `namespace`
+- `spec` - Not Supported.
+  - `to`
+    - `group`
+    - `kind`
+    - `name`
+  - `from`
+    - `group`
+    - `kind`
+    - `namespace`
 
 ### TLSRoute
 
@@ -110,36 +110,38 @@ Fields:
 > Spacegate's unique implementation that is different or even opposite to the standard
 
 ### Gateway
+
 - metadata
-    - annotations
-        - log_level (option) - spacegate log level : see [rust log level](https://docs.rs/log/latest/log/enum.Level.html)
-        - redis_url (option) - spacegate redis url
-        - lang (option) - spacegate i8n support
-        - ignore_tls_verification (option) - ignore backend tls verification
+  - annotations
+    - log_level (option) - spacegate log level : see [rust log level](https://docs.rs/log/latest/log/enum.Level.html)
+    - redis_url (option) - spacegate redis url
+    - lang (option) - spacegate i8n support
+    - ignore_tls_verification (option) - ignore backend tls verification
+
 ### HttpRoute
 
 - metadata
-    - annotations
-        - priority (option) - default is 0
+  - annotations
+    - priority (option) - default is 0
 - spec
-    - rules
-        - backendRefs
-            - kind - supports `Service`: k8s service
-              `External`: external-k8s service, backend name can be host or ip.
-              `ExternalHttp`: external-k8s http service, backend name can be host or ip.
-              `ExternalHttps`: external https service for k8s, similar to `ExternalHttp`.
+  - rules
+    - backendRefs
+      - kind - supports `Service`: k8s service
+        `External`: external-k8s service, backend name can be host or ip.
+        `ExternalHttp`: external-k8s http service, backend name can be host or ip.
+        `ExternalHttps`: external https service for k8s, similar to `ExternalHttp`.
 
 ### SgFilter
 
 > spacegate's CRD,used to express the attachment of a specified filter to a resource
 
 - spec
-    - filters
-        - code
-        - name (option)
-        - enable (option)
-        - config - json Value
-    - targetRefs:
-        - kind - `Gateway` `HTTPRoute`
-        - namespace (option)
-        - name
+  - filters
+    - code
+    - name (option)
+    - enable (option)
+    - config - json Value
+  - targetRefs:
+    - kind - `Gateway` `HTTPRoute` `HTTPSpaceRoute`
+    - namespace (option)
+    - name

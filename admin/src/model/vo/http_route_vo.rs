@@ -10,6 +10,7 @@ use super::{backend_vo::SgBackendRefVo, plugin_vo::SgFilterVo};
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[cfg_attr(feature = "test", derive(PartialEq))]
 pub struct SgHttpRouteVo {
     /// Name of the HttpRoute. Global Unique.
     ///
@@ -49,6 +50,7 @@ impl Vo for SgHttpRouteVo {
 
 /// HTTPRouteRule defines semantics for matching an HTTP request based on conditions (matches), processing it (filters), and forwarding the request to an API object
 #[derive(Default, Debug, Serialize, Deserialize, Clone, poem_openapi::Object)]
+#[cfg_attr(feature = "test", derive(PartialEq))]
 pub struct SgHttpRouteRuleVo {
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,

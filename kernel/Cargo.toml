@@ -15,12 +15,20 @@ readme = "../README.md"
 [lib]
 name = "spacegate_kernel"
 path = "src/lib.rs"
+bench = false
 
 [features]
 local = ["tardis/fs"]
 cache = ["tardis/cache", "kernel-common/cache"]
 ws = ["tardis/ws-client"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "cache", "kernel-common/k8s"]
+k8s = [
+  "kube",
+  "k8s-openapi",
+  "k8s-gateway-api",
+  "schemars",
+  "cache",
+  "kernel-common/k8s",
+]
 
 [dependencies]
 serde.workspace = true

@@ -24,6 +24,7 @@ k8s = [
 ]
 admin-support = ["tardis/web-server"]
 cache = ["tardis/cache"]
+test = []
 
 [dependencies]
 serde.workspace = true

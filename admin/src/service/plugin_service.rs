@@ -1,4 +1,6 @@
 use crate::model::query_dto::{GatewayQueryDto, HttpRouteQueryDto, PluginQueryInst, ToInstance as _};
+use crate::model::vo::gateway_vo::SgGatewayVo;
+use crate::model::vo::http_route_vo::SgHttpRouteVo;
 use crate::model::vo::plugin_vo::SgFilterVo;
 
 use crate::service::base_service::VoBaseService;
@@ -11,6 +13,7 @@ use kube::api::{ListParams, PostParams};
 use kube::{Api, ResourceExt};
 use std::collections::{HashMap, HashSet};
 use std::mem;
+use tardis::basic::error::TardisError;
 use tardis::basic::result::TardisResult;
 use tardis::futures_util::future::join_all;
 
@@ -49,55 +52,71 @@ impl PluginVoService {
         let result = Self::update_vo(client_name, update).await?;
 
         // update parent gateway
-        join_all(
-            GatewayVoService::list(
-                client_name,
-                GatewayQueryDto {
-                    names: None,
-                    port: None,
-                    hostname: None,
-                    tls_ids: None,
-                    filter_ids: Some(vec![id.clone()]),
-                }
-                .to_instance()?,
-            )
-            .await?
-            .iter()
-            .map(|gateway| GatewayVoService::update(client_name, gateway.clone()))
-            .collect::<Vec<_>>(),
-        )
-        .await
-        .into_iter()
-        .collect::<TardisResult<Vec<_>>>()?;
+        join_all(Self::get_ref_gateway(client_name, &id).await?.iter().map(|gateway| GatewayVoService::update(client_name, gateway.clone())).collect::<Vec<_>>())
+            .await
+            .into_iter()
+            .collect::<TardisResult<Vec<_>>>()?;
 
         // update parent httproute
-        join_all(
-            HttpRouteVoService::list(
-                client_name,
-                HttpRouteQueryDto {
-                    names: None,
-                    gateway_name: None,
-                    hostnames: None,
-                    backend_ids: None,
-                    filter_ids: Some(vec![id]),
-                }
-                .to_instance()?,
-            )
-            .await?
-            .iter()
-            .map(|route| HttpRouteVoService::update(client_name, route.clone()))
-            .collect::<Vec<_>>(),
-        )
-        .await
-        .into_iter()
-        .collect::<TardisResult<Vec<_>>>()?;
+        join_all(Self::get_ref_httproute(client_name, &id).await?.iter().map(|route| HttpRouteVoService::update(client_name, route.clone())).collect::<Vec<_>>())
+            .await
+            .into_iter()
+            .collect::<TardisResult<Vec<_>>>()?;
 
         Ok(result)
     }
 
     pub(crate) async fn delete(client_name: &str, id: &str) -> TardisResult<()> {
+        let ref_gateways = Self::get_ref_gateway(client_name, id).await?;
+        if !ref_gateways.is_empty() {
+            return Err(TardisError::bad_request(
+                &format!(
+                    "[admin.service] {id} is referenced by gateway(s): {}",
+                    ref_gateways.iter().map(|x| x.name.as_ref()).collect::<Vec<&str>>().join(",")
+                ),
+                "",
+            ));
+        }
+        let ref_routes = Self::get_ref_httproute(client_name, id).await?;
+        if !ref_routes.is_empty() {
+            return Err(TardisError::bad_request(
+                &format!(
+                    "[admin.service] {id} is referenced by httproute(s): {}",
+                    ref_routes.iter().map(|x| x.name.as_ref()).collect::<Vec<&str>>().join(",")
+                ),
+                "",
+            ));
+        }
+
         Self::delete_vo(client_name, id).await?;
         Ok(())
+    }
+
+    async fn get_ref_gateway(client_name: &str, id: &str) -> TardisResult<Vec<SgGatewayVo>> {
+        GatewayVoService::list(
+            client_name,
+            GatewayQueryDto {
+                filter_ids: Some(vec![id.to_string()]),
+                ..Default::default()
+            }
+            .to_instance()?,
+        )
+        .await
+    }
+
+    async fn get_ref_httproute(client_name: &str, id: &str) -> TardisResult<Vec<SgHttpRouteVo>> {
+        HttpRouteVoService::list(
+            client_name,
+            HttpRouteQueryDto {
+                names: None,
+                gateway_name: None,
+                hostnames: None,
+                backend_ids: None,
+                filter_ids: Some(vec![id.to_string()]),
+            }
+            .to_instance()?,
+        )
+        .await
     }
 }
 

@@ -41,18 +41,16 @@ impl HttprouteApi {
 
     /// Add Httproute
     #[oai(path = "/", method = "post")]
-    async fn add(&self, add: Json<SgHttpRouteVo>, session: &Session) -> TardisApiResult<Void> {
+    async fn add(&self, add: Json<SgHttpRouteVo>, session: &Session) -> TardisApiResult<SgHttpRouteVo> {
         let client_name = &super::get_instance_name(session).await?;
-        HttpRouteVoService::add(client_name, add.0).await?;
-        TardisResp::ok(Void {})
+        TardisResp::ok(HttpRouteVoService::add(client_name, add.0).await?)
     }
 
     /// Update Httproute
     #[oai(path = "/", method = "put")]
-    async fn update(&self, backend: Json<SgHttpRouteVo>, session: &Session) -> TardisApiResult<Void> {
+    async fn update(&self, backend: Json<SgHttpRouteVo>, session: &Session) -> TardisApiResult<SgHttpRouteVo> {
         let client_name = &super::get_instance_name(session).await?;
-        HttpRouteVoService::update(client_name, backend.0).await?;
-        TardisResp::ok(Void {})
+        TardisResp::ok(HttpRouteVoService::update(client_name, backend.0).await?)
     }
 
     /// Delete Httproute

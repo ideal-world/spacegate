@@ -53,6 +53,8 @@ rules:
   verbs:
   - get
   - list
+  - create
+  - update
   - watch
 - apiGroups:
   - gateway.networking.k8s.io
@@ -69,6 +71,9 @@ rules:
   - httpspaceroutes
   verbs:
   - get
+  - create
+  - update
+  - patch
   - list
   - watch
 ---

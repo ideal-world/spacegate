@@ -29,6 +29,7 @@ pub struct SgGateway {
 /// Gateway parameter configuration.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "admin-support", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "test", derive(PartialEq, Eq))]
 pub struct SgParameters {
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
@@ -63,7 +64,6 @@ pub struct SgListener {
 /// ProtocolType defines the application protocol accepted by a Listener.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Default)]
 #[cfg_attr(feature = "admin-support", derive(poem_openapi::Enum))]
-#[serde(rename_all = "lowercase")]
 pub enum SgProtocol {
     /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support
     /// HTTP/2 over cleartext.
