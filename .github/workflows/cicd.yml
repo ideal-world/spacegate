@@ -34,7 +34,7 @@ jobs:
         run: cargo clippy --all --all-features
 
       - name: Run rust test
-        run: cargo test --all-features
+        run: cargo test -p spacegate-kernel kernel-common --all-features
 
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main

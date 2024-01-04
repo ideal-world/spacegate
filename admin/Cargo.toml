@@ -13,7 +13,7 @@ edition.workspace = true
 readme = "./README.md"
 
 [[bin]]
-name = "spacegate_admin"
+name = "spacegate-admin"
 path = "src/main.rs"
 
 [lib]
