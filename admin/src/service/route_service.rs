@@ -5,6 +5,7 @@ use crate::model::vo_converter::VoConv;
 use crate::service::base_service::VoBaseService;
 use crate::service::plugin_service::PluginK8sService;
 
+use k8s_gateway_api::HttpRoute;
 use kernel_common::client::{cache_client, k8s_client};
 use kernel_common::constants::k8s_constants::DEFAULT_NAMESPACE;
 use kernel_common::{
@@ -27,7 +28,7 @@ impl HttpRouteVoService {
     pub(crate) async fn list(client_name: &str, query: HttpRouteQueryInst) -> TardisResult<Vec<SgHttpRouteVo>> {
         let map = Self::get_type_map(client_name).await?;
         Ok(
-            if query.names.is_none() && query.gateway_name.is_none() && query.hostnames.is_none() && query.filter_ids.is_none() {
+            if query.names.is_none() && query.gateway_name.is_none() && query.hostnames.is_none() && query.backend_ids.is_none() && query.filter_ids.is_none() {
                 map.into_values().collect()
             } else {
                 map.into_values()
@@ -57,10 +58,12 @@ impl HttpRouteVoService {
             let (namespace, raw_nmae) = parse_k8s_unique_or_default(&add.get_unique_name());
             add.name = format_k8s_obj_unique(Some(&namespace), &raw_nmae);
         }
+
         let add_model = add.clone().to_model(client_name).await?;
+
         if is_kube {
             let (namespace, _) = parse_k8s_unique_or_default(&add.get_unique_name());
-            let (httproute, sgfilters) = add_model.to_kube_httproute();
+            let (httproute, sgfilters) = add_model.to_kube_httproute_spaceroute_filters();
             let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(client_name, &Some(namespace)).await?;
             let _ = http_route_api.create(&PostParams::default(), &httproute).await.warp_result_by_method("Add HttpSpaceroute")?;
 
@@ -87,17 +90,28 @@ impl HttpRouteVoService {
         let is_kube = SpacegateManageService::client_is_kube(client_name).await?;
         if is_kube {
             let (namespace, name) = parse_k8s_obj_unique(update_un);
-            let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(client_name, &Some(namespace)).await?;
-            let (mut update_httproute, update_filter) = update_sg_httproute.to_kube_httproute();
-            update_httproute.metadata.resource_version = http_route_api
-                .get_metadata(update_httproute.name_any().as_str())
-                .await
-                .warp_result_by_method("Get Metadata Before Replace HttpSpaceroute")?
-                .metadata
-                .resource_version;
-            http_route_api.replace(&name, &PostParams::default(), &update_httproute).await.warp_result_by_method("Replace HttpSpaceroute")?;
 
-            PluginK8sService::update_filter_changes(client_name, old_sg_httproute.to_kube_httproute().1, update_filter).await?;
+            match Self::get_kind_by_name(client_name, &Some(namespace.clone()), &name).await? {
+                RouteKind::HttpRoute => {
+                    // delete httproute
+                    // and add httpspaceroute
+                    Self::delete(client_name, update_un).await?;
+                    Self::add(client_name, update.clone()).await?;
+                }
+                RouteKind::HttpSpaceroute => {
+                    let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(client_name, &Some(namespace)).await?;
+                    let (mut update_httproute, update_filter) = update_sg_httproute.to_kube_httproute_spaceroute_filters();
+                    update_httproute.metadata.resource_version = http_route_api
+                        .get_metadata(update_httproute.name_any().as_str())
+                        .await
+                        .warp_result_by_method("Get Metadata Before Replace HttpSpaceroute")?
+                        .metadata
+                        .resource_version;
+                    http_route_api.replace(&name, &PostParams::default(), &update_httproute).await.warp_result_by_method("Replace HttpSpaceroute")?;
+
+                    PluginK8sService::update_filter_changes(client_name, old_sg_httproute.to_kube_httproute_spaceroute_filters().1, update_filter).await?;
+                }
+            }
         } else {
             cache_client::add_or_update_obj(
                 client_name,
@@ -115,19 +129,52 @@ impl HttpRouteVoService {
         let is_kube = SpacegateManageService::client_is_kube(client_name).await?;
         if is_kube {
             let (namespace, name) = parse_k8s_obj_unique(id);
-            let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(client_name, &Some(namespace)).await?;
+            let route_ref_filters = match Self::get_kind_by_name(client_name, &Some(namespace.clone()), &name).await? {
+                RouteKind::HttpRoute => {
+                    let http_route_api: Api<HttpRoute> = Self::get_http_route_api(client_name, &Some(namespace)).await?;
 
-            http_route_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete HttpSpaceroute")?;
+                    http_route_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete HttpRoute")?;
 
-            let old_sg_httproute = Self::get_by_id(client_name, id).await?.to_model(client_name).await?;
-            let (_, f_v) = old_sg_httproute.to_kube_httproute();
-            PluginK8sService::delete_sgfilter_vec(client_name, &f_v.iter().collect::<Vec<_>>()).await?;
+                    let old_sg_httproute = Self::get_by_id(client_name, id).await?.to_model(client_name).await?;
+                    let (_, f_v) = old_sg_httproute.to_kube_httproute_route_filters();
+                    f_v
+                }
+                RouteKind::HttpSpaceroute => {
+                    let http_route_api: Api<HttpSpaceroute> = Self::get_spaceroute_api(client_name, &Some(namespace)).await?;
+
+                    http_route_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete HttpSpaceroute")?;
+
+                    let old_sg_httproute = Self::get_by_id(client_name, id).await?.to_model(client_name).await?;
+                    let (_, f_v) = old_sg_httproute.to_kube_httproute_spaceroute_filters();
+                    f_v
+                }
+            };
+
+            PluginK8sService::delete_sgfilter_vec(client_name, &route_ref_filters.iter().collect::<Vec<_>>()).await?;
         } else {
             let old_httproute = Self::get_by_id(client_name, id).await?;
             cache_client::delete_obj(client_name, cache_client::CONF_HTTP_ROUTE_KEY, &old_httproute.gateway_name, id).await?;
         }
         Self::delete_vo(client_name, id).await?;
         Ok(())
+    }
+
+    async fn get_kind_by_name(client_name: &str, namespace: &Option<String>, name: &str) -> TardisResult<RouteKind> {
+        match Self::get_spaceroute_api(client_name, namespace).await?.get_opt(name).await.warp_result()? {
+            Some(_) => Ok(RouteKind::HttpSpaceroute),
+            None => match Self::get_http_route_api(client_name, namespace).await?.get_opt(name).await.warp_result()? {
+                Some(_) => Ok(RouteKind::HttpRoute),
+                None => Err(TardisError::not_found(&format!("[Admin] {name} not found in kube {namespace:?}"), "")),
+            },
+        }
+    }
+
+    #[inline]
+    async fn get_http_route_api(client_name: &str, namespace: &Option<String>) -> TardisResult<Api<HttpRoute>> {
+        Ok(Api::namespaced(
+            (*k8s_client::get(client_name).await?).clone(),
+            namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
+        ))
     }
 
     #[inline]
@@ -137,6 +184,11 @@ impl HttpRouteVoService {
             namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()),
         ))
     }
+}
+
+enum RouteKind {
+    HttpRoute,
+    HttpSpaceroute,
 }
 
 #[inline]

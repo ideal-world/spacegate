@@ -93,19 +93,9 @@ impl TlsVoService {
             let secret_api: Api<Secret> = Self::get_secret_api(client_name, &Some(namespace)).await?;
             secret_api.delete(&name, &DeleteParams::default()).await.warp_result_by_method("Delete Secret")?;
         }
-        let gateways = GatewayVoService::list(client_name, GatewayQueryDto { ..Default::default() }.to_instance()?).await?;
-        if gateways.is_empty() {
-            Self::delete_vo(client_name, id).await?;
-            Ok(())
-        } else {
-            Err(TardisError::bad_request(
-                &format!(
-                    "[admin.service] Delete tls {id} is used by gateway:{}",
-                    gateways.iter().map(|g| g.get_unique_name()).collect::<Vec<String>>().join(",")
-                ),
-                "",
-            ))
-        }
+
+        Self::delete_vo(client_name, id).await?;
+        Ok(())
     }
 
     async fn get_ref_gateway(client_name: &str, id: &str) -> TardisResult<Vec<SgGatewayVo>> {

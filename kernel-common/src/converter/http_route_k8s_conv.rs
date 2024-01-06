@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::constants::{self, BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS};
 use crate::converter::plugin_k8s_conv::SgSingeFilter;
 use crate::helper::k8s_helper::{format_k8s_obj_unique, get_k8s_obj_unique, parse_k8s_obj_unique};
@@ -15,7 +17,19 @@ use kube::ResourceExt;
 use tardis::basic::result::TardisResult;
 
 impl SgHttpRoute {
-    pub fn to_kube_httproute(self) -> (HttpSpaceroute, Vec<SgSingeFilter>) {
+    /// Convert to HttpSpaceroute and SgSingeFilter
+    /// And SgSingeFilter ref kind is 'HTTPSpaceroute'
+    pub fn to_kube_httproute_spaceroute_filters(self) -> (HttpSpaceroute, Vec<SgSingeFilter>) {
+        self.to_kube_httproute(constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE)
+    }
+
+    /// Convert to HttpSpaceroute and SgSingeFilter
+    /// And SgSingeFilter ref kind is 'HTTPRoute'
+    pub fn to_kube_httproute_route_filters(self) -> (HttpSpaceroute, Vec<SgSingeFilter>) {
+        self.to_kube_httproute(constants::RAW_HTTP_ROUTE_KIND_DEFAULT)
+    }
+
+    pub fn to_kube_httproute(self, self_kind: &str) -> (HttpSpaceroute, Vec<SgSingeFilter>) {
         let (namespace, raw_name) = parse_k8s_obj_unique(&self.name);
 
         let (gateway_namespace, gateway_name) = parse_k8s_obj_unique(&self.gateway_name);
@@ -35,7 +49,7 @@ impl SgHttpRoute {
                                     .into_iter()
                                     .filter_map(|f| {
                                         f.to_singe_filter(K8sSgFilterSpecTargetRef {
-                                            kind: "HTTPSpaceroute".to_string(),
+                                            kind: self_kind.to_string(),
                                             name: raw_name.clone(),
                                             namespace: Some(namespace.to_string()),
                                         })
@@ -58,7 +72,7 @@ impl SgHttpRoute {
                                                     .iter()
                                                     .filter_map(|b_f| {
                                                         b_f.clone().to_singe_filter(K8sSgFilterSpecTargetRef {
-                                                            kind: "HTTPSpaceroute".to_string(),
+                                                            kind: self_kind.to_string(),
                                                             name: raw_name.clone(),
                                                             namespace: Some(namespace.to_string()),
                                                         })
@@ -86,7 +100,7 @@ impl SgHttpRoute {
                         .into_iter()
                         .filter_map(|f| {
                             f.to_singe_filter(K8sSgFilterSpecTargetRef {
-                                kind: "HTTPSpaceroute".to_string(),
+                                kind: self_kind.to_string(),
                                 name: raw_name.clone(),
                                 namespace: Some(namespace.to_string()),
                             })
@@ -102,6 +116,7 @@ impl SgHttpRoute {
                 name: Some(raw_name),
                 owner_references: None,
                 self_link: None,
+                annotations: Some(BTreeMap::from([(constants::ANNOTATION_RESOURCE_PRIORITY.to_string(), self.priority.to_string())])),
                 ..Default::default()
             },
             spec: HttpSpacerouteSpec {

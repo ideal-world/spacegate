@@ -8,7 +8,8 @@ COPY ./conf-default.toml /usr/src/app/config/conf-default.toml
 COPY ./spacegate-admin /usr/src/app/spacegate-admin
 
 COPY nginx-default.conf /etc/nginx/nginx.conf
-
+COPY start.sh /usr/src/app/start.sh
+RUN chmod +x start.sh
 
 # COPY libssl1.1_1.1.1f-1ubuntu2.20_amd64.deb /usr/src/app
 # RUN  dpkg -i libssl1.1_1.1.1f-1ubuntu2.20_amd64.deb
@@ -16,5 +17,5 @@ COPY nginx-default.conf /etc/nginx/nginx.conf
 
 EXPOSE 9080
 
-# 在容器启动时启动后端服务和 Nginx
-CMD ["sh", "-c", "./spacegate-admin & nginx -g 'daemon off;'"]
+
+CMD ["sh", "-c", "sh start.sh"]

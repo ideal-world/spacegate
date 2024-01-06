@@ -14,7 +14,6 @@ rules:
   - ""
   resources:
   - services
-  - secrets
   verbs:
   - get
   - list
@@ -22,10 +21,13 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
+  - secrets
   verbs:
+  - get
+  - list
   - create
-  - patch
+  - watch
+  - delete
 - apiGroups:
   - ""
   resources:
@@ -56,6 +58,7 @@ rules:
   - create
   - update
   - watch
+  - delete
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
@@ -76,6 +79,7 @@ rules:
   - patch
   - list
   - watch
+  - delete
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

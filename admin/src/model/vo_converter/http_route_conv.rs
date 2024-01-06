@@ -142,7 +142,7 @@ impl VoConv<SgBackendRef, SgBackendRefVo> for SgBackendRefVo {
             namespace: model.namespace,
             port: model.port,
             timeout_ms: model.timeout_ms,
-            protocol: model.protocol,
+            protocol: Some(model.protocol.unwrap_or_default()),
             weight: model.weight,
             filters: if filters.is_empty() { None } else { Some(filters) },
             filter_vos,

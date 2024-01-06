@@ -26,7 +26,7 @@ impl VoConv<SgGateway, SgGatewayVo> for SgGatewayVo {
             filters
                 .into_iter()
                 .map(|f| SgFilterVo {
-                    id: format!("{}{}", &model.name, &f.code),
+                    id: format!("{}-{}", &model.name, &f.code),
                     code: f.code,
                     name: f.name,
                     enable: f.enable,
