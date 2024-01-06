@@ -1,13 +1,9 @@
-use crate::{
-    config::{
-        gateway_dto::{SgListener, SgProtocol},
-        http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
-    },
-    plugins::filters::BoxSgPluginFilter,
+use crate::config::{
+    gateway_dto::{SgListener, SgProtocol},
+    http_route_dto::{SgHttpHeaderMatchType, SgHttpPathMatchType, SgHttpQueryMatchType},
 };
 
 use http::Method;
-use hyper::{client::HttpConnector, Client};
 use hyper_rustls::HttpsConnector;
 
 use std::{fmt, vec::Vec};

@@ -5,8 +5,11 @@ use spacegate_kernel::config::{
     gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
 };
+use spacegate_tower::BoxError;
 use tardis::{
-    basic::result::TardisResult,
+    basic::{
+        tracing::{TardisTracingInitializer},
+    },
     config::config_dto::WebClientModuleConfig,
     tokio::{self, time::sleep},
     web::web_client::{TardisHttpResponse, TardisWebClient},
@@ -97,9 +100,9 @@ W0X+/YToWPeWivw3Kbo05oCob0NUi3fXtiTHng==
 -----END CERTIFICATE-----"#;
 
 #[tokio::test]
-async fn test_https() -> TardisResult<()> {
-    env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
-    tracing_subscriber::fmt::init();
+async fn test_https() -> Result<(), BoxError> {
+    env::set_var("RUST_LOG", "info,spacegate_kernel=trace,spacegate_tower=trace,tower_service=trace,rust_tls=trace");
+    let _tracing = TardisTracingInitializer::default().with_fmt_layer().with_env_layer().init();
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),
@@ -138,6 +141,7 @@ async fn test_https() -> TardisResult<()> {
             ..Default::default()
         },
         vec![SgHttpRoute {
+            hostnames: Some(vec!["localhost".to_string()]),
             gateway_name: "test_gw".to_string(),
             rules: Some(vec![SgHttpRouteRule {
                 backends: Some(vec![SgBackendRef {

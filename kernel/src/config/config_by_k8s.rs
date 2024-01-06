@@ -9,6 +9,10 @@ use kube::{
     runtime::{watcher, WatchStreamExt},
     Api, Client, ResourceExt,
 };
+use spacegate_tower::layers::http_route::match_request::{
+    SgHttpHeaderMatch, SgHttpHeaderMatchPolicy, SgHttpMethodMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpQueryMatchPolicy, SgHttpRouteMatch,
+};
+use tardis::regex;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::{future::join_all, pin_mut, TryStreamExt},
@@ -17,19 +21,15 @@ use tardis::{
     TardisFuns,
 };
 
+use crate::update_route;
 use crate::{
     constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION},
-    do_startup,
-    functions::http_route,
-    shutdown,
+    do_startup, shutdown,
 };
 
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
-    http_route_dto::{
-        SgBackendRef, SgHttpHeaderMatch, SgHttpHeaderMatchType, SgHttpPathMatch, SgHttpPathMatchType, SgHttpQueryMatch, SgHttpQueryMatchType, SgHttpRoute, SgHttpRouteMatch,
-        SgHttpRouteRule,
-    },
+    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
     k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
 };
@@ -422,7 +422,7 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
             let gateway_config = process_gateway_config(vec![gateway_obj])
                 .await
                 .expect("[SG.Config] Failed to process gateway config")
-                .get(0)
+                .first()
                 .expect("[SG.Config] Gateway config not found")
                 .clone();
 
@@ -511,7 +511,7 @@ async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<Ht
     let gateway_config = process_gateway_config(vec![gateway_obj])
         .await
         .expect("[SG.Config] Failed to process gateway config for http_route parent ref")
-        .get(0)
+        .first()
         .expect("[SG.Config] Gateway config not found for http_route parent ref")
         .clone();
 
@@ -521,10 +521,12 @@ async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<Ht
         .expect("");
 
     if http_route_objs.is_empty() {
-        http_route::init(gateway_config, vec![]).await.expect("[SG.Config] Failed to re-init http_route");
+        shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
+        log::trace!("[SG.Config] Gateway config change to:{:?}", gateway_config);
+        do_startup(gateway_config, vec![]).await.expect("[SG.Config] Failed to restart gateway");
     } else {
         let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs).await.expect("[SG.Config] Failed to process http_route config");
-        http_route::init(gateway_config, http_route_configs).await.expect("[SG.Config] Failed to re-init http_route");
+        update_route(&gateway_config.name, http_route_configs).await.expect("[SG.Config] Failed to update route config");
     }
 }
 
@@ -627,7 +629,7 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                                     .certificate_refs
                                     .as_ref()
                                     .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is required", ""))?
-                                    .get(0)
+                                    .first()
                                     .ok_or_else(|| TardisError::format_error("[SG.Config] Gateway [spec.listener.tls.certificateRefs] is empty", ""))?;
                                 let secret_api: Api<Secret> = if let Some(namespace) = &certificate_ref.namespace {
                                     Api::namespaced(get_client().await?, namespace)
@@ -784,33 +786,34 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                                 matches
                                     .into_iter()
                                     .map(|a_match| SgHttpRouteMatch {
-                                        path: a_match.path.map(|path| match path {
-                                            k8s_gateway_api::HttpPathMatch::Exact { value } => SgHttpPathMatch {
-                                                kind: SgHttpPathMatchType::Exact,
-                                                value,
-                                            },
-                                            k8s_gateway_api::HttpPathMatch::PathPrefix { value } => SgHttpPathMatch {
-                                                kind: SgHttpPathMatchType::Prefix,
-                                                value,
-                                            },
-                                            k8s_gateway_api::HttpPathMatch::RegularExpression { value } => SgHttpPathMatch {
-                                                kind: SgHttpPathMatchType::Regular,
-                                                value,
+                                        path: a_match.path.and_then(|path| match path {
+                                            k8s_gateway_api::HttpPathMatch::Exact { value } => Some(SgHttpPathMatch::Exact(value)),
+                                            k8s_gateway_api::HttpPathMatch::PathPrefix { value } => Some(SgHttpPathMatch::Prefix(value)),
+                                            k8s_gateway_api::HttpPathMatch::RegularExpression { value } => match regex::Regex::new(&value) {
+                                                Ok(re) => Some(SgHttpPathMatch::Regular(re)),
+                                                Err(e) => {
+                                                    log::error!("[Sg.Init] Invalid regex: {e}");
+                                                    None
+                                                }
                                             },
                                         }),
                                         header: a_match.headers.map(|headers| {
                                             headers
                                                 .into_iter()
-                                                .map(|header| match header {
-                                                    k8s_gateway_api::HttpHeaderMatch::Exact { name, value } => SgHttpHeaderMatch {
-                                                        kind: SgHttpHeaderMatchType::Exact,
+                                                .filter_map(|header| match header {
+                                                    k8s_gateway_api::HttpHeaderMatch::Exact { name, value } => Some(SgHttpHeaderMatch {
                                                         name,
-                                                        value,
-                                                    },
-                                                    k8s_gateway_api::HttpHeaderMatch::RegularExpression { name, value } => SgHttpHeaderMatch {
-                                                        kind: SgHttpHeaderMatchType::Regular,
-                                                        name,
-                                                        value,
+                                                        policy: SgHttpHeaderMatchPolicy::Exact(value),
+                                                    }),
+                                                    k8s_gateway_api::HttpHeaderMatch::RegularExpression { name, value } => match regex::Regex::new(&value) {
+                                                        Ok(re) => Some(SgHttpHeaderMatch {
+                                                            name,
+                                                            policy: SgHttpHeaderMatchPolicy::Regular(re),
+                                                        }),
+                                                        Err(e) => {
+                                                            log::error!("[Sg.Init] Invalid regex: {e}");
+                                                            None
+                                                        }
                                                     },
                                                 })
                                                 .collect_vec()
@@ -818,23 +821,27 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                                         query: a_match.query_params.map(|query_params| {
                                             query_params
                                                 .into_iter()
-                                                .map(|query_param| match query_param {
-                                                    k8s_gateway_api::HttpQueryParamMatch::Exact { name, value } => SgHttpQueryMatch {
-                                                        kind: SgHttpQueryMatchType::Exact,
+                                                .filter_map(|query_param| match query_param {
+                                                    k8s_gateway_api::HttpQueryParamMatch::Exact { name, value } => Some(SgHttpQueryMatch {
                                                         name,
-                                                        value,
-                                                    },
-                                                    k8s_gateway_api::HttpQueryParamMatch::RegularExpression { name, value } => SgHttpQueryMatch {
-                                                        kind: SgHttpQueryMatchType::Regular,
-                                                        name,
-                                                        value,
+                                                        policy: SgHttpQueryMatchPolicy::Exact(value),
+                                                    }),
+                                                    k8s_gateway_api::HttpQueryParamMatch::RegularExpression { name, value } => match regex::Regex::new(&value) {
+                                                        Ok(re) => Some(SgHttpQueryMatch {
+                                                            name,
+                                                            policy: SgHttpQueryMatchPolicy::Regular(re),
+                                                        }),
+                                                        Err(e) => {
+                                                            log::error!("[Sg.Init] Invalid regex: {e}");
+                                                            None
+                                                        }
                                                     },
                                                 })
                                                 .collect_vec()
                                         }),
                                         // ref https://www.rfc-editor.org/rfc/rfc9110.html#name-methods
                                         // Method is case-sensitive and standardized methods are defined in all-uppercase US-ASCII letters
-                                        method: a_match.method.map(|method| vec![method]),
+                                        method: a_match.method.map(|m| vec![SgHttpMethodMatch(m)]),
                                     })
                                     .collect_vec()
                             }),
@@ -931,6 +938,7 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
             filters
                 .into_iter()
                 .map(|filter| {
+                    use spacegate_plugin::{model::*, plugins::*};
                     let sg_filter = match filter {
                         k8s_gateway_api::HttpRouteFilter::RequestHeaderModifier { request_header_modifier } => {
                             let mut sg_sets = HashMap::new();
@@ -945,10 +953,10 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                                 }
                             }
                             SgRouteFilter {
-                                code: crate::plugins::filters::header_modifier::CODE.to_string(),
+                                code: spacegate_plugin::plugins::header_modifier::CODE.to_string(),
                                 name: None,
-                                spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::header_modifier::SgFilterHeaderModifier {
-                                    kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Request,
+                                spec: TardisFuns::json.obj_to_json(&header_modifier::SgFilterHeaderModifier {
+                                    kind: header_modifier::SgFilterHeaderModifierKind::Request,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: request_header_modifier.remove,
                                 })?,
@@ -967,28 +975,28 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                                 }
                             }
                             SgRouteFilter {
-                                code: crate::plugins::filters::header_modifier::CODE.to_string(),
+                                code: header_modifier::CODE.to_string(),
                                 name: None,
-                                spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::header_modifier::SgFilterHeaderModifier {
-                                    kind: crate::plugins::filters::header_modifier::SgFilterHeaderModifierKind::Response,
+                                spec: TardisFuns::json.obj_to_json(&header_modifier::SgFilterHeaderModifier {
+                                    kind: header_modifier::SgFilterHeaderModifierKind::Response,
                                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                                     remove: response_header_modifier.remove,
                                 })?,
                             }
                         }
                         k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
-                            code: crate::plugins::filters::redirect::CODE.to_string(),
+                            code: redirect::CODE.to_string(),
                             name: None,
-                            spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::redirect::SgFilterRedirect {
+                            spec: TardisFuns::json.obj_to_json(&redirect::RedirectFilter {
                                 scheme: request_redirect.scheme,
                                 hostname: request_redirect.hostname,
                                 path: request_redirect.path.map(|path| match path {
-                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplaceFullPath,
+                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
+                                        kind: SgHttpPathModifierType::ReplaceFullPath,
                                         value: replace_full_path,
                                     },
-                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
+                                        kind: SgHttpPathModifierType::ReplacePrefixMatch,
                                         value: replace_prefix_match,
                                     },
                                 }),
@@ -997,17 +1005,17 @@ fn convert_filters(filters: Option<Vec<HttpRouteFilter>>) -> Option<Vec<SgRouteF
                             })?,
                         },
                         k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
-                            code: crate::plugins::filters::rewrite::CODE.to_string(),
+                            code: rewrite::CODE.to_string(),
                             name: None,
-                            spec: TardisFuns::json.obj_to_json(&crate::plugins::filters::rewrite::SgFilterRewrite {
+                            spec: TardisFuns::json.obj_to_json(&rewrite::SgFilterRewriteConfig {
                                 hostname: url_rewrite.hostname,
                                 path: url_rewrite.path.map(|path| match path {
-                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplaceFullPath,
+                                    k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
+                                        kind: SgHttpPathModifierType::ReplaceFullPath,
                                         value: replace_full_path,
                                     },
-                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => super::plugin_filter_dto::SgHttpPathModifier {
-                                        kind: super::plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                                    k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
+                                        kind: SgHttpPathModifierType::ReplacePrefixMatch,
                                         value: replace_prefix_match,
                                     },
                                 }),

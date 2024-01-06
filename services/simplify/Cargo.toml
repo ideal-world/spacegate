@@ -12,6 +12,15 @@ license.workspace = true
 edition.workspace = true
 readme = "../../README.md"
 
+[profile.release]
+codegen-units = 1
+debug = false
+debug-assertions = false
+lto = "fat"
+opt-level = 3
+panic = "abort"
+rpath = false
+strip = true
 
 [features]
 default=[]

@@ -1,3 +1,16 @@
+use lazy_static::lazy_static;
+use serde_json::json;
+use spacegate_kernel::config::{
+    gateway_dto::{SgGateway, SgListener},
+    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
+    plugin_filter_dto,
+};
+use spacegate_kernel::config::{
+    http_route_dto::{SgHttpPathMatch, SgHttpRouteMatch},
+    plugin_filter_dto::SgRouteFilter,
+};
+use spacegate_plugin::{plugins::*, SgPluginRepository};
+use spacegate_tower::BoxError;
 use std::{
     collections::HashMap,
     env,
@@ -8,17 +21,6 @@ use std::{
     time::Duration,
     vec,
 };
-
-use lazy_static::lazy_static;
-use serde_json::json;
-use spacegate_kernel::config::http_route_dto::{SgHttpPathMatch, SgHttpPathMatchType, SgHttpRouteMatch};
-use spacegate_kernel::config::plugin_filter_dto::SgRouteFilter;
-use spacegate_kernel::config::{
-    gateway_dto::{SgGateway, SgListener},
-    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-    plugin_filter_dto,
-};
-use spacegate_kernel::plugins::filters;
 use tardis::config::config_dto::WebServerCommonConfig;
 use tardis::web::web_server::WebServerModule;
 use tardis::web::ws_processor::TardisWebsocketMgrMessage;
@@ -38,16 +40,15 @@ use tardis::{
     },
     TardisFuns,
 };
-
 lazy_static! {
     static ref SENDERS: Arc<RwLock<HashMap<String, Sender<TardisWebsocketMgrMessage>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
 #[tokio::test]
-async fn test_webscoket() -> TardisResult<()> {
-    env::set_var("RUST_LOG", "info,spacegate_kernel=trace,tardis=trace");
+async fn test_webscoket() -> Result<(), BoxError> {
+    env::set_var("RUST_LOG", "info,spacegate_kernel=trace,spacegate_plugin=trace,spacegate_tower=trace,tardis=info");
     tracing_subscriber::fmt::init();
-
+    SgPluginRepository::global().register_prelude();
     TardisFuns::init_conf(TardisConfig {
         cs: Default::default(),
         fw: FrameworkConfig {
@@ -57,7 +58,7 @@ async fn test_webscoket() -> TardisResult<()> {
         },
     })
     .await?;
-    tokio::spawn(async { TardisFuns::web_server().add_route(WebServerModule::from(WsApi).with_ws(100)).await.start().await });
+    tokio::spawn(async { TardisFuns::web_server().add_route(WebServerModule::from(WsApi).with_ws::<String>(100)).await.start().await });
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),
@@ -73,19 +74,16 @@ async fn test_webscoket() -> TardisResult<()> {
                     ..Default::default()
                 }]),
                 matches: Some(vec![SgHttpRouteMatch {
-                    path: Some(SgHttpPathMatch {
-                        kind: SgHttpPathMatchType::Prefix,
-                        value: "/".to_string(),
-                    }),
+                    path: Some(SgHttpPathMatch::Prefix("/".into())),
                     ..Default::default()
                 }]),
                 filters: Some(vec![SgRouteFilter {
                     code: "rewrite".to_string(),
                     name: None,
-                    spec: TardisFuns::json.obj_to_json(&filters::rewrite::SgFilterRewrite {
+                    spec: TardisFuns::json.obj_to_json(&rewrite::SgFilterRewriteConfig {
                         hostname: None,
-                        path: Some(plugin_filter_dto::SgHttpPathModifier {
-                            kind: plugin_filter_dto::SgHttpPathModifierType::ReplacePrefixMatch,
+                        path: Some(spacegate_plugin::model::SgHttpPathModifier {
+                            kind: spacegate_plugin::model::SgHttpPathModifierType::ReplacePrefixMatch,
                             value: "/".to_string(),
                         }),
                     })?,
