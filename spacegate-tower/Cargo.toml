@@ -1,0 +1,51 @@
+[package]
+name = "spacegate-tower"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../README.md"
+
+[lib]
+name = "spacegate_tower"
+path = "src/lib.rs"
+
+[dependencies]
+regex = { workspace = true }
+hyper = { workspace = true }
+http-body-util = { workspace = true }
+tower-service = { workspace = true }
+tower-layer = { workspace = true }
+tower = { workspace = true, features = ["steer", "buffer"] }
+tower-http = { workspace = true, features = ["timeout"] }
+pin-project-lite = { workspace = true }
+
+# serde
+serde = { workspace = true, features = ["derive"] }
+serde_regex = "1.1.0"
+# http-serde = "2"
+
+
+tracing = { workspace = true }
+hyper-util = { workspace = true, features = ["full"] }
+tokio = { version = "1", features = ["net", "time", "macros"] }
+
+rand = { version = "0" }
+# future
+futures-util = { workspace = true }
+tokio-tungstenite = { workspace = true }
+
+# Tls
+hyper-rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+tokio-rustls = { workspace = true }
+
+tokio-util = { workspace = true }
+[dev-dependencies]
+tokio = { version = "1", features = ["net", "time", "rt", "macros"] }

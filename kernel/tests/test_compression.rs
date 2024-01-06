@@ -7,7 +7,7 @@ use spacegate_kernel::{
         http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
-    plugins::filters::compression::{self},
+    spacegate_plugin::plugins::decompression,
 };
 use tardis::{
     basic::result::TardisResult,
@@ -18,7 +18,7 @@ const HTTP_PORT: u16 = 8888;
 const HTTPS_PORT: u16 = 18443;
 #[tokio::test]
 async fn test_compression() -> TardisResult<()> {
-    env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
+    env::set_var("RUST_LOG", "info,spacegate_kernel=trace,spacegate_plugin=trace,spacegate_tower=trace");
     tracing_subscriber::fmt::init();
     spacegate_kernel::do_startup(
         SgGateway {
@@ -53,20 +53,22 @@ async fn test_compression() -> TardisResult<()> {
                 ..Default::default()
             }]),
             filters: Some(vec![SgRouteFilter {
-                code: compression::CODE.to_string(),
+                code: decompression::CODE.to_string(),
                 name: None,
                 spec: json!({}),
             }]),
             ..Default::default()
         }],
     )
-    .await?;
+    .await.expect("fail to start spacegate");
     sleep(Duration::from_millis(500)).await;
 
     info!("【test_compression】test backend is gzip");
     let client = reqwest::Client::builder().gzip(true).danger_accept_invalid_certs(true).build().unwrap();
     let resp = client.get(format!("http://localhost:{HTTP_PORT}/gzip")).send().await?;
-    assert!(resp.text().await.expect("response").contains("gzipped"));
+    let text = resp.text().await.expect("response");
+    dbg!(&text);
+    assert!(text.contains("gzipped"));
 
     info!("【test_compression】test backend not gzip ,gateway compression with gzip");
     let client = reqwest::Client::builder().gzip(true).danger_accept_invalid_certs(true).build().unwrap();

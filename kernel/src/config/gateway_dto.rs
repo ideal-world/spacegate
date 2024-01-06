@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, net::IpAddr, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use tardis::basic::error::TardisError;
@@ -43,7 +43,7 @@ pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
     pub name: Option<String>,
     /// Ip bound to the Listener. Default is 0.0.0.0
-    pub ip: Option<String>,
+    pub ip: Option<IpAddr>,
     /// Port is the network port. Multiple listeners may use the same port, subject to the Listener compatibility rules.
     pub port: u16,
     /// Protocol specifies the network protocol this listener expects to receive.

@@ -1,59 +1,50 @@
 use std::{env, time::Duration, vec};
 
-use async_trait::async_trait;
+
+use hyper::header::AUTHORIZATION;
+use hyper::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use spacegate_kernel::config::gateway_dto::SgProtocol::Https;
-use spacegate_kernel::plugins::context::SgRoutePluginContext;
-use spacegate_kernel::plugins::filters::SgPluginFilterInitDto;
-use spacegate_kernel::{
-    config::{
-        gateway_dto::{SgGateway, SgListener},
-        http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-        plugin_filter_dto::SgRouteFilter,
-    },
-    def_filter,
-    plugins::filters::SgPluginFilter,
+// use spacegate_kernel::plugins::context::SgRoutePluginContext;
+// use spacegate_kernel::plugins::filters::SgPluginFilterInitDto;
+use spacegate_kernel::config::{
+    gateway_dto::{SgGateway, SgListener},
+    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
+    plugin_filter_dto::SgRouteFilter,
 };
+
+use spacegate_plugin::{def_filter_plugin, SgPluginRepository};
+use spacegate_tower::helper_layers::filter::Filter;
+use spacegate_tower::{SgResponseExt};
+use spacegate_tower::{BoxError};
+
 use tardis::config::config_dto::WebClientModuleConfig;
 use tardis::{
-    basic::{error::TardisError, result::TardisResult},
     tokio::{self, time::sleep},
     web::web_client::TardisWebClient,
 };
 
-def_filter!("auth", SgFilterAuthDef, SgFilterAuth);
-
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgFilterAuth {}
 
-#[async_trait]
-impl SgPluginFilter for SgFilterAuth {
-    async fn init(&mut self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
-        Ok(())
-    }
-
-    async fn destroy(&self) -> TardisResult<()> {
-        Ok(())
-    }
-
-    async fn req_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
-        if ctx.request.get_headers().contains_key("Authorization") {
-            return Ok((true, ctx));
+impl Filter for SgFilterAuth {
+    fn filter(&self, req: hyper::Request<spacegate_tower::SgBody>) -> Result<hyper::Request<spacegate_tower::SgBody>, hyper::Response<spacegate_tower::SgBody>> {
+        if req.headers().contains_key(AUTHORIZATION) {
+            Ok(req)
+        } else {
+            Err(Response::with_code_message(StatusCode::UNAUTHORIZED, "missing authorization header"))
         }
-        Err(TardisError::unauthorized("unauthorized", ""))
-    }
-
-    async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
-        Ok((true, ctx))
     }
 }
 
+def_filter_plugin!("auth", SgFilterAuthPlugin, SgFilterAuth);
+
 #[tokio::test]
-async fn test_custom_plugin() -> TardisResult<()> {
-    env::set_var("RUST_LOG", "info,spacegate_kernel=trace");
+async fn test_custom_plugin() -> Result<(), BoxError> {
+    env::set_var("RUST_LOG", "info,spacegate_kernel=trace,spacegate_plugin=trace,spacegate_tower");
     tracing_subscriber::fmt::init();
-    spacegate_kernel::register_filter_def(SgFilterAuthDef);
+    SgPluginRepository::global().register::<SgFilterAuthPlugin>();
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),

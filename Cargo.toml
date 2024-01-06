@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "services/*"]
+members = ["kernel", "services/*", "spacegate-tower", "spacegate-plugin"]
 resolver = "2"
 
 [profile.release]
@@ -30,20 +30,29 @@ lazy_static = { version = "1.4" }
 async-trait = { version = "0.1" }
 itertools = { version = "0" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = { version = "0" }
 urlencoding = { version = "2" }
 
 # Tardis
-tardis = { version = "=0.1.0-rc.7" }
+tardis = { version = "=0.1.0-rc.8" }
 # tardis = { path = "../tardis/tardis" }
 # tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "25baf2a" }
 
 # Http
 http = { version = "0.2" }
 rustls = { version = "0.21.0" }
-hyper = { version = "0.14", features = ["full"] }
-hyper-rustls = { version = "0.24" }
-rustls-pemfile = { version = "1" }
-tokio-rustls = { version = "0.24", default-features = false }
+hyper = { version = "1", features = ["full"] }
+http-body-util = { version = "0" }
+hyper-util = { version = "0"}
+
+# ws
+tokio-tungstenite = { version = "0" }
+
+# tower
+tower-service = { version = "0.3" }
+tower-layer = { version = "0.3" }
+tower-http = { version = "0.5" }
+tower = { version = "0.4" }
 
 # K8s
 kube = { version = "0.85", features = ["runtime", "derive"] }
@@ -55,10 +64,32 @@ schemars = { version = "0.8.6" }
 # Test
 reqwest = { version = "0.11", features = ["json", "gzip", "brotli"] }
 testcontainers-modules = { version = "0.2" }
-#async-compression 
 async-compression = { version = "0.3.13", default-features = false, features = [
   "tokio",
   "gzip",
   "deflate",
   "brotli",
 ] }
+
+
+bytes = { version = "1" }
+
+# Tls
+hyper-rustls = { version = "0.26" }
+rustls-pemfile = "2"
+tokio-rustls = { version = "0.25" }
+
+# serde
+duration-str = "0.7.1"
+
+# regex
+regex = { version = "1" }
+
+# futures
+pin-project-lite = { version = "0.2" }
+tokio-util = { version = "0.7.8", features = ["io"] }
+futures-util = { version = "0" }
+
+# utils
+ipnet = { version = "2" }
+

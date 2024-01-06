@@ -1,0 +1,23 @@
+{
+  "gateway_name": "gateway",
+  "rules": [
+    {
+      "matches": [
+        {
+          "path": {
+            "kind": "Prefix",
+            "value": "/"
+          }
+        }
+      ],
+      "backends": [
+        {
+          "name_or_host": "localhost",
+          "port": 8080,
+          "protocol": "http",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

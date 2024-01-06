@@ -20,9 +20,33 @@ path = "src/lib.rs"
 local = ["tardis/fs"]
 cache = ["tardis/cache"]
 ws = ["tardis/ws-client"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "cache"]
+k8s = [
+    "kube",
+    "k8s-openapi",
+    "k8s-gateway-api",
+    "schemars",
+    "cache",
+    "spacegate-plugin/cache",
+    "spacegate-plugin/rewrite",
+    "spacegate-plugin/header-modifier",
+    "spacegate-plugin/redirect",
+]
+plugin-cache = ["spacegate-plugin/cache"]
+plugin-limit = ["spacegate-plugin/limit"]
+plugin-header-modifier = ["spacegate-plugin/header-modifier"]
+plugin-inject = ["spacegate-plugin/inject"]
+plugin-redirect = ["spacegate-plugin/redirect"]
+plugin-retry = ["spacegate-plugin/retry"]
+plugin-rewrite = ["spacegate-plugin/rewrite"]
+plugin-maintenance = ["spacegate-plugin/maintenance"]
+plugin-decompression = ["spacegate-plugin/decompression"]
+plugin-status = ["spacegate-plugin/status"]
+
 
 [dependencies]
+spacegate-tower = { path = "../spacegate-tower" }
+spacegate-plugin = { path = "../spacegate-plugin" }
+
 serde.workspace = true
 serde_json.workspace = true
 lazy_static.workspace = true
@@ -33,12 +57,13 @@ async-compression.workspace = true
 
 tardis = { workspace = true, features = ["future", "crypto", "tls"] }
 http.workspace = true
-rustls = { workspace = true, features = ["dangerous_configuration"] }
 hyper.workspace = true
 hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
 tokio-rustls.workspace = true
 ipnet = { version = "2", features = ["serde"] }
+
+bytes = { workspace = true }
 
 kube = { workspace = true, optional = true }
 k8s-openapi = { workspace = true, optional = true }
@@ -46,21 +71,19 @@ k8s-gateway-api = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 async-stream = "0.3.5"
 tokio-util = { version = "0.7.8", features = ["io"] }
-
-
 [dev-dependencies]
 tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
 reqwest = { workspace = true }
 tracing-subscriber = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio"] }
-testcontainers-modules ={ workspace = true }
+testcontainers-modules = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[test]]
 name = "test_config_by_redis"
-required-features = ["cache"]
+required-features = ["cache", "plugin-decompression"]
 
 [[test]]
 name = "test_websocket"
