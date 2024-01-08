@@ -53,8 +53,9 @@ impl VoConv<SgRouteFilter, SgFilterVo> for SgFilterVo {
     }
 
     async fn from_model(model: SgRouteFilter) -> TardisResult<SgFilterVo> {
+        let name = model.name.clone();
         Ok(SgFilterVo {
-            id: format!("{}-{}", &model.code, &model.name.clone().unwrap_or_default(),),
+            id: format!("{}{}", &model.code, if let Some(name) = name { format!("_{}", name) } else { "".to_string() }),
             code: model.code,
             name: model.name,
             enable: model.enable,

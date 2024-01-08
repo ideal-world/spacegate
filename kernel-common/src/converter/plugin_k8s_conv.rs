@@ -130,52 +130,36 @@ impl SgRouteFilter {
     }
 
     pub fn from_http_route_filter(route_filter: HttpRouteFilter) -> TardisResult<SgRouteFilter> {
-        let sg_filter = match route_filter {
-            k8s_gateway_api::HttpRouteFilter::RequestHeaderModifier { request_header_modifier } => {
-                let mut sg_sets = HashMap::new();
-                if let Some(adds) = request_header_modifier.add {
-                    for add in adds {
-                        sg_sets.insert(add.name, add.value);
-                    }
-                }
-                if let Some(sets) = request_header_modifier.set {
-                    for set in sets {
-                        sg_sets.insert(set.name, set.value);
-                    }
-                }
-                SgRouteFilter {
-                    code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
-                    name: None,
-                    spec: TardisFuns::json.obj_to_json(&SgFilterHeaderModifier {
-                        kind: SgFilterHeaderModifierKind::Request,
-                        sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
-                        remove: request_header_modifier.remove,
-                    })?,
-                    enable: true,
+        let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> TardisResult<SgRouteFilter> {
+            let mut sg_sets = HashMap::new();
+            if let Some(adds) = header_modifier.add {
+                for add in adds {
+                    sg_sets.insert(add.name, add.value);
                 }
             }
+            if let Some(sets) = header_modifier.set {
+                for set in sets {
+                    sg_sets.insert(set.name, set.value);
+                }
+            }
+
+            Ok(SgRouteFilter {
+                code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
+                name: None,
+                spec: TardisFuns::json.obj_to_json(&SgFilterHeaderModifier {
+                    kind: modifier_kind,
+                    sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
+                    remove: header_modifier.remove,
+                })?,
+                enable: true,
+            })
+        };
+        let mut sg_filter = match route_filter {
+            k8s_gateway_api::HttpRouteFilter::RequestHeaderModifier { request_header_modifier } => {
+                process_header_modifier(request_header_modifier, SgFilterHeaderModifierKind::Request)?
+            }
             k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
-                let mut sg_sets = HashMap::new();
-                if let Some(adds) = response_header_modifier.add {
-                    for add in adds {
-                        sg_sets.insert(add.name, add.value);
-                    }
-                }
-                if let Some(sets) = response_header_modifier.set {
-                    for set in sets {
-                        sg_sets.insert(set.name, set.value);
-                    }
-                }
-                SgRouteFilter {
-                    code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
-                    name: None,
-                    spec: TardisFuns::json.obj_to_json(&SgFilterHeaderModifier {
-                        kind: SgFilterHeaderModifierKind::Response,
-                        sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
-                        remove: response_header_modifier.remove,
-                    })?,
-                    enable: true,
-                }
+                process_header_modifier(response_header_modifier, SgFilterHeaderModifierKind::Response)?
             }
             k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
                 code: SG_FILTER_REDIRECT_CODE.to_string(),
@@ -229,6 +213,7 @@ impl SgRouteFilter {
                 ))
             }
         };
+        sg_filter.name = Some(TardisFuns::crypto.digest.md5(sg_filter.spec.to_string())?.chars().take(8).collect());
         Ok(sg_filter)
     }
 }
