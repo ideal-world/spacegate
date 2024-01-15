@@ -57,7 +57,7 @@ async fn test_webscoket() -> TardisResult<()> {
         },
     })
     .await?;
-    tokio::spawn(async { TardisFuns::web_server().add_route(WebServerModule::from(WsApi).with_ws(100)).await.start().await });
+    tokio::spawn(async { TardisFuns::web_server().add_route(WebServerModule::from(WsApi).with_ws::<String>(100)).await.start().await });
     spacegate_kernel::do_startup(
         SgGateway {
             name: "test_gw".to_string(),
