@@ -429,8 +429,8 @@ fn process_request_headers(request: &mut Request<Body>, remote_addr: SocketAddr)
         Some(forwarded) => {
             format!(
                 "{},{}",
+                real_ip,
                 forwarded.to_str().map_err(|e| TardisError::bad_gateway(&format!("[SG.ProcessRequestHeaders] X-Forwarded-For header value parse err {e}"), ""))?,
-                real_ip
             )
         }
         None => real_ip,
