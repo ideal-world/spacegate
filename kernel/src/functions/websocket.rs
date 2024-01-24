@@ -50,15 +50,22 @@ pub async fn process(gateway_name: Arc<String>, remote_addr: SocketAddr, backend
         ));
     };
 
-    let default_protocol = if backend.port == 443 { SgProtocol::Wss } else { SgProtocol::Ws };
-    let scheme = backend.protocol.as_ref().unwrap_or(&default_protocol);
+    let raw_protocol = match request.uri().scheme_str() {
+        Some("wss") => Some(SgProtocol::Wss),
+        Some("ws") => Some(SgProtocol::Ws),
+        _ => None,
+    };
+    let default_protocol = if backend.port == 443 { SgProtocol::Wss } else { raw_protocol.unwrap_or(SgProtocol::Ws) };
+    let scheme = match backend.protocol.as_ref() {
+        Some(&SgProtocol::Wss) | Some(&SgProtocol::Https) => SgProtocol::Wss,
+        Some(&SgProtocol::Ws) | Some(&SgProtocol::Http) => SgProtocol::Ws,
+        None => default_protocol,
+    };
     let client_url = format!(
         "{}://{}{}{}",
         scheme,
         format_args!("{}{}", backend.name_or_host, backend.namespace.as_ref().map(|n| format!(".{n}")).unwrap_or("".to_string())),
-        if (backend.port == 0 || backend.port == 80) && (scheme == &SgProtocol::Http || scheme == &SgProtocol::Ws)
-            || (backend.port == 0 || backend.port == 443) && (scheme == &SgProtocol::Https || scheme == &SgProtocol::Wss)
-        {
+        if ((backend.port == 0 || backend.port == 80) && scheme == SgProtocol::Ws) || ((backend.port == 0 || backend.port == 443) && scheme == SgProtocol::Wss) {
             "".to_string()
         } else {
             format!(":{}", backend.port)
