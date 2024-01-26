@@ -35,7 +35,7 @@ urlencoding = { version = "2" }
 # Tardis
 # tardis = { version = "=0.1.0-rc.9" }
 # tardis = { path = "../tardis/tardis" }
-tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "dd1c4b7" }
+tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "1b3cf9f" }
 
 # Http
 http = { version = "0.2" }
