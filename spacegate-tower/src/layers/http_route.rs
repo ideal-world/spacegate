@@ -7,14 +7,17 @@ use std::{convert::Infallible, num::NonZeroU16, sync::Arc, time::Duration};
 
 use crate::{
     extension::{BackendHost, Reflect},
+    helper_layers::{map_request::MapRequestLayer, random_pick},
+    service::BoxHyperService,
     utils::schema_port::port_to_schema,
-    SgBody, SgBoxLayer, SgBoxService,
+    SgBody, SgBoxLayer,
 };
 
+use futures_util::future::BoxFuture;
 use hyper::{Request, Response};
 use tower::steer::Steer;
 
-use tower_http::timeout::{Timeout, TimeoutLayer};
+// use tower_http::timeout::{Timeout, TimeoutLayer};
 
 use tower_layer::Layer;
 use tower_service::Service;
@@ -71,19 +74,18 @@ impl SgHttpRouteRuleLayer {
 
 impl<S> Layer<S> for SgHttpRouteRuleLayer
 where
-    S: Clone + Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + 'static,
-    <S as tower_service::Service<Request<SgBody>>>::Future: std::marker::Send,
+    S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
+    <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
 {
     type Service = SgRouteRule;
 
     fn layer(&self, inner: S) -> Self::Service {
-        let steer = <Steer<_, _, Request<SgBody>>>::new(self.backends.iter().map(|l| l.layer(inner.clone())), RouteByWeight);
+        use crate::helper_layers::timeout::TimeoutLayer;
+        let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
+        let random_picker = random_pick::RandomPick::new(service_iter);
         let filter_layer = self.plugins.iter().collect::<SgBoxLayer>();
-        let service = if let Some(timeout) = self.timeouts {
-            SgBoxService::new(TimeoutLayer::new(timeout).layer(filter_layer.layer(steer)))
-        } else {
-            SgBoxService::new(filter_layer.layer(SgBoxService::new(steer)))
-        };
+        let service = filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(random_picker));
+
         SgRouteRule {
             r#match: self.r#match.clone(),
             service,
@@ -93,18 +95,15 @@ where
 #[derive(Clone)]
 pub struct SgRouteRule {
     pub r#match: Arc<Option<Vec<SgHttpRouteMatch>>>,
-    pub service: SgBoxService,
+    pub service: BoxHyperService,
 }
 
-impl Service<Request<SgBody>> for SgRouteRule {
+impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
     type Response = Response<SgBody>;
     type Error = Infallible;
-    type Future = <SgBoxService as Service<Request<SgBody>>>::Future;
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(cx)
-    }
+    type Future = <BoxHyperService as hyper::service::Service<Request<SgBody>>>::Future;
 
-    fn call(&mut self, req: Request<SgBody>) -> Self::Future {
+    fn call(&self, req: Request<SgBody>) -> Self::Future {
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter route rule");
         self.service.call(req)
     }
@@ -134,12 +133,45 @@ impl SgHttpBackendLayer {
 
 impl<S> Layer<S> for SgHttpBackendLayer
 where
-    S: Clone + Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + 'static,
-    <S as tower_service::Service<Request<SgBody>>>::Future: std::marker::Send,
+    S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
+    <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
 {
-    type Service = SgHttpBackend<SgBoxService>;
+    type Service = SgHttpBackend<BoxHyperService>;
 
     fn layer(&self, inner: S) -> Self::Service {
+        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
+        let mut filtered = self.filters.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
+        SgHttpBackend {
+            weight: self.weight,
+            host: self.host.clone(),
+            port: self.port.clone(),
+            scheme: self.scheme.clone(),
+            timeout: self.timeout.clone(),
+            inner_service: BoxHyperService::new(filtered),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SgHttpBackend<S> {
+    pub host: Option<Arc<str>>,
+    pub port: Option<NonZeroU16>,
+    pub scheme: Option<Arc<str>>,
+    pub weight: u16,
+    pub timeout: Option<Duration>,
+    pub inner_service: S,
+}
+
+impl<S> hyper::service::Service<Request<SgBody>> for SgHttpBackend<S>
+where
+    S: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + 'static,
+    <S as hyper::service::Service<Request<SgBody>>>::Future: Send + 'static,
+{
+    type Response = Response<SgBody>;
+    type Error = Infallible;
+    type Future = S::Future;
+
+    fn call(&self, req: Request<SgBody>) -> Self::Future {
         let map_request = match (self.host.clone(), self.port, self.scheme.clone()) {
             (None, None, None) => None,
             (host, port, schema) => Some(move |mut req: Request<SgBody>| {
@@ -170,44 +202,8 @@ where
                 req
             }),
         };
-        let service = if let Some(map_request) = map_request {
-            let map_request = tower::util::MapRequestLayer::new(map_request);
-            SgBoxService::new(map_request.layer(inner))
-        } else {
-            SgBoxService::new(inner)
-        };
-        let mut filtered = self.filters.iter().collect::<SgBoxLayer>().layer(service);
-        if let Some(timeout) = self.timeout {
-            filtered = SgBoxService::new(Timeout::new(filtered, timeout));
-        }
-        SgHttpBackend {
-            weight: self.weight,
-            inner_service: SgBoxService::new(filtered),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct SgHttpBackend<S> {
-    pub weight: u16,
-    pub inner_service: S,
-}
-
-impl<S> Service<Request<SgBody>> for SgHttpBackend<S>
-where
-    S: Clone + Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + 'static,
-    <S as Service<Request<SgBody>>>::Future: Send + 'static,
-{
-    type Response = Response<SgBody>;
-    type Error = Infallible;
-    type Future = <SgBoxService as Service<Request<SgBody>>>::Future;
-
-    fn call(&mut self, req: Request<SgBody>) -> Self::Future {
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter backend");
-        Box::pin(self.inner_service.call(req))
-    }
-
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner_service.poll_ready(cx)
+        let mut req = if let Some(map_request) = map_request { map_request(req) } else { req };
+        self.inner_service.call(req)
     }
 }

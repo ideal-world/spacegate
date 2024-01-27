@@ -15,7 +15,7 @@ use extension::Reflect;
 use std::{convert::Infallible, fmt, sync::Arc};
 pub use tower_layer::Layer;
 pub use tower_service::Service;
-
+pub use service::BoxHyperService;
 use helper_layers::response_error::ErrorFormatter;
 
 use hyper::{body::Bytes, Request, Response, StatusCode};
@@ -72,11 +72,8 @@ impl SgResponseExt for Response<SgBody> {
 
 pub type ReqOrResp = Result<Request<SgBody>, Response<SgBody>>;
 
-pub type SgBoxService = BoxCloneService<Request<SgBody>, Response<SgBody>, Infallible>;
-// type SgBoxLayer<S> = BoxLayer<S, Request<SgBody>, Response<SgBody>, Infallible>;
-
 pub struct SgBoxLayer {
-    boxed: Arc<dyn Layer<SgBoxService, Service = SgBoxService> + Send + Sync + 'static>,
+    boxed: Arc<dyn Layer<BoxHyperService, Service = BoxHyperService> + Send + Sync + 'static>,
 }
 
 impl FromIterator<SgBoxLayer> for SgBoxLayer {
@@ -95,31 +92,31 @@ impl SgBoxLayer {
     /// Create a new [`BoxLayer`].
     pub fn new<L>(inner_layer: L) -> Self
     where
-        L: Layer<SgBoxService> + Send + Sync + 'static,
-        L::Service: Clone + Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + 'static,
-        <L::Service as Service<Request<SgBody>>>::Future: Send + 'static,
+        L: Layer<BoxHyperService> + Send + Sync + 'static,
+        L::Service: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
+        <L::Service as hyper::service::Service<Request<SgBody>>>::Future: Send + 'static,
     {
-        let layer = layer_fn(move |inner: SgBoxService| {
+        let layer = layer_fn(move |inner: BoxHyperService| {
             let out = inner_layer.layer(inner);
-            SgBoxService::new(out)
+            BoxHyperService::new(out)
         });
 
         Self { boxed: Arc::new(layer) }
     }
-    pub fn layer_boxed(&self, inner: SgBoxService) -> SgBoxService {
+    pub fn layer_boxed(&self, inner: BoxHyperService) -> BoxHyperService {
         self.boxed.layer(inner)
     }
 }
 
 impl<S> Layer<S> for SgBoxLayer
 where
-    S: Clone + Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + 'static,
-    <S as tower_service::Service<hyper::Request<SgBody>>>::Future: std::marker::Send,
+    S: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
+    <S as hyper::service::Service<hyper::Request<SgBody>>>::Future: std::marker::Send,
 {
-    type Service = SgBoxService;
+    type Service = BoxHyperService;
 
     fn layer(&self, inner: S) -> Self::Service {
-        self.boxed.layer(SgBoxService::new(inner))
+        self.boxed.layer(BoxHyperService::new(inner))
     }
 }
 

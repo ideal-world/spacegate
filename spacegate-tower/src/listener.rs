@@ -67,25 +67,25 @@ impl<S> SgListen<S> {
 #[derive(Clone)]
 pub struct HyperServiceAdapter<S>
 where
-    S: tower::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
+    S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
-    service: Buffer<S, Request<SgBody>>,
+    service: S,
     peer: SocketAddr,
 }
 impl<S> HyperServiceAdapter<S>
 where
-    S: tower::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
+    S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
-    pub fn new(service: Buffer<S, Request<SgBody>>, peer: SocketAddr) -> Self {
+    pub fn new(service: S, peer: SocketAddr) -> Self {
         Self { service, peer }
     }
 }
 
 impl<S> hyper::service::Service<Request<Incoming>> for HyperServiceAdapter<S>
 where
-    S: tower::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
+    S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response<SgBody>;
@@ -97,11 +97,11 @@ where
         req.extensions_mut().insert(self.peer);
         // here we will clone underlying service,
         // so it's important that underlying service is cheap to clone.
-        // here, the service are likely to be a `SgBoxService`, if underlying service is big, it will be expensive to clone.
+        // here, the service are likely to be a `BoxHyperService`, if underlying service is big, it will be expensive to clone.
         // especially the router is big and the too many plugins are installed.
         // so we should avoid that
         let enter_time = EnterTime::new();
-        let this = self.service.clone();
+        let service = self.service.clone();
         let mut req = req.map(SgBody::new);
         let mut reflect = Reflect::default();
         reflect.insert(enter_time);
@@ -109,17 +109,6 @@ where
         req.extensions_mut().insert(PeerAddr(self.peer));
         req.extensions_mut().insert(enter_time);
         Box::pin(async move {
-            use tower::Service;
-            let mut service = match this.ready_oneshot().await {
-                Ok(service) => service,
-                Err(e) => {
-                    tracing::warn!("too many request, the underlying buffer is fulfilled {:?}", e);
-                    return Ok(Response::builder()
-                        .status(StatusCode::SERVICE_UNAVAILABLE)
-                        .body(SgBody::full("Too many requests, please try again later."))
-                        .expect("constructing invalid response"));
-                }
-            };
             let mut resp = match service.call(req).await {
                 Ok(resp) => resp,
                 Err(e) => {
@@ -137,7 +126,7 @@ where
 
 impl<S> SgListen<S>
 where
-    S: tower::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
+    S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
     #[instrument(skip(stream, service, tls_cfg))]
@@ -145,7 +134,7 @@ where
         stream: TcpStream,
         peer_addr: SocketAddr,
         tls_cfg: Option<Arc<rustls::ServerConfig>>,
-        service: tower::buffer::Buffer<S, Request<SgBody>>,
+        service: S,
     ) -> Result<(), BoxError> {
         tracing::debug!("[Sg.Listen] Accepted connection");
         let builder = hyper_util::server::conn::auto::Builder::new(rt::TokioExecutor::default());
@@ -173,7 +162,6 @@ where
         let listener = tokio::net::TcpListener::bind(self.socket_addr).await?;
         let cancel_token = self.cancel_token;
         tracing::debug!("[Sg.Listen] start listening...");
-        let buffered = tower::buffer::Buffer::new(self.service, self.buffer_size);
         loop {
             tokio::select! {
                 _ = cancel_token.cancelled() => {
@@ -184,7 +172,7 @@ where
                     match accepted {
                         Ok((stream, peer_addr)) => {
                             let tls_cfg = self.tls_cfg.clone();
-                            let service = buffered.clone();
+                            let service = self.service.clone();
                             tokio::spawn(async move {
                                 if let Err(e) = Self::accept(stream, peer_addr, tls_cfg, service).await {
                                     tracing::warn!("[Sg.Listen] Accept stream error: {:?}", e);

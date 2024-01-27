@@ -208,9 +208,9 @@ mod test {
     use tardis::chrono::{Duration, Local};
     use tardis::serde_json;
     use tardis::tokio;
-    use tower::{BoxError, ServiceExt};
+    use tower::{BoxError};
     use tower_layer::Layer;
-    use tower_service::Service;
+    use hyper::service::Service;
 
     #[tokio::test]
     async fn test_config() -> Result<(), BoxError> {
@@ -249,7 +249,7 @@ mod test {
             .extension(PeerAddr("192.168.1.123:10000".parse().expect("invalid addr")))
             .body(SgBody::empty())
             .expect("invalid request");
-        let resp = serivce.ready().await.unwrap().call(req).await.unwrap();
+        let resp = serivce.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
         let req = Request::builder()
@@ -259,7 +259,7 @@ mod test {
             .extension(PeerAddr("192.168.2.123:10000".parse().expect("invalid addr")))
             .body(SgBody::empty())
             .expect("invalid request");
-        let resp = serivce.ready().await.unwrap().call(req).await.unwrap();
+        let resp = serivce.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
 
         let req = Request::builder()
@@ -269,7 +269,7 @@ mod test {
             .extension(PeerAddr("172.30.30.30:10000".parse().expect("invalid addr")))
             .body(SgBody::empty())
             .expect("invalid request");
-        let resp = serivce.ready().await.unwrap().call(req).await.unwrap();
+        let resp = serivce.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
     }

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use futures_util::future::BoxFuture;
+use tokio::sync::{Mutex, RwLock};
 use tower_layer::Layer;
 
 use tower::Service;
@@ -18,8 +19,7 @@ where
 
     fn layer(&self, inner: S) -> Self::Service {
         Reload {
-            current_service: inner,
-            next_service: self.reloader.service.clone(),
+            service: Arc::new(RwLock::new(inner)),
         }
     }
 }
@@ -29,8 +29,7 @@ pub struct Reload<S>
 where
     S: Send,
 {
-    current_service: S,
-    next_service: Arc<Mutex<Option<S>>>,
+    service: Arc<RwLock<S>>,
 }
 
 #[derive(Debug)]
@@ -60,28 +59,23 @@ impl<S> Reloader<S> {
     }
 }
 
-impl<Request, S> Service<Request> for Reload<S>
+impl<Request, S> hyper::service::Service<Request> for Reload<S>
 where
-    S: Service<Request> + Send,
+    Request: Send + Sync + 'static,
+    S: hyper::service::Service<Request> + Send + Sync + 'static,
+    <S as hyper::service::Service<Request>>::Future: std::marker::Send,
 {
     type Response = S::Response;
 
     type Error = S::Error;
 
-    type Future = S::Future;
+    type Future = BoxFuture<'static, Result<S::Response, S::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        let Ok(mut next) = self.next_service.try_lock() else {
-            return self.current_service.poll_ready(cx);
-        };
-        if let Some(new_service) = next.take() {
-            self.current_service = new_service
-        }
-        drop(next);
-        self.current_service.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request) -> Self::Future {
-        self.current_service.call(req)
+    fn call(&self, req: Request) -> Self::Future {
+        let service = self.service.clone();
+        Box::pin(async move {
+            let rg = service.read_owned().await;
+            rg.call(req).await
+        })
     }
 }

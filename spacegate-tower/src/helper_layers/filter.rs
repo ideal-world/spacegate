@@ -43,6 +43,23 @@ pub struct FilterRequest<F, S> {
     inner: S,
 }
 
+impl<F, S> hyper::service::Service<Request<SgBody>> for FilterRequest<F, S>
+where
+    F: Filter,
+    S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
+{
+    type Response = Response<SgBody>;
+    type Error = Infallible;
+    type Future = futures_util::future::Either<Ready<Result<Self::Response, Self::Error>>, S::Future>;
+
+    fn call(&self, req: Request<SgBody>) -> Self::Future {
+        match self.filter.filter(req) {
+            Ok(req) => futures_util::future::Either::Right(self.inner.call(req)),
+            Err(resp) => futures_util::future::Either::Left(std::future::ready(Ok(resp))),
+        }
+    }
+}
+
 impl<F, S> Service<Request<SgBody>> for FilterRequest<F, S>
 where
     F: Filter,

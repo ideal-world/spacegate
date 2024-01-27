@@ -5,7 +5,6 @@ use futures_util::Future;
 use hyper::{Request, Response};
 use pin_project_lite::pin_project;
 use tower_layer::Layer;
-use tower_service::Service;
 
 use crate::SgBody;
 
@@ -61,7 +60,7 @@ pin_project! {
 
 pin_project! {
     pub struct FilterResponseFuture<S, F>
-    where S: Service<Request<SgBody>>, F: AsyncFilter
+    where S: hyper::service::Service<Request<SgBody>>, F: AsyncFilter
     {
         #[pin]
         state: FilterResponseFutureState<S::Future, F::Future>,
@@ -72,7 +71,7 @@ pin_project! {
 impl<S, F> Future for FilterResponseFuture<S, F>
 where
     F: AsyncFilter,
-    S: Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible>,
+    S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible>,
 {
     type Output = Result<Response<SgBody>, Infallible>;
 
@@ -95,28 +94,17 @@ where
     }
 }
 
-impl<F, S> Service<Request<SgBody>> for AsyncFilterRequest<F, S>
+impl<F, S> hyper::service::Service<Request<SgBody>> for AsyncFilterRequest<F, S>
 where
     F: AsyncFilter,
-    S: Clone + Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
+    S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
 {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = FilterResponseFuture<S, F>;
 
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request<SgBody>) -> Self::Future {
-        use std::mem;
-
+    fn call(&self, req: Request<SgBody>) -> Self::Future {
         let inner = self.inner.clone();
-        // In case the inner service has state that's driven to readiness and
-        // not tracked by clones (such as `Buffer`), pass the version we have
-        // already called `poll_ready` on into the future, and leave its clone
-        // behind.
-        let inner = mem::replace(&mut self.inner, inner);
         let filter = self.filter.clone();
         // filter the request
 

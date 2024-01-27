@@ -167,25 +167,6 @@ impl SgHttpClient {
     }
 }
 
-impl Service<Request<SgBody>> for SgHttpClient {
-    type Response = Response<SgBody>;
-
-    type Error = Infallible;
-
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
-
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map(|_| Ok(()))
-    }
-
-    fn call(&mut self, req: Request<SgBody>) -> Self::Future {
-        let mut this = self.clone();
-        mem::swap(&mut this, self);
-        let fut = async move { this.request(req).map(Ok).await };
-        fut.boxed()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

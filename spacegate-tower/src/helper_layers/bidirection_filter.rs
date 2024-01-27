@@ -1,4 +1,4 @@
-use crate::{SgBody, SgBoxService};
+use crate::{service::BoxHyperService, SgBody,};
 use futures_util::ready;
 use hyper::{Request, Response};
 use pin_project_lite::pin_project;
@@ -43,12 +43,12 @@ pin_project! {
     }
 }
 
-impl<F> Layer<SgBoxService> for BdfLayer<F>
+impl<F> Layer<BoxHyperService> for BdfLayer<F>
 where
     F: Clone,
 {
-    type Service = BdfService<F, SgBoxService>;
-    fn layer(&self, service: SgBoxService) -> Self::Service {
+    type Service = BdfService<F, BoxHyperService>;
+    fn layer(&self, service: BoxHyperService) -> Self::Service {
         Self::Service {
             filter: self.filter.clone(),
             service,
@@ -56,21 +56,18 @@ where
     }
 }
 
-impl<F, S> Service<Request<SgBody>> for BdfService<F, S>
+
+impl<F, S> hyper::service::Service<Request<SgBody>> for BdfService<F, S>
 where
     Self: Clone,
-    S: Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
+    S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
     F: Bdf,
 {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = FilterFuture<F, S>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Request<SgBody>) -> Self::Future {
+    fn call(&self, request: Request<SgBody>) -> Self::Future {
         let cloned = self.clone();
         FilterFuture {
             request: Some(request),
@@ -83,7 +80,7 @@ where
 pin_project! {
     pub struct FilterFuture<F, S>
     where
-        S: Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
+        S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
         F: Bdf,
     {
         request: Option<Request<SgBody>>,
@@ -115,7 +112,7 @@ pin_project! {
 
 impl<F, S> Future for FilterFuture<F, S>
 where
-    S: Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
+    S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
     F: Bdf,
 {
     type Output = Result<Response<SgBody>, Infallible>;
