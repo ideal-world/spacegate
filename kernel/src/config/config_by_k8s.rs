@@ -106,7 +106,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_route_api_clone = http_route_api.clone();
 
     // watch gateway
-    tardis::tokio::spawn(async move {
+    tardis::tokio::task::spawn_local(async move {
         let ew = watcher::watcher(gateway_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
@@ -181,7 +181,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_route_objs_versions_clone = http_route_objs_versions.clone();
     let http_route_apis_clone = http_route_apis.clone();
     // watch http_spaceroute
-    tardis::tokio::spawn(async move {
+    tardis::tokio::task::spawn_local(async move {
         watcher::watcher(http_spaceroute_api_clone, watcher::Config::default())
             .touched_objects()
             .default_backoff()
@@ -193,7 +193,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
             .expect("[SG.Config] Watcher try_for_each error");
     });
     // watch  http_route
-    tardis::tokio::spawn(async move {
+    tardis::tokio::task::spawn_local(async move {
         watcher::watcher(http_route_api_clone, watcher::Config::default())
             .touched_objects()
             .default_backoff()
@@ -211,7 +211,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let sg_filter_objs_versions = k8s_helper::get_obj_uid_version_map(&sg_filter_objs);
 
     // watch sgfilter
-    tardis::tokio::spawn(async move {
+    tardis::tokio::task::spawn_local(async move {
         let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {

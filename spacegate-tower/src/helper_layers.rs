@@ -7,5 +7,6 @@ pub mod route;
 pub mod stat;
 pub mod timeout;
 pub mod map_request;
+pub mod map_response;
 pub mod map_future;
 pub mod random_pick;

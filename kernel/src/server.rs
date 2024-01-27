@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Mutex};
+use std::{cell::OnceCell, collections::HashMap, net::SocketAddr, rc::Rc, sync::Mutex};
 
 use crate::config::{
     gateway_dto::{SgGateway, SgProtocol, SgTlsMode},
@@ -12,7 +12,7 @@ use spacegate_tower::{
     layers::gateway::{builder::default_gateway_route_fallback, create_http_router, SgGatewayRoute},
     listener::SgListen,
     service::get_http_backend_service,
-    BoxError, Layer, BoxHyperService,
+    BoxError, BoxHyperService, Layer,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -120,23 +120,25 @@ pub(crate) fn create_router_service(http_routes: Vec<crate::SgHttpRoute>) -> Res
 pub struct RunningSgGateway {
     token: CancellationToken,
     _guard: tokio_util::sync::DropGuard,
-    handle: JoinHandle<()>,
+    local_set: tokio::task::LocalSet,
     pub reloader: Reloader<SgGatewayRoute>,
     shutdown_timeout: Duration,
 }
 
 impl RunningSgGateway {
-    tardis_static! {
-        pub global_store: Arc<Mutex<HashMap<String, RunningSgGateway>>>;
+    pub const GLOBAL_STORE: OnceCell<Rc<Mutex<HashMap<String, RunningSgGateway>>>> = OnceCell::new();
+    pub fn global_store() -> Rc<Mutex<HashMap<String, RunningSgGateway>>> {
+        Self::GLOBAL_STORE.get_or_init(Default::default).clone()
     }
-
     pub fn global_save(gateway_name: impl Into<String>, gateway: RunningSgGateway) {
-        let mut global_store = Self::global_store().lock().expect("poisoned lock");
+        let global_store = Self::global_store();
+        let mut global_store = global_store.lock().expect("poisoned lock");
         global_store.insert(gateway_name.into(), gateway);
     }
 
     pub fn global_remove(gateway_name: impl AsRef<str>) -> Option<RunningSgGateway> {
-        let mut global_store = Self::global_store().lock().expect("poisoned lock");
+        let global_store = Self::global_store();
+        let mut global_store = global_store.lock().expect("poisoned lock");
         global_store.remove(gateway_name.as_ref())
     }
 
@@ -144,7 +146,8 @@ impl RunningSgGateway {
         let gateway_name = gateway_name.as_ref();
         let service = create_router_service(http_routes)?;
         let reloader = {
-            let global_store = Self::global_store().lock().expect("poisoned lock");
+            let store = Self::global_store();
+            let global_store = store.lock().expect("poisoned lock");
             if let Some(gw) = global_store.get(gateway_name) {
                 gw.reloader.clone()
             } else {
@@ -158,7 +161,8 @@ impl RunningSgGateway {
 
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config.name), skip_all, err)]
-    pub fn start(config: SgGateway, http_routes: Vec<SgHttpRoute>) -> Result<Self, BoxError> {
+    pub fn create(config: SgGateway, http_routes: Vec<SgHttpRoute>) -> Result<Self, BoxError> {
+        log::info!("[SG.Server] start gateway");
         let cancel_token = CancellationToken::new();
         let reloader = <Reloader<SgGatewayRoute>>::default();
         let service = create_service(&config.name, cancel_token.clone(), config.filters.unwrap_or_default(), http_routes, reloader.clone())?;
@@ -233,38 +237,37 @@ impl RunningSgGateway {
             listens.push(listen)
         }
 
-        let task = tokio::spawn(async move {
-            let mut join_set = tokio::task::JoinSet::new();
-            for listen in listens {
-                join_set.spawn(async move {
-                    let id = listen.listener_id.clone();
-                    if let Err(e) = listen.listen().await {
-                        log::error!("[Sg.Server] listen error: {e}")
-                    }
-                    log::info!("[Sg.Server] listener[{id}] quit listening")
-                });
-            }
-            while (join_set.join_next().await).is_some() {}
-        });
+        let local_set = tokio::task::LocalSet::new();
+        for listen in listens {
+            local_set.spawn_local(async move {
+                let id = listen.listener_id.clone();
+                if let Err(e) = listen.listen().await {
+                    log::error!("[Sg.Server] listen error: {e}")
+                }
+                log::info!("[Sg.Server] listener[{id}] quit listening")
+            });
+        }
 
         let cancel_guard = cancel_token.clone().drop_guard();
+        log::info!("[SG.Server] start finished");
         Ok(RunningSgGateway {
             token: cancel_token,
             _guard: cancel_guard,
-            handle: task,
+            local_set,
             shutdown_timeout: Duration::from_secs(10),
             reloader,
         })
     }
 
+    pub async fn start(&self) {
+        let cancle_task = self.token.clone().cancelled_owned();
+        self.local_set.run_until(cancle_task).await;
+    }
     /// Shutdown this gateway
     pub async fn shutdown(self) {
         self.token.cancel();
-        match timeout(self.shutdown_timeout, self.handle).await {
-            Ok(Ok(_)) => {}
-            Ok(Err(e)) => {
-                log::error!("[SG.Server] Join handle error:{e}");
-            }
+        match timeout(self.shutdown_timeout, self.local_set).await {
+            Ok(_) => {}
             Err(e) => {
                 log::warn!("[SG.Server] Wait shutdown timeout:{e}");
             }

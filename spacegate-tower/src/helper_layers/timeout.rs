@@ -35,8 +35,11 @@ pub struct Timeout<S> {
 }
 
 impl TimeoutLayer {
-    pub fn new(timeout: Option<Duration>, ) -> Self {
-        Self { timeout, timeout_response: hyper::body::Bytes::default() }
+    pub fn new(timeout: Option<Duration>) -> Self {
+        Self {
+            timeout,
+            timeout_response: hyper::body::Bytes::default(),
+        }
     }
     pub fn set_timeout(&mut self, timeout: Option<Duration>) {
         self.timeout = timeout;
@@ -88,7 +91,8 @@ where
         let this = self.project();
         if let Some(timeout_at) = this.timeout_at {
             if Instant::now() >= *timeout_at {
-                return std::task::Poll::Ready(Ok(Response::new(SgBody::full(this.timeout_response.clone()))));
+                let response = Response::builder().status(hyper::StatusCode::GATEWAY_TIMEOUT).body(SgBody::full(this.timeout_response.clone())).expect("invalid response");
+                return std::task::Poll::Ready(Ok(response));
             }
         }
         this.inner.poll(cx)

@@ -140,13 +140,13 @@ where
 
     fn layer(&self, inner: S) -> Self::Service {
         let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
-        let mut filtered = self.filters.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
+        let filtered = self.filters.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
         SgHttpBackend {
             weight: self.weight,
             host: self.host.clone(),
-            port: self.port.clone(),
+            port: self.port,
             scheme: self.scheme.clone(),
-            timeout: self.timeout.clone(),
+            timeout: self.timeout,
             inner_service: BoxHyperService::new(filtered),
         }
     }
@@ -203,7 +203,7 @@ where
             }),
         };
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter backend");
-        let mut req = if let Some(map_request) = map_request { map_request(req) } else { req };
+        let req = if let Some(map_request) = map_request { map_request(req) } else { req };
         self.inner_service.call(req)
     }
 }

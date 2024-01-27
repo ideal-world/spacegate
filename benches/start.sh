@@ -1,5 +1,5 @@
 ./static-web-server --port 8080 --root ./static-server
-./spacegate ./config
+./spacegate ./config 1200
 
 sleep 5
 

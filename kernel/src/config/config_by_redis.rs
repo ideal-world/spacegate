@@ -44,7 +44,7 @@ pub async fn init(conf_url: &str, check_interval_sec: u64) -> TardisResult<Vec<(
             .collect::<TardisResult<Vec<SgHttpRoute>>>()?;
         config.push((gateway_config, http_route_configs));
     }
-    tardis::tokio::spawn(async move {
+    tardis::tokio::task::spawn_local(async move {
         let mut interval = time::interval(Duration::from_secs(check_interval_sec));
         loop {
             {
