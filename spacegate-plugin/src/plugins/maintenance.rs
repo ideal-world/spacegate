@@ -199,6 +199,7 @@ def_plugin!("maintenance", MaintenancePlugin, SgFilterMaintenanceConfig);
 #[cfg(test)]
 mod test {
 
+    use hyper::service::Service;
     use hyper::StatusCode;
     use hyper::{Method, Request, Version};
     use serde_json::json;
@@ -208,9 +209,8 @@ mod test {
     use tardis::chrono::{Duration, Local};
     use tardis::serde_json;
     use tardis::tokio;
-    use tower::{BoxError};
+    use tower::BoxError;
     use tower_layer::Layer;
-    use hyper::service::Service;
 
     #[tokio::test]
     async fn test_config() -> Result<(), BoxError> {

@@ -74,7 +74,7 @@ pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> Re
         }
     }
     // Initialize service instances
-    let running_gateway = server::RunningSgGateway::start(gateway, http_routes)?;
+    let running_gateway = server::RunningSgGateway::create(gateway, http_routes)?;
     server::RunningSgGateway::global_save(gateway_name, running_gateway);
     Ok(())
 }

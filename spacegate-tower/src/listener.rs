@@ -18,6 +18,7 @@ use crate::{
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
 #[derive(Clone)]
 pub struct SgListen<S> {
+    conn_builder: hyper_util::server::conn::auto::Builder<rt::TokioExecutor>,
     pub socket_addr: SocketAddr,
     pub service: S,
     pub tls_cfg: Option<Arc<rustls::ServerConfig>>,
@@ -37,6 +38,7 @@ impl<S> SgListen<S> {
     pub const DEFAULT_BUFFER_SIZE: usize = 0x10000;
     pub fn new(socket_addr: SocketAddr, service: S, cancel_token: CancellationToken, id: impl Into<String>) -> Self {
         Self {
+            conn_builder: hyper_util::server::conn::auto::Builder::new(rt::TokioExecutor::new()),
             socket_addr,
             service,
             tls_cfg: None,
@@ -131,25 +133,26 @@ where
 {
     #[instrument(skip(stream, service, tls_cfg))]
     async fn accept(
+        conn_builder: hyper_util::server::conn::auto::Builder<rt::TokioExecutor>,
         stream: TcpStream,
         peer_addr: SocketAddr,
         tls_cfg: Option<Arc<rustls::ServerConfig>>,
+        cancel_token: CancellationToken,
         service: S,
     ) -> Result<(), BoxError> {
         tracing::debug!("[Sg.Listen] Accepted connection");
-        let builder = hyper_util::server::conn::auto::Builder::new(rt::TokioExecutor::default());
         let service = HyperServiceAdapter::new(service, peer_addr);
         match tls_cfg {
             Some(tls_cfg) => {
                 let connector = tokio_rustls::TlsAcceptor::from(tls_cfg);
                 let accepted = connector.accept(stream).await?;
                 let io = TokioIo::new(accepted);
-                let conn = builder.serve_connection_with_upgrades(io, service);
+                let conn = conn_builder.serve_connection(io, service);
                 conn.await?;
             }
             None => {
                 let io = TokioIo::new(stream);
-                let conn = builder.serve_connection_with_upgrades(io, service);
+                let conn = conn_builder.serve_connection(io, service);
                 conn.await?;
             }
         }
@@ -173,8 +176,10 @@ where
                         Ok((stream, peer_addr)) => {
                             let tls_cfg = self.tls_cfg.clone();
                             let service = self.service.clone();
+                            let builder = self.conn_builder.clone();
+                            let cancel_token = cancel_token.clone();
                             tokio::spawn(async move {
-                                if let Err(e) = Self::accept(stream, peer_addr, tls_cfg, service).await {
+                                if let Err(e) = Self::accept(builder, stream, peer_addr, tls_cfg, cancel_token, service).await {
                                     tracing::warn!("[Sg.Listen] Accept stream error: {:?}", e);
                                 }
                             });

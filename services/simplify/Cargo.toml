@@ -33,8 +33,9 @@ spacegate-kernel = { version = "0.1.0-alpha.7", path = "../../kernel", features 
     "local",
 ] }
 openssl = {version = "0.10"}
+# tardis = { workspace = true, features = ["console-subscriber"] }
 tardis = { workspace = true }
-
+tokio ={ version = "1", features = ["full"] }
 [dev-dependencies]
 
 [package.metadata.docs.rs]

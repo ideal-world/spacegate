@@ -4,11 +4,11 @@ use hyper::header::HeaderValue;
 use hyper::{header::HeaderName, HeaderMap};
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
+use spacegate_tower::helper_layers::{map_request::MapRequestLayer, map_response::MapResponseLayer};
 use spacegate_tower::service::BoxHyperService;
-use tower::util::{MapRequestLayer, MapResponseLayer};
 use tower_layer::Layer;
 
-use spacegate_tower::{SgBody, SgBoxService};
+use spacegate_tower::SgBody;
 
 use crate::{def_plugin, MakeSgLayer};
 
@@ -92,8 +92,7 @@ impl Layer<BoxHyperService> for HeaderModifierLayer {
             }
             resp
         });
-        unimplemented!()
-        // BoxHyperService::new(req_map_layer.layer(resp_map_layer.layer(service)))
+        BoxHyperService::new(req_map_layer.layer(resp_map_layer.layer(service)))
     }
 }
 

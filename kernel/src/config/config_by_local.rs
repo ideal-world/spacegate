@@ -22,7 +22,7 @@ pub async fn init(conf_path: &str, check_interval_sec: u64) -> TardisResult<Vec<
 
     let (config, _, _) = fetch_configs(&gateway_config_path, &routes_config_path).await?;
 
-    tardis::tokio::spawn(async move {
+    tardis::tokio::task::spawn_local(async move {
         let mut interval = time::interval(Duration::from_secs(check_interval_sec));
         loop {
             {
