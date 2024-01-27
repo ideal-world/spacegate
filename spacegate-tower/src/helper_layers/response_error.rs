@@ -96,6 +96,29 @@ where
     }
 }
 
+impl<S, FMT> hyper::service::Service<Request<SgBody>> for ResponseError<S, FMT> 
+where
+    S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>> + Send + Sync + 'static,
+    S::Error: std::error::Error,
+    FMT: ErrorFormatter,
+{
+    type Response = Response<SgBody>;
+
+    type Error = Infallible;
+
+    type Future = ResponseErrorFuture<S::Error, S::Future, FMT>;
+
+    fn call(&self, req: Request<SgBody>) -> Self::Future {
+        let fut = self.inner.call(req);
+        ResponseErrorFuture {
+            error: marker::PhantomData,
+            inner: fut,
+            formatter: self.formatter.clone(),
+        }
+    }
+}
+
+
 impl<S, FMT> Service<Request<SgBody>> for ResponseError<S, FMT>
 where
     S: Service<Request<SgBody>, Response = Response<SgBody>> + Send + Sync + 'static,

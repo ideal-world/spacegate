@@ -43,20 +43,16 @@ where
     }
 }
 
-impl<P, S> tower_service::Service<Request<SgBody>> for Stat<P, S>
+impl<P, S> hyper::service::Service<Request<SgBody>> for Stat<P, S>
 where
     P: Policy,
-    S: tower_service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible>,
+    S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible>,
 {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = ResponseFuture<S::Future, P>;
 
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request<SgBody>) -> Self::Future {
+    fn call(&self, req: Request<SgBody>) -> Self::Future {
         self.policy.on_request(&req);
         let fut = self.inner.call(req);
         ResponseFuture::new(fut, self.policy.clone())

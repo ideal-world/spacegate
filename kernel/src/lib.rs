@@ -24,7 +24,7 @@ use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 pub use http;
 pub use hyper;
 pub use spacegate_plugin;
-pub use spacegate_tower::{self, helper_layers, BoxError, SgBody, SgBoxLayer, SgBoxService, SgRequestExt, SgResponseExt};
+pub use spacegate_tower::{self, helper_layers, BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 use tardis::{
     basic::result::TardisResult,
     log::{self as tracing, instrument},

@@ -4,6 +4,7 @@ use hyper::header::HeaderValue;
 use hyper::{header::HeaderName, HeaderMap};
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
+use spacegate_tower::service::BoxHyperService;
 use tower::util::{MapRequestLayer, MapResponseLayer};
 use tower_layer::Layer;
 
@@ -65,10 +66,10 @@ pub struct HeaderModifierLayer {
     response: Arc<Filter>,
 }
 
-impl Layer<SgBoxService> for HeaderModifierLayer {
-    type Service = SgBoxService;
+impl Layer<BoxHyperService> for HeaderModifierLayer {
+    type Service = BoxHyperService;
 
-    fn layer(&self, service: SgBoxService) -> Self::Service {
+    fn layer(&self, service: BoxHyperService) -> Self::Service {
         let req_filter = self.request.clone();
         let resp_filter = self.response.clone();
         let req_map_layer = MapRequestLayer::new(move |req: Request<SgBody>| {
@@ -91,7 +92,8 @@ impl Layer<SgBoxService> for HeaderModifierLayer {
             }
             resp
         });
-        SgBoxService::new(req_map_layer.layer(resp_map_layer.layer(service)))
+        unimplemented!()
+        // BoxHyperService::new(req_map_layer.layer(resp_map_layer.layer(service)))
     }
 }
 

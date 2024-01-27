@@ -12,7 +12,7 @@ use spacegate_tower::{
     layers::gateway::{builder::default_gateway_route_fallback, create_http_router, SgGatewayRoute},
     listener::SgListen,
     service::get_http_backend_service,
-    BoxError, Layer, SgBoxService,
+    BoxError, Layer, BoxHyperService,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -88,7 +88,7 @@ pub(crate) fn create_service(
     plugins: Vec<SgRouteFilter>,
     http_routes: Vec<crate::SgHttpRoute>,
     reloader: Reloader<SgGatewayRoute>,
-) -> Result<SgBoxService, BoxError> {
+) -> Result<BoxHyperService, BoxError> {
     let routes = collect_tower_http_route(http_routes)?;
     let plugins = plugins.into_iter().map(SgRouteFilter::into_layer).collect::<Result<Vec<_>, _>>()?;
     let gateway_layer = spacegate_tower::layers::gateway::SgGatewayLayer::builder(gateway_name.to_owned(), cancel_token)
@@ -98,7 +98,7 @@ pub(crate) fn create_service(
         .build();
 
     let backend_service = get_http_backend_service();
-    let service = SgBoxService::new(gateway_layer.layer(backend_service));
+    let service = BoxHyperService::new(gateway_layer.layer(backend_service));
     Ok(service)
 }
 
@@ -186,7 +186,7 @@ impl RunningSgGateway {
         }
 
         let gateway_name = Arc::new(config.name.to_string());
-        let mut listens: Vec<SgListen<SgBoxService>> = Vec::new();
+        let mut listens: Vec<SgListen<BoxHyperService>> = Vec::new();
         for listener in &config.listeners {
             let ip = listener.ip.unwrap_or(IP_UNSPECIFIED);
             let addr = SocketAddr::new(ip, listener.port);
