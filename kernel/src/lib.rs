@@ -20,6 +20,8 @@
 //! logs at most.
 
 #![warn(clippy::unwrap_used)]
+use std::time::Duration;
+
 use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
 pub use http;
 pub use hyper;
@@ -27,8 +29,8 @@ pub use spacegate_plugin;
 pub use spacegate_tower::{self, helper_layers, BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 use tardis::{
     basic::result::TardisResult,
-    log::{self as tracing, instrument},
-    tokio::signal,
+    log::{self as tracing, info, instrument},
+    tokio::{signal, task::JoinHandle},
 };
 mod cache_client;
 pub mod config;
@@ -38,27 +40,29 @@ pub mod server;
 // pub mod instance;
 // pub mod plugins;
 
-#[inline]
-pub async fn startup_k8s(namespace: Option<String>) -> Result<(), BoxError> {
-    startup(true, namespace, None).await
-}
+// #[inline]
+// pub async fn startup_k8s(namespace: Option<String>) -> Result<(), BoxError> {
+//     startup(true, namespace, None).await
+// }
+
+// #[inline]
+// pub async fn startup_native(conf_uri: String, check_interval_sec: u64) -> Result<(), BoxError> {
+//     startup(false, Some(conf_uri), Some(check_interval_sec)).await
+// }
 
 #[inline]
-pub async fn startup_native(conf_uri: String, check_interval_sec: u64) -> Result<(), BoxError> {
-    startup(false, Some(conf_uri), Some(check_interval_sec)).await
-}
-
-#[inline]
-pub async fn startup_simplify(conf_path: String, check_interval_sec: u64) -> Result<(), BoxError> {
-    startup(false, Some(conf_path), Some(check_interval_sec)).await
+pub async fn startup_simplify(conf_path: String, check_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    let config_listener = config::config_by_local::FileConfigListener::new(&conf_path, Duration::from_secs(check_interval_sec)).await?;
+    Ok(config::init_with_config_listener(config_listener, ctrl_c_cancel_token()))
 }
 
 pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> Result<(), BoxError> {
     // Initialize configuration according to different modes
-    let configs = config::init(k8s_mode, namespace_or_conf_uri, check_interval_sec).await?;
-    for (gateway, http_routes) in configs {
-        do_startup(gateway, http_routes).await?;
-    }
+    // let configs = config::init(k8s_mode, namespace_or_conf_uri, check_interval_sec).await?;
+    // for (gateway, http_routes) in configs {
+    //     do_startup(gateway, http_routes).await?;
+    // }
+    // config::init_with_config_listener(config_listener)
     Ok(())
 }
 
@@ -74,8 +78,8 @@ pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> Re
         }
     }
     // Initialize service instances
-    let running_gateway = server::RunningSgGateway::create(gateway, http_routes)?;
-    server::RunningSgGateway::global_save(gateway_name, running_gateway);
+    // let running_gateway = server::RunningSgGateway::create(gateway, http_routes)?;
+    // server::RunningSgGateway::global_save(gateway_name, running_gateway);
     Ok(())
 }
 
@@ -114,4 +118,17 @@ pub async fn wait_graceful_shutdown() -> TardisResult<()> {
         }
     }
     Ok(())
+}
+
+pub fn ctrl_c_cancel_token() -> tokio_util::sync::CancellationToken {
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+    {
+        let cancel_token = cancel_token.clone();
+        tardis::tokio::spawn(async move {
+            let _ = tardis::tokio::signal::ctrl_c().await;
+            info!("Received ctrl+c signal, shutting down...");
+            cancel_token.cancel();
+        });
+    }
+    cancel_token
 }
