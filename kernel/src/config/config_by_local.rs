@@ -178,7 +178,7 @@ impl FileConfigListener {
                 }
             }
         };
-        tokio::task::spawn_local(reloader);
+        tokio::task::spawn(reloader);
         // create watcher
         let watcher = {
             let mut watcher = notify::recommended_watcher(move |res| {
