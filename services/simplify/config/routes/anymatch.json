@@ -2,6 +2,12 @@
   "gateway_name": "gateway",
   "rules": [
     {
+      "hostnames": [
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "[::]"
+      ],
       "matches": [
         {
           "path": {
@@ -12,7 +18,7 @@
       ],
       "backends": [
         {
-          "name_or_host": "localhost",
+          "name_or_host": "127.0.0.1",
           "port": 8080,
           "protocol": "http",
           "weight": 1
