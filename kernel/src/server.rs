@@ -141,13 +141,11 @@ impl RunningSgGateway {
         let global_store = Self::global_store();
         let mut global_store = global_store.lock().expect("poisoned lock");
         global_store.insert(gateway_name.into(), gateway);
-        dbg!(&global_store, global_store.deref() as *const _, std::thread::current().name());
     }
 
     pub fn global_remove(gateway_name: impl AsRef<str>) -> Option<RunningSgGateway> {
         let global_store = Self::global_store();
         let mut global_store = global_store.lock().expect("poisoned lock");
-        dbg!(&global_store, global_store.deref() as *const _, std::thread::current().name());
         global_store.remove(gateway_name.as_ref())
     }
 
@@ -157,7 +155,6 @@ impl RunningSgGateway {
         let reloader = {
             let store = Self::global_store();
             let global_store = store.lock().expect("poisoned lock");
-            dbg!(&global_store, global_store.deref() as *const _, std::thread::current().name());
             if let Some(gw) = global_store.get(gateway_name) {
                 gw.reloader.clone()
             } else {

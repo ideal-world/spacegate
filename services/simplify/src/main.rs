@@ -19,12 +19,8 @@ fn main() -> Result<(), BoxError> {
         let local_set = tokio::task::LocalSet::new();
         local_set
             .run_until(async move {
-                tokio::task::spawn_local(async move {
-                    let join_handle = spacegate_kernel::startup_simplify(conf_path, check_interval_sec).await.expect("fail to start spacegate");
-                    join_handle.await.expect("join handle error")
-                })
-                .await
-                .expect("join handle error")
+                let join_handle = spacegate_kernel::startup_simplify(conf_path, check_interval_sec).await.expect("fail to start spacegate");
+                join_handle.await.expect("join handle error")
             })
             .await
     })
