@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, collections::HashMap, net::SocketAddr, rc::Rc, sync::Mutex};
+use std::{cell::OnceCell, collections::HashMap, net::SocketAddr, ops::Deref, rc::Rc, sync::{Mutex, OnceLock}};
 
 use crate::config::{
     gateway_dto::{SgGateway, SgProtocol, SgTlsMode},
@@ -119,26 +119,35 @@ pub(crate) fn create_router_service(http_routes: Vec<crate::SgHttpRoute>) -> Res
 /// Though, after it has been dropped, it will shutdown automatically.
 pub struct RunningSgGateway {
     token: CancellationToken,
-    _guard: tokio_util::sync::DropGuard,
-    local_set: tokio::task::LocalSet,
+    // _guard: tokio_util::sync::DropGuard,
+    handle: tokio::task::JoinHandle<()>,
     pub reloader: Reloader<SgGatewayRoute>,
     shutdown_timeout: Duration,
 }
+impl std::fmt::Debug for RunningSgGateway {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunningSgGateway")
+            .field("shutdown_timeout", &self.shutdown_timeout)
+            .finish()
+    }
+}
 
+pub static GLOBAL_STORE: OnceLock<Arc<Mutex<HashMap<String, RunningSgGateway>>>> = OnceLock::new();
 impl RunningSgGateway {
-    pub const GLOBAL_STORE: OnceCell<Rc<Mutex<HashMap<String, RunningSgGateway>>>> = OnceCell::new();
-    pub fn global_store() -> Rc<Mutex<HashMap<String, RunningSgGateway>>> {
-        Self::GLOBAL_STORE.get_or_init(Default::default).clone()
+    pub fn global_store() -> Arc<Mutex<HashMap<String, RunningSgGateway>>> {
+        GLOBAL_STORE.get_or_init(Default::default).clone()
     }
     pub fn global_save(gateway_name: impl Into<String>, gateway: RunningSgGateway) {
         let global_store = Self::global_store();
         let mut global_store = global_store.lock().expect("poisoned lock");
         global_store.insert(gateway_name.into(), gateway);
+        dbg!(&global_store, global_store.deref() as *const _, std::thread::current().name());
     }
 
     pub fn global_remove(gateway_name: impl AsRef<str>) -> Option<RunningSgGateway> {
         let global_store = Self::global_store();
         let mut global_store = global_store.lock().expect("poisoned lock");
+        dbg!(&global_store, global_store.deref() as *const _, std::thread::current().name());
         global_store.remove(gateway_name.as_ref())
     }
 
@@ -148,6 +157,7 @@ impl RunningSgGateway {
         let reloader = {
             let store = Self::global_store();
             let global_store = store.lock().expect("poisoned lock");
+            dbg!(&global_store, global_store.deref() as *const _, std::thread::current().name());
             if let Some(gw) = global_store.get(gateway_name) {
                 gw.reloader.clone()
             } else {
@@ -161,9 +171,8 @@ impl RunningSgGateway {
 
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config.name), skip_all, err)]
-    pub fn create(config: SgGateway, http_routes: Vec<SgHttpRoute>) -> Result<Self, BoxError> {
+    pub fn create(config: SgGateway, http_routes: Vec<SgHttpRoute>, cancel_token: CancellationToken) -> Result<Self, BoxError> {
         log::info!("[SG.Server] start gateway");
-        let cancel_token = CancellationToken::new();
         let reloader = <Reloader<SgGatewayRoute>>::default();
         let service = create_service(&config.name, cancel_token.clone(), config.filters.unwrap_or_default(), http_routes, reloader.clone())?;
         if config.listeners.is_empty() {
@@ -230,7 +239,7 @@ impl RunningSgGateway {
                 }
             }
             let listen_id = format!("{gateway_name}-{name}-{protocol}", name = listener.name.as_deref().unwrap_or("?"), protocol = protocol);
-            let mut listen = SgListen::new(addr, service.clone(), cancel_token.clone(), listen_id);
+            let mut listen = SgListen::new(addr, service.clone(), cancel_token.child_token(), listen_id);
             if let Some(tls_cfg) = tls_cfg {
                 listen = listen.with_tls_config(tls_cfg);
             }
@@ -248,25 +257,27 @@ impl RunningSgGateway {
             });
         }
 
-        let cancel_guard = cancel_token.clone().drop_guard();
+        // let cancel_guard = cancel_token.clone().drop_guard();
+        let cancel_task = cancel_token.clone().cancelled_owned();
+        let handle = tokio::task::spawn_local(async move {
+            log::info!(gateway=gateway_name.as_ref(), "[Sg.Server] start all listeners");
+            local_set.run_until(cancel_task).await;
+            log::info!(gateway=gateway_name.as_ref(), "[Sg.Server] cancelled");
+        });
         log::info!("[SG.Server] start finished");
         Ok(RunningSgGateway {
             token: cancel_token,
-            _guard: cancel_guard,
-            local_set,
+            // _guard: cancel_guard,
+            handle,
             shutdown_timeout: Duration::from_secs(10),
             reloader,
         })
     }
 
-    pub async fn start(&self) {
-        let cancle_task = self.token.clone().cancelled_owned();
-        self.local_set.run_until(cancle_task).await;
-    }
     /// Shutdown this gateway
     pub async fn shutdown(self) {
         self.token.cancel();
-        match timeout(self.shutdown_timeout, self.local_set).await {
+        match timeout(self.shutdown_timeout, self.handle).await {
             Ok(_) => {}
             Err(e) => {
                 log::warn!("[SG.Server] Wait shutdown timeout:{e}");
