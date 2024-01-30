@@ -1,0 +1,60 @@
+[package]
+name = "spacegate-config"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../README.md"
+
+[lib]
+name = "spacegate_config"
+path = "src/lib.rs"
+
+[features]
+default = ["full"]
+full = ["file", "redis", "k8s", "typegen", "service"]
+service = []
+file = ["notify"]
+redis = []
+k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars"]
+typegen = ["ts-rs"]
+[dependencies]
+ts-rs = { version = "7.1", optional = true }
+serde_regex = "1.1.0"
+regex = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+serde.workspace = true
+serde_json.workspace = true
+
+hyper.workspace = true
+hyper-rustls.workspace = true
+rustls-pemfile.workspace = true
+tokio-rustls.workspace = true
+ipnet = { version = "2", features = ["serde"] }
+
+bytes = { workspace = true }
+
+kube = { workspace = true, optional = true }
+k8s-openapi = { workspace = true, optional = true }
+k8s-gateway-api = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+
+notify = { version = "6.1.1", default-features = false, features = [
+    "macos_kqueue",
+], optional = true }
+
+[dev-dependencies]
+tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
+reqwest = { workspace = true }
+tracing-subscriber = { workspace = true }
+criterion = { version = "0.5", features = ["async_tokio"] }
+testcontainers-modules = { workspace = true }
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
