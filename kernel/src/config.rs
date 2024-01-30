@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use spacegate_tower::BoxError;
 use tardis::{
     futures_util::{Stream, StreamExt},
@@ -115,10 +116,13 @@ where
     })
 }
 
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct StaticConfigItem {
     pub gateway: SgGateway,
     pub routes: Vec<SgHttpRoute>,
 }
+
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 
 pub struct StaticConfig {
     pub items: Vec<StaticConfigItem>,
