@@ -4,14 +4,12 @@ use std::sync::Arc;
 use futures_util::future::BoxFuture;
 use futures_util::Future;
 use hyper::{header::UPGRADE, Request, Response, StatusCode};
-use tower::BoxError;
-use tower::ServiceExt;
-use tower_service::Service;
 use tracing::instrument;
 
 use crate::helper_layers::map_future::MapFuture;
 use crate::service::http_client_service::get_client;
 use crate::utils::x_forwarded_for;
+use crate::BoxError;
 use crate::SgBody;
 use crate::SgResponseExt;
 
@@ -19,7 +17,6 @@ pub mod echo;
 pub mod http_client_service;
 
 pub mod ws_client_service;
-
 pub trait CloneHyperService<R>: hyper::service::Service<R> {
     fn clone_box(&self) -> Box<dyn CloneHyperService<R, Response = Self::Response, Error = Self::Error, Future = Self::Future> + Send + Sync>;
 }

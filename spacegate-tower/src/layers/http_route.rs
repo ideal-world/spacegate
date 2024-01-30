@@ -1,31 +1,26 @@
 pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
-mod picker;
 mod predicate;
 use std::{convert::Infallible, num::NonZeroU16, sync::Arc, time::Duration};
 
 use crate::{
     extension::{BackendHost, Reflect},
-    helper_layers::{map_request::MapRequestLayer, random_pick},
+    helper_layers::random_pick,
     service::BoxHyperService,
     utils::schema_port::port_to_schema,
     SgBody, SgBoxLayer,
 };
 
-use futures_util::future::BoxFuture;
 use hyper::{Request, Response};
-use tower::steer::Steer;
 
 // use tower_http::timeout::{Timeout, TimeoutLayer};
 
 use tower_layer::Layer;
-use tower_service::Service;
 
 use self::{
     builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
     match_request::SgHttpRouteMatch,
-    picker::RouteByWeight,
 };
 
 /****************************************************************************************

@@ -1,9 +1,20 @@
-use tardis::{basic::result::TardisResult, tokio, TardisFuns};
+use tardis::{basic::{tracing::TardisTracing}, tokio, };
+use spacegate_kernel::BoxError;
 
-#[tokio::main]
-async fn main() -> TardisResult<()> {
-    TardisFuns::init_log()?;
-    let namespaces = std::env::args().nth(1).map(Some).unwrap_or(None);
-    spacegate_kernel::startup_k8s(namespaces).await.expect("fail to start up");
-    spacegate_kernel::wait_graceful_shutdown().await
+
+fn main() -> Result<(), BoxError> {
+    TardisTracing::initializer().with_env_layer().with_fmt_layer().init();
+    let ns_from_env = std::env::var("NAMESPACE").ok();
+    let ns_from_arg = std::env::args().nth(1);
+    let namespaces = ns_from_arg.or(ns_from_env);
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().thread_name("spacegate").build().expect("fail to build runtime");
+    rt.block_on(async move {
+        let local_set = tokio::task::LocalSet::new();
+        local_set
+            .run_until(async move {
+                let join_handle = spacegate_kernel::startup_k8s(namespaces.as_deref()).await.expect("fail to start spacegate");
+                join_handle.await.expect("join handle error")
+            })
+            .await
+    })
 }

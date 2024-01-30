@@ -6,7 +6,7 @@ use spacegate_tower::helper_layers::filter::{Filter, FilterRequestLayer};
 use spacegate_tower::{SgBody, SgBoxLayer, SgResponseExt};
 use std::net::IpAddr;
 use std::ops::Range;
-use tower::BoxError;
+use spacegate_tower::BoxError;
 
 // use crate::def_filter;
 // use itertools::Itertools;
@@ -158,18 +158,18 @@ impl Filter for SgFilterMaintenance {
                         .status(StatusCode::SERVICE_UNAVAILABLE)
                         .header(CONTENT_TYPE, HeaderValue::from_static("text/html"))
                         .body(SgBody::full(body))
-                        .map_err(Response::internal_error)?
+                        .map_err(Response::bad_gateway)?
                 }
                 ContentType::Json => Response::builder()
                     .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
                     .status(StatusCode::SERVICE_UNAVAILABLE)
                     .body(SgBody::full(format!("\"{msg}\"", msg = self.msg)))
-                    .map_err(Response::internal_error)?,
+                    .map_err(Response::bad_gateway)?,
                 ContentType::Other => Response::builder()
                     .status(StatusCode::SERVICE_UNAVAILABLE)
                     .header(CONTENT_TYPE, HeaderValue::from_static("text/html"))
                     .body(SgBody::full(format!("<h1>{}</h1>", self.title)))
-                    .map_err(Response::internal_error)?,
+                    .map_err(Response::bad_gateway)?,
             };
             Err(resp)
         } else {
@@ -209,7 +209,7 @@ mod test {
     use tardis::chrono::{Duration, Local};
     use tardis::serde_json;
     use tardis::tokio;
-    use tower::BoxError;
+    use spacegate_tower::BoxError;
     use tower_layer::Layer;
 
     #[tokio::test]
@@ -240,7 +240,7 @@ mod test {
                 ),
             )
             .expect("unable to create plugin");
-        let mut serivce = repo.layer(get_echo_service());
+        let serivce = repo.layer(get_echo_service());
 
         let req = Request::builder()
             .method(Method::POST)

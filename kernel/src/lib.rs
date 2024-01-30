@@ -20,16 +20,15 @@
 //! logs at most.
 
 #![warn(clippy::unwrap_used)]
-use std::time::Duration;
 
-use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
+use config::{http_route_dto::SgHttpRoute, ConfigListener, StaticConfig};
 pub use http;
 pub use hyper;
 pub use spacegate_plugin;
 pub use spacegate_tower::{self, helper_layers, BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 use tardis::{
     basic::result::TardisResult,
-    log::{self as tracing, info, instrument},
+    log::{self as tracing, info},
     tokio::{signal, task::JoinHandle},
 };
 mod cache_client;
@@ -37,71 +36,32 @@ pub mod config;
 pub mod constants;
 pub mod helpers;
 pub mod server;
-// pub mod instance;
-// pub mod plugins;
 
-// #[inline]
-// pub async fn startup_k8s(namespace: Option<String>) -> Result<(), BoxError> {
-//     startup(true, namespace, None).await
-// }
-
-// #[inline]
-// pub async fn startup_native(conf_uri: String, check_interval_sec: u64) -> Result<(), BoxError> {
-//     startup(false, Some(conf_uri), Some(check_interval_sec)).await
-// }
-
-#[inline]
-pub async fn startup_simplify(conf_path: String, check_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    let config_listener = config::config_by_local::FileConfigListener::new(&conf_path, Duration::from_secs(check_interval_sec)).await?;
+#[cfg(feature = "local")]
+pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    let config_listener = config::config_by_local::FileConfigListener::new(&conf_path).await?;
+    Ok(config::init_with_config_listener(config_listener, ctrl_c_cancel_token()))
+}
+#[cfg(feature = "k8s")]
+pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    let config_listener = config::config_by_k8s::K8sConfigListener::new(namespace).await?;
+    Ok(config::init_with_config_listener(config_listener, ctrl_c_cancel_token()))
+}
+#[cfg(feature = "cache")]
+pub async fn startup_cache(url: impl AsRef<str>, poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    let config_listener = config::config_by_redis::RedisConfigListener::new(url.as_ref(), poll_interval_sec).await?;
     Ok(config::init_with_config_listener(config_listener, ctrl_c_cancel_token()))
 }
 
-pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> Result<(), BoxError> {
-    // Initialize configuration according to different modes
-    // let configs = config::init(k8s_mode, namespace_or_conf_uri, check_interval_sec).await?;
-    // for (gateway, http_routes) in configs {
-    //     do_startup(gateway, http_routes).await?;
-    // }
-    // config::init_with_config_listener(config_listener)
-    Ok(())
+pub async fn startup_static(config: StaticConfig) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    Ok(config::init_with_config_listener(config, ctrl_c_cancel_token()))
 }
 
-#[instrument(skip(gateway))]
-pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> Result<(), BoxError> {
-    let gateway_name = gateway.name.clone();
-    #[cfg(feature = "cache")]
-    {
-        // Initialize cache instances
-        if let Some(url) = &gateway.parameters.redis_url {
-            tracing::trace!("Initialize cache client...url:{url}");
-            cache_client::init(gateway_name.clone(), url).await?;
-        }
-    }
-    // Initialize service instances
-    // let running_gateway = server::RunningSgGateway::create(gateway, http_routes)?;
-    // server::RunningSgGateway::global_save(gateway_name, running_gateway);
-    Ok(())
-}
-
-#[instrument]
-pub async fn update_route(gateway_name: &str, http_routes: Vec<SgHttpRoute>) -> Result<(), BoxError> {
-    server::RunningSgGateway::global_update(gateway_name, http_routes).await
-}
-
-#[instrument]
-pub async fn shutdown(gateway_name: &str) -> Result<(), BoxError> {
-    // Remove route instances
-    // http_route::remove(gateway_name).await?;
-    #[cfg(feature = "cache")]
-    {
-        // Remove cache instances
-        cache_client::remove(gateway_name).await?;
-    }
-    // Shutdown service instances
-    if let Some(gateway) = server::RunningSgGateway::global_remove(gateway_name) {
-        gateway.shutdown().await;
-    }
-    Ok(())
+pub async fn startup<L>(config: L) -> Result<JoinHandle<Result<(), BoxError>>, BoxError>
+where
+    L: ConfigListener,
+{
+    Ok(config::init_with_config_listener(config, ctrl_c_cancel_token()))
 }
 
 pub async fn wait_graceful_shutdown() -> TardisResult<()> {

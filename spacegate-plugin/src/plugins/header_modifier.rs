@@ -27,7 +27,7 @@ pub struct SgFilterHeaderModifier {
 }
 
 impl MakeSgLayer for SgFilterHeaderModifier {
-    fn make_layer(&self) -> Result<spacegate_tower::SgBoxLayer, tower::BoxError> {
+    fn make_layer(&self) -> Result<spacegate_tower::SgBoxLayer, spacegate_tower::BoxError> {
         let mut sets = HeaderMap::new();
         if let Some(set) = &self.sets {
             for (k, v) in set.iter() {

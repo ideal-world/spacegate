@@ -6,13 +6,10 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 use tokio::net::TcpStream;
 use tokio_rustls::rustls;
 use tokio_util::sync::CancellationToken;
-use tower::{buffer::Buffer, BoxError, ServiceExt};
 use tracing::instrument;
 
 use crate::{
-    extension::{EnterTime, PeerAddr, Reflect},
-    utils::with_length_or_chunked,
-    SgBody,
+    extension::{EnterTime, PeerAddr, Reflect}, utils::with_length_or_chunked, BoxError, SgBody
 };
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
@@ -131,13 +128,13 @@ where
     S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
-    #[instrument(skip(stream, service, tls_cfg))]
+    #[instrument(skip(stream, service, tls_cfg, conn_builder, cancel_token))]
     async fn accept(
         conn_builder: hyper_util::server::conn::auto::Builder<rt::TokioExecutor>,
         stream: TcpStream,
         peer_addr: SocketAddr,
         tls_cfg: Option<Arc<rustls::ServerConfig>>,
-        cancel_token: CancellationToken,
+        #[allow(unused_variables)] cancel_token: CancellationToken,
         service: S,
     ) -> Result<(), BoxError> {
         tracing::debug!("[Sg.Listen] Accepted connection");
@@ -147,12 +144,12 @@ where
                 let connector = tokio_rustls::TlsAcceptor::from(tls_cfg);
                 let accepted = connector.accept(stream).await?;
                 let io = TokioIo::new(accepted);
-                let conn = conn_builder.serve_connection(io, service);
+                let conn = conn_builder.serve_connection_with_upgrades(io, service);
                 conn.await?;
             }
             None => {
                 let io = TokioIo::new(stream);
-                let conn = conn_builder.serve_connection(io, service);
+                let conn = conn_builder.serve_connection_with_upgrades(io, service);
                 conn.await?;
             }
         }

@@ -1,23 +1,20 @@
 pub mod builder;
 
-use std::{
-    convert::Infallible,
-    ops::{Index, IndexMut},
-    sync::Arc,
-};
+use std::{convert::Infallible, ops::Index, sync::Arc};
 
 use crate::{
     helper_layers::{
         reload::Reloader,
         route::{Route, Router},
-    }, service::BoxHyperService, SgBody, SgBoxLayer
+    },
+    service::BoxHyperService,
+    SgBody, SgBoxLayer,
 };
 
 use hyper::{header::HOST, Request, Response};
 use tokio_util::sync::CancellationToken;
 
 use tower_layer::Layer;
-use tower_service::Service;
 use tracing::instrument;
 
 use super::http_route::{match_hostname::HostnameTree, match_request::MatchRequest, SgHttpRoute, SgHttpRouter};
@@ -80,7 +77,6 @@ impl Router for SgGatewayRouter {
         }
         None
     }
-
 }
 
 impl<S> Layer<S> for SgGatewayLayer

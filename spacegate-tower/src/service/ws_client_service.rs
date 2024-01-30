@@ -3,7 +3,7 @@ use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
 use tokio::{self};
 
-use tower::BoxError;
+use crate::BoxError;
 
 use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
 pub async fn service(as_server: Upgraded, as_client: Upgraded) -> Result<(), BoxError> {

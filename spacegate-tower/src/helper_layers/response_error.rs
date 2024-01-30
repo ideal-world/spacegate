@@ -3,7 +3,6 @@ use std::{convert::Infallible, future::Future, marker, sync::Arc, task::ready};
 use hyper::{Request, Response};
 use pin_project_lite::pin_project;
 use tower_layer::Layer;
-use tower_service::Service;
 
 use crate::SgBody;
 #[derive(Debug, Clone)]
@@ -109,33 +108,6 @@ where
     type Future = ResponseErrorFuture<S::Error, S::Future, FMT>;
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
-        let fut = self.inner.call(req);
-        ResponseErrorFuture {
-            error: marker::PhantomData,
-            inner: fut,
-            formatter: self.formatter.clone(),
-        }
-    }
-}
-
-
-impl<S, FMT> Service<Request<SgBody>> for ResponseError<S, FMT>
-where
-    S: Service<Request<SgBody>, Response = Response<SgBody>> + Send + Sync + 'static,
-    S::Error: std::error::Error,
-    FMT: ErrorFormatter,
-{
-    type Response = Response<SgBody>;
-
-    type Error = Infallible;
-
-    type Future = ResponseErrorFuture<S::Error, S::Future, FMT>;
-
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map(|_| Ok(()))
-    }
-
-    fn call(&mut self, req: Request<SgBody>) -> Self::Future {
         let fut = self.inner.call(req);
         ResponseErrorFuture {
             error: marker::PhantomData,

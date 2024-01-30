@@ -39,7 +39,7 @@ plugin-redirect = ["spacegate-plugin/redirect"]
 plugin-retry = ["spacegate-plugin/retry"]
 plugin-rewrite = ["spacegate-plugin/rewrite"]
 plugin-maintenance = ["spacegate-plugin/maintenance"]
-plugin-decompression = ["spacegate-plugin/decompression"]
+# plugin-decompression = ["spacegate-plugin/decompression"]
 plugin-status = ["spacegate-plugin/status"]
 
 

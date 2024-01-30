@@ -1,11 +1,14 @@
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::{Body, Bytes};
-use tower::BoxError;
+use crate::BoxError;
 
 use crate::utils::never;
 
 // pub mod dump;
 
+
+/// # Clone
+/// Always clone after ensure the body is dumped
 #[derive(Debug)]
 pub struct SgBody {
     pub(crate) body: BoxBody<Bytes, BoxError>,

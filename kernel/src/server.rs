@@ -1,4 +1,8 @@
-use std::{cell::OnceCell, collections::HashMap, net::SocketAddr, ops::Deref, rc::Rc, sync::{Mutex, OnceLock}};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Mutex, OnceLock},
+};
 
 use crate::config::{
     gateway_dto::{SgGateway, SgProtocol, SgTlsMode},
@@ -18,6 +22,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
 use tardis::log::{instrument, warn};
+use tardis::tokio::time::timeout;
 use tardis::{config::config_dto::LogConfig, consts::IP_UNSPECIFIED};
 use tardis::{
     log::{self as tracing, debug, info},
@@ -25,7 +30,6 @@ use tardis::{
     tokio::{self, sync::watch::Sender, task::JoinHandle},
     TardisFuns,
 };
-use tardis::{tardis_static, tokio::time::timeout};
 use tokio_rustls::rustls::{self, pki_types::PrivateKeyDer};
 use tokio_util::sync::CancellationToken;
 
@@ -39,7 +43,6 @@ fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<
         .into_iter()
         .map(|route| {
             let plugins = route.filters.unwrap_or_default();
-            let plugins = plugins.into_iter().map(SgRouteFilter::into_layer).collect::<Result<Vec<_>, _>>()?;
             let rules = route.rules.unwrap_or_default();
             let rules = rules
                 .into_iter()
@@ -57,8 +60,8 @@ fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<
                                 let host = backend.get_host();
                                 let mut builder = spacegate_tower::layers::http_route::SgHttpBackendLayer::builder();
                                 let plugins = backend.filters.unwrap_or_default();
-                                let plugins = plugins.into_iter().map(SgRouteFilter::into_layer).collect::<Result<Vec<_>, _>>()?;
-                                builder = builder.host(host).port(backend.port).plugins(plugins);
+                                builder = SgRouteFilter::install_on_backend(plugins, builder);
+                                builder = builder.host(host).port(backend.port);
                                 let protocol = backend.protocol;
                                 if let Some(protocol) = protocol {
                                     builder = builder.protocol(protocol.to_string());
@@ -72,11 +75,13 @@ fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<
                         builder = builder.timeout(Duration::from_millis(timeout));
                     }
                     let plugins = route_rule.filters.unwrap_or_default();
-                    builder = builder.plugins(plugins.into_iter().map(SgRouteFilter::into_layer).collect::<Result<Vec<_>, _>>()?);
+                    builder = SgRouteFilter::install_on_rule(plugins, builder);
                     builder.build()
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            spacegate_tower::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).plugins(plugins).rules(rules).build()
+            let mut builder = spacegate_tower::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules);
+            builder = SgRouteFilter::install_on_route(plugins, builder);
+            builder.build()
         })
         .collect::<Result<Vec<_>, _>>()
 }
@@ -90,13 +95,9 @@ pub(crate) fn create_service(
     reloader: Reloader<SgGatewayRoute>,
 ) -> Result<BoxHyperService, BoxError> {
     let routes = collect_tower_http_route(http_routes)?;
-    let plugins = plugins.into_iter().map(SgRouteFilter::into_layer).collect::<Result<Vec<_>, _>>()?;
-    let gateway_layer = spacegate_tower::layers::gateway::SgGatewayLayer::builder(gateway_name.to_owned(), cancel_token)
-        .http_routers(routes)
-        .http_plugins(plugins)
-        .http_route_reloader(reloader)
-        .build();
-
+    let builder = spacegate_tower::layers::gateway::SgGatewayLayer::builder(gateway_name.to_owned(), cancel_token).http_routers(routes).http_route_reloader(reloader);
+    let builder = SgRouteFilter::install_on_gateway(plugins, builder);
+    let gateway_layer = builder.build();
     let backend_service = get_http_backend_service();
     let service = BoxHyperService::new(gateway_layer.layer(backend_service));
     Ok(service)
@@ -118,6 +119,7 @@ pub(crate) fn create_router_service(http_routes: Vec<crate::SgHttpRoute>) -> Res
 ///
 /// Though, after it has been dropped, it will shutdown automatically.
 pub struct RunningSgGateway {
+    gateway_name: Arc<str>,
     token: CancellationToken,
     // _guard: tokio_util::sync::DropGuard,
     handle: tokio::task::JoinHandle<()>,
@@ -126,9 +128,7 @@ pub struct RunningSgGateway {
 }
 impl std::fmt::Debug for RunningSgGateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RunningSgGateway")
-            .field("shutdown_timeout", &self.shutdown_timeout)
-            .finish()
+        f.debug_struct("RunningSgGateway").field("shutdown_timeout", &self.shutdown_timeout).finish()
     }
 }
 
@@ -165,10 +165,26 @@ impl RunningSgGateway {
         reloader.reload(service).await;
         Ok(())
     }
-
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config.name), skip_all, err)]
     pub fn create(config: SgGateway, http_routes: Vec<SgHttpRoute>, cancel_token: CancellationToken) -> Result<Self, BoxError> {
+        #[cfg(feature = "cache")]
+        {
+            if let Some(url) = &config.parameters.redis_url {
+                let url = url.clone();
+                let name = config.name.clone();
+                tokio::spawn(async move {
+                    // Initialize cache instances
+                    log::trace!("Initialize cache client...url:{url}");
+                    match crate::cache_client::init(name, &url).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::error!("Initialize cache client failed:{e}");
+                        }
+                    }
+                });
+            }
+        }
         log::info!("[SG.Server] start gateway");
         let reloader = <Reloader<SgGatewayRoute>>::default();
         let service = create_service(&config.name, cancel_token.clone(), config.filters.unwrap_or_default(), http_routes, reloader.clone())?;
@@ -195,7 +211,7 @@ impl RunningSgGateway {
             })?;
         }
 
-        let gateway_name = Arc::new(config.name.to_string());
+        let gateway_name: Arc<str> = Arc::from(config.name.to_string());
         let mut listens: Vec<SgListen<BoxHyperService>> = Vec::new();
         for listener in &config.listeners {
             let ip = listener.ip.unwrap_or(IP_UNSPECIFIED);
@@ -256,13 +272,17 @@ impl RunningSgGateway {
 
         // let cancel_guard = cancel_token.clone().drop_guard();
         let cancel_task = cancel_token.clone().cancelled_owned();
-        let handle = tokio::task::spawn_local(async move {
-            log::info!(gateway=gateway_name.as_ref(), "[Sg.Server] start all listeners");
-            local_set.run_until(cancel_task).await;
-            log::info!(gateway=gateway_name.as_ref(), "[Sg.Server] cancelled");
-        });
+        let handle = {
+            let gateway_name = gateway_name.clone();
+            tokio::task::spawn_local(async move {
+                log::info!(gateway = gateway_name.as_ref(), "[Sg.Server] start all listeners");
+                local_set.run_until(cancel_task).await;
+                log::info!(gateway = gateway_name.as_ref(), "[Sg.Server] cancelled");
+            })
+        };
         log::info!("[SG.Server] start finished");
         Ok(RunningSgGateway {
+            gateway_name: gateway_name.clone(),
             token: cancel_token,
             // _guard: cancel_guard,
             handle,
@@ -274,6 +294,12 @@ impl RunningSgGateway {
     /// Shutdown this gateway
     pub async fn shutdown(self) {
         self.token.cancel();
+        #[cfg(feature = "cache")]
+        {
+            let name = self.gateway_name.clone();
+            log::trace!("[SG.Cache] Remove cache client...");
+            tokio::spawn(async move { crate::cache_client::remove(name.as_ref()).await });
+        }
         match timeout(self.shutdown_timeout, self.handle).await {
             Ok(_) => {}
             Err(e) => {

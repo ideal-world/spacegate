@@ -5,7 +5,6 @@ use std::{convert::Infallible, future::Ready};
 use crate::SgBody;
 use hyper::{Request, Response};
 use tower_layer::Layer;
-use tower_service::Service;
 
 pub trait Filter: Clone {
     fn filter(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>>;
@@ -53,27 +52,6 @@ where
     type Future = futures_util::future::Either<Ready<Result<Self::Response, Self::Error>>, S::Future>;
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
-        match self.filter.filter(req) {
-            Ok(req) => futures_util::future::Either::Right(self.inner.call(req)),
-            Err(resp) => futures_util::future::Either::Left(std::future::ready(Ok(resp))),
-        }
-    }
-}
-
-impl<F, S> Service<Request<SgBody>> for FilterRequest<F, S>
-where
-    F: Filter,
-    S: Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>>,
-{
-    type Response = Response<SgBody>;
-    type Error = Infallible;
-    type Future = futures_util::future::Either<Ready<Result<Self::Response, Self::Error>>, S::Future>;
-
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request<SgBody>) -> Self::Future {
         match self.filter.filter(req) {
             Ok(req) => futures_util::future::Either::Right(self.inner.call(req)),
             Err(resp) => futures_util::future::Either::Left(std::future::ready(Ok(resp))),

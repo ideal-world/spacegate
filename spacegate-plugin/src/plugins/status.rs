@@ -5,6 +5,7 @@ pub mod server;
 pub mod sliding_window;
 pub mod status_plugin;
 use serde::{Deserialize, Serialize};
+use spacegate_tower::BoxError;
 use spacegate_tower::{
     extension::BackendHost,
     helper_layers::{self},
@@ -15,7 +16,6 @@ use tardis::{
     chrono::{Duration, Utc},
     tokio::{self},
 };
-use tower::BoxError;
 
 use crate::MakeSgLayer;
 
@@ -159,7 +159,7 @@ impl MakeSgLayer for SgFilterStatusConfig {
     fn make_layer(&self) -> Result<SgBoxLayer, BoxError> {
         Err(BoxError::from("status plugin is only supported on gateway layer"))
     }
-    fn install_on_gateway(&self, gateway: SgGatewayLayerBuilder) -> Result<SgGatewayLayerBuilder, BoxError> {
+    fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> Result<(), BoxError> {
         let gateway_name = gateway.gateway_name.clone();
         let cancel_guard = gateway.cancel_token.clone();
         let config = self.clone();
@@ -190,6 +190,7 @@ impl MakeSgLayer for SgFilterStatusConfig {
             };
             SgBoxLayer::new(helper_layers::stat::StatLayer::new(policy))
         };
-        Ok(gateway.http_plugin(layer))
+        gateway.http_plugins.push(layer);
+        Ok(())
     }
 }
