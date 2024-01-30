@@ -1,0 +1,23 @@
+{
+  "name": "spacegate-admin-client",
+  "version": "0.0.1",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build-model": "cd ../config && cargo test --features typegen && cd ../admin-client && node ./scripts/build-model.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "axios": "^1.6.7"
+  },
+  "files": [
+    "dist"
+  ]
+}

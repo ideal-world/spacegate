@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "services/*", "spacegate-tower", "spacegate-plugin"]
+members = ["kernel", "services/*", "shell", "plugin", "config", "admin-server"]
 resolver = "2"
 
 [profile.release]
@@ -10,7 +10,7 @@ panic = 'abort'
 strip = true
 
 [workspace.package]
-version = "0.1.0-alpha.7"
+version = "0.1.0-alpha.8"
 authors = ["gudaoxuri <i@sunisle.org>"]
 description = "A library-first, lightweight, high-performance, cloud-native supported API gateway"
 keywords = ["http", "gateway", "proxy", "websocket", "kubernates"]
@@ -23,6 +23,8 @@ license = "MIT/Apache-2.0"
 rust-version = "1.64"
 
 [workspace.dependencies]
+# runtime
+tokio = { version = "1" }
 # Basic
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
@@ -34,9 +36,9 @@ tracing = { version = "0" }
 urlencoding = { version = "2" }
 
 # Tardis
-tardis = { version = "=0.1.0-rc.8" }
+# tardis = { version = "=0.1.0-rc.8" }
 # tardis = { path = "../tardis/tardis" }
-# tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "25baf2a" }
+tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "059f4c" }
 
 # Http
 http = { version = "0.2" }
