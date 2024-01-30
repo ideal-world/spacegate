@@ -1,6 +1,5 @@
-use tardis::{basic::{tracing::TardisTracing}, tokio, };
 use spacegate_kernel::BoxError;
-
+use tardis::{basic::tracing::TardisTracing, tokio};
 
 fn main() -> Result<(), BoxError> {
     TardisTracing::initializer().with_env_layer().with_fmt_layer().init();
