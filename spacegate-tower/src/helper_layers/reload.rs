@@ -4,11 +4,10 @@ use futures_util::future::BoxFuture;
 use tokio::sync::{Mutex, RwLock};
 use tower_layer::Layer;
 
-use tower::Service;
 
 #[derive(Default, Debug, Clone)]
 pub struct ReloadLayer<S> {
-    reloader: Reloader<S>,
+    pub reloader: Reloader<S>,
 }
 
 impl<S> Layer<S> for ReloadLayer<S>

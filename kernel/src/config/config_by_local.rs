@@ -1,7 +1,6 @@
 use std::{
     path::{self, Path},
     sync::Arc,
-    time::Duration,
 };
 
 use spacegate_tower::BoxError;
@@ -9,11 +8,11 @@ use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::Stream,
     log::{self, warn},
-    tokio::{self, sync::Mutex, time},
+    tokio::{self, sync::Mutex},
     TardisFuns,
 };
 
-use crate::{do_startup, shutdown, update_route};
+
 
 use super::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute, ConfigEvent, ConfigListener};
 use lazy_static::lazy_static;
@@ -22,69 +21,9 @@ lazy_static! {
     static ref MD5_CACHE: Mutex<(String, String)> = Mutex::new((String::new(), String::new()));
 }
 use notify::{
-    event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind, RemoveKind},
+    event::{AccessKind, AccessMode, RemoveKind},
     Event, EventKind, INotifyWatcher, RecursiveMode, Watcher,
 };
-pub async fn init(conf_path: &str, check_interval_sec: u64) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
-    // let gateway_config_path = Arc::from(format!("{conf_path}/gateway.json"));
-    // let routes_config_path = Arc::from(format!("{conf_path}/routes"));
-
-    // let (config, _, _) = fetch_configs(&gateway_config_path, &routes_config_path).await?;
-    // {
-    //     let gateway_config_path = gateway_config_path.clone();
-    //     let routes_config_path = routes_config_path.clone();
-    //     let mut watcher = notify::recommended_watcher(move |res| {
-    //         let event: Event = match res {
-    //             Ok(event) => event,
-    //             Err(e) => {
-    //                 log::error!("[SG.Config.Local] notify error: {e}");
-    //                 return;
-    //             }
-    //         };
-    //         match event.kind {
-    //             EventKind::Create(CreateKind::File) | EventKind::Modify(ModifyKind::Data(DataChange::Content)) | EventKind::Remove(RemoveKind::File) => {
-    //                 let gateway_config_path = gateway_config_path.clone();
-    //                 let routes_config_path = routes_config_path.clone();
-    //                 tokio::spawn(async move {
-    //                     log::trace!("[SG.Config] Config change check");
-    //                     let (config, gateway_config_changed, routes_config_changed) =
-    //                         fetch_configs(&gateway_config_path, &routes_config_path).await.expect("[SG.Config] init Failed to fetch configs");
-    //                     if gateway_config_changed {
-    //                         let (gateway_config, http_route_configs) = config.expect("[SG.Config] config is None");
-    //                         shutdown(&gateway_config.name).await.expect("[SG.Config] shutdown failed");
-    //                         do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] re-startup failed");
-    //                     } else if routes_config_changed {
-    //                         let (gateway_config, http_route_configs) = config.expect("[SG.Config] config is None");
-    //                         update_route(&gateway_config.name, http_route_configs).await.expect("[SG.Config] fail to update route config");
-    //                     }
-    //                 });
-    //             }
-    //             _ => return,
-    //         }
-    //     });
-    // }
-    // tardis::tokio::task::spawn_local(async move {
-    //     let mut interval = time::interval(Duration::from_secs(check_interval_sec));
-    //     loop {
-    //         {
-    //             log::trace!("[SG.Config] Config change check");
-    //             let (config, gateway_config_changed, routes_config_changed) =
-    //                 fetch_configs(&gateway_config_path, &routes_config_path).await.expect("[SG.Config] init Failed to fetch configs");
-    //             if gateway_config_changed {
-    //                 let (gateway_config, http_route_configs) = config.expect("[SG.Config] config is None");
-    //                 shutdown(&gateway_config.name).await.expect("[SG.Config] shutdown failed");
-    //                 do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] re-startup failed");
-    //             } else if routes_config_changed {
-    //                 let (gateway_config, http_route_configs) = config.expect("[SG.Config] config is None");
-    //                 update_route(&gateway_config.name, http_route_configs).await.expect("[SG.Config] fail to update route config");
-    //             }
-    //         }
-    //         interval.tick().await;
-    //     }
-    // });
-    // Ok(vec![config.expect("[SG.Config] config is None")])
-    todo!()
-}
 
 async fn fetch_configs(gateway_config_path: &Path, routes_config_path: &Path) -> TardisResult<(Option<(SgGateway, Vec<SgHttpRoute>)>, bool, bool)> {
     let gateway_config_content = tokio::fs::read_to_string(&gateway_config_path).await?;
@@ -135,7 +74,7 @@ pub struct FileConfigListener {
 
 impl FileConfigListener {
     #[allow(clippy::collapsible_if)]
-    pub async fn new(conf_path: impl AsRef<Path>, interval: Duration) -> Result<Self, BoxError> {
+    pub async fn new(conf_path: impl AsRef<Path>) -> Result<Self, BoxError> {
         let gateway_config_dir: Arc<Path> = conf_path.as_ref().join("gateway.json").into();
         let routes_config_path: Arc<Path> = conf_path.as_ref().join("routes").into();
         let conf_path: Arc<Path> = Arc::from(conf_path.as_ref().to_owned());
@@ -213,10 +152,9 @@ impl ConfigListener for FileConfigListener {
     const CONFIG_LISTENER_NAME: &'static str = "file";
 
     fn shutdown(&mut self) {
-        log::info!("[SG.Config] FileConfigListener shutdown")
-        // match self.watcher.unwatch(self.conf_path.as_ref()) {
-        //     Ok(_) => log::info!("[SG.Config] file config unwatch success"),
-        //     Err(e) => log::error!("[SG.Config] file config unwatch failed: {e}"),
-        // }
+        match self.watcher.unwatch(self.conf_path.as_ref()) {
+            Ok(_) => log::info!("[SG.Config] file config unwatch success"),
+            Err(e) => log::error!("[SG.Config] file config unwatch failed: {e}"),
+        }
     }
 }

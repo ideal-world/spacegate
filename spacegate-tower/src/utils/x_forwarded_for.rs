@@ -1,5 +1,5 @@
 use hyper::{header::HeaderValue, Request};
-use tower::BoxError;
+use crate::BoxError;
 
 use crate::{extension::PeerAddr, header::X_FORWARDED_FOR, SgBody};
 

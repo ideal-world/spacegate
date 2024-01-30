@@ -12,7 +12,9 @@ use kube::{
 use spacegate_tower::layers::http_route::match_request::{
     SgHttpHeaderMatch, SgHttpHeaderMatchPolicy, SgHttpMethodMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpQueryMatchPolicy, SgHttpRouteMatch,
 };
-use tardis::regex;
+use spacegate_tower::BoxError;
+use tardis::futures_util::Stream;
+use tardis::tokio::sync::mpsc::UnboundedSender;
 use tardis::{
     basic::{error::TardisError, result::TardisResult},
     futures_util::{future::join_all, pin_mut, TryStreamExt},
@@ -20,13 +22,12 @@ use tardis::{
     tokio::sync::RwLock,
     TardisFuns,
 };
+use tardis::{regex, tokio};
 
-use crate::update_route;
-use crate::{
-    constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION},
-    do_startup, shutdown,
-};
 
+use crate::constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION};
+
+use super::{ConfigEvent, ConfigListener};
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
@@ -48,7 +49,43 @@ lazy_static! {
 
 const GATEWAY_CLASS_NAME: &str = "spacegate";
 
-pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
+pub struct K8sConfigListener {
+    pub namespace: Arc<str>,
+    receiver: tokio::sync::mpsc::UnboundedReceiver<ConfigEvent>,
+    // handle: tokio::task::JoinHandle<()>,
+}
+
+impl K8sConfigListener {
+    pub async fn new(namespaces: Option<&str>) -> Result<Self, BoxError> {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let init_configs = init(namespaces.clone(), sender.clone()).await?;
+        for config in init_configs {
+            let (gateway_config, http_route_configs) = config;
+            let _ = sender.send(ConfigEvent::GatewayAdd(gateway_config, http_route_configs));
+        }
+        let namespace = namespaces.clone().unwrap_or("").into();
+        Ok(Self { namespace, receiver })
+    }
+}
+
+impl Stream for K8sConfigListener {
+    type Item = ConfigEvent;
+
+    fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
+        self.receiver.poll_recv(cx)
+    }
+}
+
+impl ConfigListener for K8sConfigListener {
+    const CONFIG_LISTENER_NAME: &'static str = "k8s";
+
+    fn shutdown(&mut self) {
+        // we can do nothing here since we didn't manage the tasks we spawned
+        // but we should manage those tasks in the future
+    }
+}
+
+pub async fn init(namespaces: Option<&str>, sender: UnboundedSender<ConfigEvent>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     let (gateway_api, http_spaceroute_api, http_route_api, filter_api): (Api<Gateway>, Api<HttpSpaceroute>, Api<HttpRoute>, Api<SgFilter>) = if let Some(namespaces) = namespaces {
         (
             Api::namespaced(get_client().await?, &namespaces),
@@ -105,31 +142,39 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_spaceroute_api_clone = http_spaceroute_api.clone();
     let http_route_api_clone = http_route_api.clone();
 
-    // watch gateway
-    tardis::tokio::task::spawn_local(async move {
-        let ew = watcher::watcher(gateway_api.clone(), watcher::Config::default()).touched_objects();
-        pin_mut!(ew);
-        while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
-            let default_uid = "".to_string();
-            let gateway_uid = gateway_obj.metadata.uid.as_ref().unwrap_or(&default_uid);
-            if gateway_objs_versions.get(gateway_uid).unwrap_or(&"".to_string()) == &gateway_obj.metadata.resource_version.clone().unwrap_or_default()
-                && (gateway_objs_params.get(gateway_uid).unwrap_or(&None) == &gateway_obj.metadata.annotations)
-            {
-                // ignore the original object
-                continue;
+    {
+        let sender = sender.clone();
+        // watch gateway
+        tardis::tokio::task::spawn(async move {
+            let ew = watcher::watcher(gateway_api.clone(), watcher::Config::default()).touched_objects();
+            pin_mut!(ew);
+            while let Some(gateway_obj) = ew.try_next().await.unwrap_or_default() {
+                let default_uid = "".to_string();
+                let gateway_uid = gateway_obj.metadata.uid.as_ref().unwrap_or(&default_uid);
+                if gateway_objs_versions.get(gateway_uid).unwrap_or(&"".to_string()) == &gateway_obj.metadata.resource_version.clone().unwrap_or_default()
+                    && (gateway_objs_params.get(gateway_uid).unwrap_or(&None) == &gateway_obj.metadata.annotations)
+                {
+                    // ignore the original object
+                    continue;
+                }
+                if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
+                    continue;
+                }
+                gateway_objs_params.insert(gateway_uid.to_string(), gateway_obj.metadata.annotations.clone());
+
+                log::trace!("[SG.Config] Gateway config change found");
+
+                overload_gateway(gateway_obj, (&http_spaceroute_api_clone, &http_route_api_clone), sender.clone()).await;
             }
-            if gateway_obj.spec.gateway_class_name != GATEWAY_CLASS_NAME {
-                continue;
-            }
-            gateway_objs_params.insert(gateway_uid.to_string(), gateway_obj.metadata.annotations.clone());
+        });
+    }
 
-            log::trace!("[SG.Config] Gateway config change found");
-
-            overload_gateway(gateway_obj, (&http_spaceroute_api_clone, &http_route_api_clone)).await;
-        }
-    });
-
-    async fn watch_http_spaceroute(http_route_obj: HttpSpaceroute, http_route_objs_versions: &HashMap<String, String>, http_route_apis: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
+    async fn watch_http_spaceroute(
+        http_route_obj: HttpSpaceroute,
+        http_route_objs_versions: &HashMap<String, String>,
+        http_route_apis: (&Api<HttpSpaceroute>, &Api<HttpRoute>),
+        sender: UnboundedSender<ConfigEvent>,
+    ) {
         log::trace!("[SG.Config] http_route config watch tiger. name:{}", k8s_helper::get_k8s_obj_unique(&http_route_obj));
         if http_route_objs_versions.get(http_route_obj.metadata.uid.as_ref().unwrap_or(&"".to_string())).unwrap_or(&"".to_string())
             == http_route_obj.metadata.resource_version.as_ref().unwrap_or(&"".to_string())
@@ -171,7 +216,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
 
         log::debug!("[SG.Config] Http route:{} config change found", k8s_helper::get_k8s_obj_unique(&http_route_obj));
 
-        overload_http_route(gateway_obj, (&http_route_apis.0, &http_route_apis.1)).await;
+        overload_http_route(gateway_obj, (&http_route_apis.0, &http_route_apis.1), sender).await;
     }
 
     let http_spaceroute_api_clone = http_spaceroute_api.clone();
@@ -181,29 +226,42 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let http_route_objs_versions_clone = http_route_objs_versions.clone();
     let http_route_apis_clone = http_route_apis.clone();
     // watch http_spaceroute
-    tardis::tokio::task::spawn_local(async move {
-        watcher::watcher(http_spaceroute_api_clone, watcher::Config::default())
-            .touched_objects()
-            .default_backoff()
-            .try_for_each(|http_route_obj| async {
-                watch_http_spaceroute(http_route_obj, &http_route_objs_versions_clone, (&http_route_apis_clone.0, &http_route_apis_clone.1)).await;
-                Ok(())
-            })
-            .await
-            .expect("[SG.Config] Watcher try_for_each error");
-    });
-    // watch  http_route
-    tardis::tokio::task::spawn_local(async move {
-        watcher::watcher(http_route_api_clone, watcher::Config::default())
-            .touched_objects()
-            .default_backoff()
-            .try_for_each(|http_route_obj| async {
-                watch_http_spaceroute(http_route_obj.into(), &http_route_objs_versions, (&http_route_apis.0, &http_route_apis.1)).await;
-                Ok(())
-            })
-            .await
-            .expect("[SG.Config] Watcher try_for_each error");
-    });
+    {
+        let sender = sender.clone();
+        tardis::tokio::task::spawn(async move {
+            watcher::watcher(http_spaceroute_api_clone, watcher::Config::default())
+                .touched_objects()
+                .default_backoff()
+                .try_for_each(|http_route_obj| async {
+                    watch_http_spaceroute(
+                        http_route_obj,
+                        &http_route_objs_versions_clone,
+                        (&http_route_apis_clone.0, &http_route_apis_clone.1),
+                        sender.clone(),
+                    )
+                    .await;
+                    Ok(())
+                })
+                .await
+                .expect("[SG.Config] Watcher try_for_each error");
+        });
+    }
+    {
+        let sender = sender.clone();
+
+        // watch  http_route
+        tardis::tokio::task::spawn(async move {
+            watcher::watcher(http_route_api_clone, watcher::Config::default())
+                .touched_objects()
+                .default_backoff()
+                .try_for_each(|http_route_obj| async {
+                    watch_http_spaceroute(http_route_obj.into(), &http_route_objs_versions, (&http_route_apis.0, &http_route_apis.1), sender.clone()).await;
+                    Ok(())
+                })
+                .await
+                .expect("[SG.Config] Watcher try_for_each error");
+        });
+    }
 
     let sg_filter_objs: Vec<SgFilter> =
         filter_api.list(&ListParams::default()).await.map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))?.into_iter().collect();
@@ -211,7 +269,7 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
     let sg_filter_objs_versions = k8s_helper::get_obj_uid_version_map(&sg_filter_objs);
 
     // watch sgfilter
-    tardis::tokio::task::spawn_local(async move {
+    tardis::tokio::task::spawn(async move {
         let ew = watcher::watcher(filter_api.clone(), watcher::Config::default()).touched_objects();
         pin_mut!(ew);
         while let Some(filter_obj) = ew.try_next().await.unwrap_or_default() {
@@ -328,11 +386,11 @@ pub async fn init(namespaces: Option<String>) -> TardisResult<Vec<(SgGateway, Ve
                 &Api::all(get_client().await.expect("[SG.Config] Failed to get client")),
             );
             for gateway_obj in gateway_obj_map.into_values() {
-                overload_gateway(gateway_obj, http_route_api).await;
+                overload_gateway(gateway_obj, http_route_api, sender.clone()).await;
             }
 
             for gateway_obj in http_route_rel_gateway_map.into_values() {
-                overload_http_route(gateway_obj, http_route_api).await;
+                overload_http_route(gateway_obj, http_route_api, sender.clone()).await;
             }
         }
     });
@@ -411,7 +469,7 @@ async fn get_http_spaceroute_by_api(
     Ok(http_route_objs)
 }
 
-async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
+async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>), sender: UnboundedSender<ConfigEvent>) {
     let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_api: Api<Gateway> = Api::namespaced(
         get_client().await.expect("[SG.Config] Failed to get client"),
@@ -440,15 +498,13 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
                     .await
                     .map_err(|error| TardisError::wrap(&format!("[SG.Config] Kubernetes error: {error:?}"), ""))
                     .expect("");
-                shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
-                log::trace!("[SG.Config] Gateway config change to:{:?}", gateway_config);
-                do_startup(gateway_config, http_route_configs).await.expect("[SG.Config] Failed to restart gateway");
+                let _ = sender.send(ConfigEvent::GatewayAdd(gateway_config, http_route_configs));
             } else {
                 {
                     let mut gateway_uniques_guard = GATEWAY_UNIQUES.write().await;
                     gateway_uniques_guard.retain(|name| name != &gateway_config.name);
                 }
-                shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
+                let _ = sender.send(ConfigEvent::GatewayDelete(gateway_config.name));
             }
         }
         Err(error) => {
@@ -506,7 +562,7 @@ async fn overload_gateway(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpS
 //     overload_http_route(gateway_obj, http_route_api_refs).await;
 // }
 
-async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>)) {
+async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<HttpSpaceroute>, &Api<HttpRoute>), sender: UnboundedSender<ConfigEvent>) {
     let gateway_unique = k8s_helper::get_k8s_obj_unique(&gateway_obj);
     let gateway_config = process_gateway_config(vec![gateway_obj])
         .await
@@ -521,12 +577,10 @@ async fn overload_http_route(gateway_obj: Gateway, http_route_api_refs: (&Api<Ht
         .expect("");
 
     if http_route_objs.is_empty() {
-        shutdown(&gateway_config.name).await.expect("[SG.Config] Failed to shutdown gateway");
-        log::trace!("[SG.Config] Gateway config change to:{:?}", gateway_config);
-        do_startup(gateway_config, vec![]).await.expect("[SG.Config] Failed to restart gateway");
+        let _ = sender.send(ConfigEvent::GatewayAdd(gateway_config, vec![]));
     } else {
         let http_route_configs: Vec<SgHttpRoute> = process_http_route_config(http_route_objs).await.expect("[SG.Config] Failed to process http_route config");
-        update_route(&gateway_config.name, http_route_configs).await.expect("[SG.Config] Failed to update route config");
+        let _ = sender.send(ConfigEvent::HttpRouteReload(gateway_config.name, http_route_configs));
     }
 }
 

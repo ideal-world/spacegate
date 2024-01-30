@@ -62,7 +62,7 @@ pub type RedirectFilterLayer = FilterRequestLayer<RedirectFilter>;
 pub type Redirect<S> = FilterRequest<RedirectFilter, S>;
 
 impl MakeSgLayer for RedirectFilter {
-    fn make_layer(&self) -> Result<SgBoxLayer, tower::BoxError> {
+    fn make_layer(&self) -> Result<SgBoxLayer, spacegate_tower::BoxError> {
         let layer = FilterRequestLayer::new(self.clone());
         Ok(SgBoxLayer::new(layer))
     }

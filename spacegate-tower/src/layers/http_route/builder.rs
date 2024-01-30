@@ -1,6 +1,6 @@
 use std::{num::NonZeroU16, sync::Arc, time::Duration};
 
-use tower::BoxError;
+use crate::BoxError;
 
 use crate::SgBoxLayer;
 
@@ -62,7 +62,7 @@ impl SgHttpRouteLayerBuilder {
 #[derive(Debug)]
 pub struct SgHttpRouteRuleLayerBuilder {
     r#match: Option<Vec<SgHttpRouteMatch>>,
-    plugins: Vec<SgBoxLayer>,
+    pub plugins: Vec<SgBoxLayer>,
     timeouts: Option<Duration>,
     backends: Vec<SgHttpBackendLayer>,
 }
@@ -124,7 +124,7 @@ pub struct SgHttpBackendLayerBuilder {
     host: Option<String>,
     port: Option<NonZeroU16>,
     protocol: Option<String>,
-    plugins: Vec<SgBoxLayer>,
+    pub plugins: Vec<SgBoxLayer>,
     timeout: Option<Duration>,
     weight: u16,
 }

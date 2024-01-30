@@ -1,8 +1,5 @@
-use std::future::Future;
-
 use spacegate_tower::BoxError;
 use tardis::{
-    basic::{error::TardisError, result::TardisResult},
     futures_util::{Stream, StreamExt},
     log,
     tokio::{self, task::JoinHandle},
@@ -26,43 +23,6 @@ pub mod k8s_crd;
 #[cfg(feature = "k8s")]
 mod k8s_crd_spaceroute;
 pub mod plugin_filter_dto;
-
-// #[allow(unreachable_code)]
-// #[allow(unused_variables)]
-// pub async fn init(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
-//     log::info!(
-//         "[SG.Config] Config initialization mode: {}",
-//         if k8s_mode {
-//             format!("kubernetes, with namespaces: {namespace_or_conf_uri:?}")
-//         } else {
-//             format!("non-kubernetes, with uri: {namespace_or_conf_uri:?}")
-//         }
-//     );
-//     if k8s_mode {
-//         #[cfg(feature = "k8s")]
-//         {
-//             config_by_k8s::init(namespace_or_conf_uri).await
-//         }
-//         #[cfg(not(feature = "k8s"))]
-//         {
-//             Err(tardis::basic::error::TardisError::not_found(
-//                 "[SG.Config] The current compilation mode does not support k8s",
-//                 "",
-//             ))
-//         }
-//     } else {
-//         let conf_uri = namespace_or_conf_uri.ok_or_else(|| TardisError::not_found("[SG.Config] The configuration path must be specified in the current mode", ""))?;
-//         #[cfg(feature = "cache")]
-//         {
-//             return config_by_redis::init(&conf_uri, check_interval_sec.unwrap_or(10)).await;
-//         }
-//         #[cfg(feature = "local")]
-//         {
-//             return config_by_local::init(&conf_uri, check_interval_sec.unwrap_or(10)).await;
-//         }
-//         Err(tardis::basic::error::TardisError::not_found("[SG.Config] The current compilation mode does not exist", ""))
-//     }
-// }
 
 pub enum ConfigEvent {
     GatewayAdd(SgGateway, Vec<SgHttpRoute>),
@@ -94,10 +54,10 @@ where
                     match event {
                         Some(event) => event,
                         None => {
-                            log::error!("[SG.Config] unexpected end of event stream config");
+                            log::info!("[SG.Config] config event stream end");
                             log::info!("[SG.Config] config listener {CONFIG_LISTENER_NAME} shutdown", CONFIG_LISTENER_NAME = L::CONFIG_LISTENER_NAME);
                             config_listener.shutdown();
-                            return Err(BoxError::from("[SG.Config] unexpected end of event stream config"));
+                            return Ok(());
                         }
                     }
                 }
@@ -144,13 +104,40 @@ where
                 ConfigEvent::HttpRouteReload(gateway_name, http_routes) => {
                     log::info!("[SG.Config] HttpRouteReload: {gateway_name}", gateway_name = gateway_name);
                     match RunningSgGateway::global_update(&gateway_name, http_routes).await {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(e) => {
                             log::error!("[SG.Config] Fail to reload routes: {e}")
-                        },
+                        }
                     }
                 }
             }
         }
     })
+}
+
+pub struct StaticConfigItem {
+    pub gateway: SgGateway,
+    pub routes: Vec<SgHttpRoute>,
+}
+
+pub struct StaticConfig {
+    pub items: Vec<StaticConfigItem>,
+}
+
+impl Stream for StaticConfig {
+    type Item = ConfigEvent;
+
+    fn poll_next(mut self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
+        if self.items.is_empty() {
+            return std::task::Poll::Ready(None);
+        }
+        let item = self.items.remove(0);
+        let routes = item.routes;
+        std::task::Poll::Ready(Some(ConfigEvent::GatewayAdd(item.gateway, routes)))
+    }
+}
+
+impl ConfigListener for StaticConfig {
+    const CONFIG_LISTENER_NAME: &'static str = "static";
+    fn shutdown(&mut self) {}
 }

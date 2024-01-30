@@ -86,7 +86,7 @@ impl RateLimitConfig {
         let id = &self.id;
         if let Some(max_request_number) = &self.max_request_number {
             if let Some(gateway_name) = req.extensions().get::<GatewayName>() {
-                let mut conn = Cache::get(gateway_name).await.map_err(Response::<SgBody>::internal_error)?.cmd().await.map_err(Response::<SgBody>::internal_error)?;
+                let mut conn = Cache::get(gateway_name).await.map_err(Response::<SgBody>::bad_gateway)?.cmd().await.map_err(Response::<SgBody>::bad_gateway)?;
                 let result: &bool = &script()
                     // counter key
                     .key(format!("{CONF_LIMIT_KEY}{id}"))
@@ -130,7 +130,7 @@ pub type RateLimitLayer = AsyncFilterRequestLayer<RateLimitFilter>;
 pub type RateLimit<S> = AsyncFilterRequest<RateLimitFilter, S>;
 
 impl MakeSgLayer for RateLimitConfig {
-    fn make_layer(&self) -> Result<SgBoxLayer, tower::BoxError> {
+    fn make_layer(&self) -> Result<SgBoxLayer, spacegate_tower::BoxError> {
         let layer = RateLimitLayer::new(RateLimitFilter { config: Arc::new(self.clone()) });
         Ok(SgBoxLayer::new(layer))
     }

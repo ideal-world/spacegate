@@ -14,15 +14,14 @@ pub use body::SgBody;
 use extension::Reflect;
 use std::{convert::Infallible, fmt, sync::Arc};
 pub use tower_layer::Layer;
-pub use tower_service::Service;
 pub use service::BoxHyperService;
 use helper_layers::response_error::ErrorFormatter;
 
 use hyper::{body::Bytes, Request, Response, StatusCode};
 
-use tower::util::BoxCloneService;
 use tower_layer::layer_fn;
 use utils::fold_sg_layers::fold_sg_layers;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub trait SgRequestExt {
     fn with_reflect(&mut self);
@@ -43,13 +42,13 @@ impl SgRequestExt for Request<SgBody> {
 
 pub trait SgResponseExt {
     fn with_code_message(code: StatusCode, message: impl Into<Bytes>) -> Self;
-    fn internal_error<E: std::error::Error>(e: E) -> Self
+    fn bad_gateway<E: std::error::Error>(e: E) -> Self
     where
         Self: Sized,
     {
         let message = e.to_string();
         tracing::debug!(message, "[Sg] internal error");
-        Self::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, message)
+        Self::with_code_message(StatusCode::BAD_GATEWAY, message)
     }
     fn from_error<E: std::error::Error, F: ErrorFormatter>(e: E, formatter: &F) -> Self
     where
@@ -57,7 +56,7 @@ pub trait SgResponseExt {
     {
         let message = formatter.format(&e);
         tracing::debug!(message, "[Sg] internal error");
-        Self::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, formatter.format(&e))
+        Self::with_code_message(StatusCode::BAD_GATEWAY, formatter.format(&e))
     }
 }
 
@@ -132,4 +131,3 @@ impl fmt::Debug for SgBoxLayer {
     }
 }
 
-pub use tower::BoxError;

@@ -15,7 +15,7 @@ impl AsyncFilter for Dump {
     fn filter(&self, req: Request<SgBody>) -> Self::Future {
         let (part, body) = req.into_parts();
         Box::pin(async move {
-            let body = body.dump().await.map_err(|e| Response::<SgBody>::internal_error(e.as_ref()))?;
+            let body = body.dump().await.map_err(|e| Response::<SgBody>::bad_gateway(e.as_ref()))?;
             Ok(Request::from_parts(part, body))
         })
     }

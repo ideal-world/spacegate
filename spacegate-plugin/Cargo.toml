@@ -22,10 +22,10 @@ limit = ["cache"]
 header-modifier = []
 inject = []
 redirect = []
-retry = ["tower/retry"]
+retry = []
 rewrite = []
 maintenance = ["ipnet"]
-decompression = ["tower-http/decompression-full"]
+# decompression = ["tower-http/decompression-full"]
 status = ["hyper-util"]
 full = [
     "cache",
@@ -36,7 +36,7 @@ full = [
     "retry",
     "rewrite",
     "maintenance",
-    "decompression",
+    # "decompression",
     "status",
 ]
 [dependencies]
@@ -44,11 +44,8 @@ spacegate-tower = { path = "../spacegate-tower" }
 tracing = { workspace = true }
 hyper = { workspace = true }
 http-body-util = { workspace = true }
-tower-service = { workspace = true }
 tower-layer = { workspace = true }
 rustls = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
 pin-project-lite = { workspace = true }
 hyper-util = { workspace = true, optional = true }
 # serde

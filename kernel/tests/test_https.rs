@@ -1,15 +1,13 @@
 use std::{env, time::Duration, vec};
 
 use serde_json::{json, Value};
-use spacegate_kernel::config::{
+use spacegate_kernel::{config::{
     gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-};
+}, ctrl_c_cancel_token};
 use spacegate_tower::BoxError;
 use tardis::{
-    basic::{
-        tracing::{TardisTracingInitializer},
-    },
+    basic::tracing::TardisTracingInitializer,
     config::config_dto::WebClientModuleConfig,
     tokio::{self, time::sleep},
     web::web_client::{TardisHttpResponse, TardisWebClient},
@@ -103,106 +101,114 @@ W0X+/YToWPeWivw3Kbo05oCob0NUi3fXtiTHng==
 async fn test_https() -> Result<(), BoxError> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace,spacegate_tower=trace,tower_service=trace,rust_tls=trace");
     let _tracing = TardisTracingInitializer::default().with_fmt_layer().with_env_layer().init();
-    spacegate_kernel::do_startup(
-        SgGateway {
-            name: "test_gw".to_string(),
-            listeners: vec![
-                SgListener {
-                    port: 8888,
-                    protocol: SgProtocol::Https,
-                    tls: Some(SgTlsConfig {
-                        mode: SgTlsMode::Terminate,
-                        key: TLS_RSA_KEY.to_string(),
-                        cert: TLS_CERT.to_string(),
-                    }),
-                    ..Default::default()
-                },
-                SgListener {
-                    port: 8889,
-                    protocol: SgProtocol::Https,
-                    tls: Some(SgTlsConfig {
-                        mode: SgTlsMode::Terminate,
-                        key: TLS_PKCS8_KEY.to_string(),
-                        cert: TLS_EC_CERT.to_string(),
-                    }),
-                    ..Default::default()
-                },
-                SgListener {
-                    port: 8890,
-                    protocol: SgProtocol::Https,
-                    tls: Some(SgTlsConfig {
-                        mode: SgTlsMode::Terminate,
-                        key: TLS_EC_KEY.to_string(),
-                        cert: TLS_EC_CERT.to_string(),
-                    }),
-                    ..Default::default()
-                },
-            ],
-            ..Default::default()
-        },
-        vec![SgHttpRoute {
-            hostnames: Some(vec!["localhost".to_string()]),
-            gateway_name: "test_gw".to_string(),
-            rules: Some(vec![SgHttpRouteRule {
-                backends: Some(vec![SgBackendRef {
-                    name_or_host: "postman-echo.com".to_string(),
-                    port: 443,
-                    protocol: Some(SgProtocol::Https),
+    let localset = tokio::task::LocalSet::new();
+    localset.spawn_local(async move {
+        let token = ctrl_c_cancel_token();
+        let _server = spacegate_kernel::server::RunningSgGateway::create(
+            SgGateway {
+                name: "test_gw".to_string(),
+                listeners: vec![
+                    SgListener {
+                        port: 8888,
+                        protocol: SgProtocol::Https,
+                        tls: Some(SgTlsConfig {
+                            mode: SgTlsMode::Terminate,
+                            key: TLS_RSA_KEY.to_string(),
+                            cert: TLS_CERT.to_string(),
+                        }),
+                        ..Default::default()
+                    },
+                    SgListener {
+                        port: 8889,
+                        protocol: SgProtocol::Https,
+                        tls: Some(SgTlsConfig {
+                            mode: SgTlsMode::Terminate,
+                            key: TLS_PKCS8_KEY.to_string(),
+                            cert: TLS_EC_CERT.to_string(),
+                        }),
+                        ..Default::default()
+                    },
+                    SgListener {
+                        port: 8890,
+                        protocol: SgProtocol::Https,
+                        tls: Some(SgTlsConfig {
+                            mode: SgTlsMode::Terminate,
+                            key: TLS_EC_KEY.to_string(),
+                            cert: TLS_EC_CERT.to_string(),
+                        }),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            },
+            vec![SgHttpRoute {
+                hostnames: Some(vec!["localhost".to_string()]),
+                gateway_name: "test_gw".to_string(),
+                rules: Some(vec![SgHttpRouteRule {
+                    backends: Some(vec![SgBackendRef {
+                        name_or_host: "postman-echo.com".to_string(),
+                        port: 443,
+                        protocol: Some(SgProtocol::Https),
+                        ..Default::default()
+                    }]),
                     ..Default::default()
                 }]),
                 ..Default::default()
-            }]),
+            }],
+            token.clone(),
+        )
+        .expect("fail to start up server");
+        token.cancelled().await
+    });
+    localset.run_until(async move {
+        sleep(Duration::from_millis(500)).await;
+        let client = TardisWebClient::init(&WebClientModuleConfig {
+            connect_timeout_sec: 100,
             ..Default::default()
-        }],
-    )
-    .await?;
-    sleep(Duration::from_millis(500)).await;
-    let client = TardisWebClient::init(&WebClientModuleConfig {
-        connect_timeout_sec: 100,
-        ..Default::default()
-    })?;
-    let resp: TardisHttpResponse<Value> = client
-        .post(
-            "https://localhost:8888/post?dd",
-            &json!({
-                "name":"星航",
-                "age":6
-            }),
-            None,
-        )
-        .await?;
-    assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
-
-    let client = TardisWebClient::init(&WebClientModuleConfig {
-        connect_timeout_sec: 100,
-        ..Default::default()
-    })?;
-    let resp: TardisHttpResponse<Value> = client
-        .post(
-            "https://localhost:8889/post?dd",
-            &json!({
-                "name":"星航",
-                "age":6
-            }),
-            None,
-        )
-        .await?;
-    assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
-
-    let client = TardisWebClient::init(&WebClientModuleConfig {
-        connect_timeout_sec: 100,
-        ..Default::default()
-    })?;
-    let resp: TardisHttpResponse<Value> = client
-        .post(
-            "https://localhost:8890/post?dd",
-            &json!({
-                "name":"星航",
-                "age":6
-            }),
-            None,
-        )
-        .await?;
-    assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
-    Ok(())
+        })?;
+        let resp: TardisHttpResponse<Value> = client
+            .post(
+                "https://localhost:8888/post?dd",
+                &json!({
+                    "name":"星航",
+                    "age":6
+                }),
+                None,
+            )
+            .await?;
+        assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+    
+        let client = TardisWebClient::init(&WebClientModuleConfig {
+            connect_timeout_sec: 100,
+            ..Default::default()
+        })?;
+        let resp: TardisHttpResponse<Value> = client
+            .post(
+                "https://localhost:8889/post?dd",
+                &json!({
+                    "name":"星航",
+                    "age":6
+                }),
+                None,
+            )
+            .await?;
+        assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+    
+        let client = TardisWebClient::init(&WebClientModuleConfig {
+            connect_timeout_sec: 100,
+            ..Default::default()
+        })?;
+        let resp: TardisHttpResponse<Value> = client
+            .post(
+                "https://localhost:8890/post?dd",
+                &json!({
+                    "name":"星航",
+                    "age":6
+                }),
+                None,
+            )
+            .await?;
+        assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+        Ok(())
+    }).await
 }

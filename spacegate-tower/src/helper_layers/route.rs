@@ -1,12 +1,10 @@
-use std::{collections::VecDeque, convert::Infallible, ops::{Index}};
+use std::{convert::Infallible, ops::Index};
 
 use futures_util::future::BoxFuture;
 pub use hyper::http::request::Parts;
 use hyper::{Request, Response};
 
-use tower_service::Service;
-
-use crate::{extension::Matched, SgBody};
+use crate::SgBody;
 
 pub trait Router: Clone {
     type Index: Clone;
@@ -29,11 +27,7 @@ where
     S: Index<R::Index>,
 {
     pub fn new(services: S, router: R, fallback: F) -> Self {
-        Self {
-            services,
-            router,
-            fallback,
-        }
+        Self { services, router, fallback }
     }
 }
 

@@ -11,7 +11,7 @@ use std::convert::Infallible;
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
 use spacegate_tower::{SgBody, SgBoxService};
-use tower::BoxError;
+use spacegate_tower::BoxError;
 use tower_http::decompression::Decompression as TowerDecompression;
 use tower_layer::Layer;
 use tower_service::Service;

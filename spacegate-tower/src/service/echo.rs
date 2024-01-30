@@ -11,7 +11,7 @@ pub async fn echo(mut req: Request<SgBody>) -> Result<Response<SgBody>, Infallib
     let reflect = req.extensions_mut().remove::<Reflect>();
     let body = req.into_body();
 
-    let mut resp = Response::builder().body(body).unwrap_or_else(Response::internal_error);
+    let mut resp = Response::builder().body(body).unwrap_or_else(Response::bad_gateway);
     if let Some(reflect) = reflect {
         resp.extensions_mut().insert(reflect);
     }
