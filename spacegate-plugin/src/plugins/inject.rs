@@ -8,7 +8,7 @@ use spacegate_tower::extension::Reflect;
 use spacegate_tower::helper_layers::bidirection_filter::{Bdf, BdfLayer, BoxReqFut, BoxRespFut};
 use spacegate_tower::service::http_client_service::get_client;
 use spacegate_tower::{SgBody, SgResponseExt};
-use tower::BoxError;
+use spacegate_tower::BoxError;
 
 use crate::{def_plugin, MakeSgLayer};
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);

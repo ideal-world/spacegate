@@ -5,7 +5,7 @@ use hyper::{body::Incoming, service::service_fn, Request};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use tardis::tokio::{self};
 use tokio_util::sync::CancellationToken;
-use tower::BoxError;
+use spacegate_tower::BoxError;
 use tracing::instrument;
 #[instrument(skip(cancel_signal, config))]
 pub async fn launch_status_server(config: &SgFilterStatusConfig, gateway_name: Arc<str>, cancel_signal: CancellationToken) -> Result<(), BoxError> {

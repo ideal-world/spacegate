@@ -34,6 +34,7 @@ pub struct HostnameTree<T> {
     ipv4: BTreeMap<Ipv4Addr, T>,
     ipv6: BTreeMap<Ipv6Addr, T>,
     host: HostnameMatcherNode<T>,
+    fallback: Option<T>,
 }
 
 impl<T> Default for HostnameTree<T> {
@@ -42,6 +43,7 @@ impl<T> Default for HostnameTree<T> {
             ipv4: BTreeMap::new(),
             ipv6: BTreeMap::new(),
             host: HostnameMatcherNode::new(),
+            fallback: None,
         }
     }
 }
@@ -52,7 +54,7 @@ impl<T> HostnameTree<T> {
     }
     pub fn get(&self, host: &str) -> Option<&T> {
         // trim port
-        if host.starts_with('[') {
+        let data = if host.starts_with('[') {
             let bracket_end = host.find(']')?;
             let ipv6 = host[1..bracket_end].parse::<Ipv6Addr>().ok()?;
             return self.ipv6.get(&ipv6);
@@ -63,9 +65,14 @@ impl<T> HostnameTree<T> {
             } else {
                 self.host.get(host)
             }
-        }
+        };
+        data.or(self.fallback.as_ref())
     }
     pub fn set(&mut self, host: &str, data: T) {
+        if host == "*" {
+            self.fallback = Some(data);
+            return;
+        }
         if host.starts_with('[') {
             if let Some(ipv6) = host.strip_prefix('[').and_then(|host| host.strip_suffix(']')) {
                 if let Ok(ipv6) = ipv6.parse::<Ipv6Addr>() {
@@ -175,39 +182,59 @@ impl<T> HostnameMatcherNode<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn test_hostname_matcher_node() {
-        let mut tree = HostnameTree::new();
-        macro_rules! test_cases {
-            ($tree: ident
-                $(![$($unmatched_case: literal),*])?
-                $([$($case: literal),*] => $rule:literal)*
-            ) => {
-                $($tree.set($rule, $rule);)*
-                println!("{:#?}", tree.host);
+    macro_rules! test_cases {
+        ($tree: ident
+            $(![$($unmatched_case: literal),*])?
+            $([$($case: literal),*] => $rule:literal)*
+        ) => {
+            $($tree.set($rule, $rule);)*
+            println!("{:#?}", $tree.host);
+            $(
                 $(
-                    $(
-                        assert_eq!($tree.get($unmatched_case), None);
-                    )*
-                )?
-                $(
-                    $(
-                        assert_eq!($tree.get($case).cloned(), Some($rule));
-                    )*
+                    assert_eq!($tree.get($unmatched_case), None);
                 )*
-            };
-        }
-
+            )?
+            $(
+                $(
+                    assert_eq!($tree.get($case).cloned(), Some($rule));
+                )*
+            )*
+        };
+    }
+    #[test]
+    fn test_hostname_matcher_without_fallback() {
+        let mut tree = HostnameTree::new();
         test_cases! {
             tree
-            !["[::1]", "127.0.0.1"]
+            !["com", "127.0.0.23"]
             ["[::0]", "[::0]:80", "[::]"] => "[::0]"
             ["192.168.0.1"] => "192.168.0.1"
             ["example.com", "example.com:80"] => "example.com"
             ["api.example.com", "apL.v1.example.com:1000"] => "*.example.com"
             ["api.v1.example.com", "api.v2.example.com"] => "api.*.example.com"
             ["baidu.com"] => "*.com"
-            ["com", "example.org", "example.org:80", "example.org:443", "localhost:8080"] => "*"
+        }
+    }
+    #[test]
+    fn test_hostname_matcher_node() {
+        let mut tree = HostnameTree::new();
+        test_cases! {
+            tree
+            ["[::0]", "[::0]:80", "[::]"] => "[::0]"
+            ["192.168.0.1"] => "192.168.0.1"
+            ["example.com", "example.com:80"] => "example.com"
+            ["api.example.com", "apL.v1.example.com:1000"] => "*.example.com"
+            ["api.v1.example.com", "api.v2.example.com"] => "api.*.example.com"
+            ["baidu.com"] => "*.com"
+            ["[::1]", "127.0.0.1", "com", "example.org", "example.org:80", "example.org:443", "localhost:8080"] => "*"
+        }
+    }
+    #[test]
+    fn test_any_match() {
+        let mut tree = HostnameTree::new();
+        test_cases! {
+            tree
+            ["com", "example.org", "example.org:80", "example.org:443", "localhost:8080", "127.0.0.1:9090"] => "*"
         }
     }
 }

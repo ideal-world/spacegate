@@ -1,39 +1,43 @@
 use std::{convert::Infallible, future::Future, pin::Pin, sync::Arc, task::ready, time::Duration};
 
-use hyper::{Request, Response};
+use http_body_util::BodyExt;
+use hyper::{Request, Response, StatusCode};
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use tardis::{
     rand::{self, Rng},
     tokio::{self, time::Sleep},
 };
-use tower::retry::{Policy, Retry as TowerRetry, RetryLayer as TowerRetryLayer};
 use tower_layer::Layer;
 
-use spacegate_tower::{
-    helper_layers::async_filter::{dump::Dump, AsyncFilterRequest, AsyncFilterRequestLayer},
-    SgBody, SgBoxLayer,
-};
+use spacegate_tower::{SgBody, SgBoxLayer, SgResponseExt};
 
 use crate::{def_plugin, MakeSgLayer};
-
-pub struct RetryLayer {
-    inner_layer: TowerRetryLayer<RetryPolicy>,
+#[derive(Debug, Clone)]
+pub struct RetryLayer<P> {
+    policy_default: P,
 }
 
-impl RetryLayer {
-    pub fn new(policy: RetryPolicy) -> Self {
-        Self {
-            inner_layer: TowerRetryLayer::new(policy),
-        }
+impl<P> RetryLayer<P>
+where
+    P: Policy,
+{
+    pub fn new(policy_default: P) -> Self {
+        Self { policy_default }
     }
 }
 
-impl<S> Layer<S> for RetryLayer {
-    type Service = AsyncFilterRequest<Dump, TowerRetry<RetryPolicy, S>>;
+impl<S, P> Layer<S> for RetryLayer<P>
+where
+    P: Clone,
+{
+    type Service = Retry<P, S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        AsyncFilterRequestLayer::new(Dump).layer(self.inner_layer.layer(service))
+        Retry {
+            policy: self.policy_default.clone(),
+            service,
+        }
     }
 }
 
@@ -52,7 +56,7 @@ pub enum BackOff {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
-pub struct RetryConfig {
+pub struct SgPluginRetryConfig {
     pub retries: u16,
     pub retirable_methods: Vec<String>,
     /// Backoff strategies can vary depending on the specific implementation and requirements.
@@ -64,7 +68,7 @@ pub struct RetryConfig {
     pub max_interval: u64,
 }
 
-impl Default for RetryConfig {
+impl Default for SgPluginRetryConfig {
     fn default() -> Self {
         Self {
             retries: 3,
@@ -80,7 +84,7 @@ impl Default for RetryConfig {
 #[derive(Clone)]
 pub struct RetryPolicy {
     times: usize,
-    config: Arc<RetryConfig>,
+    config: Arc<SgPluginRetryConfig>,
 }
 pin_project! {
     pub struct Delay<T> {
@@ -108,12 +112,18 @@ impl<T> Future for Delay<T> {
         std::task::Poll::Ready(this.value.take().expect("poll after ready"))
     }
 }
+pub trait Policy: Sized {
+    /// The [`Future`] type returned by [`Policy::retry`].
+    type Future: Future<Output = Self>;
 
-impl Policy<Request<SgBody>, Response<SgBody>, Infallible> for RetryPolicy {
+    fn retry(&self, req: &Request<SgBody>, response: &Response<SgBody>) -> Option<Self::Future>;
+}
+
+impl Policy for RetryPolicy {
     type Future = Delay<Self>;
 
-    fn retry(&self, _req: &Request<SgBody>, result: Result<&Response<SgBody>, &Infallible>) -> Option<Self::Future> {
-        if self.times < self.config.retries.into() && result.is_err() {
+    fn retry(&self, _req: &Request<SgBody>, response: &Response<SgBody>) -> Option<Self::Future> {
+        if self.times < self.config.retries.into() && response.status() == StatusCode::INTERNAL_SERVER_ERROR {
             let delay = match self.config.backoff {
                 BackOff::Fixed => self.config.base_interval,
                 BackOff::Exponential => self.config.base_interval * 2u64.pow(self.times as u32),
@@ -133,18 +143,138 @@ impl Policy<Request<SgBody>, Response<SgBody>, Infallible> for RetryPolicy {
             None
         }
     }
+}
 
-    fn clone_request(&self, req: &Request<SgBody>) -> Option<Request<SgBody>> {
-        if !req.body().is_dumped() {
-            Some(req.clone())
-        } else {
-            None
+#[derive(Debug, Clone)]
+pub struct Retry<P, S> {
+    policy: P,
+    service: S,
+}
+
+pin_project_lite::pin_project! {
+    pub struct RetryFuture<P, S>
+    where
+        P: Policy,
+        S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible>,
+    {
+        policy: P,
+        service: S,
+        #[pin]
+        state: RetryState<P::Future, S::Future>,
+        request: Option<Request<SgBody>>
+    }
+}
+
+impl<P, S> RetryFuture<P, S>
+where
+    P: Policy,
+    S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible>,
+{
+    pub fn new(policy: P, service: S, req: Request<SgBody>) -> Self {
+        let (parts, body) = req.into_parts();
+        let body = body.collect();
+        Self {
+            policy,
+            service,
+            state: RetryState::Collecting { body, parts },
+            request: None,
         }
     }
 }
 
-impl MakeSgLayer for RetryConfig {
-    fn make_layer(&self) -> Result<spacegate_tower::SgBoxLayer, tower::BoxError> {
+pin_project_lite::pin_project! {
+    #[project = RetryStateProj]
+    pub enum RetryState<PF, SF> {
+        Collecting {
+            #[pin]
+            body: http_body_util::combinators::Collect<SgBody>,
+            parts: hyper::http::request::Parts,
+        },
+        Requesting {
+            #[pin]
+            future: SF,
+        },
+        Retrying {
+            #[pin]
+            future: PF,
+        },
+
+    }
+}
+
+impl<P, S> Future for RetryFuture<P, S>
+where
+    P: Policy,
+    S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible>,
+{
+    type Output = Result<Response<SgBody>, Infallible>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        let mut this = self.project();
+        loop {
+            match this.state.as_mut().project() {
+                RetryStateProj::Collecting { body, parts: part } => {
+                    let body = ready!(body.poll(cx));
+                    match body {
+                        Ok(body) => {
+                            let req = Request::from_parts(part.clone(), SgBody::full(body.to_bytes()));
+                            {
+                                let req = req.clone();
+                                *this.request = Some(req);
+                            }
+                            let fut = this.service.call(req);
+                            this.state.set(RetryState::Requesting { future: fut });
+                        }
+                        Err(e) => {
+                            return std::task::Poll::Ready(Ok(Response::with_code_message(StatusCode::BAD_REQUEST, e.to_string())));
+                        }
+                    }
+                }
+                RetryStateProj::Requesting { future } => {
+                    let resp = ready!(future.poll(cx));
+                    match resp {
+                        Ok(resp) => {
+                            if let Some(fut) = this.policy.retry(this.request.as_ref().expect("status conflict"), &resp) {
+                                this.state.set(RetryState::Retrying { future: fut });
+                            } else {
+                                return std::task::Poll::Ready(Ok(resp));
+                            }
+                        }
+                        Err(_e) => {
+                            unreachable!()
+                        }
+                    }
+                }
+                RetryStateProj::Retrying { future } => {
+                    let next_p = ready!(future.poll(cx));
+                    *this.policy = next_p;
+                    // retry
+                    let fut = this.service.call(this.request.as_ref().expect("status conflict").clone());
+                    this.state.set(RetryState::Requesting { future: fut });
+                }
+            }
+        }
+    }
+}
+
+impl<P, S> hyper::service::Service<Request<SgBody>> for Retry<P, S>
+where
+    P: Policy + Clone,
+    S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Clone,
+{
+    type Response = Response<SgBody>;
+
+    type Error = Infallible;
+
+    type Future = RetryFuture<P, S>;
+
+    fn call(&self, req: Request<SgBody>) -> Self::Future {
+        RetryFuture::new(self.policy.clone(), self.service.clone(), req)
+    }
+}
+
+impl MakeSgLayer for SgPluginRetryConfig {
+    fn make_layer(&self) -> Result<spacegate_tower::SgBoxLayer, spacegate_tower::BoxError> {
         let policy = RetryPolicy {
             times: 0,
             config: Arc::new(self.clone()),
@@ -154,4 +284,4 @@ impl MakeSgLayer for RetryConfig {
     }
 }
 
-def_plugin!("retry", RetryPlugin, RetryConfig);
+def_plugin!("retry", RetryPlugin, SgPluginRetryConfig);

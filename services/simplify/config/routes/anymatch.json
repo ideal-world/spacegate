@@ -2,17 +2,11 @@
   "gateway_name": "gateway",
   "rules": [
     {
-      "hostnames": [
-        "localhost",
-        "127.0.0.1",
-        "0.0.0.0",
-        "[::]"
-      ],
       "matches": [
         {
           "path": {
             "kind": "Prefix",
-            "value": "/"
+            "value": "/reject"
           }
         }
       ],

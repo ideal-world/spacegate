@@ -3,7 +3,7 @@ use http_body_util::Full;
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tower::BoxError;
+use spacegate_tower::BoxError;
 
 type BoxResult<T> = Result<T, BoxError>;
 #[cfg(not(feature = "cache"))]

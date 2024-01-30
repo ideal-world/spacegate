@@ -17,7 +17,7 @@ pub struct SgGatewayLayerBuilder {
     pub gateway_name: Arc<str>,
     pub cancel_token: CancellationToken,
     http_routers: Vec<SgHttpRoute>,
-    http_plugins: Vec<SgBoxLayer>,
+    pub http_plugins: Vec<SgBoxLayer>,
     http_fallback: SgBoxLayer,
     http_route_reloader: Reloader<SgGatewayRoute>,
 }

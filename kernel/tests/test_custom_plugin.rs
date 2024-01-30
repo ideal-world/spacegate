@@ -1,6 +1,5 @@
 use std::{env, time::Duration, vec};
 
-
 use hyper::header::AUTHORIZATION;
 use hyper::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -14,10 +13,11 @@ use spacegate_kernel::config::{
     plugin_filter_dto::SgRouteFilter,
 };
 
+use spacegate_kernel::ctrl_c_cancel_token;
 use spacegate_plugin::{def_filter_plugin, SgPluginRepository};
 use spacegate_tower::helper_layers::filter::Filter;
-use spacegate_tower::{SgResponseExt};
-use spacegate_tower::{BoxError};
+use spacegate_tower::BoxError;
+use spacegate_tower::SgResponseExt;
 
 use tardis::config::config_dto::WebClientModuleConfig;
 use tardis::{
@@ -45,41 +45,51 @@ async fn test_custom_plugin() -> Result<(), BoxError> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace,spacegate_plugin=trace,spacegate_tower");
     tracing_subscriber::fmt::init();
     SgPluginRepository::global().register::<SgFilterAuthPlugin>();
-    spacegate_kernel::do_startup(
-        SgGateway {
-            name: "test_gw".to_string(),
-            listeners: vec![SgListener { port: 8888, ..Default::default() }],
-            ..Default::default()
-        },
-        vec![SgHttpRoute {
-            gateway_name: "test_gw".to_string(),
-            filters: Some(vec![SgRouteFilter {
-                code: "auth".to_string(),
-                spec: json!({}),
+    let localset = tokio::task::LocalSet::new();
+    localset.spawn_local(async move {
+        let token = ctrl_c_cancel_token();
+        let _server = spacegate_kernel::server::RunningSgGateway::create(
+            SgGateway {
+                name: "test_gw".to_string(),
+                listeners: vec![SgListener { port: 8888, ..Default::default() }],
                 ..Default::default()
-            }]),
-            rules: Some(vec![SgHttpRouteRule {
-                backends: Some(vec![SgBackendRef {
-                    name_or_host: "postman-echo.com".to_string(),
-                    protocol: Some(Https),
+            },
+            vec![SgHttpRoute {
+                gateway_name: "test_gw".to_string(),
+                filters: Some(vec![SgRouteFilter {
+                    code: "auth".to_string(),
+                    spec: json!({}),
+                    ..Default::default()
+                }]),
+                rules: Some(vec![SgHttpRouteRule {
+                    backends: Some(vec![SgBackendRef {
+                        name_or_host: "postman-echo.com".to_string(),
+                        protocol: Some(Https),
+                        ..Default::default()
+                    }]),
                     ..Default::default()
                 }]),
                 ..Default::default()
-            }]),
-            ..Default::default()
-        }],
-    )
-    .await?;
-    sleep(Duration::from_millis(500)).await;
-    let client = TardisWebClient::init(&WebClientModuleConfig {
-        connect_timeout_sec: 100,
-        ..Default::default()
-    })?;
-    let resp = client.get_to_str("http://localhost:8888/get?dd", None).await?;
-    assert_eq!(resp.code, 401);
+            }],
+            token.clone(),
+        )
+        .expect("fail to start up server");
+        token.cancelled().await
+    });
+    localset
+        .run_until(async move {
+            sleep(Duration::from_millis(500)).await;
+            let client = TardisWebClient::init(&WebClientModuleConfig {
+                connect_timeout_sec: 100,
+                ..Default::default()
+            })?;
+            let resp = client.get_to_str("http://localhost:8888/get?dd", None).await?;
+            assert_eq!(resp.code, 401);
 
-    let resp = client.get::<Value>("http://localhost:8888/get?dd", [("Authorization".to_string(), "xxxxx".to_string())]).await?;
-    assert_eq!(resp.code, 200);
-    assert!(resp.body.unwrap().get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
-    Ok(())
+            let resp = client.get::<Value>("http://localhost:8888/get?dd", [("Authorization".to_string(), "xxxxx".to_string())]).await?;
+            assert_eq!(resp.code, 200);
+            assert!(resp.body.unwrap().get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd"));
+            Ok::<(), BoxError>(())
+        })
+        .await
 }

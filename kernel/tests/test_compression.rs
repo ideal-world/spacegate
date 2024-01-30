@@ -7,6 +7,7 @@ use spacegate_kernel::{
         http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
+    ctrl_c_cancel_token,
     spacegate_plugin::plugins::decompression,
 };
 use tardis::{
@@ -20,7 +21,7 @@ const HTTPS_PORT: u16 = 18443;
 async fn test_compression() -> TardisResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_kernel=trace,spacegate_plugin=trace,spacegate_tower=trace");
     tracing_subscriber::fmt::init();
-    spacegate_kernel::do_startup(
+    let server = spacegate_kernel::server::RunningSgGateway::create(
         SgGateway {
             name: "test_gw".to_string(),
             listeners: vec![
@@ -59,8 +60,9 @@ async fn test_compression() -> TardisResult<()> {
             }]),
             ..Default::default()
         }],
+        ctrl_c_cancel_token(),
     )
-    .await.expect("fail to start spacegate");
+    .expect("fail to start spacegate");
     sleep(Duration::from_millis(500)).await;
 
     info!("【test_compression】test backend is gzip");

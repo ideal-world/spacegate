@@ -1,5 +1,4 @@
 use crate::{extension::Reflect, SgBody, SgResponseExt};
-use futures_util::{Future, FutureExt};
 
 use hyper::StatusCode;
 use hyper::{Request, Response};
@@ -11,14 +10,10 @@ use hyper_util::{
 };
 use std::{
     collections::HashMap,
-    convert::Infallible,
-    mem,
-    pin::Pin,
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
 use tokio_rustls::rustls::{self, client::danger::ServerCertVerifier, SignatureScheme};
-use tower_service::Service;
 
 #[derive(Debug, Clone)]
 pub struct NoCertificateVerification {}
@@ -147,7 +142,7 @@ impl SgHttpClient {
     }
     pub async fn request(&mut self, mut req: Request<SgBody>) -> Response<SgBody> {
         let reflect = req.extensions_mut().remove::<Reflect>();
-        match self.inner.request(req).await.map_err(Response::internal_error) {
+        match self.inner.request(req).await.map_err(Response::bad_gateway) {
             Ok(mut response) => {
                 if let Some(reflect) = reflect {
                     response.extensions_mut().extend(reflect.into_inner());

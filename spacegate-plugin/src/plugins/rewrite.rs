@@ -30,40 +30,6 @@ pub struct SgFilterRewrite {
     /// Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.
     pub path: Option<SgHttpPathModifier>,
 }
-// #[async_trait]
-// impl SgPluginFilter for SgFilterRewrite {
-//     fn accept(&self) -> super::SgPluginFilterAccept {
-//         super::SgPluginFilterAccept {
-//             kind: vec![super::SgPluginFilterKind::Http, super::SgPluginFilterKind::Ws],
-//             ..Default::default()
-//         }
-//     }
-
-//     async fn init(&mut self, _: &SgPluginFilterInitDto) -> TardisResult<()> {
-//         Ok(())
-//     }
-
-//     async fn destroy(&self) -> TardisResult<()> {
-//         Ok(())
-//     }
-
-//     async fn req_filter(&self, _: &str, mut ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
-//         if let Some(hostname) = &self.hostname {
-//             let mut uri = Url::parse(&ctx.request.get_uri().to_string())?;
-//             uri.set_host(Some(hostname)).map_err(|_| TardisError::format_error(&format!("[SG.Filter.Rewrite] Host {hostname} parsing error"), ""))?;
-//             ctx.request.set_uri(uri.to_uri()?);
-//         }
-//         let matched_match_inst = ctx.get_rule_matched();
-//         if let Some(new_url) = http_common_modify_path(ctx.request.get_uri(), &self.path, matched_match_inst.as_ref())? {
-//             ctx.request.set_uri(new_url);
-//         }
-//         Ok((true, ctx))
-//     }
-
-//     async fn resp_filter(&self, _: &str, ctx: SgRoutePluginContext) -> TardisResult<(bool, SgRoutePluginContext)> {
-//         Ok((true, ctx))
-//     }
-// }
 
 impl SgFilterRewrite {
     fn on_req(&self, mut req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
@@ -90,7 +56,7 @@ impl SgFilterRewrite {
                 if let Some(ref pq) = uri_part.path_and_query {
                     if let Some(new_path) = modifier.replace(pq.path(), prefix_match) {
                         tracing::debug!("[Sg.Plugin.Rewrite] rewrite path from {} to {}", pq.path(), new_path);
-                        let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_path).map_err(Response::internal_error)?;
+                        let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_path).map_err(Response::bad_gateway)?;
                         uri_part.path_and_query = Some(new_pq)
                     }
                 }
@@ -110,7 +76,7 @@ pub type RedirectFilterLayer = FilterRequestLayer<SgFilterRewriteConfig>;
 pub type Redirect<S> = FilterRequest<SgFilterRewriteConfig, S>;
 
 impl MakeSgLayer for SgFilterRewriteConfig {
-    fn make_layer(&self) -> Result<SgBoxLayer, tower::BoxError> {
+    fn make_layer(&self) -> Result<SgBoxLayer, spacegate_tower::BoxError> {
         let hostname = self.hostname.as_deref().map(HeaderValue::from_str).transpose()?;
         let filter = SgFilterRewrite {
             hostname,
