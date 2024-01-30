@@ -30,7 +30,11 @@ serde_regex = "1.1.0"
 
 
 tracing = { workspace = true }
-hyper-util = { workspace = true, features = ["full"] }
+hyper-util = { workspace = true, features = [
+    "server-auto",
+    "client-legacy",
+    "tokio",
+] }
 tokio = { version = "1", features = ["net", "time", "macros"] }
 
 rand = { version = "0" }
