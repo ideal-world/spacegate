@@ -1,0 +1,69 @@
+[package]
+name = "spacegate-plugin"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../README.md"
+
+[lib]
+name = "spacegate_plugin"
+path = "src/lib.rs"
+
+[features]
+cache = ["tardis/cache"]
+limit = ["cache"]
+header-modifier = []
+inject = []
+redirect = []
+retry = []
+rewrite = []
+maintenance = ["ipnet"]
+# decompression = ["tower-http/decompression-full"]
+status = ["hyper-util"]
+full = [
+    "cache",
+    "limit",
+    "header-modifier",
+    "inject",
+    "redirect",
+    "retry",
+    "rewrite",
+    "maintenance",
+    # "decompression",
+    "status",
+]
+[dependencies]
+spacegate-kernel = { path = "../kernel" }
+tracing = { workspace = true }
+hyper = { workspace = true }
+http-body-util = { workspace = true }
+tower-layer = { workspace = true }
+rustls = { workspace = true }
+pin-project-lite = { workspace = true }
+hyper-util = { workspace = true, optional = true }
+# serde
+serde = { workspace = true, features = ["derive"] }
+tokio-util = { workspace = true, features = ["io"] }
+tardis = { workspace = true, features = ["cache"] }
+
+# future
+futures-util = { workspace = true }
+
+# plugin-maintenance
+ipnet = { workspace = true, optional = true }
+
+[dev-dependencies]
+tardis = { workspace = true, features = ["cache", "test"] }
+async-compression = { version = "0.4", features = [
+    "tokio",
+    "gzip",
+    "deflate",
+    "brotli",
+] }

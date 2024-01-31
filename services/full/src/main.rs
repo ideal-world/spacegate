@@ -1,4 +1,4 @@
-use spacegate_kernel::BoxError;
+use spacegate_shell::BoxError;
 use tardis::{basic::tracing::TardisTracing, tokio};
 
 fn main() -> Result<(), BoxError> {
@@ -11,7 +11,7 @@ fn main() -> Result<(), BoxError> {
         let local_set = tokio::task::LocalSet::new();
         local_set
             .run_until(async move {
-                let join_handle = spacegate_kernel::startup_k8s(namespaces.as_deref()).await.expect("fail to start spacegate");
+                let join_handle = spacegate_shell::startup_k8s(namespaces.as_deref()).await.expect("fail to start spacegate");
                 join_handle.await.expect("join handle error")
             })
             .await
