@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct K8sServiceData {
     pub name: String,
+    #[serde(alias = "ns")]
     pub namespace: Option<String>,
 }
 

@@ -8,7 +8,7 @@ use super::{gateway_dto::SgProtocol, plugin_filter_dto::SgRouteFilter};
 /// HTTPRoute provides a way to route HTTP requests.
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SgHttpRoute {
     /// Associated gateway name.
     pub gateway_name: String,
@@ -18,6 +18,20 @@ pub struct SgHttpRoute {
     pub filters: Option<Vec<SgRouteFilter>>,
     /// Rules are a list of HTTP matchers, filters and actions.
     pub rules: Option<Vec<SgHttpRouteRule>>,
+    /// Rule priority, the rule of higher priority will be chosen.
+    pub priority: u16,
+}
+
+impl Default for SgHttpRoute {
+    fn default() -> Self {
+        Self {
+            gateway_name: Default::default(),
+            hostnames: Default::default(),
+            filters: Default::default(),
+            rules: Default::default(),
+            priority: 1,
+        }
+    }
 }
 
 /// HTTPRouteRule defines semantics for matching an HTTP request based on conditions (matches), processing it (filters), and forwarding the request to an API object
@@ -36,6 +50,7 @@ pub struct SgHttpRouteRule {
 /// BackendRef defines how a HTTPRoute should forward an HTTP request.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgBackendRef {
+    #[serde(flatten)]
     pub host: BackendHost,
     /// Port specifies the destination port number to use for this resource.
     pub port: u16,
@@ -53,8 +68,11 @@ pub struct SgBackendRef {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
 pub enum BackendHost {
-    Host(String),
+    Host {
+        host: String,
+    },
     #[cfg(feature = "k8s")]
     K8sService(K8sServiceData),
 }
@@ -62,7 +80,7 @@ pub enum BackendHost {
 impl ToString for BackendHost {
     fn to_string(&self) -> String {
         match self {
-            Self::Host(host) => host.clone(),
+            Self::Host { host } => host.clone(),
             #[cfg(feature = "k8s")]
             Self::K8sService(k8s_service) => k8s_service.to_string(),
         }
@@ -71,7 +89,7 @@ impl ToString for BackendHost {
 
 impl Default for BackendHost {
     fn default() -> Self {
-        Self::Host(String::default())
+        Self::Host { host: String::default() }
     }
 }
 

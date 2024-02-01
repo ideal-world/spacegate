@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_plugin::MakeSgLayer;
 use spacegate_kernel::{
     layers::{
         gateway::builder::SgGatewayLayerBuilder,
@@ -8,6 +7,7 @@ use spacegate_kernel::{
     },
     BoxError, SgBoxLayer,
 };
+use spacegate_plugin::MakeSgLayer;
 use tardis::log;
 
 /// RouteFilter defines processing steps that must be completed during the request or response lifecycle.

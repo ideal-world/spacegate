@@ -24,8 +24,8 @@
 use config::{http_route_dto::SgHttpRoute, ConfigListener, StaticConfig};
 pub use hyper;
 pub use spacegate_kernel as kernel;
-pub use spacegate_plugin as plugin;
 pub use spacegate_kernel::{BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
+pub use spacegate_plugin as plugin;
 use tardis::{
     basic::result::TardisResult,
     log::{self as tracing, info},
@@ -36,9 +36,9 @@ use tardis::{
 pub mod cache_client;
 pub mod config;
 pub mod constants;
+pub mod extension;
 pub mod helpers;
 pub mod server;
-pub mod extension;
 
 #[cfg(feature = "local")]
 pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {

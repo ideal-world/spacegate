@@ -9,7 +9,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::{
-    extension::{EnterTime, PeerAddr, Reflect}, utils::with_length_or_chunked, BoxError, SgBody
+    extension::{EnterTime, PeerAddr, Reflect},
+    utils::with_length_or_chunked,
+    BoxError, SgBody,
 };
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.

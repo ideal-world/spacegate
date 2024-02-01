@@ -62,9 +62,9 @@ fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<
                                 let plugins = backend.filters.unwrap_or_default();
                                 #[cfg(feature = "k8s")]
                                 {
+                                    use crate::extension::k8s_service::K8sService;
                                     use spacegate_kernel::helper_layers::map_request::{add_extension::add_extension, MapRequestLayer};
                                     use spacegate_kernel::SgBoxLayer;
-                                    use crate::extension::k8s_service::K8sService;
                                     if let BackendHost::K8sService(data) = backend.host {
                                         let namespace_ext = K8sService(data.into());
                                         builder = builder.plugin(SgBoxLayer::new(MapRequestLayer::new(add_extension(namespace_ext, true))))

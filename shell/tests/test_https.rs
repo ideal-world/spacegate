@@ -1,11 +1,14 @@
 use std::{env, time::Duration, vec};
 
 use serde_json::{json, Value};
-use spacegate_shell::{config::{
-    gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
-    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-}, ctrl_c_cancel_token};
 use spacegate_kernel::BoxError;
+use spacegate_shell::{
+    config::{
+        gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
+        http_route_dto::{BackendHost, SgBackendRef, SgHttpRoute, SgHttpRouteRule},
+    },
+    ctrl_c_cancel_token,
+};
 use tardis::{
     basic::tracing::TardisTracingInitializer,
     config::config_dto::WebClientModuleConfig,
@@ -146,7 +149,9 @@ async fn test_https() -> Result<(), BoxError> {
                 gateway_name: "test_gw".to_string(),
                 rules: Some(vec![SgHttpRouteRule {
                     backends: Some(vec![SgBackendRef {
-                        name_or_host: "postman-echo.com".to_string(),
+                        host: BackendHost::Host {
+                            host: "postman-echo.com".into()
+                        },
                         port: 443,
                         protocol: Some(SgProtocol::Https),
                         ..Default::default()
@@ -160,55 +165,57 @@ async fn test_https() -> Result<(), BoxError> {
         .expect("fail to start up server");
         token.cancelled().await
     });
-    localset.run_until(async move {
-        sleep(Duration::from_millis(500)).await;
-        let client = TardisWebClient::init(&WebClientModuleConfig {
-            connect_timeout_sec: 100,
-            ..Default::default()
-        })?;
-        let resp: TardisHttpResponse<Value> = client
-            .post(
-                "https://localhost:8888/post?dd",
-                &json!({
-                    "name":"星航",
-                    "age":6
-                }),
-                None,
-            )
-            .await?;
-        assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
-    
-        let client = TardisWebClient::init(&WebClientModuleConfig {
-            connect_timeout_sec: 100,
-            ..Default::default()
-        })?;
-        let resp: TardisHttpResponse<Value> = client
-            .post(
-                "https://localhost:8889/post?dd",
-                &json!({
-                    "name":"星航",
-                    "age":6
-                }),
-                None,
-            )
-            .await?;
-        assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
-    
-        let client = TardisWebClient::init(&WebClientModuleConfig {
-            connect_timeout_sec: 100,
-            ..Default::default()
-        })?;
-        let resp: TardisHttpResponse<Value> = client
-            .post(
-                "https://localhost:8890/post?dd",
-                &json!({
-                    "name":"星航",
-                    "age":6
-                }),
-                None,
-            )
-            .await?;
-        assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
-        Ok(())
-    }).await
+    localset
+        .run_until(async move {
+            sleep(Duration::from_millis(500)).await;
+            let client = TardisWebClient::init(&WebClientModuleConfig {
+                connect_timeout_sec: 100,
+                ..Default::default()
+            })?;
+            let resp: TardisHttpResponse<Value> = client
+                .post(
+                    "https://localhost:8888/post?dd",
+                    &json!({
+                        "name":"星航",
+                        "age":6
+                    }),
+                    None,
+                )
+                .await?;
+            assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+
+            let client = TardisWebClient::init(&WebClientModuleConfig {
+                connect_timeout_sec: 100,
+                ..Default::default()
+            })?;
+            let resp: TardisHttpResponse<Value> = client
+                .post(
+                    "https://localhost:8889/post?dd",
+                    &json!({
+                        "name":"星航",
+                        "age":6
+                    }),
+                    None,
+                )
+                .await?;
+            assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+
+            let client = TardisWebClient::init(&WebClientModuleConfig {
+                connect_timeout_sec: 100,
+                ..Default::default()
+            })?;
+            let resp: TardisHttpResponse<Value> = client
+                .post(
+                    "https://localhost:8890/post?dd",
+                    &json!({
+                        "name":"星航",
+                        "age":6
+                    }),
+                    None,
+                )
+                .await?;
+            assert!(resp.body.unwrap().get("data").unwrap().to_string().contains("星航"));
+            Ok(())
+        })
+        .await
 }

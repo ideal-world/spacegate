@@ -95,7 +95,7 @@ where
     }
 }
 
-impl<S, FMT> hyper::service::Service<Request<SgBody>> for ResponseError<S, FMT> 
+impl<S, FMT> hyper::service::Service<Request<SgBody>> for ResponseError<S, FMT>
 where
     S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>> + Send + Sync + 'static,
     S::Error: std::error::Error,

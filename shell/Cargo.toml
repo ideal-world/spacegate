@@ -18,7 +18,7 @@ path = "src/lib.rs"
 
 [features]
 local = ["tardis/fs", "notify"]
-cache = ["tardis/cache"]
+cache = ["tardis/cache", "spacegate-plugin/cache"]
 ws = ["tardis/ws-client"]
 k8s = [
     "kube",
@@ -26,11 +26,11 @@ k8s = [
     "k8s-gateway-api",
     "schemars",
     "cache",
-    "spacegate-plugin/cache",
     "spacegate-plugin/rewrite",
     "spacegate-plugin/header-modifier",
     "spacegate-plugin/redirect",
 ]
+plugin-all = ["spacegate-plugin/full"]
 plugin-cache = ["spacegate-plugin/cache"]
 plugin-limit = ["spacegate-plugin/limit"]
 plugin-header-modifier = ["spacegate-plugin/header-modifier"]

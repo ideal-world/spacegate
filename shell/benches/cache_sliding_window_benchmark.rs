@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use spacegate_shell::cache_client::{get as get_cache, init as init_cache};
 use spacegate_plugin::plugins::status::sliding_window::SlidingWindowCounter;
+use spacegate_shell::cache_client::{get as get_cache, init as init_cache};
 use tardis::chrono::{Duration, Utc};
 use tardis::test::test_container::TardisTestContainer;
 use tardis::testcontainers;

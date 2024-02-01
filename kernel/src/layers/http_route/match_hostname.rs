@@ -317,14 +317,14 @@ impl<T> HostnameMatcherNode<T> {
         let host = host.to_ascii_lowercase();
         self.get_mut_by_iter(host.split('.').rev())
     }
-    pub fn iter<'a>(&'a self) -> HostnameMatcherNodeIter<'a, T> {
+    pub fn iter(&self) -> HostnameMatcherNodeIter<'_, T> {
         HostnameMatcherNodeIter {
             data: self.data.iter(),
             children: self.children.values(),
             else_node: self.else_node.as_ref().map(|node| Box::new(node.iter())),
         }
     }
-    pub fn iter_mut<'a>(&'a mut self) -> HostnameMatcherNodeIterMut<'a, T> {
+    pub fn iter_mut(&mut self) -> HostnameMatcherNodeIterMut<'_, T> {
         HostnameMatcherNodeIterMut {
             data: self.data.iter_mut(),
             children: self.children.values_mut(),

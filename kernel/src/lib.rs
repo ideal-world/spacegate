@@ -12,10 +12,10 @@ pub mod utils;
 
 pub use body::SgBody;
 use extension::Reflect;
+use helper_layers::response_error::ErrorFormatter;
+pub use service::BoxHyperService;
 use std::{convert::Infallible, fmt, sync::Arc};
 pub use tower_layer::Layer;
-pub use service::BoxHyperService;
-use helper_layers::response_error::ErrorFormatter;
 
 use hyper::{body::Bytes, Request, Response, StatusCode};
 
@@ -25,19 +25,12 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub trait SgRequestExt {
     fn with_reflect(&mut self);
-    // fn into_context(self) -> (SgContext, Request<BoxBody<Bytes, hyper::Error>>);
 }
 
 impl SgRequestExt for Request<SgBody> {
     fn with_reflect(&mut self) {
         self.extensions_mut().insert(Reflect::new());
     }
-    // fn into_context(self) -> (SgContext, Request<BoxBody<Bytes, hyper::Error>>) {
-    //     let (parts, body) = self.into_parts();
-    //     let (context, body) = body.into_context();
-    //     let real_body = Request::from_parts(parts, body);
-    //     (context, real_body)
-    // }
 }
 
 pub trait SgResponseExt {
@@ -47,7 +40,15 @@ pub trait SgResponseExt {
         Self: Sized,
     {
         let message = e.to_string();
-        tracing::debug!(message, "[Sg] internal error");
+        tracing::debug!(message, "[Sg] gateway internal error");
+        Self::with_code_message(StatusCode::BAD_GATEWAY, message)
+    }
+    fn plugin_error<E: std::error::Error>(e: E) -> Self
+    where
+        Self: Sized,
+    {
+        let message = e.to_string();
+        tracing::debug!(message, "[Sg] gateway plugin internal error");
         Self::with_code_message(StatusCode::BAD_GATEWAY, message)
     }
     fn from_error<E: std::error::Error, F: ErrorFormatter>(e: E, formatter: &F) -> Self
@@ -55,7 +56,7 @@ pub trait SgResponseExt {
         Self: Sized,
     {
         let message = formatter.format(&e);
-        tracing::debug!(message, "[Sg] internal error");
+        tracing::debug!(message, "[Sg] gateway internal error");
         Self::with_code_message(StatusCode::BAD_GATEWAY, formatter.format(&e))
     }
 }
@@ -130,4 +131,3 @@ impl fmt::Debug for SgBoxLayer {
         fmt.debug_struct("BoxLayer").finish()
     }
 }
-

@@ -1,4 +1,4 @@
-use crate::{service::BoxHyperService, SgBody,};
+use crate::{service::BoxHyperService, SgBody};
 use futures_util::ready;
 use hyper::{Request, Response};
 use pin_project_lite::pin_project;
@@ -53,7 +53,6 @@ where
         }
     }
 }
-
 
 impl<F, S> hyper::service::Service<Request<SgBody>> for BdfService<F, S>
 where

@@ -5,6 +5,7 @@ use hyper::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use spacegate_shell::config::gateway_dto::SgProtocol::Https;
+use spacegate_shell::config::http_route_dto::BackendHost;
 // use spacegate_shell::plugins::context::SgRoutePluginContext;
 // use spacegate_shell::plugins::filters::SgPluginFilterInitDto;
 use spacegate_shell::config::{
@@ -13,11 +14,11 @@ use spacegate_shell::config::{
     plugin_filter_dto::SgRouteFilter,
 };
 
-use spacegate_shell::ctrl_c_cancel_token;
-use spacegate_plugin::{def_filter_plugin, SgPluginRepository};
 use spacegate_kernel::helper_layers::filter::Filter;
 use spacegate_kernel::BoxError;
 use spacegate_kernel::SgResponseExt;
+use spacegate_plugin::{def_filter_plugin, SgPluginRepository};
+use spacegate_shell::ctrl_c_cancel_token;
 
 use tardis::config::config_dto::WebClientModuleConfig;
 use tardis::{
@@ -63,7 +64,9 @@ async fn test_custom_plugin() -> Result<(), BoxError> {
                 }]),
                 rules: Some(vec![SgHttpRouteRule {
                     backends: Some(vec![SgBackendRef {
-                        name_or_host: "postman-echo.com".to_string(),
+                        host: BackendHost::Host {
+                            host: "postman-echo.com".into()
+                        },
                         protocol: Some(Https),
                         ..Default::default()
                     }]),

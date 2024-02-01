@@ -16,8 +16,10 @@ pub use tardis::serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::BoxError;
 #[cfg(feature = "cache")]
 pub mod cache;
+pub mod error;
 pub mod model;
 pub mod plugins;
+pub use error::PluginError;
 
 pub trait Plugin {
     type Error: std::error::Error + Send + Sync + 'static;

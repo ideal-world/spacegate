@@ -24,17 +24,16 @@ use tardis::{
 };
 use tardis::{regex, tokio};
 
-
 use crate::constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION};
 use crate::extension::k8s_service::K8sServiceData;
 
-use super::{ConfigEvent, ConfigListener};
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
     k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
 };
+use super::{ConfigEvent, ConfigListener};
 use crate::config::k8s_crd_spaceroute::HttpSpaceroute;
 use crate::constants::{
     BANCKEND_KIND_EXTERNAL, BANCKEND_KIND_EXTERNAL_HTTP, BANCKEND_KIND_EXTERNAL_HTTPS, GATEWAY_ANNOTATION_LANGUAGE, GATEWAY_ANNOTATION_LOG_LEVEL, GATEWAY_ANNOTATION_REDIS_URL,
@@ -48,6 +47,7 @@ lazy_static! {
     static ref GATEWAY_UNIQUES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
 }
 
+const DEFAULT_NAMESPACE: &str = "default";
 const GATEWAY_CLASS_NAME: &str = "spacegate";
 
 pub struct K8sConfigListener {
@@ -59,12 +59,12 @@ pub struct K8sConfigListener {
 impl K8sConfigListener {
     pub async fn new(namespaces: Option<&str>) -> Result<Self, BoxError> {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        let init_configs = init(namespaces.clone(), sender.clone()).await?;
+        let init_configs = init(namespaces, sender.clone()).await?;
         for config in init_configs {
             let (gateway_config, http_route_configs) = config;
             let _ = sender.send(ConfigEvent::GatewayAdd(gateway_config, http_route_configs));
         }
-        let namespace = namespaces.clone().unwrap_or("").into();
+        let namespace = namespaces.unwrap_or(DEFAULT_NAMESPACE).into();
         Ok(Self { namespace, receiver })
     }
 }
@@ -89,10 +89,10 @@ impl ConfigListener for K8sConfigListener {
 pub async fn init(namespaces: Option<&str>, sender: UnboundedSender<ConfigEvent>) -> TardisResult<Vec<(SgGateway, Vec<SgHttpRoute>)>> {
     let (gateway_api, http_spaceroute_api, http_route_api, filter_api): (Api<Gateway>, Api<HttpSpaceroute>, Api<HttpRoute>, Api<SgFilter>) = if let Some(namespaces) = namespaces {
         (
-            Api::namespaced(get_client().await?, &namespaces),
-            Api::namespaced(get_client().await?, &namespaces),
-            Api::namespaced(get_client().await?, &namespaces),
-            Api::namespaced(get_client().await?, &namespaces),
+            Api::namespaced(get_client().await?, namespaces),
+            Api::namespaced(get_client().await?, namespaces),
+            Api::namespaced(get_client().await?, namespaces),
+            Api::namespaced(get_client().await?, namespaces),
         )
     } else {
         (
@@ -757,6 +757,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
     });
 
     for http_route_obj in http_route_objs {
+        let priority = http_route_obj.annotations().get(constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<u16>().ok()).unwrap_or(1);
         // Key configuration compatibility checks
         if http_route_obj.spec.inner.parent_refs.as_ref().map(|refs| refs.len() > 1).unwrap_or(false) {
             return Err(TardisError::not_implemented(
@@ -946,6 +947,7 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                 }
                 None => None,
             },
+            priority,
         };
         http_route_configs.push(http_route_config);
     }

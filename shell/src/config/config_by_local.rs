@@ -12,8 +12,6 @@ use tardis::{
     TardisFuns,
 };
 
-
-
 use super::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute, ConfigEvent, ConfigListener};
 use lazy_static::lazy_static;
 

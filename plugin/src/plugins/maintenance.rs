@@ -3,10 +3,10 @@ use hyper::{Request, Response, StatusCode};
 use ipnet::IpNet;
 use spacegate_kernel::extension::PeerAddr;
 use spacegate_kernel::helper_layers::filter::{Filter, FilterRequestLayer};
+use spacegate_kernel::BoxError;
 use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
 use std::net::IpAddr;
 use std::ops::Range;
-use spacegate_kernel::BoxError;
 
 // use crate::def_filter;
 // use itertools::Itertools;
@@ -205,11 +205,11 @@ mod test {
     use serde_json::json;
     use spacegate_kernel::extension::PeerAddr;
     use spacegate_kernel::service::get_echo_service;
+    use spacegate_kernel::BoxError;
     use spacegate_kernel::SgBody;
     use tardis::chrono::{Duration, Local};
     use tardis::serde_json;
     use tardis::tokio;
-    use spacegate_kernel::BoxError;
     use tower_layer::Layer;
 
     #[tokio::test]
