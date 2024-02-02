@@ -38,7 +38,7 @@ lazy_static! {
     static ref START_JOIN_HANDLE: Arc<Mutex<HashMap<String, JoinHandle<()>>>> = <_>::default();
 }
 
-fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<spacegate_kernel::layers::http_route::SgHttpRoute>, BoxError> {
+fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>, builder_ext: hyper::http::Extensions) -> Result<Vec<spacegate_kernel::layers::http_route::SgHttpRoute>, BoxError> {
     http_routes
         .into_iter()
         .map(|route| {
@@ -47,7 +47,7 @@ fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<
             let rules = rules
                 .into_iter()
                 .map(|route_rule| {
-                    let mut builder = spacegate_kernel::layers::http_route::SgHttpRouteRuleLayer::builder();
+                    let mut builder = spacegate_kernel::layers::http_route::SgHttpRouteRuleLayer::builder().ext(builder_ext.clone());
                     builder = if let Some(matches) = route_rule.matches {
                         builder.matches(matches)
                     } else {
@@ -58,7 +58,7 @@ fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<
                             .into_iter()
                             .map(|backend| {
                                 let host = backend.get_host();
-                                let mut builder = spacegate_kernel::layers::http_route::SgHttpBackendLayer::builder();
+                                let mut builder = spacegate_kernel::layers::http_route::SgHttpBackendLayer::builder().ext(builder_ext.clone());
                                 let plugins = backend.filters.unwrap_or_default();
                                 #[cfg(feature = "k8s")]
                                 {
@@ -89,7 +89,7 @@ fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>) -> Result<Vec<
                     builder.build()
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut builder = spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules);
+            let mut builder = spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).ext(builder_ext.clone());
             builder = SgRouteFilter::install_on_route(plugins, builder);
             builder.build()
         })
@@ -103,10 +103,12 @@ pub(crate) fn create_service(
     plugins: Vec<SgRouteFilter>,
     http_routes: Vec<crate::SgHttpRoute>,
     reloader: Reloader<SgGatewayRoute>,
+    builder_ext: hyper::http::Extensions,
 ) -> Result<BoxHyperService, BoxError> {
-    let routes = collect_tower_http_route(http_routes)?;
+    let routes = collect_tower_http_route(http_routes, builder_ext.clone())?;
     let builder = spacegate_kernel::layers::gateway::SgGatewayLayer::builder(gateway_name.to_owned(), cancel_token).http_routers(routes).http_route_reloader(reloader);
-    let builder = SgRouteFilter::install_on_gateway(plugins, builder);
+
+    let builder = SgRouteFilter::install_on_gateway(plugins, builder.ext(builder_ext));
     let gateway_layer = builder.build();
     let backend_service = get_http_backend_service();
     let service = BoxHyperService::new(gateway_layer.layer(backend_service));
@@ -114,8 +116,8 @@ pub(crate) fn create_service(
 }
 
 /// create a new sg gateway route, which can be sent to reloader
-pub(crate) fn create_router_service(http_routes: Vec<crate::SgHttpRoute>) -> Result<SgGatewayRoute, BoxError> {
-    let routes = collect_tower_http_route(http_routes)?;
+pub(crate) fn create_router_service(http_routes: Vec<crate::SgHttpRoute>, builder_ext: hyper::http::Extensions,) -> Result<SgGatewayRoute, BoxError> {
+    let routes = collect_tower_http_route(http_routes, builder_ext)?;
     let service = create_http_router(&routes, default_gateway_route_fallback(), get_http_backend_service());
     Ok(service)
 }
@@ -161,7 +163,7 @@ impl RunningSgGateway {
 
     pub async fn global_update(gateway_name: impl AsRef<str>, http_routes: Vec<crate::SgHttpRoute>) -> Result<(), BoxError> {
         let gateway_name = gateway_name.as_ref();
-        let service = create_router_service(http_routes)?;
+        let service = create_router_service(http_routes, Default::default())?;
         let reloader = {
             let store = Self::global_store();
             let global_store = store.lock().expect("poisoned lock");
@@ -178,11 +180,14 @@ impl RunningSgGateway {
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config.name), skip_all, err)]
     pub fn create(config: SgGateway, http_routes: Vec<SgHttpRoute>, cancel_token: CancellationToken) -> Result<Self, BoxError> {
+        let mut builder_ext = hyper::http::Extensions::new();
         #[cfg(feature = "cache")]
         {
             if let Some(url) = &config.parameters.redis_url {
-                let url = url.clone();
+                let url: Arc<str> = url.clone().into();
                 let name = config.name.clone();
+                
+                builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
                 tokio::spawn(async move {
                     // Initialize cache instances
                     log::trace!("Initialize cache client...url:{url}");
@@ -197,7 +202,7 @@ impl RunningSgGateway {
         }
         log::info!("[SG.Server] start gateway");
         let reloader = <Reloader<SgGatewayRoute>>::default();
-        let service = create_service(&config.name, cancel_token.clone(), config.filters.unwrap_or_default(), http_routes, reloader.clone())?;
+        let service = create_service(&config.name, cancel_token.clone(), config.filters.unwrap_or_default(), http_routes, reloader.clone(), builder_ext)?;
         if config.listeners.is_empty() {
             return Err("[SG.Server] Missing Listeners".into());
         }

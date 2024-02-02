@@ -12,6 +12,7 @@ pub struct SgHttpRouteLayerBuilder {
     pub rules: Vec<SgHttpRouteRuleLayer>,
     pub plugins: Vec<SgBoxLayer>,
     pub priority: Option<u16>,
+    pub extensions: hyper::http::Extensions,
 }
 
 impl Default for SgHttpRouteLayerBuilder {
@@ -27,6 +28,7 @@ impl SgHttpRouteLayerBuilder {
             rules: Vec::new(),
             plugins: Vec::new(),
             priority: None,
+            extensions: Default::default()
         }
     }
     pub fn hostnames(mut self, hostnames: impl IntoIterator<Item = String>) -> Self {
@@ -53,6 +55,10 @@ impl SgHttpRouteLayerBuilder {
         self.priority = Some(priority);
         self
     }
+    pub fn ext(mut self, extensions: hyper::http::Extensions) -> Self {
+        self.extensions = extensions;
+        self
+    }
     pub fn build(mut self) -> Result<SgHttpRoute, BoxError> {
         if self.hostnames.iter().any(|host| host == "*") {
             self.hostnames = vec!["*".to_string()]
@@ -72,6 +78,7 @@ pub struct SgHttpRouteRuleLayerBuilder {
     pub plugins: Vec<SgBoxLayer>,
     timeouts: Option<Duration>,
     backends: Vec<SgHttpBackendLayer>,
+    pub extensions: hyper::http::Extensions,
 }
 impl Default for SgHttpRouteRuleLayerBuilder {
     fn default() -> Self {
@@ -86,6 +93,7 @@ impl SgHttpRouteRuleLayerBuilder {
             plugins: Vec::new(),
             timeouts: None,
             backends: Vec::new(),
+            extensions: Default::default()
         }
     }
     pub fn matches(mut self, matches: impl IntoIterator<Item = SgHttpRouteMatch>) -> Self {
@@ -124,6 +132,10 @@ impl SgHttpRouteRuleLayerBuilder {
             backends: Arc::from_iter(self.backends),
         })
     }
+    pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
+        self.extensions = extension;
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -134,6 +146,7 @@ pub struct SgHttpBackendLayerBuilder {
     pub plugins: Vec<SgBoxLayer>,
     timeout: Option<Duration>,
     weight: u16,
+    pub extensions: hyper::http::Extensions,
 }
 
 impl Default for SgHttpBackendLayerBuilder {
@@ -145,6 +158,7 @@ impl Default for SgHttpBackendLayerBuilder {
             plugins: Vec::new(),
             timeout: None,
             weight: 1,
+            extensions: Default::default(),
         }
     }
 }
@@ -179,6 +193,10 @@ impl SgHttpBackendLayerBuilder {
     }
     pub fn protocol(mut self, protocol: String) -> Self {
         self.protocol = Some(protocol);
+        self
+    }
+    pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
+        self.extensions = extension;
         self
     }
     pub fn build(self) -> Result<SgHttpBackendLayer, BoxError> {

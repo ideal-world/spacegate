@@ -3,6 +3,7 @@ use std::sync::{Arc, OnceLock};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
+    extension,
     helper_layers::{
         filter::{response_anyway::ResponseAnyway, FilterRequestLayer},
         reload::Reloader,
@@ -20,6 +21,7 @@ pub struct SgGatewayLayerBuilder {
     pub http_plugins: Vec<SgBoxLayer>,
     http_fallback: SgBoxLayer,
     http_route_reloader: Reloader<SgGatewayRoute>,
+    pub extension: hyper::http::Extensions,
 }
 
 pub fn default_gateway_route_fallback() -> &'static SgBoxLayer {
@@ -41,6 +43,7 @@ impl SgGatewayLayerBuilder {
             http_plugins: Vec::new(),
             http_fallback: default_gateway_route_fallback().clone(),
             http_route_reloader: Default::default(),
+            extension: hyper::http::Extensions::default(),
         }
     }
     pub fn http_router(mut self, route: SgHttpRoute) -> Self {
@@ -65,6 +68,10 @@ impl SgGatewayLayerBuilder {
     }
     pub fn http_route_reloader(mut self, reloader: Reloader<SgGatewayRoute>) -> Self {
         self.http_route_reloader = reloader;
+        self
+    }
+    pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
+        self.extension = extension;
         self
     }
     pub fn build(self) -> SgGatewayLayer {

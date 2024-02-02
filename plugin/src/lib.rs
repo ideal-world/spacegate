@@ -58,8 +58,7 @@ pub trait MakeSgLayer {
 type BoxCreateFn = Box<dyn Fn(JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> + Send + Sync>;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
-    pub fnmap: Arc<RwLock<HashMap<&'static str, BoxCreateFn>>>,
-    pub target_wise_map: Arc<HashMap<TypeId, BoxCreateFn>>,
+    pub map: Arc<RwLock<HashMap<&'static str, BoxCreateFn>>>,
 }
 
 impl SgPluginRepository {
@@ -96,7 +95,7 @@ impl SgPluginRepository {
     }
 
     pub fn register<P: Plugin>(&self) {
-        let mut map = self.fnmap.write().expect("SgPluginTypeMap register error");
+        let mut map = self.map.write().expect("SgPluginTypeMap register error");
         let create_fn = Box::new(move |value| P::create(value).map_err(BoxError::from).map(|x| Box::new(x) as Box<dyn MakeSgLayer>));
         map.insert(P::CODE, Box::new(create_fn));
     }
@@ -107,13 +106,13 @@ impl SgPluginRepository {
         M: MakeSgLayer + 'static,
         E: std::error::Error + Send + Sync + 'static,
     {
-        let mut map = self.fnmap.write().expect("SgPluginTypeMap register error");
+        let mut map = self.map.write().expect("SgPluginTypeMap register error");
         let create_fn = Box::new(move |value| f(value).map_err(BoxError::from).map(|x| Box::new(x) as Box<dyn MakeSgLayer>));
         map.insert(code, Box::new(create_fn));
     }
 
     pub fn create(&self, code: &str, value: JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> {
-        let map = self.fnmap.read().expect("SgPluginTypeMap register error");
+        let map = self.map.read().expect("SgPluginTypeMap register error");
         if let Some(t) = map.get(code) {
             (t)(value)
         } else {
