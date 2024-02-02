@@ -26,6 +26,7 @@ pub use hyper;
 pub use spacegate_kernel as kernel;
 pub use spacegate_kernel::{BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 pub use spacegate_plugin as plugin;
+use tardis::log::instrument;
 use tardis::{
     basic::result::TardisResult,
     log::{self as tracing, info},
@@ -43,28 +44,53 @@ pub mod server;
 #[cfg(feature = "local")]
 pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
     let config_listener = config::config_by_local::FileConfigListener::new(&conf_path).await?;
-    Ok(config::init_with_config_listener(config_listener, ctrl_c_cancel_token()))
+    startup(config_listener)
 }
 #[cfg(feature = "k8s")]
 pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
     let config_listener = config::config_by_k8s::K8sConfigListener::new(namespace).await?;
-    Ok(config::init_with_config_listener(config_listener, ctrl_c_cancel_token()))
+    startup(config_listener)
 }
 #[cfg(feature = "cache")]
 pub async fn startup_cache(url: impl AsRef<str>, poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
     let config_listener = config::config_by_redis::RedisConfigListener::new(url.as_ref(), poll_interval_sec).await?;
-    Ok(config::init_with_config_listener(config_listener, ctrl_c_cancel_token()))
+    startup(config_listener)
 }
 
-pub async fn startup_static(config: StaticConfig) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    Ok(config::init_with_config_listener(config, ctrl_c_cancel_token()))
+pub fn startup_static(config: StaticConfig) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    startup(config)
 }
 
-pub async fn startup<L>(config: L) -> Result<JoinHandle<Result<(), BoxError>>, BoxError>
+#[instrument(fields(listener = (L::CONFIG_LISTENER_NAME)), skip(config))]
+pub fn startup<L>(config: L) -> Result<JoinHandle<Result<(), BoxError>>, BoxError>
 where
     L: ConfigListener,
 {
+    info!("Starting spacegate...");
+    info!("Spacegate Meta Info: {:?}", Meta::new());
     Ok(config::init_with_config_listener(config, ctrl_c_cancel_token()))
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Meta {
+    pub version: &'static str,
+    pub commit: &'static str,
+}
+
+impl Meta {
+    const DEFAULT: Meta = Self {
+        version: env!("CARGO_PKG_VERSION"),
+        commit: tardis::utils::build_info::git_version!(cargo_prefix = "cargo:", fallback = "unknown"),
+    };
+    pub const fn new() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 
 pub async fn wait_graceful_shutdown() -> TardisResult<()> {

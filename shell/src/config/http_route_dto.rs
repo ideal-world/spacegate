@@ -9,6 +9,7 @@ use super::{gateway_dto::SgProtocol, plugin_filter_dto::SgRouteFilter};
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct SgHttpRoute {
     /// Associated gateway name.
     pub gateway_name: String,
