@@ -4,7 +4,7 @@ use hyper::header::AUTHORIZATION;
 use hyper::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use spacegate_shell::config::gateway_dto::SgProtocol::Https;
+use spacegate_shell::config::gateway_dto::SgProtocolConfig::Https;
 use spacegate_shell::config::http_route_dto::BackendHost;
 // use spacegate_shell::plugins::context::SgRoutePluginContext;
 // use spacegate_shell::plugins::filters::SgPluginFilterInitDto;

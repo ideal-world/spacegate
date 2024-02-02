@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use spacegate_kernel::BoxError;
 use spacegate_shell::{
     config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
+        gateway_dto::{SgGateway, SgListener, SgProtocolConfig, SgTlsConfig, SgTlsMode},
         http_route_dto::{BackendHost, SgBackendRef, SgHttpRoute, SgHttpRouteRule},
     },
     ctrl_c_cancel_token,
@@ -113,7 +113,7 @@ async fn test_https() -> Result<(), BoxError> {
                 listeners: vec![
                     SgListener {
                         port: 8888,
-                        protocol: SgProtocol::Https,
+                        protocol: SgProtocolConfig::Https,
                         tls: Some(SgTlsConfig {
                             mode: SgTlsMode::Terminate,
                             key: TLS_RSA_KEY.to_string(),
@@ -123,7 +123,7 @@ async fn test_https() -> Result<(), BoxError> {
                     },
                     SgListener {
                         port: 8889,
-                        protocol: SgProtocol::Https,
+                        protocol: SgProtocolConfig::Https,
                         tls: Some(SgTlsConfig {
                             mode: SgTlsMode::Terminate,
                             key: TLS_PKCS8_KEY.to_string(),
@@ -133,7 +133,7 @@ async fn test_https() -> Result<(), BoxError> {
                     },
                     SgListener {
                         port: 8890,
-                        protocol: SgProtocol::Https,
+                        protocol: SgProtocolConfig::Https,
                         tls: Some(SgTlsConfig {
                             mode: SgTlsMode::Terminate,
                             key: TLS_EC_KEY.to_string(),
@@ -153,7 +153,7 @@ async fn test_https() -> Result<(), BoxError> {
                             host: "postman-echo.com".into()
                         },
                         port: 443,
-                        protocol: Some(SgProtocol::Https),
+                        protocol: Some(SgProtocolConfig::Https),
                         ..Default::default()
                     }]),
                     ..Default::default()

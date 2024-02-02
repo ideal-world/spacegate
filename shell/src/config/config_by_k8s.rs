@@ -28,7 +28,7 @@ use crate::constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION};
 use crate::extension::k8s_service::K8sServiceData;
 
 use super::{
-    gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocol, SgTlsConfig, SgTlsMode},
+    gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocolConfig, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
     k8s_crd::SgFilter,
     plugin_filter_dto::SgRouteFilter,
@@ -715,9 +715,9 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                             ip: None,
                             port: listener.port,
                             protocol: match listener.protocol.to_lowercase().as_str() {
-                                "http" => SgProtocol::Http,
-                                "https" => SgProtocol::Https,
-                                "ws" => SgProtocol::Ws,
+                                "http" => SgProtocolConfig::Http,
+                                "https" => SgProtocolConfig::Https,
+                                "ws" => SgProtocolConfig::Ws,
                                 _ => {
                                     return Err(TardisError::not_implemented(
                                         &format!("[SG.Config] Gateway [spec.listener.protocol={}] not supported yet", listener.protocol),
@@ -914,10 +914,10 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                                                 if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL) {
                                                     backend.inner.namespace
                                                 } else if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTP) {
-                                                    protocol = Some(SgProtocol::Http);
+                                                    protocol = Some(SgProtocolConfig::Http);
                                                     backend.inner.namespace
                                                 } else if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTPS) {
-                                                    protocol = Some(SgProtocol::Https);
+                                                    protocol = Some(SgProtocolConfig::Https);
                                                     backend.inner.namespace
                                                 } else {
                                                     Some(backend.inner.namespace.unwrap_or("default".to_string()))

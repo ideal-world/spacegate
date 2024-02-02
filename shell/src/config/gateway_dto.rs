@@ -47,41 +47,41 @@ pub struct SgListener {
     /// Port is the network port. Multiple listeners may use the same port, subject to the Listener compatibility rules.
     pub port: u16,
     /// Protocol specifies the network protocol this listener expects to receive.
-    pub protocol: SgProtocol,
-    /// TLS is the TLS configuration for the Listener.
-    /// This field is required if the Protocol field is “HTTPS” or “TLS”. It is invalid to set this field if the Protocol field is “HTTP”, “TCP”, or “UDP”.
-    pub tls: Option<SgTlsConfig>,
+    #[serde(flatten)]
+    pub protocol: SgProtocolConfig,
     /// `HostName` is used to define the host on which the listener accepts requests.
     pub hostname: Option<String>,
 }
 
+#[non_exhaustive]
 /// ProtocolType defines the application protocol accepted by a Listener.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum SgProtocol {
+#[serde(rename_all = "lowercase", tag = "protocol")]
+pub enum SgProtocolConfig {
     /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support HTTP/2 over cleartext.
     /// If implementations support HTTP/2 over cleartext on “HTTP” listeners, that MUST be clearly documented by the implementation.
     #[default]
     Http,
     /// Accepts HTTP/1.1 or HTTP/2 sessions over TLS.
-    Https,
-    Ws,
-    Wss,
+    Https {
+        /// TLS is the TLS configuration for the Listener.
+        /// This field is required if the Protocol field is “HTTPS” or “TLS”. It is invalid to set this field if the Protocol field is “HTTP”, “TCP”, or “UDP”.
+        tls: SgTlsConfig,
+    },
 }
 
-impl Display for SgProtocol {
+impl Display for SgProtocolConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SgProtocol::Http => write!(f, "http"),
-            SgProtocol::Https => write!(f, "https"),
-            SgProtocol::Ws => write!(f, "ws"),
-            SgProtocol::Wss => write!(f, "wss"),
+            SgProtocolConfig::Http => write!(f, "http"),
+            SgProtocolConfig::Https { .. } => write!(f, "https"),
+            _ => write!(f, ""),
         }
     }
 }
 
 /// GatewayTLSConfig describes a TLS configuration.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone)]
 pub struct SgTlsConfig {
     pub mode: SgTlsMode,
     pub key: String,

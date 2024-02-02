@@ -3,7 +3,7 @@ pub use spacegate_kernel::layers::http_route::match_request::*;
 
 use crate::extension::k8s_service::K8sServiceData;
 
-use super::{gateway_dto::SgProtocol, plugin_filter_dto::SgRouteFilter};
+use super::{gateway_dto::SgProtocolConfig, plugin_filter_dto::SgRouteFilter};
 
 /// HTTPRoute provides a way to route HTTP requests.
 ///
@@ -58,7 +58,7 @@ pub struct SgBackendRef {
     /// Timeout specifies the timeout for requests forwarded to the referenced backend.
     pub timeout_ms: Option<u64>,
     // Protocol specifies the protocol used to talk to the referenced backend.
-    pub protocol: Option<SgProtocol>,
+    pub protocol: Option<SgProtocolConfig>,
     /// Weight specifies the proportion of requests forwarded to the referenced backend.
     /// This is computed as weight/(sum of all weights in this BackendRefs list).
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.

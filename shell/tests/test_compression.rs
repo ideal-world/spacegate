@@ -3,7 +3,7 @@ use std::{env, time::Duration, vec};
 use serde_json::{json, Value};
 use spacegate_shell::{
     config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocol, SgTlsConfig, SgTlsMode},
+        gateway_dto::{SgGateway, SgListener, SgProtocolConfig, SgTlsConfig, SgTlsMode},
         http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
         plugin_filter_dto::SgRouteFilter,
     },
@@ -31,7 +31,7 @@ async fn test_compression() -> TardisResult<()> {
                 },
                 SgListener {
                     port: HTTPS_PORT,
-                    protocol: SgProtocol::Https,
+                    protocol: SgProtocolConfig::Https,
                     tls: Some(SgTlsConfig {
                         mode: SgTlsMode::Terminate,
                         key: TLS_KEY.to_string(),
@@ -48,7 +48,7 @@ async fn test_compression() -> TardisResult<()> {
                 backends: Some(vec![SgBackendRef {
                     name_or_host: "postman-echo.com".to_string(),
                     port: 443,
-                    protocol: Some(SgProtocol::Https),
+                    protocol: Some(SgProtocolConfig::Https),
                     ..Default::default()
                 }]),
                 ..Default::default()

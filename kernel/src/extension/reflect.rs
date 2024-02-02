@@ -2,6 +2,9 @@ use std::ops::{Deref, DerefMut};
 
 use hyper::http::Extensions;
 
+/// Reflect is a wrapper around `hyper::http::Extensions`
+/// 
+/// The extensions in reflect will be passed to the corresponded response if request is sent out from backend.
 #[derive(Clone, Default, Debug)]
 #[repr(transparent)]
 pub struct Reflect(Extensions);

@@ -77,7 +77,7 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<Resp
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;
     let mut client = get_client();
-    if let Some(upgrade) = req.headers().get(UPGRADE) {
+    let mut response = if let Some(upgrade) = req.headers().get(UPGRADE) {
         // we only support websocket upgrade now
         if !upgrade.as_bytes().eq_ignore_ascii_case(b"websocket") {
             return Ok(Response::with_code_message(StatusCode::NOT_IMPLEMENTED, "[Sg.Websocket] unsupported upgrade protocol"));
@@ -110,12 +110,14 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<Resp
         });
         tracing::trace!(elapsed = ?resp.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend websocket forward");
         // return response to client
-        Ok(resp)
+        resp
     } else {
         let resp = client.request(req).await;
         tracing::trace!(elapsed = ?resp.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend request");
-        Ok(resp)
-    }
+        resp
+    };
+    response.extensions_mut().insert(unsafe { crate::extension::FromBackend::new() });
+    Ok(response)
 }
 
 #[instrument]

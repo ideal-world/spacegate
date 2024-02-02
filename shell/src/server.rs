@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::config::{
-    gateway_dto::{SgGateway, SgProtocol, SgTlsMode},
+    gateway_dto::{SgGateway, SgProtocolConfig, SgTlsMode},
     http_route_dto::{BackendHost, SgHttpRoute},
     plugin_filter_dto::SgRouteFilter,
 };
@@ -206,7 +206,7 @@ impl RunningSgGateway {
         if config.listeners.is_empty() {
             return Err("[SG.Server] Missing Listeners".into());
         }
-        if config.listeners.iter().any(|l| l.protocol != SgProtocol::Http && l.protocol != SgProtocol::Https && l.protocol != SgProtocol::Ws) {
+        if config.listeners.iter().any(|l| l.protocol != SgProtocolConfig::Http && l.protocol != SgProtocolConfig::Https && l.protocol != SgProtocolConfig::Ws) {
             return Err("[SG.Server] Non-Http(s) protocols are not supported yet".into());
         }
         if let Some(log_level) = config.parameters.log_level.clone() {

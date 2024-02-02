@@ -25,11 +25,32 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub trait SgRequestExt {
     fn with_reflect(&mut self);
+    fn reflect_mut(&mut self) -> &mut Reflect;
+    fn reflect(&self) -> &Reflect;
 }
 
 impl SgRequestExt for Request<SgBody> {
+    /// Get a mutable reference to the reflect extension.
+    ///
+    /// # Panics
+    /// Panics if the reflect extension is not found.
+    /// If you are using a request created by spacegate, this should never happen.
+    fn reflect_mut(&mut self) -> &mut Reflect {
+        self.extensions_mut().get_mut::<Reflect>().expect("reflect extension not found")
+    }
+    /// Get a reference to the reflect extension.
+    ///
+    /// # Panics
+    /// Panics if the reflect extension is not found.
+    /// If you are using a request created by spacegate, this should never happen.
+    fn reflect(&self) -> &Reflect {
+        self.extensions().get::<Reflect>().expect("reflect extension not found")
+    }
+    /// Add a reflect extension to the request if it does not exist.
     fn with_reflect(&mut self) {
-        self.extensions_mut().insert(Reflect::new());
+        if self.extensions().get::<Reflect>().is_none() {
+            self.extensions_mut().insert(Reflect::new());
+        }
     }
 }
 
