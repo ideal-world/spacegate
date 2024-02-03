@@ -27,6 +27,7 @@ use tardis::{regex, tokio};
 use crate::constants::{self, GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION};
 use crate::extension::k8s_service::K8sServiceData;
 
+use super::gateway_dto::SgBackendProtocol;
 use super::{
     gateway_dto::{SgGateway, SgListener, SgParameters, SgProtocolConfig, SgTlsConfig, SgTlsMode},
     http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
@@ -710,22 +711,22 @@ async fn process_gateway_config(gateway_objs: Vec<Gateway>) -> TardisResult<Vec<
                             }
                             None => None,
                         };
+                        let protocol = match (listener.protocol.to_lowercase().as_str(), tls) {
+                            ("http", _) => SgProtocolConfig::Http,
+                            ("https", Some(tls)) => SgProtocolConfig::Https { tls },
+                            _ => {
+                                return Err(TardisError::not_implemented(
+                                    &format!("[SG.Config] Gateway [spec.listener.protocol={}] not supported yet", listener.protocol),
+                                    "",
+                                ))
+                            }
+                        };
+
                         let sg_listener = SgListener {
                             name: Some(listener.name),
                             ip: None,
                             port: listener.port,
-                            protocol: match listener.protocol.to_lowercase().as_str() {
-                                "http" => SgProtocolConfig::Http,
-                                "https" => SgProtocolConfig::Https,
-                                "ws" => SgProtocolConfig::Ws,
-                                _ => {
-                                    return Err(TardisError::not_implemented(
-                                        &format!("[SG.Config] Gateway [spec.listener.protocol={}] not supported yet", listener.protocol),
-                                        "",
-                                    ))
-                                }
-                            },
-                            tls,
+                            protocol,
                             hostname: listener.hostname,
                         };
                         Ok(sg_listener)
@@ -914,10 +915,10 @@ async fn process_http_route_config(mut http_route_objs: Vec<HttpSpaceroute>) -> 
                                                 if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL) {
                                                     backend.inner.namespace
                                                 } else if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTP) {
-                                                    protocol = Some(SgProtocolConfig::Http);
+                                                    protocol = Some(SgBackendProtocol::Http);
                                                     backend.inner.namespace
                                                 } else if kind.eq_ignore_ascii_case(BANCKEND_KIND_EXTERNAL_HTTPS) {
-                                                    protocol = Some(SgProtocolConfig::Https);
+                                                    protocol = Some(SgBackendProtocol::Https);
                                                     backend.inner.namespace
                                                 } else {
                                                     Some(backend.inner.namespace.unwrap_or("default".to_string()))

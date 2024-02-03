@@ -57,6 +57,29 @@ pub struct SgListener {
 /// ProtocolType defines the application protocol accepted by a Listener.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "lowercase", tag = "protocol")]
+pub enum SgBackendProtocol {
+    /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support HTTP/2 over cleartext.
+    /// If implementations support HTTP/2 over cleartext on “HTTP” listeners, that MUST be clearly documented by the implementation.
+    #[default]
+    Http,
+    /// Accepts HTTP/1.1 or HTTP/2 sessions over TLS.
+    Https,
+}
+
+impl Display for SgBackendProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SgBackendProtocol::Http => write!(f, "http"),
+            SgBackendProtocol::Https { .. } => write!(f, "https"),
+            _ => write!(f, ""),
+        }
+    }
+}
+
+#[non_exhaustive]
+/// ProtocolType defines the application protocol accepted by a Listener.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[serde(rename_all = "lowercase", tag = "protocol")]
 pub enum SgProtocolConfig {
     /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support HTTP/2 over cleartext.
     /// If implementations support HTTP/2 over cleartext on “HTTP” listeners, that MUST be clearly documented by the implementation.
@@ -88,7 +111,7 @@ pub struct SgTlsConfig {
     pub cert: String,
 }
 
-#[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default, Eq, Copy)]
 pub enum SgTlsMode {
     Terminate,
     #[default]

@@ -38,7 +38,10 @@ lazy_static! {
     static ref START_JOIN_HANDLE: Arc<Mutex<HashMap<String, JoinHandle<()>>>> = <_>::default();
 }
 
-fn collect_tower_http_route(http_routes: Vec<crate::SgHttpRoute>, builder_ext: hyper::http::Extensions) -> Result<Vec<spacegate_kernel::layers::http_route::SgHttpRoute>, BoxError> {
+fn collect_tower_http_route(
+    http_routes: Vec<crate::SgHttpRoute>,
+    builder_ext: hyper::http::Extensions,
+) -> Result<Vec<spacegate_kernel::layers::http_route::SgHttpRoute>, BoxError> {
     http_routes
         .into_iter()
         .map(|route| {
@@ -116,7 +119,7 @@ pub(crate) fn create_service(
 }
 
 /// create a new sg gateway route, which can be sent to reloader
-pub(crate) fn create_router_service(http_routes: Vec<crate::SgHttpRoute>, builder_ext: hyper::http::Extensions,) -> Result<SgGatewayRoute, BoxError> {
+pub(crate) fn create_router_service(http_routes: Vec<crate::SgHttpRoute>, builder_ext: hyper::http::Extensions) -> Result<SgGatewayRoute, BoxError> {
     let routes = collect_tower_http_route(http_routes, builder_ext)?;
     let service = create_http_router(&routes, default_gateway_route_fallback(), get_http_backend_service());
     Ok(service)
@@ -186,7 +189,7 @@ impl RunningSgGateway {
             if let Some(url) = &config.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
                 let name = config.name.clone();
-                
+
                 builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
                 tokio::spawn(async move {
                     // Initialize cache instances
@@ -202,12 +205,16 @@ impl RunningSgGateway {
         }
         log::info!("[SG.Server] start gateway");
         let reloader = <Reloader<SgGatewayRoute>>::default();
-        let service = create_service(&config.name, cancel_token.clone(), config.filters.unwrap_or_default(), http_routes, reloader.clone(), builder_ext)?;
+        let service = create_service(
+            &config.name,
+            cancel_token.clone(),
+            config.filters.unwrap_or_default(),
+            http_routes,
+            reloader.clone(),
+            builder_ext,
+        )?;
         if config.listeners.is_empty() {
             return Err("[SG.Server] Missing Listeners".into());
-        }
-        if config.listeners.iter().any(|l| l.protocol != SgProtocolConfig::Http && l.protocol != SgProtocolConfig::Https && l.protocol != SgProtocolConfig::Ws) {
-            return Err("[SG.Server] Non-Http(s) protocols are not supported yet".into());
         }
         if let Some(log_level) = config.parameters.log_level.clone() {
             log::debug!("[SG.Server] change log level to {log_level}");
@@ -235,7 +242,7 @@ impl RunningSgGateway {
             let gateway_name = gateway_name.clone();
             let protocol = listener.protocol.to_string();
             let mut tls_cfg = None;
-            if let Some(tls) = listener.tls.clone() {
+            if let SgProtocolConfig::Https { ref tls } = listener.protocol {
                 log::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
                 if SgTlsMode::Terminate == tls.mode {
                     {
