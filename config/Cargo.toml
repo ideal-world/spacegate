@@ -17,14 +17,19 @@ name = "spacegate_config"
 path = "src/lib.rs"
 
 [features]
+default = ["full"]
+full = ["file", "redis", "k8s"]
 file = []
 redis = []
-k8s = []
+k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars"]
 
 
 [dependencies]
-pin-project-lite = { workspace = true }
 
+tokio = { workspace = true, features = ["fs"]}
+pin-project-lite = { workspace = true }
+spacegate-kernel = { path = "../kernel" }
+spacegate-plugin = { path = "../plugin" }
 serde.workspace = true
 serde_json.workspace = true
 lazy_static.workspace = true

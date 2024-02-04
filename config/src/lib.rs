@@ -1,26 +1,22 @@
-use std::{
-    future::Future,
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-    pin::{self, Pin},
-    task::{ready, Poll},
-};
+use std::collections::BTreeMap;
 
-pub trait Upload<D> {
-    type Error;
+use model::gateway::SgGateway;
+use model::http_route::SgHttpRoute;
+use serde::{Deserialize, Serialize};
+pub mod backend;
+pub mod config_format;
+pub mod model;
+pub mod retrieve;
+pub mod save;
 
-    fn upload(&self, resource: D) -> Result<(), Self::Error>;
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+pub struct ConfigItem {
+    pub gateway: SgGateway,
+    pub routes: BTreeMap<String, SgHttpRoute>,
 }
 
-pub trait Download<D> {
-    type Error;
-
-    fn download(&self) -> Result<D, Self::Error>;
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[serde(transparent)]
+pub struct Config {
+    pub gateways: BTreeMap<String, ConfigItem>,
 }
-
-pub trait Listen<E> {
-    type Error;
-
-    fn poll_event(&self, cx: &std::task::Context<'_>) -> Poll<Result<Option<E>, Self::Error>>;
-}
-
