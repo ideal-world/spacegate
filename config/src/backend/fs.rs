@@ -1,7 +1,7 @@
 use std::{
     ffi::{OsStr, OsString},
     os::unix::ffi::OsStrExt,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -31,5 +31,17 @@ where
         ext.push(OsStr::from_bytes(b"."));
         ext.push(self.format.extension());
         ext
+    }
+
+    pub fn gateway_path(&self, name: &str) -> PathBuf {
+        self.dir.join(name).with_extension(GATEWAY_SUFFIX).with_extension(self.format.extension())
+    }
+
+    pub fn routes_dir(&self, gateway_name: &str) -> PathBuf {
+        self.dir.join(gateway_name).with_extension(ROUTES_SUFFIX)
+    }
+
+    pub fn route_path(&self, gateway_name: &str, route_name: &str) -> PathBuf {
+        self.routes_dir(gateway_name).join(route_name).with_extension(self.format.extension())
     }
 }
