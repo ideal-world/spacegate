@@ -1,4 +1,4 @@
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 pub mod json;
 // pub mod yaml;
 // pub mod toml;
@@ -8,6 +8,5 @@ pub trait ConfigFormat {
     fn de<T: serde::de::DeserializeOwned>(&self, slice: &[u8]) -> Result<T, Self::Error>;
     fn ser<T: serde::Serialize>(&self, t: &T) -> Result<Vec<u8>, Self::Error>;
 }
-
 
 pub use json::Json;

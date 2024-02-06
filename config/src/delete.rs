@@ -1,10 +1,6 @@
 use std::future::Future;
 
-use crate::{
-    model::{SgGateway, SgHttpRoute},
-    retrieve::Retrieve,
-    ConfigItem,
-};
+use crate::retrieve::Retrieve;
 mod fs;
 pub trait Delete: Sync + Send {
     type Error: std::error::Error + Send + Sync;

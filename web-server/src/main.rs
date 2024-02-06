@@ -216,9 +216,7 @@ async fn version_control<B>(State(state): State<AppState<B>>, request: extract::
     // do something with `request`...
     let client_version = request.headers().get(HEADER).and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or_default();
     let method = request.method().clone();
-    if method == Method::GET && state.version.equal(client_version) {
-        return Response::builder().status(StatusCode::NOT_MODIFIED).body(axum::body::Body::empty()).unwrap();
-    } else if method == Method::DELETE || method == Method::POST || method == Method::PUT {
+    if method == Method::DELETE || method == Method::POST || method == Method::PUT {
         if state.version.equal(client_version) {
             // up to date, update version
             state.version.update();
@@ -227,9 +225,10 @@ async fn version_control<B>(State(state): State<AppState<B>>, request: extract::
             return Response::builder().status(StatusCode::CONFLICT).body(axum::body::Body::empty()).expect("should be valid response");
         }
     }
+    let version = state.version.fetch();
     let mut response = next.run(request).await;
     if method == Method::GET {
-        response.headers_mut().insert(HEADER, state.version.fetch().to_string().parse().expect("u64 number should be valid header value"));
+        response.headers_mut().insert(HEADER, version.to_string().parse().expect("u64 number should be valid header value"));
     }
     response
 }
