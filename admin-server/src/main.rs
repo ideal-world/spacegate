@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    net::SocketAddr,
     sync::{atomic::AtomicU64, Arc},
 };
 
@@ -8,8 +9,8 @@ use axum::{
     http::{Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
-    Extension, Json, Router,
+    routing::get,
+    Json, Router,
 };
 use spacegate_config::{
     backend, config_format,
@@ -20,7 +21,7 @@ use spacegate_config::{
     update::Update,
     Config, ConfigItem,
 };
-use utoipa::OpenApi;
+pub mod clap;
 pub trait Backend<E>: Create<Error = E> + Retrieve<Error = E> + Update<Error = E> + Delete<Error = E> + Send + Sync + 'static {}
 
 impl<T, E> Backend<E> for T where T: Create<Error = E> + Retrieve<Error = E> + Update<Error = E> + Delete<Error = E> + Send + Sync + 'static {}
@@ -180,9 +181,15 @@ where
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let backend = backend::fs::Fs::new("./config", config_format::Json::default());
-    let app = create_app(backend);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    let args = <crate::clap::Args as ::clap::Parser>::parse();
+    let addr = SocketAddr::new(args.host, args.port);
+    let app = match args.backend {
+        clap::Backend::File(path) => {
+            let backend = backend::fs::Fs::new(path, config_format::Json::default());
+            create_app(backend)
+        }
+    };
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             let _ = tokio::signal::ctrl_c().await;
@@ -224,7 +231,11 @@ async fn version_control<B>(State(state): State<AppState<B>>, request: extract::
             state.version.update();
         } else {
             // out of date, tell client to update
-            return Response::builder().status(StatusCode::CONFLICT).header(SERVER_HEADER, state.version.fetch()).body(axum::body::Body::empty()).expect("should be valid response");
+            return Response::builder()
+                .status(StatusCode::CONFLICT)
+                .header(SERVER_HEADER, state.version.fetch())
+                .body(axum::body::Body::empty())
+                .expect("should be valid response");
         }
     }
     let version = state.version.fetch();

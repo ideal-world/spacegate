@@ -37,6 +37,7 @@ impl Default for SgHttpRoute {
 /// HTTPRouteRule defines semantics for matching an HTTP request based on conditions (matches), processing it (filters), and forwarding the request to an API object
 #[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[serde(default)]
 pub struct SgHttpRouteRule {
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,
@@ -45,19 +46,20 @@ pub struct SgHttpRouteRule {
     /// BackendRefs defines the backend(s) where matching requests should be sent.
     pub backends: Vec<SgBackendRef>,
     /// Timeout define the timeout for requests that match this rule.
-    pub timeout_ms: Option<u64>,
+    pub timeout_ms: Option<u32>,
 }
 
 /// BackendRef defines how a HTTPRoute should forward an HTTP request.
 #[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[serde(default)]
 pub struct SgBackendRef {
     // #[serde(flatten)]
     pub host: BackendHost,
     /// Port specifies the destination port number to use for this resource.
     pub port: u16,
     /// Timeout specifies the timeout for requests forwarded to the referenced backend.
-    pub timeout_ms: Option<u64>,
+    pub timeout_ms: Option<u32>,
     // Protocol specifies the protocol used to talk to the referenced backend.
     pub protocol: Option<SgBackendProtocol>,
     /// Weight specifies the proportion of requests forwarded to the referenced backend.
@@ -101,9 +103,11 @@ impl ToString for K8sServiceData {
 
 #[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
-#[serde(untagged)]
+#[serde(tag = "kind")]
 pub enum BackendHost {
-    Host(String),
+    Host {
+        host: String,
+    },
     #[cfg(feature = "k8s")]
     K8sService(K8sServiceData),
 }
@@ -111,7 +115,7 @@ pub enum BackendHost {
 impl ToString for BackendHost {
     fn to_string(&self) -> String {
         match self {
-            Self::Host(host) => host.clone(),
+            Self::Host { host } => host.clone(),
             #[cfg(feature = "k8s")]
             Self::K8sService(k8s_service) => k8s_service.to_string(),
         }
@@ -120,7 +124,7 @@ impl ToString for BackendHost {
 
 impl Default for BackendHost {
     fn default() -> Self {
-        Self::Host(String::default())
+        Self::Host { host: String::default() }
     }
 }
 

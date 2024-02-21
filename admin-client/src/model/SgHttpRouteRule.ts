@@ -3,4 +3,4 @@ import type { SgBackendRef } from "./SgBackendRef";
 import type { SgHttpRouteMatch } from "./SgHttpRouteMatch";
 import type { SgRouteFilter } from "./SgRouteFilter";
 
-export interface SgHttpRouteRule { matches: Array<SgHttpRouteMatch> | null, filters: Array<SgRouteFilter>, backends: Array<SgBackendRef>, timeout_ms: bigint | null, }
+export interface SgHttpRouteRule { matches: Array<SgHttpRouteMatch> | null, filters: Array<SgRouteFilter>, backends: Array<SgBackendRef>, timeout_ms: number | null, }

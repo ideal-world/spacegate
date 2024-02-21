@@ -1,0 +1,14 @@
+{
+  "name": "gateway",
+  "parameters": {},
+  "listeners": [
+    {
+      "name": "default_listener",
+      "ip": "0.0.0.0",
+      "port": 9001,
+      "protocol": {
+        "type": "http"
+      }
+    }
+  ]
+}

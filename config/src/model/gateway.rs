@@ -11,6 +11,7 @@ use super::filter::SgRouteFilter;
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1beta1.Gateway)
 #[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[serde(default)]
 pub struct SgGateway {
     /// Name of the Gateway. Global Unique.
     ///
@@ -22,12 +23,13 @@ pub struct SgGateway {
     /// Listeners associated with this Gateway. Listeners define logical endpoints that are bound on this Gateway’s addresses.
     pub listeners: Vec<SgListener>,
     /// Filters define the filters that are applied to requests that match this gateway.
-    pub filters: Option<Vec<SgRouteFilter>>,
+    pub filters: Vec<SgRouteFilter>,
 }
 
 /// Gateway parameter configuration.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[serde(default)]
 pub struct SgParameters {
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
@@ -42,6 +44,7 @@ pub struct SgParameters {
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[serde(default)]
 pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
     pub name: Option<String>,
@@ -59,7 +62,7 @@ pub struct SgListener {
 /// ProtocolType defines the application protocol accepted by a Listener.
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default, schemars::JsonSchema)]
-#[serde(rename_all = "lowercase", tag = "protocol")]
+#[serde(rename_all = "lowercase")]
 pub enum SgBackendProtocol {
     /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support HTTP/2 over cleartext.
     /// If implementations support HTTP/2 over cleartext on “HTTP” listeners, that MUST be clearly documented by the implementation.

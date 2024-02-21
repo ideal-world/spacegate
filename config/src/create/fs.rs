@@ -22,7 +22,11 @@ where
         let bin = self.format.ser::<SgGateway>(gateway)?;
         OpenOptions::new().truncate(false).create(true).write(true).open(self.gateway_path(gateway_name)).await?.write_all(&bin).await?;
         let routes_dir_path = self.routes_dir(gateway_name);
-        fs::create_dir(&routes_dir_path).await?;
+        if let Err(e) = fs::create_dir(&routes_dir_path).await {
+            if e.kind() != io::ErrorKind::AlreadyExists {
+                return Err(e);
+            }
+        }
         Ok(())
     }
     async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: &SgHttpRoute) -> Result<(), Self::Error> {

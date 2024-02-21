@@ -3,4 +3,4 @@ import type { SgListener } from "./SgListener";
 import type { SgParameters } from "./SgParameters";
 import type { SgRouteFilter } from "./SgRouteFilter";
 
-export interface SgGateway { name: string, parameters: SgParameters, listeners: Array<SgListener>, filters: Array<SgRouteFilter> | null, }
+export interface SgGateway { name: string, parameters: SgParameters, listeners: Array<SgListener>, filters: Array<SgRouteFilter>, }

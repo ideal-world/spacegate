@@ -3,4 +3,4 @@ import type { BackendHost } from "./BackendHost";
 import type { SgBackendProtocol } from "./SgBackendProtocol";
 import type { SgRouteFilter } from "./SgRouteFilter";
 
-export interface SgBackendRef { host: BackendHost, port: number, timeout_ms: bigint | null, protocol: SgBackendProtocol | null, weight: number, filters: Array<SgRouteFilter>, }
+export interface SgBackendRef { host: BackendHost, port: number, timeout_ms: number | null, protocol: SgBackendProtocol | null, weight: number, filters: Array<SgRouteFilter>, }

@@ -1,6 +1,6 @@
 import axios, { AxiosResponse, AxiosInstance } from 'axios'
 import { Config, ConfigItem, SgGateway, SgHttpRoute } from '../model'
-
+export * from 'axios'
 export const Client = {
     axiosInstance: axios as AxiosInstance,
     clientVersion: undefined as string | undefined,
@@ -19,7 +19,8 @@ export function setClient(...args: Parameters<typeof axios.create>) {
         return cfg
     });
     instance.interceptors.response.use((resp) => {
-        let value = resp.headers['X-Server-Version'];
+        // this shall be lower case
+        let value = resp.headers['x-server-version'];
         let is_conflict = (resp.status == 409)
         if (value !== undefined && value !== Client.clientVersion) {
             if (is_conflict) {
@@ -44,7 +45,7 @@ export async function get_config_item_route(
     route_name: string,
 
 ): Promise<AxiosResponse<SgHttpRoute | null>> {
-    return Client.axiosInstance.get(`/config/item/${gateway_name}/route/${route_name}`)
+    return Client.axiosInstance.get(`/config/item/${gateway_name}/route/item/${route_name}`)
 }
 export async function get_config_item_route_names(
     gatewayName: string,
@@ -94,7 +95,7 @@ export async function post_config_item_route(
 
     route: SgHttpRoute,
 ): Promise<AxiosResponse> {
-    return Client.axiosInstance.post(`/config/item/${gateway_name}/route/${route_name}`, route)
+    return Client.axiosInstance.post(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }
 
 /**********************************************
@@ -114,7 +115,7 @@ export async function put_config_item_route(
 
     route: SgHttpRoute,
 ): Promise<AxiosResponse> {
-    return Client.axiosInstance.put(`/config/item/${gateway_name}/route/${route_name}`, route)
+    return Client.axiosInstance.put(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }
 
 export async function put_config_item(
@@ -142,7 +143,7 @@ export async function delete_config_item_route(
     route_name: string,
 
 ): Promise<AxiosResponse> {
-    return Client.axiosInstance.delete(`/config/item/${gateway_name}/route/${route_name}`)
+    return Client.axiosInstance.delete(`/config/item/${gateway_name}/route/item/${route_name}`)
 }
 
 export async function delete_config_item(gatewayName: string,): Promise<AxiosResponse> {

@@ -36,7 +36,7 @@ where
 
     async fn retrieve_config_item_route_names(&self, name: &str) -> Result<Vec<String>, Self::Error> {
         let mut route_names = Vec::new();
-        let mut entries = fs::read_dir(self.gateway_path(name)).await?;
+        let mut entries = fs::read_dir(self.routes_dir(name)).await?;
         while let Some(entry) = entries.next_entry().await? {
             let file_name = entry.path();
             if file_name.is_file() && file_name.extension() == Some(self.format.extension()) {
@@ -52,9 +52,13 @@ where
         let mut gateway_names = Vec::new();
         let mut entries = fs::read_dir(&self.dir).await?;
         while let Some(entry) = entries.next_entry().await? {
-            let file_name = entry.file_name();
-            if file_name.to_string_lossy().ends_with(GATEWAY_SUFFIX) {
-                gateway_names.push(file_name.to_string_lossy().to_string());
+            if !entry.path().is_file() {
+                continue;
+            }
+            if let Some(file_name) = entry.path().file_stem().and_then(OsStr::to_str) {
+                if let Some(file_name) = file_name.strip_suffix(GATEWAY_SUFFIX).and_then(|f| f.strip_suffix('.')) {
+                    gateway_names.push(file_name.to_owned());
+                }
             }
         }
         Ok(gateway_names)

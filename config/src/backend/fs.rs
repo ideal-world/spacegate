@@ -34,7 +34,7 @@ where
     }
 
     pub fn gateway_path(&self, name: &str) -> PathBuf {
-        self.dir.join(name).with_extension(GATEWAY_SUFFIX).with_extension(self.format.extension())
+        self.dir.join(name).with_extension(self.gateway_suffix())
     }
 
     pub fn routes_dir(&self, gateway_name: &str) -> PathBuf {
