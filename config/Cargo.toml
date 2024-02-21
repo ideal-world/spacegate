@@ -18,18 +18,18 @@ path = "src/lib.rs"
 
 [features]
 default = ["full"]
-full = ["file", "redis", "k8s"]
+full = ["file", "redis", "k8s", "typegen"]
 file = []
 redis = []
 k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars"]
-
+typegen = ["ts-rs"]
 
 [dependencies]
-
-tokio = { workspace = true, features = ["fs"]}
+ts-rs = { version = "7.1", optional = true }
+serde_regex = "1.1.0"
+regex = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
 pin-project-lite = { workspace = true }
-spacegate-kernel = { path = "../kernel" }
-spacegate-plugin = { path = "../plugin" }
 serde.workspace = true
 serde_json.workspace = true
 lazy_static.workspace = true

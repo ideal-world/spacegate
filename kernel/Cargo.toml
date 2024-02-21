@@ -17,6 +17,7 @@ name = "spacegate_kernel"
 path = "src/lib.rs"
 
 [dependencies]
+spacegate-config = { path = "../config" }
 regex = { workspace = true }
 hyper = { workspace = true }
 http-body-util = { workspace = true }

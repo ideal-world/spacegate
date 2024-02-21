@@ -20,6 +20,7 @@ use spacegate_config::{
     update::Update,
     Config, ConfigItem,
 };
+use utoipa::OpenApi;
 pub trait Backend<E>: Create<Error = E> + Retrieve<Error = E> + Update<Error = E> + Delete<Error = E> + Send + Sync + 'static {}
 
 impl<T, E> Backend<E> for T where T: Create<Error = E> + Retrieve<Error = E> + Update<Error = E> + Delete<Error = E> + Send + Sync + 'static {}
@@ -212,9 +213,10 @@ impl Version {
 }
 
 async fn version_control<B>(State(state): State<AppState<B>>, request: extract::Request, next: Next) -> Response {
-    const HEADER: &str = "X-Client-Version";
+    const CLIENT_HEADER: &str = "X-Client-Version";
+    const SERVER_HEADER: &str = "X-Server-Version";
     // do something with `request`...
-    let client_version = request.headers().get(HEADER).and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or_default();
+    let client_version = request.headers().get(CLIENT_HEADER).and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or_default();
     let method = request.method().clone();
     if method == Method::DELETE || method == Method::POST || method == Method::PUT {
         if state.version.equal(client_version) {
@@ -222,13 +224,13 @@ async fn version_control<B>(State(state): State<AppState<B>>, request: extract::
             state.version.update();
         } else {
             // out of date, tell client to update
-            return Response::builder().status(StatusCode::CONFLICT).body(axum::body::Body::empty()).expect("should be valid response");
+            return Response::builder().status(StatusCode::CONFLICT).header(SERVER_HEADER, state.version.fetch()).body(axum::body::Body::empty()).expect("should be valid response");
         }
     }
     let version = state.version.fetch();
     let mut response = next.run(request).await;
     if method == Method::GET {
-        response.headers_mut().insert(HEADER, version.to_string().parse().expect("u64 number should be valid header value"));
+        response.headers_mut().insert(SERVER_HEADER, version.into());
     }
     response
 }
@@ -255,11 +257,11 @@ where
                         get(get_config_item::<B>).post(post_config_item::<B>).put(put_config_item::<B>).delete(delete_config_item::<B>),
                     )
                     .route(
-                        "/:name/route/:route",
+                        "/:name/route/item/:route",
                         get(get_config_item_route::<B>).post(post_config_item_route::<B>).put(put_config_item_route::<B>).delete(delete_config_item_route::<B>),
                     )
-                    .route("/:name/route", get(get_config_item_all_routes::<B>).delete(delete_config_item_all_routes))
-                    .route("/:name/route-names", get(get_config_item_route_names::<B>))
+                    .route("/:name/route/all", get(get_config_item_all_routes::<B>).delete(delete_config_item_all_routes))
+                    .route("/:name/route/names", get(get_config_item_route_names::<B>))
                     .route(
                         "/:name/gateway",
                         get(get_config_item_gateway::<B>).post(post_config_item_gateway::<B>).put(put_config_item_gateway::<B>).delete(delete_config_item_gateway::<B>),

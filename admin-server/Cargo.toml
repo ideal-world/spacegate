@@ -1,5 +1,5 @@
 [package]
-name = "spacegate-web-server"
+name = "spacegate-admin-server"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -23,15 +23,16 @@ rpath = false
 strip = true
 
 [features]
-default = [] 
+default = []
 
 
 [dependencies]
+utoipa = {version = "4", features = ["axum_extras"]}
 spacegate-config = { version = "0.1.0-alpha.7", path = "../config", features = [
     "full",
 ] }
 axum = "0.7.4"
-tower = { version = "0.4"}
+tower = { version = "0.4" }
 tokio = { version = "1", features = ["full"] }
 [dev-dependencies]
 
