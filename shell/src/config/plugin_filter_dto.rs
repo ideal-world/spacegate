@@ -1,4 +1,3 @@
-
 use spacegate_config::model::SgRouteFilter;
 use spacegate_kernel::{
     layers::{

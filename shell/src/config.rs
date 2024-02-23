@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
 use spacegate_kernel::BoxError;
 use tardis::{
@@ -33,7 +32,18 @@ where
     use crate::server::RunningSgGateway;
     tardis::tokio::task::spawn_local(async move {
         let listener = config.create_listener()?;
+        let init_config = config.retrieve_config().await?;
+        for (name, item) in init_config.gateways {
+            let (gateway, routes) = item.into_gateway_and_routes();
+            match RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {
+                Ok(inst) => RunningSgGateway::global_save(name, inst),
+                Err(e) => {
+                    log::error!("[SG.Config] fail to init gateway [{name}]: {e}")
+                }
+            }
+        }
         let mut listener = ListenerWrapper(listener);
+        log::info!("[SG.Config] Entering listening");
         loop {
             let event = tokio::select! {
                 _ = shutdown_signal.cancelled() => {

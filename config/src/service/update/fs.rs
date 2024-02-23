@@ -1,9 +1,12 @@
 use tokio::{
-    fs::{OpenOptions},
-    io::{self, AsyncWriteExt},
+    fs::OpenOptions,
+    io::{AsyncWriteExt},
 };
 
-use crate::{service::{backend::fs::Fs, config_format::ConfigFormat}, BoxError};
+use crate::{
+    service::{backend::fs::Fs, config_format::ConfigFormat},
+    BoxError,
+};
 
 use super::Update;
 
@@ -11,7 +14,6 @@ impl<F> Update for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
 {
-
     async fn update_config_item_gateway(&self, gateway_name: &str, gateway: &crate::model::SgGateway) -> Result<(), BoxError> {
         let gateway_file_path = self.gateway_path(gateway_name);
         let gateway_file = self.format.ser(&gateway)?;

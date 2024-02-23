@@ -1,6 +1,9 @@
-use tokio::io;
 
-use crate::{service::{backend::fs::Fs, config_format::ConfigFormat}, BoxError};
+
+use crate::{
+    service::{backend::fs::Fs, config_format::ConfigFormat},
+    BoxError,
+};
 
 impl<F> super::Delete for Fs<F>
 where

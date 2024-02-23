@@ -13,18 +13,15 @@ use axum::{
     Json, Router,
 };
 use spacegate_config::{
-    service, config_format,
-    create::Create,
-    delete::Delete,
     model::{SgGateway, SgHttpRoute},
-    retrieve::Retrieve,
-    update::Update,
-    Config, ConfigItem,
+    service::{self, *},
+    BoxError, Config, ConfigItem,
 };
 pub mod clap;
-pub trait Backend<E>: Create<Error = E> + Retrieve<Error = E> + Update<Error = E> + Delete<Error = E> + Send + Sync + 'static {}
+pub trait Backend: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
 
-impl<T, E> Backend<E> for T where T: Create<Error = E> + Retrieve<Error = E> + Update<Error = E> + Delete<Error = E> + Send + Sync + 'static {}
+impl<T> Backend for T where T: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
+
 #[derive(Debug)]
 pub struct AppState<B> {
     pub backend: Arc<B>,
@@ -41,10 +38,7 @@ impl<B> Clone for AppState<B> {
 }
 
 pub struct InternalError<E>(pub E);
-impl<E> IntoResponse for InternalError<E>
-where
-    E: std::error::Error,
-{
+impl IntoResponse for InternalError<BoxError> {
     fn into_response(self) -> Response {
         let body = axum::body::Body::from(format!("Internal error: {}", self.0));
         Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(body).unwrap()
@@ -58,34 +52,34 @@ where
 async fn get_config_item_gateway<B: Retrieve>(
     Path(gateway_name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
-) -> Result<Json<Option<SgGateway>>, InternalError<B::Error>> {
+) -> Result<Json<Option<SgGateway>>, InternalError<BoxError>> {
     backend.retrieve_config_item_gateway(&gateway_name).await.map(Json).map_err(InternalError)
 }
 async fn get_config_item_route<B: Retrieve>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
-) -> Result<Json<Option<SgHttpRoute>>, InternalError<B::Error>> {
+) -> Result<Json<Option<SgHttpRoute>>, InternalError<BoxError>> {
     backend.retrieve_config_item_route(&name, &route_name).await.map(Json).map_err(InternalError)
 }
 async fn get_config_item_route_names<B: Retrieve>(
     Path(name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
-) -> Result<Json<Vec<String>>, InternalError<B::Error>> {
+) -> Result<Json<Vec<String>>, InternalError<BoxError>> {
     backend.retrieve_config_item_route_names(&name).await.map(Json).map_err(InternalError)
 }
 async fn get_config_item_all_routes<B: Retrieve>(
     Path(name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
-) -> Result<Json<BTreeMap<String, SgHttpRoute>>, InternalError<B::Error>> {
+) -> Result<Json<BTreeMap<String, SgHttpRoute>>, InternalError<BoxError>> {
     backend.retrieve_config_item_all_routes(&name).await.map(Json).map_err(InternalError)
 }
-async fn get_config_item<B: Retrieve>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Option<ConfigItem>>, InternalError<B::Error>> {
+async fn get_config_item<B: Retrieve>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Option<ConfigItem>>, InternalError<BoxError>> {
     backend.retrieve_config_item(&name).await.map(Json).map_err(InternalError)
 }
-async fn get_config_names<B: Retrieve>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<String>>, InternalError<B::Error>> {
+async fn get_config_names<B: Retrieve>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<String>>, InternalError<BoxError>> {
     backend.retrieve_config_names().await.map(Json).map_err(InternalError)
 }
-async fn get_config<B: Retrieve>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Config>, InternalError<B::Error>> {
+async fn get_config<B: Retrieve>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Config>, InternalError<BoxError>> {
     backend.retrieve_config().await.map(Json).map_err(InternalError)
 }
 
@@ -96,25 +90,25 @@ async fn post_config_item<B: Create>(
     Path(name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(config_item): Json<ConfigItem>,
-) -> Result<(), InternalError<B::Error>> {
-    backend.create_config_item(&name, &config_item).await.map_err(InternalError)
+) -> Result<(), InternalError<BoxError>> {
+    backend.create_config_item(&name, config_item).await.map_err(InternalError)
 }
-async fn post_config<B: Create>(State(AppState { backend, .. }): State<AppState<B>>, Json(config): Json<Config>) -> Result<(), InternalError<B::Error>> {
-    backend.create_config(&config).await.map_err(InternalError)
+async fn post_config<B: Create>(State(AppState { backend, .. }): State<AppState<B>>, Json(config): Json<Config>) -> Result<(), InternalError<BoxError>> {
+    backend.create_config(config).await.map_err(InternalError)
 }
 async fn post_config_item_gateway<B: Create>(
     Path(gateway_name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(gateway): Json<SgGateway>,
-) -> Result<(), InternalError<B::Error>> {
-    backend.create_config_item_gateway(&gateway_name, &gateway).await.map_err(InternalError)
+) -> Result<(), InternalError<BoxError>> {
+    backend.create_config_item_gateway(&gateway_name, gateway).await.map_err(InternalError)
 }
 async fn post_config_item_route<B: Create>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(route): Json<SgHttpRoute>,
-) -> Result<(), InternalError<B::Error>> {
-    backend.create_config_item_route(&name, &route_name, &route).await.map_err(InternalError)
+) -> Result<(), InternalError<BoxError>> {
+    backend.create_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 
 /**********************************************
@@ -124,7 +118,7 @@ async fn put_config_item_gateway<B: Update>(
     Path(gateway_name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(gateway): Json<SgGateway>,
-) -> Result<(), InternalError<B::Error>> {
+) -> Result<(), InternalError<BoxError>> {
     backend.update_config_item_gateway(&gateway_name, &gateway).await.map_err(InternalError)
 }
 
@@ -132,7 +126,7 @@ async fn put_config_item_route<B: Update>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(route): Json<SgHttpRoute>,
-) -> Result<(), InternalError<B::Error>> {
+) -> Result<(), InternalError<BoxError>> {
     backend.update_config_item_route(&name, &route_name, &route).await.map_err(InternalError)
 }
 
@@ -140,11 +134,11 @@ async fn put_config_item<B: Update>(
     Path(name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(config_item): Json<ConfigItem>,
-) -> Result<(), InternalError<B::Error>> {
+) -> Result<(), InternalError<BoxError>> {
     backend.update_config_item(&name, &config_item).await.map_err(InternalError)
 }
 
-async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B>>, Json(config): Json<Config>) -> Result<(), InternalError<B::Error>> {
+async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B>>, Json(config): Json<Config>) -> Result<(), InternalError<BoxError>> {
     backend.update_config(&config).await.map_err(InternalError)
 }
 
@@ -152,29 +146,27 @@ async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B
                        DELETE
 **********************************************/
 
-async fn delete_config_item_gateway<B: Delete>(Path(gateway_name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<B::Error>> {
+async fn delete_config_item_gateway<B: Delete>(Path(gateway_name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
     backend.delete_config_item_gateway(&gateway_name).await.map_err(InternalError)
 }
 
 async fn delete_config_item_route<B: Delete>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
-) -> Result<(), InternalError<B::Error>> {
+) -> Result<(), InternalError<BoxError>> {
     backend.delete_config_item_route(&name, &route_name).await.map_err(InternalError)
 }
 
-async fn delete_config_item<B: Delete>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<<B as Delete>::Error>>
+async fn delete_config_item<B: Delete>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>>
 where
     B: Retrieve,
-    <B as Delete>::Error: From<<B as Retrieve>::Error>,
 {
     backend.delete_config_item(&name).await.map_err(InternalError)
 }
 
-async fn delete_config_item_all_routes<B: Delete>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<<B as Delete>::Error>>
+async fn delete_config_item_all_routes<B: Delete>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>>
 where
     B: Retrieve,
-    <B as Delete>::Error: From<<B as Retrieve>::Error>,
 {
     backend.delete_config_item_all_routes(&name).await.map_err(InternalError)
 }
@@ -183,9 +175,9 @@ where
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = <crate::clap::Args as ::clap::Parser>::parse();
     let addr = SocketAddr::new(args.host, args.port);
-    let app = match args.backend {
-        clap::Backend::File(path) => {
-            let backend = service::fs::Fs::new(path, config_format::Json::default());
+    let app = match args.config_backend {
+        clap::ConfigBackend::File(path) => {
+            let backend = service::backend::fs::Fs::new(path, config_format::Json::default());
             create_app(backend)
         }
     };
@@ -249,7 +241,6 @@ async fn version_control<B>(State(state): State<AppState<B>>, request: extract::
 pub fn create_app<B>(backend: B) -> Router<()>
 where
     B: Create + Retrieve + Update + Delete + Send + Sync + 'static,
-    <B as Delete>::Error: From<<B as Retrieve>::Error>,
 {
     let state = AppState {
         backend: Arc::new(backend),

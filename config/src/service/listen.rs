@@ -1,6 +1,7 @@
 use std::error::Error;
 
 mod fs;
+mod memory;
 
 pub enum ConfigEventType {
     Create,

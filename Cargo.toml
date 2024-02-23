@@ -10,7 +10,7 @@ panic = 'abort'
 strip = true
 
 [workspace.package]
-version = "0.1.0-alpha.8"
+version = "0.2.0-alpha.1"
 authors = ["gudaoxuri <i@sunisle.org>"]
 description = "A library-first, lightweight, high-performance, cloud-native supported API gateway"
 keywords = ["http", "gateway", "proxy", "websocket", "kubernates"]

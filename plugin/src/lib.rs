@@ -1,6 +1,7 @@
 #![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
 use std::{
-    any::TypeId, collections::HashMap, sync::{Arc, OnceLock, RwLock}
+    collections::HashMap,
+    sync::{Arc, OnceLock, RwLock},
 };
 
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
