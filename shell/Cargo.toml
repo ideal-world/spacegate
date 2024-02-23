@@ -46,6 +46,7 @@ plugin-status = ["spacegate-plugin/status"]
 [dependencies]
 spacegate-kernel = { path = "../kernel" }
 spacegate-plugin = { path = "../plugin" }
+spacegate-config = { path = "../config" }
 
 serde.workspace = true
 serde_json.workspace = true

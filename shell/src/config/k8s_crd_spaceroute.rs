@@ -3,7 +3,7 @@ use k8s_gateway_api::{CommonRouteSpec, Group, Hostname, HttpRoute, HttpRouteFilt
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Default, kube::CustomResource, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Default, kube::CustomResource, serde::Deserialize, serde::Serialize)]
 #[kube(
     group = "spacegate.idealworld.group",
     version = "v1",
@@ -56,14 +56,14 @@ pub struct HttpSpacerouteSpec {
     pub rules: Option<Vec<HttpRouteRule>>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct HttpSpacerouteStatus {
     /// Common route status information.
     #[serde(flatten)]
     pub inner: RouteStatus,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpRouteRule {
     /// Matches define conditions used for matching the rule against incoming
@@ -173,7 +173,7 @@ pub struct HttpRouteRule {
     pub timeout_ms: Option<u64>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpBackendRef {
     /// BackendRef is a reference to a backend to forward matched requests to.
@@ -204,7 +204,7 @@ pub struct HttpBackendRef {
     pub filters: Option<Vec<HttpRouteFilter>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackendRef {
     /// Weight specifies the proportion of requests forwarded to the referenced
@@ -229,7 +229,7 @@ pub struct BackendRef {
     pub inner: BackendObjectReference,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct BackendObjectReference {
     /// Group is the group of the referent. For example, "networking.k8s.io".
     /// When unspecified (empty string), core API group is inferred.

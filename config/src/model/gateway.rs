@@ -1,7 +1,6 @@
-use std::{fmt::Display, net::IpAddr, str::FromStr};
+use std::{fmt::Display, net::IpAddr};
 
 use serde::{Deserialize, Serialize};
-use tardis::basic::error::TardisError;
 
 use super::filter::SgRouteFilter;
 
@@ -9,7 +8,7 @@ use super::filter::SgRouteFilter;
 /// by binding Listeners to a set of IP addresses.
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1beta1.Gateway)
-#[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(default)]
 pub struct SgGateway {
@@ -27,7 +26,7 @@ pub struct SgGateway {
 }
 
 /// Gateway parameter configuration.
-#[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(default)]
 pub struct SgParameters {
@@ -42,7 +41,7 @@ pub struct SgParameters {
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
-#[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(default)]
 pub struct SgListener {
@@ -61,7 +60,7 @@ pub struct SgListener {
 #[non_exhaustive]
 /// ProtocolType defines the application protocol accepted by a Listener.
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default, schemars::JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SgBackendProtocol {
     /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support HTTP/2 over cleartext.
@@ -84,7 +83,7 @@ impl Display for SgBackendProtocol {
 
 #[non_exhaustive]
 /// ProtocolType defines the application protocol accepted by a Listener.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default, schemars::JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "lowercase", tag = "type")]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub enum SgProtocolConfig {
@@ -111,7 +110,7 @@ impl Display for SgProtocolConfig {
 }
 
 /// GatewayTLSConfig describes a TLS configuration.
-#[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub struct SgTlsConfig {
     pub mode: SgTlsMode,
@@ -119,33 +118,10 @@ pub struct SgTlsConfig {
     pub cert: String,
 }
 
-#[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default, Eq, Copy, schemars::JsonSchema)]
+#[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default, Eq, Copy)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub enum SgTlsMode {
     Terminate,
     #[default]
     Passthrough,
-}
-
-impl FromStr for SgTlsMode {
-    type Err = TardisError;
-    fn from_str(mode: &str) -> Result<SgTlsMode, Self::Err> {
-        let level = mode.to_lowercase();
-        match level.as_str() {
-            "terminate" => Ok(SgTlsMode::Terminate),
-            "passthrough" => Ok(SgTlsMode::Passthrough),
-            _ => Err(TardisError::bad_request("SgTlsMode parse error", "")),
-        }
-    }
-}
-
-impl SgTlsMode {
-    pub fn from(mode: Option<String>) -> Option<Self> {
-        if let Some(mode) = mode {
-            if let Ok(mode) = SgTlsMode::from_str(&mode) {
-                return Some(mode);
-            }
-        }
-        None
-    }
 }

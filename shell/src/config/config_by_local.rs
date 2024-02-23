@@ -12,8 +12,9 @@ use tardis::{
     TardisFuns,
 };
 
-use super::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute, ConfigEvent, ConfigListener};
+// use super::{ConfigEvent, ConfigListener};
 use lazy_static::lazy_static;
+use spacegate_config::{model::{http_route::SgHttpRoute, SgGateway}, service::{backend::fs::Fs, config_format::Json, retrieve::Retrieve}};
 
 lazy_static! {
     static ref MD5_CACHE: Mutex<(String, String)> = Mutex::new((String::new(), String::new()));
@@ -65,7 +66,7 @@ async fn fetch_configs(gateway_config_path: &Path, routes_config_path: &Path) ->
 }
 
 pub struct FileConfigListener {
-    pub conf_path: Arc<Path>,
+    pub fs: Fs<Json>,
     pub receiver: tokio::sync::mpsc::UnboundedReceiver<ConfigEvent>,
     pub watcher: INotifyWatcher,
 }
@@ -73,21 +74,16 @@ pub struct FileConfigListener {
 impl FileConfigListener {
     #[allow(clippy::collapsible_if)]
     pub async fn new(conf_path: impl AsRef<Path>) -> Result<Self, BoxError> {
-        let gateway_config_dir: Arc<Path> = conf_path.as_ref().join("gateway.json").into();
-        let routes_config_path: Arc<Path> = conf_path.as_ref().join("routes").into();
-        let conf_path: Arc<Path> = Arc::from(conf_path.as_ref().to_owned());
+        let fs = Fs::new(conf_path, Json::default());
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let (config, _, _) = fetch_configs(&gateway_config_dir, &routes_config_path).await?;
-        if let Some((gateway_config, http_route_configs)) = config {
-            tx.send(ConfigEvent::GatewayAdd(gateway_config, http_route_configs))?;
-        } else {
-            warn!("[Sg.Config] Cannot find startup config");
+        let config = fs.retrieve_config().await?;
+        for (gateway_name, item) in config.gateways {
+            tx.send(ConfigEvent::GatewayAdd(item.gateway, item.routes.into_values().collect()));
         }
         let (notify_signal_tx, tokio_signal_rx) = std::sync::mpsc::channel::<()>();
 
         let reloader = async move {
-            let gateway_config_path = gateway_config_dir.clone();
-            let routes_config_path = routes_config_path.clone();
+            let fs = fs.clone();
             loop {
                 match tokio_signal_rx.try_recv() {
                     Ok(_) => {}
@@ -98,7 +94,7 @@ impl FileConfigListener {
                 }
                 log::trace!("[SG.Config] Config change check");
                 if let Ok((Some((gateway_config, http_route_configs)), gateway_config_changed, routes_config_changed)) =
-                    fetch_configs(&gateway_config_path, &routes_config_path).await
+                
                 {
                     if gateway_config_changed {
                         if tx.send(ConfigEvent::GatewayDeleteAll).is_err() {
@@ -134,7 +130,7 @@ impl FileConfigListener {
             watcher.watch(path::Path::new(conf_path.as_ref()), RecursiveMode::Recursive)?;
             watcher
         };
-        Ok(Self { conf_path, receiver: rx, watcher })
+        Ok(Self { fs, receiver: rx, watcher })
     }
 }
 

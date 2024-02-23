@@ -9,7 +9,7 @@ use serde_json::Value;
 /// 3. Rule level, which works on all requests under the same gateway routing rule
 /// 4. Backend level, which works on all requests under the same backend
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
-#[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct SgRouteFilter {
     /// Filter code, Used to match the corresponding filter.
     pub code: String,
