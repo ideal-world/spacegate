@@ -73,9 +73,7 @@ async fn test_webscoket() -> Result<(), BoxError> {
                 gateway_name: "test_gw".to_string(),
                 rules: Some(vec![SgHttpRouteRule {
                     backends: Some(vec![SgBackendRef {
-                        host: BackendHost::Host {
-                            host: "postman-echo.com".into()
-                        },
+                        host: BackendHost::Host { host: "postman-echo.com".into() },
                         port: 8081,
                         ..Default::default()
                     }]),

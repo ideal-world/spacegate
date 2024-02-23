@@ -35,8 +35,6 @@ pub struct SgHttpHeaderMatch {
     pub policy: SgHttpHeaderMatchPolicy,
 }
 
-
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum SgHttpQueryMatchPolicy {
@@ -58,8 +56,6 @@ pub struct SgHttpQueryMatch {
 #[serde(transparent)]
 
 pub struct SgHttpMethodMatch(pub String);
-
-
 
 /// HTTPRouteMatch defines the predicate used to match requests to a given action.
 /// Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
@@ -131,8 +127,6 @@ impl MatchRequest for SgHttpHeaderMatch {
         }
     }
 }
-
-
 
 impl MatchRequest for SgHttpMethodMatch {
     fn match_request(&self, req: &Request<SgBody>) -> bool {

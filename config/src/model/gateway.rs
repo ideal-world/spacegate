@@ -13,9 +13,6 @@ use super::filter::SgRouteFilter;
 #[serde(default)]
 pub struct SgGateway {
     /// Name of the Gateway. Global Unique.
-    ///
-    /// In k8s mode, this name MUST be unique within a namespace.
-    /// format see [k8s_helper::format_k8s_obj_unique]
     pub name: String,
     /// Some parameters necessary for the gateway.
     pub parameters: SgParameters,
@@ -46,7 +43,7 @@ pub struct SgParameters {
 #[serde(default)]
 pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
-    pub name: Option<String>,
+    pub name: String,
     /// Ip bound to the Listener. Default is 0.0.0.0
     pub ip: Option<IpAddr>,
     /// Port is the network port. Multiple listeners may use the same port, subject to the Listener compatibility rules.
@@ -124,4 +121,29 @@ pub enum SgTlsMode {
     Terminate,
     #[default]
     Passthrough,
+}
+
+impl From<SgTlsMode> for String {
+    fn from(value: SgTlsMode) -> Self {
+        match value {
+            SgTlsMode::Terminate => "terminate".to_string(),
+            SgTlsMode::Passthrough => "passthrough".to_string(),
+        }
+    }
+}
+
+impl From<String> for SgTlsMode {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "terminate" => SgTlsMode::Terminate,
+            "passthrough" => SgTlsMode::Passthrough,
+            _ => SgTlsMode::Passthrough,
+        }
+    }
+}
+
+impl From<Option<String>> for SgTlsMode {
+    fn from(value: Option<String>) -> Self {
+        SgTlsMode::from(value.unwrap_or_default())
+    }
 }

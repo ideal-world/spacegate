@@ -28,7 +28,7 @@ impl SgHttpRouteLayerBuilder {
             rules: Vec::new(),
             plugins: Vec::new(),
             priority: None,
-            extensions: Default::default()
+            extensions: Default::default(),
         }
     }
     pub fn hostnames(mut self, hostnames: impl IntoIterator<Item = String>) -> Self {
@@ -93,7 +93,7 @@ impl SgHttpRouteRuleLayerBuilder {
             plugins: Vec::new(),
             timeouts: None,
             backends: Vec::new(),
-            extensions: Default::default()
+            extensions: Default::default(),
         }
     }
     pub fn matches(mut self, matches: impl IntoIterator<Item = SgHttpRouteMatch>) -> Self {

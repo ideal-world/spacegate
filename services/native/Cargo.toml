@@ -18,7 +18,7 @@ default=[]
 static-openssl=["openssl/vendored"]
 
 [dependencies]
-spacegate-shell = { version = "0.1.0-alpha.7", path = "../../shell", features = [
+spacegate-shell = { path = "../../shell", features = [
     "ws",
     "cache",
 ] }

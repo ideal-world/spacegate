@@ -4,15 +4,12 @@ use hyper::header::AUTHORIZATION;
 use hyper::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use spacegate_shell::config::gateway_dto::SgProtocolConfig::Https;
-use spacegate_shell::config::http_route_dto::BackendHost;
+use spacegate_config::model::SgBackendProtocol;
+use spacegate_shell::config::BackendHost;
+use spacegate_shell::config::SgProtocolConfig::Https;
 // use spacegate_shell::plugins::context::SgRoutePluginContext;
 // use spacegate_shell::plugins::filters::SgPluginFilterInitDto;
-use spacegate_shell::config::{
-    gateway_dto::{SgGateway, SgListener},
-    http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-    plugin_filter_dto::SgRouteFilter,
-};
+use spacegate_shell::config::{SgBackendRef, SgGateway, SgHttpRoute, SgHttpRouteRule, SgListener, SgRouteFilter};
 
 use spacegate_kernel::helper_layers::filter::Filter;
 use spacegate_kernel::BoxError;
@@ -57,21 +54,19 @@ async fn test_custom_plugin() -> Result<(), BoxError> {
             },
             vec![SgHttpRoute {
                 gateway_name: "test_gw".to_string(),
-                filters: Some(vec![SgRouteFilter {
+                filters: vec![SgRouteFilter {
                     code: "auth".to_string(),
                     spec: json!({}),
                     ..Default::default()
-                }]),
-                rules: Some(vec![SgHttpRouteRule {
-                    backends: Some(vec![SgBackendRef {
-                        host: BackendHost::Host {
-                            host: "postman-echo.com".into()
-                        },
-                        protocol: Some(Https),
+                }],
+                rules: vec![SgHttpRouteRule {
+                    backends: vec![SgBackendRef {
+                        host: BackendHost::Host { host: "postman-echo.com".into() },
+                        protocol: Some(SgBackendProtocol::Https),
                         ..Default::default()
-                    }]),
+                    }],
                     ..Default::default()
-                }]),
+                }],
                 ..Default::default()
             }],
             token.clone(),

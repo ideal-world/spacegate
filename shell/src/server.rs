@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::config::{
-    matches_convert::{self, convert_config_to_kernel},
+    matches_convert::{convert_config_to_kernel},
     plugin_filter_dto::FilterInstallExt,
     BackendHost, SgGateway, SgHttpRoute, SgProtocolConfig, SgRouteFilter, SgTlsMode,
 };
@@ -265,7 +265,7 @@ impl RunningSgGateway {
                     };
                 }
             }
-            let listen_id = format!("{gateway_name}-{name}-{protocol}", name = listener.name.as_deref().unwrap_or("?"), protocol = protocol);
+            let listen_id = format!("{gateway_name}-{name}-{protocol}", name = listener.name, protocol = protocol);
             let mut listen = SgListen::new(addr, service.clone(), cancel_token.child_token(), listen_id);
             if let Some(tls_cfg) = tls_cfg {
                 listen = listen.with_tls_config(tls_cfg);

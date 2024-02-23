@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 /// PathMatchType specifies the semantics of how HTTP paths should be compared.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", content = "value", rename_all = "PascalCase")]
@@ -13,22 +13,14 @@ pub enum SgHttpPathMatch {
     Regular(String),
 }
 
-
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub enum SgHttpHeaderMatch {
     /// Matches the HTTP header exactly and with case sensitivity.
-    Exact {
-        name: String,
-        value: String
-    },
+    Exact { name: String, value: String },
     /// Matches if the Http header matches the given regular expression with case sensitivity.
-    Regular {
-        name: String,
-        re: String
-    },
+    Regular { name: String, re: String },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -36,15 +28,9 @@ pub enum SgHttpHeaderMatch {
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub enum SgHttpQueryMatch {
     /// Matches the HTTP query parameter exactly and with case sensitivity.
-    Exact {
-        key: String,
-        value: String
-    },
+    Exact { key: String, value: String },
     /// Matches if the Http query parameter matches the given regular expression with case sensitivity.
-    Regular {
-        key: String,
-        re: String
-    },
+    Regular { key: String, re: String },
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -52,8 +38,6 @@ pub enum SgHttpQueryMatch {
 #[serde(transparent)]
 
 pub struct SgHttpMethodMatch(pub String);
-
-
 
 /// HTTPRouteMatch defines the predicate used to match requests to a given action.
 /// Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.

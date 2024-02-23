@@ -32,6 +32,8 @@ tokio = { workspace = true, features = ["fs"] }
 serde.workspace = true
 serde_json.workspace = true
 
+tracing = { workspace = true }
+futures-util = { workspace = true }
 hyper.workspace = true
 hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
@@ -46,8 +48,10 @@ k8s-gateway-api = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 
 notify = { version = "6.1.1", default-features = false, features = [
-    "macos_kqueue",
+  "macos_kqueue",
 ], optional = true }
+
+chrono = { version = "0.4" }
 
 [dev-dependencies]
 tardis = { workspace = true, features = ["test", "web-client", "web-server"] }

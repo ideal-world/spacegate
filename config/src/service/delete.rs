@@ -2,6 +2,8 @@ use std::future::Future;
 
 use crate::{service::retrieve::Retrieve, BoxError};
 mod fs;
+#[cfg(feature = "k8s")]
+mod k8s;
 pub trait Delete: Sync + Send {
     fn delete_config_item_gateway(&self, gateway_name: &str) -> impl Future<Output = Result<(), BoxError>> + Send;
     fn delete_config_item_route(&self, gateway_name: &str, route_name: &str) -> impl Future<Output = Result<(), BoxError>> + Send;
