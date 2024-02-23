@@ -10,8 +10,6 @@ use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
 use crate::model::SgHttpPathModifier;
 use crate::{def_plugin, MakeSgLayer};
 
-// def_filter!("rewrite", SgFilterRewriteDef, SgFilterRewrite);
-
 /// RewriteFilter defines a filter that modifies a request during forwarding.
 ///
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/

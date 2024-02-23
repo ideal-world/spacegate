@@ -5,12 +5,13 @@ use model::http_route::SgHttpRoute;
 use serde::{Deserialize, Serialize};
 pub mod backend;
 pub mod config_format;
+pub mod constants;
+pub mod create;
+pub mod delete;
+pub mod k8s_crd;
 pub mod model;
 pub mod retrieve;
-pub mod create;
 pub mod update;
-pub mod delete;
-
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]

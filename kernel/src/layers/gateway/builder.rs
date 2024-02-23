@@ -3,7 +3,6 @@ use std::sync::{Arc, OnceLock};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    extension,
     helper_layers::{
         filter::{response_anyway::ResponseAnyway, FilterRequestLayer},
         reload::Reloader,

@@ -23,13 +23,16 @@ use tower_layer::layer_fn;
 use utils::fold_sg_layers::fold_sg_layers;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
+pub type SgRequest = Request<SgBody>;
+pub type SgResponse = Response<SgBody>;
+
 pub trait SgRequestExt {
     fn with_reflect(&mut self);
     fn reflect_mut(&mut self) -> &mut Reflect;
     fn reflect(&self) -> &Reflect;
 }
 
-impl SgRequestExt for Request<SgBody> {
+impl SgRequestExt for SgRequest {
     /// Get a mutable reference to the reflect extension.
     ///
     /// # Panics
