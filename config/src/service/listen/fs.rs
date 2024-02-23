@@ -2,16 +2,31 @@ use std::error::Error;
 
 use notify::{Event, Watcher};
 
-use crate::{service::{
-    backend::fs::Fs,
-    config_format::ConfigFormat,
-    listen::{ConfigEventType, ConfigType},
-}, BoxError};
+use crate::{
+    service::{
+        backend::fs::Fs,
+        config_format::ConfigFormat,
+        listen::{ConfigEventType, ConfigType},
+    },
+    BoxError,
+};
 
-use super::Listen;
+use super::{CreateListener, Listen};
 pub struct FsListener {
-    watcher: notify::RecommendedWatcher,
+    // hold the watcher, prevent dropping
+    _watcher: notify::RecommendedWatcher,
     rx: tokio::sync::mpsc::UnboundedReceiver<(ConfigType, ConfigEventType)>,
+}
+
+impl<F> CreateListener for Fs<F>
+where
+    F: ConfigFormat + Clone + Send + 'static,
+{
+    const CONFIG_LISTENER_NAME: &'static str = "file";
+
+    fn create_listener(&self) -> Result<Box<dyn Listen>, Box<dyn Error + Sync + Send + 'static>> {
+        Ok(Box::new(FsListener::new(self.clone())?))
+    }
 }
 
 impl FsListener {
@@ -76,15 +91,13 @@ impl FsListener {
                     } else {
                         return;
                     };
-                    if evt_tx.send(cfg_evt).is_err() {
-                        return;
-                    }
+                    if evt_tx.send(cfg_evt).is_err() {}
                 },
                 Default::default(),
             )?
         };
         watcher.watch(&fs.dir, notify::RecursiveMode::Recursive)?;
-        Ok(Self { watcher, rx: evt_rx })
+        Ok(Self { _watcher: watcher, rx: evt_rx })
     }
 }
 

@@ -6,6 +6,7 @@ use crate::{
 
 mod fs;
 mod k8s;
+mod memory;
 
 pub trait Retrieve: Sync + Send {
     fn retrieve_config_item_gateway(&self, gateway_name: &str) -> impl Future<Output = Result<Option<SgGateway>, BoxError>> + Send;
