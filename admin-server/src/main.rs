@@ -18,9 +18,10 @@ use spacegate_config::{
     BoxError, Config, ConfigItem,
 };
 pub mod clap;
-pub trait Backend<E>: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
+pub trait Backend: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
 
-impl<T, E> Backend<E> for T where T: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
+impl<T> Backend for T where T: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
+
 #[derive(Debug)]
 pub struct AppState<B> {
     pub backend: Arc<B>,
