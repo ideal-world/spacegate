@@ -1,7 +1,9 @@
 use std::ffi::{OsStr, OsString};
 
-use super::ConfigFormat;
+use crate::BoxError;
 
+use super::ConfigFormat;
+#[derive(Debug, Clone)]
 pub struct Json {
     pub extension: OsString,
 }
@@ -15,14 +17,13 @@ impl Default for Json {
 }
 
 impl ConfigFormat for Json {
-    type Error = serde_json::Error;
     fn extension(&self) -> &OsStr {
         &self.extension
     }
-    fn de<T: serde::de::DeserializeOwned>(&self, slice: &[u8]) -> Result<T, serde_json::Error> {
-        serde_json::from_slice(slice)
+    fn de<T: serde::de::DeserializeOwned>(&self, slice: &[u8]) -> Result<T, BoxError> {
+        Ok(serde_json::from_slice(slice)?)
     }
-    fn ser<T: serde::Serialize>(&self, t: &T) -> Result<Vec<u8>, serde_json::Error> {
-        serde_json::to_vec(t)
+    fn ser<T: serde::Serialize>(&self, t: &T) -> Result<Vec<u8>, BoxError> {
+        Ok(serde_json::to_vec(t)?)
     }
 }

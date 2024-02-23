@@ -5,9 +5,9 @@ use std::{
 };
 
 use crate::config::{
-    gateway_dto::{SgGateway, SgProtocolConfig, SgTlsMode},
-    http_route_dto::{BackendHost, SgHttpRoute},
-    plugin_filter_dto::SgRouteFilter,
+    matches_convert::{self, convert_config_to_kernel},
+    plugin_filter_dto::FilterInstallExt,
+    BackendHost, SgGateway, SgHttpRoute, SgProtocolConfig, SgRouteFilter, SgTlsMode,
 };
 
 use lazy_static::lazy_static;
@@ -45,49 +45,48 @@ fn collect_tower_http_route(
     http_routes
         .into_iter()
         .map(|route| {
-            let plugins = route.filters.unwrap_or_default();
-            let rules = route.rules.unwrap_or_default();
+            let plugins = route.filters;
+            let rules = route.rules;
             let rules = rules
                 .into_iter()
                 .map(|route_rule| {
                     let mut builder = spacegate_kernel::layers::http_route::SgHttpRouteRuleLayer::builder().ext(builder_ext.clone());
                     builder = if let Some(matches) = route_rule.matches {
-                        builder.matches(matches)
+                        builder.matches(matches.into_iter().map(convert_config_to_kernel).collect::<Result<Vec<_>, _>>()?)
                     } else {
                         builder.match_all()
                     };
-                    if let Some(backends) = route_rule.backends {
-                        let backends = backends
-                            .into_iter()
-                            .map(|backend| {
-                                let host = backend.get_host();
-                                let mut builder = spacegate_kernel::layers::http_route::SgHttpBackendLayer::builder().ext(builder_ext.clone());
-                                let plugins = backend.filters.unwrap_or_default();
-                                #[cfg(feature = "k8s")]
-                                {
-                                    use crate::extension::k8s_service::K8sService;
-                                    use spacegate_kernel::helper_layers::map_request::{add_extension::add_extension, MapRequestLayer};
-                                    use spacegate_kernel::SgBoxLayer;
-                                    if let BackendHost::K8sService(data) = backend.host {
-                                        let namespace_ext = K8sService(data.into());
-                                        builder = builder.plugin(SgBoxLayer::new(MapRequestLayer::new(add_extension(namespace_ext, true))))
-                                    }
+                    let backends = route_rule
+                        .backends
+                        .into_iter()
+                        .map(|backend| {
+                            let host = backend.get_host();
+                            let mut builder = spacegate_kernel::layers::http_route::SgHttpBackendLayer::builder().ext(builder_ext.clone());
+                            let plugins = backend.filters;
+                            #[cfg(feature = "k8s")]
+                            {
+                                use crate::extension::k8s_service::K8sService;
+                                use spacegate_kernel::helper_layers::map_request::{add_extension::add_extension, MapRequestLayer};
+                                use spacegate_kernel::SgBoxLayer;
+                                if let BackendHost::K8sService(data) = backend.host {
+                                    let namespace_ext = K8sService(data.into());
+                                    builder = builder.plugin(SgBoxLayer::new(MapRequestLayer::new(add_extension(namespace_ext, true))))
                                 }
-                                builder = SgRouteFilter::install_on_backend(plugins, builder);
-                                builder = builder.host(host).port(backend.port);
-                                let protocol = backend.protocol;
-                                if let Some(protocol) = protocol {
-                                    builder = builder.protocol(protocol.to_string());
-                                }
-                                builder.build()
-                            })
-                            .collect::<Result<Vec<_>, _>>()?;
-                        builder = builder.backends(backends);
-                    };
+                            }
+                            builder = SgRouteFilter::install_on_backend(plugins, builder);
+                            builder = builder.host(host).port(backend.port);
+                            let protocol = backend.protocol;
+                            if let Some(protocol) = protocol {
+                                builder = builder.protocol(protocol.to_string());
+                            }
+                            builder.build()
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    builder = builder.backends(backends);
                     if let Some(timeout) = route_rule.timeout_ms {
-                        builder = builder.timeout(Duration::from_millis(timeout));
+                        builder = builder.timeout(Duration::from_millis(timeout as u64));
                     }
-                    let plugins = route_rule.filters.unwrap_or_default();
+                    let plugins = route_rule.filters;
                     builder = SgRouteFilter::install_on_rule(plugins, builder);
                     builder.build()
                 })
@@ -205,14 +204,7 @@ impl RunningSgGateway {
         }
         log::info!("[SG.Server] start gateway");
         let reloader = <Reloader<SgGatewayRoute>>::default();
-        let service = create_service(
-            &config.name,
-            cancel_token.clone(),
-            config.filters.unwrap_or_default(),
-            http_routes,
-            reloader.clone(),
-            builder_ext,
-        )?;
+        let service = create_service(&config.name, cancel_token.clone(), config.filters, http_routes, reloader.clone(), builder_ext)?;
         if config.listeners.is_empty() {
             return Err("[SG.Server] Missing Listeners".into());
         }

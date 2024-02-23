@@ -1,19 +1,17 @@
 use std::{collections::BTreeMap, future::Future};
 
 use crate::{
-    model::{SgGateway, SgHttpRoute},
-    Config, ConfigItem,
+    model::{SgGateway, SgHttpRoute}, BoxError, Config, ConfigItem
 };
 
 mod fs;
 mod k8s;
 
 pub trait Retrieve: Sync + Send {
-    type Error: std::error::Error + Send  + Sync;
-    fn retrieve_config_item_gateway(&self, gateway_name: &str) -> impl Future<Output = Result<Option<SgGateway>, Self::Error>> + Send;
-    fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> impl Future<Output = Result<Option<SgHttpRoute>, Self::Error>> + Send;
-    fn retrieve_config_item_route_names(&self, name: &str) -> impl Future<Output = Result<Vec<String>, Self::Error>> + Send;
-    fn retrieve_config_item_all_routes(&self, name: &str) -> impl Future<Output = Result<BTreeMap<String, SgHttpRoute>, Self::Error>> + Send
+    fn retrieve_config_item_gateway(&self, gateway_name: &str) -> impl Future<Output = Result<Option<SgGateway>, BoxError>> + Send;
+    fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> impl Future<Output = Result<Option<SgHttpRoute>, BoxError>> + Send;
+    fn retrieve_config_item_route_names(&self, name: &str) -> impl Future<Output = Result<Vec<String>, BoxError>> + Send;
+    fn retrieve_config_item_all_routes(&self, name: &str) -> impl Future<Output = Result<BTreeMap<String, SgHttpRoute>, BoxError>> + Send
     {
         async move {
             let mut routes = BTreeMap::new();
@@ -25,7 +23,7 @@ pub trait Retrieve: Sync + Send {
             Ok(routes)
         }
     }
-    fn retrieve_config_item(&self, name: &str) -> impl Future<Output = Result<Option<ConfigItem>, Self::Error>> + Send
+    fn retrieve_config_item(&self, name: &str) -> impl Future<Output = Result<Option<ConfigItem>, BoxError>> + Send
     {
         async move {
             let Some(gateway) = self.retrieve_config_item_gateway(name).await? else {
@@ -35,11 +33,11 @@ pub trait Retrieve: Sync + Send {
             Ok(Some(ConfigItem { gateway, routes }))
         }
     }
-    fn retrieve_config_names(&self) -> impl Future<Output = Result<Vec<String>, Self::Error>> + Send;
-    fn retrieve_config(&self) -> impl Future<Output = Result<Config, Self::Error>> + Send
+    fn retrieve_config_names(&self) -> impl Future<Output = Result<Vec<String>, BoxError>> + Send;
+    fn retrieve_config(&self) -> impl Future<Output = Result<Config, BoxError>> + Send
     where
         Self: Sync,
-        Self::Error: Send,
+        BoxError: Send,
     {
         async move {
             let mut gateways = BTreeMap::new();

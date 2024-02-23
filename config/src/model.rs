@@ -1,9 +1,10 @@
 pub mod filter;
-pub mod gateway;
-pub mod http_route;
-pub mod route_match;
-
 pub use filter::*;
+
+pub mod gateway;
 pub use gateway::*;
+
+pub mod http_route;
 pub use http_route::*;
-pub use route_match::*;
+
+pub mod route_match;

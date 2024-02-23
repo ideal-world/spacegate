@@ -6,7 +6,7 @@ use super::{filter::SgRouteFilter, gateway::SgBackendProtocol};
 /// HTTPRoute provides a way to route HTTP requests.
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
-#[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(default)]
 pub struct SgHttpRoute {
@@ -35,7 +35,7 @@ impl Default for SgHttpRoute {
 }
 
 /// HTTPRouteRule defines semantics for matching an HTTP request based on conditions (matches), processing it (filters), and forwarding the request to an API object
-#[derive(Default, Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(default)]
 pub struct SgHttpRouteRule {
@@ -50,7 +50,7 @@ pub struct SgHttpRouteRule {
 }
 
 /// BackendRef defines how a HTTPRoute should forward an HTTP request.
-#[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(default)]
 pub struct SgBackendRef {
@@ -84,7 +84,7 @@ impl Default for SgBackendRef {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub struct K8sServiceData {
     pub name: String,
@@ -101,7 +101,7 @@ impl ToString for K8sServiceData {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(tag = "kind")]
 pub enum BackendHost {

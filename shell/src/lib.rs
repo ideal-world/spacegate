@@ -21,8 +21,9 @@
 
 #![warn(clippy::unwrap_used)]
 
-use config::{http_route_dto::SgHttpRoute, ConfigListener, StaticConfig};
+use config::SgHttpRoute;
 pub use hyper;
+use spacegate_config::service::{CreateListener, Retrieve};
 pub use spacegate_kernel as kernel;
 pub use spacegate_kernel::{BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 pub use spacegate_plugin as plugin;
@@ -43,32 +44,35 @@ pub mod server;
 
 #[cfg(feature = "local")]
 pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    let config_listener = config::config_by_local::FileConfigListener::new(&conf_path).await?;
-    startup(config_listener)
+    // let config_listener = config::config_by_local::FileConfigListener::new(&conf_path).await?;
+    // startup(config_listener)
+    unimplemented!("local feature is not implemented yet")
 }
 #[cfg(feature = "k8s")]
 pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    let config_listener = config::config_by_k8s::K8sConfigListener::new(namespace).await?;
-    startup(config_listener)
+    unimplemented!("k8s feature is not implemented yet")
+    // let config_listener = config::config_by_k8s::K8sConfigListener::new(namespace).await?;
+    // startup(config_listener)
 }
 #[cfg(feature = "cache")]
 pub async fn startup_cache(url: impl AsRef<str>, poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    let config_listener = config::config_by_redis::RedisConfigListener::new(url.as_ref(), poll_interval_sec).await?;
-    startup(config_listener)
+    unimplemented!("cache feature is not implemented yet")
+    // let config_listener = config::config_by_redis::RedisConfigListener::new(url.as_ref(), poll_interval_sec).await?;
+    // startup(config_listener)
 }
 
-pub fn startup_static(config: StaticConfig) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    startup(config)
-}
+// pub fn startup_static(config: StaticConfig) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+//     startup(config)
+// }
 
 #[instrument(fields(listener = (L::CONFIG_LISTENER_NAME)), skip(config))]
 pub fn startup<L>(config: L) -> Result<JoinHandle<Result<(), BoxError>>, BoxError>
 where
-    L: ConfigListener,
+    L: CreateListener + Retrieve + 'static,
 {
     info!("Starting spacegate...");
     info!("Spacegate Meta Info: {:?}", Meta::new());
-    Ok(config::init_with_config_listener(config, ctrl_c_cancel_token()))
+    Ok(config::init_with_config(config, ctrl_c_cancel_token()))
 }
 
 #[derive(Debug, Clone, Copy)]

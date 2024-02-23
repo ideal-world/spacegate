@@ -1,22 +1,21 @@
 use std::ffi::OsStr;
-use std::{collections::BTreeMap, ffi::OsString, future::Future};
+
 
 use tokio::{fs, io};
 
-use crate::backend::fs::{Fs, GATEWAY_SUFFIX, ROUTES_SUFFIX};
-use crate::config_format::ConfigFormat;
-use crate::{model::gateway::SgGateway, model::http_route::SgHttpRoute, Config, ConfigItem};
+use crate::service::backend::fs::{Fs, GATEWAY_SUFFIX};
+use crate::service::config_format::ConfigFormat;
+use crate::BoxError;
+use crate::{model::gateway::SgGateway, model::http_route::SgHttpRoute};
 
 use super::Retrieve;
 
 impl<F> Retrieve for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
-    io::Error: From<F::Error>,
 {
-    type Error = io::Error;
 
-    async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> Result<Option<SgGateway>, Self::Error> {
+    async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> Result<Option<SgGateway>, BoxError> {
         let gateway_file_path = self.gateway_path(gateway_name);
         if !gateway_file_path.exists() {
             return Ok(None);
@@ -25,7 +24,7 @@ where
         Ok(Some(self.format.de(&gateway_file)?))
     }
 
-    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<SgHttpRoute>, Self::Error> {
+    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<SgHttpRoute>, BoxError> {
         let route_file_path = self.route_path(gateway_name, route_name);
         if !route_file_path.exists() {
             return Ok(None);
@@ -34,7 +33,7 @@ where
         Ok(Some(self.format.de(&route_file)?))
     }
 
-    async fn retrieve_config_item_route_names(&self, name: &str) -> Result<Vec<String>, Self::Error> {
+    async fn retrieve_config_item_route_names(&self, name: &str) -> Result<Vec<String>, BoxError> {
         let mut route_names = Vec::new();
         let mut entries = fs::read_dir(self.routes_dir(name)).await?;
         while let Some(entry) = entries.next_entry().await? {
@@ -48,7 +47,7 @@ where
         Ok(route_names)
     }
 
-    async fn retrieve_config_names(&self) -> Result<Vec<String>, Self::Error> {
+    async fn retrieve_config_names(&self) -> Result<Vec<String>, BoxError> {
         let mut gateway_names = Vec::new();
         let mut entries = fs::read_dir(&self.dir).await?;
         while let Some(entry) = entries.next_entry().await? {

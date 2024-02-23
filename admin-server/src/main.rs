@@ -13,7 +13,7 @@ use axum::{
     Json, Router,
 };
 use spacegate_config::{
-    backend, config_format,
+    service, config_format,
     create::Create,
     delete::Delete,
     model::{SgGateway, SgHttpRoute},
@@ -185,7 +185,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::new(args.host, args.port);
     let app = match args.backend {
         clap::Backend::File(path) => {
-            let backend = backend::fs::Fs::new(path, config_format::Json::default());
+            let backend = service::fs::Fs::new(path, config_format::Json::default());
             create_app(backend)
         }
     };

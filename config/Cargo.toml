@@ -18,32 +18,20 @@ path = "src/lib.rs"
 
 [features]
 default = ["full"]
-full = ["file", "redis", "k8s", "typegen"]
-file = []
+full = ["file", "redis", "k8s", "typegen", "service"]
+service = []
+file = ["notify"]
 redis = []
 k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars"]
 typegen = ["ts-rs"]
-
 [dependencies]
 ts-rs = { version = "7.1", optional = true }
 serde_regex = "1.1.0"
 regex = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
-pin-project-lite = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
-lazy_static.workspace = true
-async-trait.workspace = true
-itertools.workspace = true
-urlencoding.workspace = true
-async-compression.workspace = true
 
-tardis = { workspace = true, features = [
-    "future",
-    "crypto",
-    "tls",
-    "build-info",
-] }
 hyper.workspace = true
 hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
@@ -56,8 +44,6 @@ kube = { workspace = true, optional = true }
 k8s-openapi = { workspace = true, optional = true }
 k8s-gateway-api = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
-async-stream = "0.3.5"
-tokio-util = { version = "0.7.8", features = ["io"] }
 
 notify = { version = "6.1.1", default-features = false, features = [
     "macos_kqueue",

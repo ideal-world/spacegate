@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 /// PathMatchType specifies the semantics of how HTTP paths should be compared.
-#[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", content = "value", rename_all = "PascalCase")]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub enum SgHttpPathMatch {
@@ -15,27 +15,39 @@ pub enum SgHttpPathMatch {
 
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub enum SgHttpHeaderMatch {
     /// Matches the HTTP header exactly and with case sensitivity.
-    Exact(String),
+    Exact {
+        name: String,
+        value: String
+    },
     /// Matches if the Http header matches the given regular expression with case sensitivity.
-    Regular(String),
+    Regular {
+        name: String,
+        re: String
+    },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, schemars::JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub enum SgHttpQueryMatch {
     /// Matches the HTTP query parameter exactly and with case sensitivity.
-    Exact(String),
+    Exact {
+        key: String,
+        value: String
+    },
     /// Matches if the Http query parameter matches the given regular expression with case sensitivity.
-    Regular(String),
+    Regular {
+        key: String,
+        re: String
+    },
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(transparent)]
 
@@ -45,7 +57,7 @@ pub struct SgHttpMethodMatch(pub String);
 
 /// HTTPRouteMatch defines the predicate used to match requests to a given action.
 /// Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 pub struct SgHttpRouteMatch {
     /// Path specifies a HTTP request path matcher.
