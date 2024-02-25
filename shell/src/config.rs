@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
 use spacegate_kernel::BoxError;
 use tardis::{

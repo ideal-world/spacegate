@@ -51,7 +51,7 @@ impl FsListener {
                         return;
                     };
                     // 1. path is a gateway file
-                    let cfg_evt = if let Some(gateway_name) = fs.extract_gateway_name(&target) {
+                    let cfg_evt = if let Some(gateway_name) = fs.extract_gateway_name(target) {
                         let cfg_evt_ty = match evt.kind {
                             // 1.1 gateway added
                             EventKind::Create(CreateKind::File) => ConfigEventType::Create,
@@ -68,7 +68,7 @@ impl FsListener {
                         (cfg_ty, cfg_evt_ty)
                     }
                     // 2. path is a route file
-                    else if let Some((gateway_name, route_name)) = fs.extract_route_name(&target) {
+                    else if let Some((gateway_name, route_name)) = fs.extract_route_name(target) {
                         let cfg_evt_ty = match evt.kind {
                             // 2.1 route added
                             EventKind::Create(CreateKind::File) => ConfigEventType::Create,
@@ -85,7 +85,7 @@ impl FsListener {
                         (cfg_ty, cfg_evt_ty)
                     }
                     // 3. path is a route directory
-                    else if let Some(_gateway_name) = fs.extract_gateway_name_from_route_dir(&target) {
+                    else if let Some(_gateway_name) = fs.extract_gateway_name_from_route_dir(target) {
                         // ignore route directory event
                         return;
                     } else {
