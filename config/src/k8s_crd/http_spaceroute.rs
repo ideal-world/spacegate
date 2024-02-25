@@ -2,7 +2,6 @@ use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Hostname, HttpRou
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::{api::ListParams, Api, ResourceExt};
 use std::collections::{BTreeMap, HashSet};
-use tardis::basic::result::TardisResult;
 
 #[derive(Clone, Debug, Default, kube::CustomResource, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[kube(
@@ -230,124 +229,124 @@ pub struct BackendRef {
     pub inner: BackendObjectReference,
 }
 
-impl From<HttpRoute> for HttpSpaceroute {
-    fn from(http_route_obj: HttpRoute) -> Self {
-        HttpSpaceroute {
-            metadata: ObjectMeta {
-                annotations: Some(if let Some(mut ann) = http_route_obj.metadata.annotations {
-                    ann.insert(constants::RAW_HTTP_ROUTE_KIND.to_string(), constants::RAW_HTTP_ROUTE_KIND_DEFAULT.to_string());
-                    ann
-                } else {
-                    BTreeMap::from([(constants::RAW_HTTP_ROUTE_KIND.to_string(), constants::RAW_HTTP_ROUTE_KIND_DEFAULT.to_string())])
-                }),
-                ..http_route_obj.metadata
-            },
-            spec: HttpSpacerouteSpec {
-                inner: http_route_obj.spec.inner,
-                hostnames: http_route_obj.spec.hostnames,
-                rules: http_route_obj.spec.rules.map(|rules| {
-                    rules
-                        .into_iter()
-                        .map(|rule| HttpRouteRule {
-                            matches: rule.matches,
-                            filters: rule.filters,
-                            backend_refs: rule.backend_refs.map(|backend_refs| {
-                                backend_refs
-                                    .into_iter()
-                                    .map(|http_backend_ref| HttpBackendRef {
-                                        backend_ref: http_backend_ref.backend_ref.map(|backend_ref| BackendRef {
-                                            weight: backend_ref.weight,
-                                            timeout_ms: None,
-                                            inner: BackendObjectReference {
-                                                group: backend_ref.inner.group,
-                                                kind: backend_ref.inner.kind,
-                                                name: backend_ref.inner.name,
-                                                namespace: backend_ref.inner.namespace,
-                                                port: backend_ref.inner.port,
-                                            },
-                                        }),
-                                        filters: http_backend_ref.filters,
-                                    })
-                                    .collect()
-                            }),
-                            timeout_ms: None,
-                        })
-                        .collect()
-                }),
-            },
-            status: http_route_obj.status.map(|status| HttpSpacerouteStatus { inner: status.inner }),
-        }
-    }
-}
+// impl From<HttpRoute> for HttpSpaceroute {
+//     fn from(http_route_obj: HttpRoute) -> Self {
+//         HttpSpaceroute {
+//             metadata: ObjectMeta {
+//                 annotations: Some(if let Some(mut ann) = http_route_obj.metadata.annotations {
+//                     ann.insert(constants::RAW_HTTP_ROUTE_KIND.to_string(), constants::RAW_HTTP_ROUTE_KIND_DEFAULT.to_string());
+//                     ann
+//                 } else {
+//                     BTreeMap::from([(constants::RAW_HTTP_ROUTE_KIND.to_string(), constants::RAW_HTTP_ROUTE_KIND_DEFAULT.to_string())])
+//                 }),
+//                 ..http_route_obj.metadata
+//             },
+//             spec: HttpSpacerouteSpec {
+//                 inner: http_route_obj.spec.inner,
+//                 hostnames: http_route_obj.spec.hostnames,
+//                 rules: http_route_obj.spec.rules.map(|rules| {
+//                     rules
+//                         .into_iter()
+//                         .map(|rule| HttpRouteRule {
+//                             matches: rule.matches,
+//                             filters: rule.filters,
+//                             backend_refs: rule.backend_refs.map(|backend_refs| {
+//                                 backend_refs
+//                                     .into_iter()
+//                                     .map(|http_backend_ref| HttpBackendRef {
+//                                         backend_ref: http_backend_ref.backend_ref.map(|backend_ref| BackendRef {
+//                                             weight: backend_ref.weight,
+//                                             timeout_ms: None,
+//                                             inner: BackendObjectReference {
+//                                                 group: backend_ref.inner.group,
+//                                                 kind: backend_ref.inner.kind,
+//                                                 name: backend_ref.inner.name,
+//                                                 namespace: backend_ref.inner.namespace,
+//                                                 port: backend_ref.inner.port,
+//                                             },
+//                                         }),
+//                                         filters: http_backend_ref.filters,
+//                                     })
+//                                     .collect()
+//                             }),
+//                             timeout_ms: None,
+//                         })
+//                         .collect()
+//                 }),
+//             },
+//             status: http_route_obj.status.map(|status| HttpSpacerouteStatus { inner: status.inner }),
+//         }
+//     }
+// }
 
-// todo replace kernel::config::config_by_k8s::get_http_spaceroute_by_api
-pub async fn get_http_spaceroute_by_api(
-    gateway_uniques: &[String],
-    (http_spaceroute_api, http_route_api): (&Api<HttpSpaceroute>, &Api<HttpRoute>),
-) -> TardisResult<Vec<HttpSpaceroute>> {
-    let mut http_route_objs: Vec<HttpSpaceroute> = http_spaceroute_api
-        .list(&ListParams::default())
-        .await
-        .warp_result_by_method("List HttpSpaceroute")?
-        .into_iter()
-        .filter(|http_route_obj| {
-            http_route_obj
-                .spec
-                .inner
-                .parent_refs
-                .as_ref()
-                .map(|parent_refs| {
-                    parent_refs.iter().any(|parent_ref| {
-                        let http_route_namespace = http_route_obj.namespace();
-                        gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
-                            if let Some(namespaces) = parent_ref.namespace.as_ref() {
-                                Some(namespaces)
-                            } else {
-                                http_route_namespace.as_ref()
-                            },
-                            &parent_ref.name,
-                        ))
-                    })
-                })
-                .unwrap_or(false)
-        })
-        .collect();
-    let http_spaceroute_name_namespace_set =
-        http_route_objs.iter().map(|spaceroute| format!("{}{}", spaceroute.name_any(), spaceroute.namespace().unwrap_or_default())).collect::<HashSet<String>>();
+// // todo replace kernel::config::config_by_k8s::get_http_spaceroute_by_api
+// pub async fn get_http_spaceroute_by_api(
+//     gateway_uniques: &[String],
+//     (http_spaceroute_api, http_route_api): (&Api<HttpSpaceroute>, &Api<HttpRoute>),
+// ) -> TardisResult<Vec<HttpSpaceroute>> {
+//     let mut http_route_objs: Vec<HttpSpaceroute> = http_spaceroute_api
+//         .list(&ListParams::default())
+//         .await
+//         .warp_result_by_method("List HttpSpaceroute")?
+//         .into_iter()
+//         .filter(|http_route_obj| {
+//             http_route_obj
+//                 .spec
+//                 .inner
+//                 .parent_refs
+//                 .as_ref()
+//                 .map(|parent_refs| {
+//                     parent_refs.iter().any(|parent_ref| {
+//                         let http_route_namespace = http_route_obj.namespace();
+//                         gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+//                             if let Some(namespaces) = parent_ref.namespace.as_ref() {
+//                                 Some(namespaces)
+//                             } else {
+//                                 http_route_namespace.as_ref()
+//                             },
+//                             &parent_ref.name,
+//                         ))
+//                     })
+//                 })
+//                 .unwrap_or(false)
+//         })
+//         .collect();
+//     let http_spaceroute_name_namespace_set =
+//         http_route_objs.iter().map(|spaceroute| format!("{}{}", spaceroute.name_any(), spaceroute.namespace().unwrap_or_default())).collect::<HashSet<String>>();
 
-    let mut add_http_route_objs: Vec<HttpSpaceroute> = http_route_api
-        .list(&ListParams::default())
-        .await
-        .warp_result_by_method("List HttpRoute")?
-        .into_iter()
-        .filter(|http_route_obj| {
-            // HTTPSpaceroute has higher priority than HTTPRoute.
-            // HTTPRoute needs to filter already existing HTTPSpaceroute ({name}{namespace} as unique)
-            http_spaceroute_name_namespace_set.get(&format!("{}{}", http_route_obj.name_any(), http_route_obj.namespace().unwrap_or_default())).is_none()
-                && http_route_obj
-                    .spec
-                    .inner
-                    .parent_refs
-                    .as_ref()
-                    .map(|parent_refs| {
-                        parent_refs.iter().any(|parent_ref| {
-                            let http_route_namespace = http_route_obj.namespace();
-                            gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
-                                if let Some(namespaces) = parent_ref.namespace.as_ref() {
-                                    Some(namespaces)
-                                } else {
-                                    http_route_namespace.as_ref()
-                                },
-                                &parent_ref.name,
-                            ))
-                        })
-                    })
-                    .unwrap_or(false)
-        })
-        .map(|http_route_obj| http_route_obj.into())
-        .collect::<Vec<HttpSpaceroute>>();
+//     let mut add_http_route_objs: Vec<HttpSpaceroute> = http_route_api
+//         .list(&ListParams::default())
+//         .await
+//         .warp_result_by_method("List HttpRoute")?
+//         .into_iter()
+//         .filter(|http_route_obj| {
+//             // HTTPSpaceroute has higher priority than HTTPRoute.
+//             // HTTPRoute needs to filter already existing HTTPSpaceroute ({name}{namespace} as unique)
+//             http_spaceroute_name_namespace_set.get(&format!("{}{}", http_route_obj.name_any(), http_route_obj.namespace().unwrap_or_default())).is_none()
+//                 && http_route_obj
+//                     .spec
+//                     .inner
+//                     .parent_refs
+//                     .as_ref()
+//                     .map(|parent_refs| {
+//                         parent_refs.iter().any(|parent_ref| {
+//                             let http_route_namespace = http_route_obj.namespace();
+//                             gateway_uniques.contains(&k8s_helper::format_k8s_obj_unique(
+//                                 if let Some(namespaces) = parent_ref.namespace.as_ref() {
+//                                     Some(namespaces)
+//                                 } else {
+//                                     http_route_namespace.as_ref()
+//                                 },
+//                                 &parent_ref.name,
+//                             ))
+//                         })
+//                     })
+//                     .unwrap_or(false)
+//         })
+//         .map(|http_route_obj| http_route_obj.into())
+//         .collect::<Vec<HttpSpaceroute>>();
 
-    http_route_objs.append(&mut add_http_route_objs);
+//     http_route_objs.append(&mut add_http_route_objs);
 
-    Ok(http_route_objs)
-}
+//     Ok(http_route_objs)
+// }

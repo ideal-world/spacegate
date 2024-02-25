@@ -125,3 +125,19 @@ pub enum SgTlsMode {
     #[default]
     Passthrough,
 }
+
+impl From<String> for SgTlsMode {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "terminate" => SgTlsMode::Terminate,
+            "passthrough" => SgTlsMode::Passthrough,
+            _ => SgTlsMode::Passthrough,
+        }
+    }
+}
+
+impl From<Option<String>> for SgTlsMode {
+    fn from(value: Option<String>) -> Self {
+        SgTlsMode::from(value.unwrap_or_default())
+    }
+}
