@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod gatewayapi_support_filter;
 /// RouteFilter defines processing steps that must be completed during the request or response lifecycle.
 ///
 /// There are four levels of filters

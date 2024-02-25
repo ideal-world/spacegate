@@ -1,7 +1,8 @@
 use std::future::Future;
 
 use crate::{
-    model::{SgGateway, SgHttpRoute}, BoxError, Config, ConfigItem
+    model::{SgGateway, SgHttpRoute},
+    BoxError, Config, ConfigItem,
 };
 
 pub mod fs;

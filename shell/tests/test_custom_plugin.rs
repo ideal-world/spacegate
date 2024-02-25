@@ -64,9 +64,7 @@ async fn test_custom_plugin() -> Result<(), BoxError> {
                 }]),
                 rules: Some(vec![SgHttpRouteRule {
                     backends: Some(vec![SgBackendRef {
-                        host: BackendHost::Host {
-                            host: "postman-echo.com".into()
-                        },
+                        host: BackendHost::Host { host: "postman-echo.com".into() },
                         protocol: Some(Https),
                         ..Default::default()
                     }]),

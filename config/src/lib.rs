@@ -11,6 +11,7 @@ pub mod model;
 use model::gateway::SgGateway;
 use model::http_route::SgHttpRoute;
 
+type BoxResult<T> = Result<T, BoxError>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]

@@ -15,11 +15,17 @@ impl K8s {
         }
     }
 
-    pub fn get_all_api<T: kube::Resource>(&self) -> kube::Api<T> where <T as kube::Resource>::DynamicType: Default {
+    pub fn get_all_api<T: kube::Resource>(&self) -> kube::Api<T>
+    where
+        <T as kube::Resource>::DynamicType: Default,
+    {
         kube::Api::all(self.client.clone())
     }
 
-    pub fn get_namespace_api<T: kube::Resource<Scope = NamespaceResourceScope>>(&self) -> kube::Api<T> where <T as kube::Resource>::DynamicType: Default{
+    pub fn get_namespace_api<T: kube::Resource<Scope = NamespaceResourceScope>>(&self) -> kube::Api<T>
+    where
+        <T as kube::Resource>::DynamicType: Default,
+    {
         kube::Api::namespaced(self.client.clone(), &self.namespace)
     }
 }

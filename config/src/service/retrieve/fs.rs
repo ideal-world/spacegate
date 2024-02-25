@@ -1,6 +1,5 @@
 use std::ffi::OsStr;
 
-
 use tokio::{fs, io};
 
 use crate::service::backend::fs::{Fs, GATEWAY_SUFFIX};
@@ -14,7 +13,6 @@ impl<F> Retrieve for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
 {
-
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> Result<Option<SgGateway>, BoxError> {
         let gateway_file_path = self.gateway_path(gateway_name);
         if !gateway_file_path.exists() {

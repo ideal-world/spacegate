@@ -4,7 +4,6 @@ use tokio::sync::RwLock;
 
 use crate::Config;
 
-
 /// In-memory Config Backend
 #[derive(Debug, Clone)]
 pub struct Memory {
