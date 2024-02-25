@@ -13,9 +13,6 @@ use super::filter::SgRouteFilter;
 #[serde(default)]
 pub struct SgGateway {
     /// Name of the Gateway. Global Unique.
-    ///
-    /// In k8s mode, this name MUST be unique within a namespace.
-    /// format see [k8s_helper::format_k8s_obj_unique]
     pub name: String,
     /// Some parameters necessary for the gateway.
     pub parameters: SgParameters,
@@ -46,7 +43,7 @@ pub struct SgParameters {
 #[serde(default)]
 pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
-    pub name: Option<String>,
+    pub name: String,
     /// Ip bound to the Listener. Default is 0.0.0.0
     pub ip: Option<IpAddr>,
     /// Port is the network port. Multiple listeners may use the same port, subject to the Listener compatibility rules.
@@ -112,10 +109,16 @@ impl Display for SgProtocolConfig {
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
-pub struct SgTlsConfig {
-    pub mode: SgTlsMode,
-    pub key: String,
-    pub cert: String,
+pub enum SgTlsConfig {
+    K8sService{k8sconfig:K8sSgTlsConfig,mode: SgTlsMode},
+    Other{mode: SgTlsMode, key: String, cert: String},
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+pub struct K8sSgTlsConfig {
+    pub name: String,
+    pub namespace: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default, Eq, Copy)]

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub mod constants;
+#[cfg(feature = "k8s")]
 pub mod k8s_crd;
 #[cfg(feature = "service")]
 pub mod service;

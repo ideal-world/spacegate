@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use futures_util::future::join_all;
-use gateway::{SgListener, SgParameters, SgProtocolConfig, SgTlsConfig, SgTlsMode};
+use gateway::{SgListener, SgParameters, SgProtocolConfig, SgTlsConfig};
 use http_route::{BackendHost, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch, SgHttpRouteRule};
-use k8s_gateway_api::{Gateway, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRequestHeaderFilter, HttpRoute, HttpRouteFilter, HttpRouteMatch, HttpRouteRule, Listener};
+use k8s_gateway_api::{Gateway, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRequestHeaderFilter, HttpRoute, HttpRouteFilter, HttpRouteMatch,  Listener};
 use k8s_openapi::api::core::v1::Secret;
-use kube::{Api, ResourceExt};
+use kube::{api::ListParams, Api, ResourceExt};
 
 use super::Retrieve;
 use crate::{
@@ -16,10 +16,6 @@ use crate::{
     },
     model::{
         gateway,
-        gatewayapi_support_filter::{
-            SgFilterHeaderModifier, SgFilterHeaderModifierKind, SgFilterRedirect, SgFilterRewrite, SgHttpPathModifier, SgHttpPathModifierType, SG_FILTER_HEADER_MODIFIER_CODE,
-            SG_FILTER_REDIRECT_CODE, SG_FILTER_REWRITE_CODE,
-        },
         http_route, SgGateway, SgHttpRoute, SgRouteFilter,
     },
     service::backend::k8s::K8s,
@@ -27,7 +23,7 @@ use crate::{
 };
 
 impl Retrieve for K8s {
-    async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> Result<Option<SgGateway>, BoxError> {
+    async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> BoxResult<Option<SgGateway>> {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
 
         let result = if let Some(gateway_obj) = gateway_api.get_opt(&gateway_name).await?.and_then(|gateway_obj| {
@@ -45,7 +41,7 @@ impl Retrieve for K8s {
         Ok(result)
     }
 
-    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<SgHttpRoute>, BoxError> {
+    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> BoxResult<Option<SgHttpRoute>> {
         let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
         let httproute_api: Api<HttpRoute> = self.get_namespace_api();
 
@@ -88,17 +84,57 @@ impl Retrieve for K8s {
         Ok(result)
     }
 
-    async fn retrieve_config_item_route_names(&self, name: &str) -> Result<Vec<String>, BoxError> {
-        todo!()
+    async fn retrieve_config_item_route_names(&self, name: &str) -> BoxResult<Vec<String>> {
+        let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
+        let httproute_api: Api<HttpRoute> = self.get_namespace_api();
+
+        let mut result: Vec<String> = http_spaceroute_api
+            .list(&ListParams::default())
+            .await?
+            .iter()
+            .filter(|route| {
+                route
+                    .spec
+                    .inner
+                    .parent_refs
+                    .as_ref()
+                    .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == route.namespace() && parent_ref.name == name))
+                    .unwrap_or(false)
+            })
+            .map(|route| route.name_any())
+            .collect();
+
+        result.extend(
+            httproute_api
+                .list(&ListParams::default())
+                .await?
+                .iter()
+                .filter(|route| {
+                    route
+                        .spec
+                        .inner
+                        .parent_refs
+                        .as_ref()
+                        .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == route.namespace() && parent_ref.name == name))
+                        .unwrap_or(false)
+                })
+                .map(|route| route.name_any()),
+        );
+
+        Ok(result)
     }
 
-    async fn retrieve_config_names(&self) -> Result<Vec<String>, BoxError> {
-        todo!()
+    async fn retrieve_config_names(&self) -> BoxResult<Vec<String>> {
+        let gateway_api: Api<Gateway> = self.get_namespace_api();
+
+        let result = gateway_api.list(&ListParams::default()).await?.iter().map(|gateway| gateway.name_any()).collect();
+
+        Ok(result)
     }
 }
 
 impl K8s {
-    async fn from_kube_gateway(&self, gateway_obj: Gateway) -> Result<SgGateway, BoxError> {
+    async fn from_kube_gateway(&self, gateway_obj: Gateway) -> BoxResult<SgGateway> {
         let gateway_name = gateway_obj.name_any();
         let filters = self
             .retrieve_config_item_filters(K8sSgFilterSpecTargetRef {
@@ -116,7 +152,7 @@ impl K8s {
         Ok(result)
     }
 
-    async fn from_kube_httpspaceroute(&self, httpspace_route: HttpSpaceroute) -> Result<SgHttpRoute, BoxError> {
+    async fn from_kube_httpspaceroute(&self, httpspace_route: HttpSpaceroute) -> BoxResult<SgHttpRoute> {
         let kind = if let Some(kind) = httpspace_route.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
             kind.clone()
         } else {
@@ -135,26 +171,67 @@ impl K8s {
             gateway_name: gateway_refs.get(0).map(|x| x.name.clone()).unwrap_or_default(),
             hostnames: httpspace_route.spec.hostnames.clone(),
             filters,
-            rules: httpspace_route.spec.rules.map(|r_vec| r_vec.into_iter().map(SgHttpRouteRule::from_kube_httproute).collect::<Result<Vec<_>, BoxError>>()).transpose()?.unwrap_or_default(),
+            rules: httpspace_route
+                .spec
+                .rules
+                .map(|r_vec| r_vec.into_iter().map(SgHttpRouteRule::from_kube_httproute).collect::<Result<Vec<_>, BoxError>>())
+                .transpose()?
+                .unwrap_or_default(),
             priority,
         })
     }
 
-    async fn from_kube_httproute(&self, http_route: HttpRoute) -> Result<SgHttpRoute, BoxError> {
+    async fn from_kube_httproute(&self, http_route: HttpRoute) -> BoxResult<SgHttpRoute> {
         self.from_kube_httpspaceroute(http_route.into()).await
     }
 
-    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> Result<Vec<SgRouteFilter>, BoxError> {
-        todo!()
+    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<SgRouteFilter>> {
+        let kind = target.kind;
+        let name = target.name;
+        let namespace = target.namespace.unwrap_or(self.namespace.to_string());
+
+        let filter_api: Api<SgFilter> = self.get_all_api();
+        let filter_objs: Vec<SgRouteFilter> = filter_api
+            .list(&ListParams::default())
+            .await
+            .map_err(|error| Box::new(error))?
+            .into_iter()
+            .filter(|filter_obj| {
+                filter_obj.spec.target_refs.iter().any(|target_ref| {
+                    target_ref.kind.eq_ignore_ascii_case(&kind)
+                        && target_ref.name.eq_ignore_ascii_case(&name)
+                        && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
+                })
+            })
+            .flat_map(|filter_obj| {
+                filter_obj.spec.filters.into_iter().map(|filter| SgRouteFilter {
+                    code: filter.code,
+                    name: filter.name,
+                    spec: filter.config,
+                })
+            })
+            .collect();
+
+        if !filter_objs.is_empty() {
+            let mut filter_vec = String::new();
+            filter_objs.clone().into_iter().for_each(|filter| filter_vec.push_str(&format!("Filter{{code: {},name:{}}},", filter.code, filter.name.unwrap_or("None".to_string()))));
+            tracing::trace!("[SG.Common] {namespace}.{kind}.{name} filter found: {}", filter_vec.trim_end_matches(','));
+        }
+
+        if filter_objs.is_empty() {
+            Ok(vec![])
+        } else {
+            Ok(filter_objs)
+        }
     }
 
-    async fn retrieve_config_item_listeners(&self, listeners: &Vec<Listener>) -> Result<Vec<SgListener>, BoxError> {
+    async fn retrieve_config_item_listeners(&self, listeners: &Vec<Listener>) -> BoxResult<Vec<SgListener>> {
         join_all(
             listeners
                 .into_iter()
                 .map(|listener| async move {
                     let sg_listener = SgListener {
-                        name: Some(listener.name.clone()),
+                        name: listener.name.clone(),
                         ip: None,
                         port: listener.port,
                         protocol: match listener.protocol.to_lowercase().as_str() {
@@ -216,184 +293,4 @@ impl K8s {
     }
 }
 
-impl SgParameters {
-    fn from_kube_gateway(gateway: &Gateway) -> Self {
-        let gateway_annotations = gateway.metadata.annotations.clone();
-        if let Some(gateway_annotations) = gateway_annotations {
-            SgParameters {
-                redis_url: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string()),
-                log_level: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
-                lang: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
-                ignore_tls_verification: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
-            }
-        } else {
-            SgParameters {
-                redis_url: None,
-                log_level: None,
-                lang: None,
-                ignore_tls_verification: None,
-            }
-        }
-    }
-}
 
-impl SgHttpRouteRule {
-    fn from_kube_httproute(rule: http_spaceroute::HttpRouteRule) -> Result<SgHttpRouteRule, BoxError> {
-        Ok(SgHttpRouteRule {
-            matches: rule.matches.map(|m_vec| m_vec.into_iter().map(SgHttpRouteMatch::from_kube_httproute).collect::<Vec<_>>()),
-            filters: rule.filters.map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<Result<Vec<_>, BoxError>>()).transpose()?.unwrap_or_default(),
-            backends: rule
-                .backend_refs
-                .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<Result<Vec<_>, BoxError>>())
-                .transpose()?
-                .unwrap_or_default(),
-            timeout_ms: rule.timeout_ms,
-        })
-    }
-}
-
-impl SgHttpRouteMatch {
-    pub(crate) fn from_kube_httproute(route_match: HttpRouteMatch) -> SgHttpRouteMatch {
-        SgHttpRouteMatch {
-            method: route_match.method.map(|m_vec| vec![http_route::SgHttpMethodMatch(m_vec)]),
-            path: route_match.path.map(SgHttpPathMatch::from_kube_httproute),
-            header: route_match.headers.map(|h_vec| h_vec.into_iter().map(SgHttpHeaderMatch::from_kube_httproute).collect::<Vec<_>>()),
-            query: route_match.query_params.map(|q_vec| q_vec.into_iter().map(SgHttpQueryMatch::from_kube_httproute).collect::<Vec<_>>()),
-        }
-    }
-}
-
-impl SgHttpPathMatch {
-    pub(crate) fn from_kube_httproute(path_match: HttpPathMatch) -> SgHttpPathMatch {
-        match path_match {
-            HttpPathMatch::Exact { value } => SgHttpPathMatch::Exact(value),
-            HttpPathMatch::PathPrefix { value } => SgHttpPathMatch::Prefix(value),
-            HttpPathMatch::RegularExpression { value } => SgHttpPathMatch::Regular(value),
-        }
-    }
-}
-
-impl SgHttpHeaderMatch {
-    pub(crate) fn from_kube_httproute(header_match: HttpHeaderMatch) -> SgHttpHeaderMatch {
-        match header_match {
-            HttpHeaderMatch::Exact { name, value } => SgHttpHeaderMatch::Exact { name, value },
-            HttpHeaderMatch::RegularExpression { name, value } => SgHttpHeaderMatch::Regular { name, re: value },
-        }
-    }
-}
-
-impl SgHttpQueryMatch {
-    pub(crate) fn from_kube_httproute(query_match: HttpQueryParamMatch) -> SgHttpQueryMatch {
-        match query_match {
-            HttpQueryParamMatch::Exact { name, value } => SgHttpQueryMatch::Exact { key: name, value: value },
-            HttpQueryParamMatch::RegularExpression { name, value } => SgHttpQueryMatch::Regular { key: name, re: value },
-        }
-    }
-}
-
-impl SgBackendRef {
-    pub(crate) fn from_kube_httproute(http_backend: HttpBackendRef) -> Result<Option<SgBackendRef>, BoxError> {
-        http_backend
-            .backend_ref
-            .map(|backend| {
-                let protocol = if let Some(kind) = backend.inner.kind.as_ref() {
-                    match kind.as_str() {
-                        BANCKEND_KIND_EXTERNAL_HTTP => Some(gateway::SgBackendProtocol::Http),
-                        BANCKEND_KIND_EXTERNAL_HTTPS => Some(gateway::SgBackendProtocol::Https),
-                        _ => None,
-                    }
-                } else {
-                    None
-                };
-                Ok(SgBackendRef {
-                    host: BackendHost::default(),
-                    port: backend.inner.port.unwrap_or(80),
-                    timeout_ms: backend.timeout_ms,
-                    protocol,
-                    weight: backend.weight.unwrap_or(1),
-                    filters: http_backend
-                        .filters
-                        .map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<Result<Vec<SgRouteFilter>, BoxError>>())
-                        .transpose()?
-                        .unwrap_or_default(),
-                })
-            })
-            .transpose()
-    }
-}
-
-impl SgRouteFilter {
-    pub fn from_http_route_filter(route_filter: HttpRouteFilter) -> BoxResult<SgRouteFilter> {
-        let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> Result<SgRouteFilter, BoxError> {
-            let mut sg_sets = HashMap::new();
-            if let Some(adds) = header_modifier.add {
-                for add in adds {
-                    sg_sets.insert(add.name, add.value);
-                }
-            }
-            if let Some(sets) = header_modifier.set {
-                for set in sets {
-                    sg_sets.insert(set.name, set.value);
-                }
-            }
-
-            Ok(SgRouteFilter {
-                code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
-                name: None,
-                spec: serde_json::to_value(&SgFilterHeaderModifier {
-                    kind: modifier_kind,
-                    sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
-                    remove: header_modifier.remove,
-                })?,
-            })
-        };
-        let mut sg_filter = match route_filter {
-            k8s_gateway_api::HttpRouteFilter::RequestHeaderModifier { request_header_modifier } => {
-                process_header_modifier(request_header_modifier, SgFilterHeaderModifierKind::Request)?
-            }
-            k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
-                process_header_modifier(response_header_modifier, SgFilterHeaderModifierKind::Response)?
-            }
-            k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
-                code: SG_FILTER_REDIRECT_CODE.to_string(),
-                name: None,
-                spec: serde_json::to_value(&SgFilterRedirect {
-                    scheme: request_redirect.scheme,
-                    hostname: request_redirect.hostname,
-                    path: request_redirect.path.map(|path| match path {
-                        k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
-                            kind: SgHttpPathModifierType::ReplaceFullPath,
-                            value: replace_full_path,
-                        },
-                        k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
-                            kind: SgHttpPathModifierType::ReplacePrefixMatch,
-                            value: replace_prefix_match,
-                        },
-                    }),
-                    port: request_redirect.port,
-                    status_code: request_redirect.status_code,
-                })?,
-            },
-            k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
-                code: SG_FILTER_REWRITE_CODE.to_string(),
-                name: None,
-                spec: serde_json::to_value(&SgFilterRewrite {
-                    hostname: url_rewrite.hostname,
-                    path: url_rewrite.path.map(|path| match path {
-                        k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
-                            kind: SgHttpPathModifierType::ReplaceFullPath,
-                            value: replace_full_path,
-                        },
-                        k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
-                            kind: SgHttpPathModifierType::ReplacePrefixMatch,
-                            value: replace_prefix_match,
-                        },
-                    }),
-                })?,
-            },
-            k8s_gateway_api::HttpRouteFilter::RequestMirror { .. } => return Err("[SG.Common] HttpRoute [spec.rules.filters.type=RequestMirror] not supported yet".into()),
-            k8s_gateway_api::HttpRouteFilter::ExtensionRef { .. } => return Err("[SG.Common] HttpRoute [spec.rules.filters.type=ExtensionRef] not supported yet".into()),
-        };
-        Ok(sg_filter)
-    }
-}

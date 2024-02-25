@@ -6,6 +6,7 @@ use crate::{
 };
 
 mod fs;
+#[cfg(feature = "k8s")]
 mod k8s;
 mod memory;
 
