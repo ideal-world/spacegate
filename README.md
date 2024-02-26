@@ -35,6 +35,10 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 | **spacegate-native** | bin  | Out-of-the-box service that include all features except kubernetes support         |
 | **spacegate-simplify** | bin  | Out-of-the-box service for standalone environments                                 |
 
+![Crates](./.readme/dep.svg)
+
+
+
 ## 🔖 Releases
 > Release binary naming method: {crate}-{arch}{OS}{abi}-{version}
 > [download here](https://github.com/ideal-world/spacegate/releases/latest)
@@ -44,3 +48,4 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 | **linux**   | **x86_64**,**aarch64** | **gnu,musl**  | If you need static linking please use `musl` |
 | **macos**   | **x86_64**,**aarch64** | **Libsystem** |                                              |
 | **windows** | **x86_64**             | **msvc**      |                                              |
+
