@@ -91,24 +91,24 @@ async fn post_config_item<B: Create>(
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(config_item): Json<ConfigItem>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.create_config_item(&name, &config_item).await.map_err(InternalError)
+    backend.create_config_item(&name, config_item).await.map_err(InternalError)
 }
 async fn post_config<B: Create>(State(AppState { backend, .. }): State<AppState<B>>, Json(config): Json<Config>) -> Result<(), InternalError<BoxError>> {
-    backend.create_config(&config).await.map_err(InternalError)
+    backend.create_config(config).await.map_err(InternalError)
 }
 async fn post_config_item_gateway<B: Create>(
     Path(gateway_name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(gateway): Json<SgGateway>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.create_config_item_gateway(&gateway_name, &gateway).await.map_err(InternalError)
+    backend.create_config_item_gateway(&gateway_name, gateway).await.map_err(InternalError)
 }
 async fn post_config_item_route<B: Create>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(route): Json<SgHttpRoute>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.create_config_item_route(&name, &route_name, &route).await.map_err(InternalError)
+    backend.create_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 
 /**********************************************

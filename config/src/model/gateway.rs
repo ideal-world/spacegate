@@ -109,16 +109,10 @@ impl Display for SgProtocolConfig {
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
-pub enum SgTlsConfig {
-    K8sService{k8sconfig:K8sSgTlsConfig,mode: SgTlsMode},
-    Other{mode: SgTlsMode, key: String, cert: String},
-}
-
-#[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
-pub struct K8sSgTlsConfig {
-    pub name: String,
-    pub namespace: Option<String>,
+pub struct SgTlsConfig {
+    pub mode: SgTlsMode,
+    pub key: String,
+    pub cert: String,
 }
 
 #[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default, Eq, Copy)]
@@ -127,6 +121,15 @@ pub enum SgTlsMode {
     Terminate,
     #[default]
     Passthrough,
+}
+
+impl From<SgTlsMode> for String {
+    fn from(value: SgTlsMode) -> Self {
+        match value {
+            SgTlsMode::Terminate => "terminate".to_string(),
+            SgTlsMode::Passthrough => "passthrough".to_string(),
+        }
+    }
 }
 
 impl From<String> for SgTlsMode {

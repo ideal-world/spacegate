@@ -1,21 +1,25 @@
 use std::collections::BTreeMap;
 
+use chrono::Utc;
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference};
-use k8s_openapi::api::core::v1::Secret;
+use k8s_openapi::{api::core::v1::Secret, ByteString};
 use kube::api::ObjectMeta;
 
-use crate::{constants, k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef, SgFilterTargetKind}, model::{helper_filter::SgSingeFilter, SgGateway, SgParameters}};
-
+use crate::{
+    constants,
+    k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef, SgFilterTargetKind},
+    model::{helper_filter::SgSingeFilter, SgGateway, SgParameters},
+};
 
 impl SgGateway {
-    pub fn to_kube_gateway(self,namespace: &str) -> (Gateway,Option<Secret>, Vec<SgSingeFilter>) {
-        let mut secret =None;
+    pub fn to_kube_gateway(self, namespace: &str) -> (Gateway, Option<Secret>, Vec<SgSingeFilter>) {
+        let mut secret = None;
 
         let gateway = Gateway {
             metadata: ObjectMeta {
                 annotations: Some(self.parameters.into_kube_gateway()),
                 labels: None,
-                name: Some(self.name),
+                name: Some(self.name.clone()),
                 owner_references: None,
                 self_link: None,
                 ..Default::default()
@@ -30,46 +34,35 @@ impl SgGateway {
                         hostname: l.hostname,
                         port: l.port,
                         protocol: l.protocol.to_string(),
-                        tls: match l.protocol{
+                        tls: match l.protocol {
                             crate::model::SgProtocolConfig::Http => None,
-                            crate::model::SgProtocolConfig::Https { tls } => match tls {
-                                crate::model::SgTlsConfig::K8sService { k8sconfig, mode,} => Some(GatewayTlsConfig {
-                                    mode: Some(tls.mode.to_kube_tls_mode_type()),
+                            crate::model::SgProtocolConfig::Https { tls } => {
+                                let current_time_utc = Utc::now().timestamp();
+                                let name = (&tls.key[..2]).to_string() + &current_time_utc.to_string();
+                                secret = Some(Secret {
+                                    metadata: ObjectMeta {
+                                        name: Some(name.clone()),
+                                        namespace: Some(namespace.to_string()),
+                                        ..Default::default()
+                                    },
+                                    type_: Some("kubernetes.io/tls".to_string()),
+                                    data: Some(BTreeMap::from([
+                                        ("tls.key".to_string(), ByteString(tls.key.into_bytes())),
+                                        ("tls.crt".to_string(), ByteString(tls.cert.into_bytes())),
+                                    ])),
+                                    ..Default::default()
+                                });
+                                Some(GatewayTlsConfig {
+                                    mode: Some(tls.mode.into()),
                                     certificate_refs: Some(vec![SecretObjectReference {
                                         kind: Some("Secret".to_string()),
-                                        name:k8sconfig.name,
-                                        namespace: k8sconfig.namespace,
+                                        name,
+                                        namespace: Some(namespace.to_string()),
                                         ..Default::default()
                                     }]),
                                     options: None,
-                                }),
-                                crate::model::SgTlsConfig::Other { mode, key, cert } => {
-                                    let name=todo!();
-                                    secret = Some(Secret {
-                                        metadata: ObjectMeta {
-                                            name: Some(name),
-                                            namespace: Some(namespace.to_string()),
-                                            ..Default::default()
-                                        },
-                                        type_: Some("kubernetes.io/tls".to_string()),
-                                        data: Some(BTreeMap::from([
-                                            ("tls.key".to_string(), key),
-                                            ("tls.crt".to_string(), cert),
-                                        ])),
-                                        ..Default::default()
-                                    });
-                                    Some(GatewayTlsConfig {
-                                        mode: Some(mode.to_kube_tls_mode_type()),
-                                        certificate_refs: Some(vec![SecretObjectReference {
-                                            kind: Some("Secret".to_string()),
-                                            name,
-                                            namespace: namespace.to_string(),
-                                            ..Default::default()
-                                        }]),
-                                        options: None,
-                                    })
-                                },
-                            },
+                                })
+                            }
                         },
                         allowed_routes: None,
                     })
@@ -79,28 +72,27 @@ impl SgGateway {
             status: None,
         };
 
-        let sgfilters: Vec<SgSingeFilter> = 
-            self.filters
-                .into_iter()
-                .map(|f| SgSingeFilter {
-                    name: f.name,
-                    namespace: namespace.to_string(),
-                    filter: K8sSgFilterSpecFilter {
-                        code: f.code,
-                        name: None,
-                        enable: true,
-                        config: f.spec,
-                    },
-                    target_ref: K8sSgFilterSpecTargetRef {
-                        kind: SgFilterTargetKind::Gateway.into(),
-                        name: self.name.clone(),
-                        namespace: Some(namespace.to_string()),
-                    },
-                })
-                .collect();
-        
+        let sgfilters: Vec<SgSingeFilter> = self
+            .filters
+            .into_iter()
+            .map(|f| SgSingeFilter {
+                name: f.name,
+                namespace: namespace.to_string(),
+                filter: K8sSgFilterSpecFilter {
+                    code: f.code,
+                    name: None,
+                    enable: true,
+                    config: f.spec,
+                },
+                target_ref: K8sSgFilterSpecTargetRef {
+                    kind: SgFilterTargetKind::Gateway.into(),
+                    name: self.name.clone(),
+                    namespace: Some(namespace.to_string()),
+                },
+            })
+            .collect();
 
-        (gateway,secret, sgfilters)
+        (gateway, secret, sgfilters)
     }
 }
 

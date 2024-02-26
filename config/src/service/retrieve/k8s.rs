@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use futures_util::future::join_all;
 use gateway::{SgListener, SgParameters, SgProtocolConfig, SgTlsConfig};
 use http_route::{BackendHost, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch, SgHttpRouteRule};
-use k8s_gateway_api::{Gateway, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRequestHeaderFilter, HttpRoute, HttpRouteFilter, HttpRouteMatch,  Listener};
+use k8s_gateway_api::{Gateway, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRequestHeaderFilter, HttpRoute, HttpRouteFilter, HttpRouteMatch, Listener};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
 
@@ -14,10 +14,7 @@ use crate::{
         http_spaceroute::{self, HttpBackendRef, HttpSpaceroute},
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
     },
-    model::{
-        gateway,
-        http_route, SgGateway, SgHttpRoute, SgRouteFilter,
-    },
+    model::{gateway, http_route, SgGateway, SgHttpRoute, SgRouteFilter},
     service::backend::k8s::K8s,
     BoxError, BoxResult,
 };
@@ -292,5 +289,3 @@ impl K8s {
         .collect()
     }
 }
-
-
