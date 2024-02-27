@@ -34,6 +34,7 @@ export function setClient(...args: Parameters<typeof axios.create>) {
     Client.axiosInstance = instance
 }
 
+
 export async function get_config_item_gateway(
     gatewayName: string,
 ): Promise<AxiosResponse<SgGateway | null>> {
