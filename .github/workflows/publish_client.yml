@@ -6,12 +6,12 @@ on:
       - main
       - v2
     paths:
-      - 'packages/admin-client/package.json'
+      - './admin-client/package.json'
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-
+    name: publish
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -23,12 +23,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        run: cd admin-client && npm ci
 
       - name: Build
-        run: npm run build
+        run: cd admin-client && npm run build
 
       - name: Publish
-        run: npm publish
+        run: cd admin-client && npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
