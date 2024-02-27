@@ -1,7 +1,6 @@
 use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Hostname, HttpRoute, HttpRouteFilter, HttpRouteMatch, RouteStatus};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::{ResourceExt};
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use crate::constants;
 
@@ -278,6 +277,18 @@ impl From<HttpRoute> for HttpSpaceroute {
             },
             status: http_route_obj.status.map(|status| HttpSpacerouteStatus { inner: status.inner }),
         }
+    }
+}
+
+impl HttpSpaceroute {
+    pub fn get_gateway_name(&self, namespace: &str) -> String {
+        self.spec
+            .inner
+            .parent_refs
+            .as_ref()
+            .map(|p_rs| p_rs.iter().filter(|p_r| p_r.namespace.eq(&Some(namespace.to_string()))).map(|p_r| p_r.name.clone()).next())
+            .unwrap_or_default()
+            .unwrap_or_default()
     }
 }
 

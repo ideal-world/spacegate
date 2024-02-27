@@ -5,9 +5,7 @@ use std::{
 };
 
 use crate::config::{
-    matches_convert::{convert_config_to_kernel},
-    plugin_filter_dto::FilterInstallExt,
-    BackendHost, SgGateway, SgHttpRoute, SgProtocolConfig, SgRouteFilter, SgTlsMode,
+    matches_convert::convert_config_to_kernel, plugin_filter_dto::FilterInstallExt, BackendHost, SgGateway, SgHttpRoute, SgProtocolConfig, SgRouteFilter, SgTlsMode,
 };
 
 use lazy_static::lazy_static;

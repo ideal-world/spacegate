@@ -15,6 +15,13 @@ impl K8s {
         }
     }
 
+    pub async fn with_default_client(namespace: impl Into<Arc<str>>) -> Result<Self, kube::Error> {
+        Ok(Self {
+            namespace: namespace.into(),
+            client: kube::Client::try_default().await?,
+        })
+    }
+
     pub fn get_all_api<T: kube::Resource>(&self) -> kube::Api<T>
     where
         <T as kube::Resource>::DynamicType: Default,

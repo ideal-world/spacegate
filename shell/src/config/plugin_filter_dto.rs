@@ -9,6 +9,7 @@ use spacegate_kernel::{
 use spacegate_plugin::MakeSgLayer;
 use tardis::log;
 
+/// Extension trait for [`SgRouteFilter`] to install on backend, gateway, rule and route in a more convenient way.
 pub trait FilterInstallExt: Sized {
     fn into_layer(self) -> Result<SgBoxLayer, BoxError>;
     fn create(self) -> Result<Box<dyn MakeSgLayer>, BoxError>;
@@ -45,6 +46,7 @@ pub trait FilterInstallExt: Sized {
         builder
     }
 }
+
 impl FilterInstallExt for SgRouteFilter {
     fn into_layer(self) -> Result<SgBoxLayer, BoxError> {
         let plugin_repo = spacegate_plugin::SgPluginRepository::global();

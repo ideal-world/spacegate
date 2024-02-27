@@ -1,0 +1,119 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spacegate-admin
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - create
+      - watch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+      - list
+      - get
+      - watch
+      - update
+      - patch
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gatewayclasses
+      - gateways
+      - httproutes
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - watch
+      - delete
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - httproutes/status
+      - gateways/status
+      - gatewayclasses/status
+    verbs:
+      - update
+  - apiGroups:
+      - spacegate.idealworld.group
+    resources:
+      - sgfilters
+      - httpspaceroutes
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+      - list
+      - watch
+      - delete
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: spacegate-admin
+subjects:
+  - kind: ServiceAccount
+    name: spacegate-admin
+    namespace: spacegate
+roleRef:
+  kind: ClusterRole
+  name: spacegate-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spacegate-admin
+  template:
+    metadata:
+      labels:
+        app: spacegate-admin
+    spec:
+      serviceAccountName: spacegate-admin
+      containers:
+        - name: spacegate-admin
+          image: ecfront/spacegate-admin:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9080
+              hostPort: 9080

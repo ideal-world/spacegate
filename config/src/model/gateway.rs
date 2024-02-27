@@ -73,7 +73,6 @@ impl Display for SgBackendProtocol {
         match self {
             SgBackendProtocol::Http => write!(f, "http"),
             SgBackendProtocol::Https { .. } => write!(f, "https"),
-            _ => write!(f, ""),
         }
     }
 }
@@ -101,7 +100,6 @@ impl Display for SgProtocolConfig {
         match self {
             SgProtocolConfig::Http => write!(f, "http"),
             SgProtocolConfig::Https { .. } => write!(f, "https"),
-            _ => write!(f, ""),
         }
     }
 }

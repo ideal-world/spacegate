@@ -1,13 +1,9 @@
-use std::{
-    collections::BTreeMap,
-    net::SocketAddr,
-    sync::{atomic::AtomicU64, Arc},
-};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use axum::{
-    extract::{self, Path, State},
-    http::{Method, StatusCode},
-    middleware::{self, Next},
+    extract::{Path, State},
+    http::StatusCode,
+    middleware::{self},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
@@ -18,6 +14,8 @@ use spacegate_config::{
     BoxError, Config, ConfigItem,
 };
 pub mod clap;
+pub mod mw;
+
 pub trait Backend: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
 
 impl<T> Backend for T where T: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
@@ -25,7 +23,7 @@ impl<T> Backend for T where T: Create + Retrieve + Update + Delete + Send + Sync
 #[derive(Debug)]
 pub struct AppState<B> {
     pub backend: Arc<B>,
-    pub version: Version,
+    pub version: mw::version_control::Version,
 }
 
 impl<B> Clone for AppState<B> {
@@ -119,7 +117,7 @@ async fn put_config_item_gateway<B: Update>(
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(gateway): Json<SgGateway>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_config_item_gateway(&gateway_name, &gateway).await.map_err(InternalError)
+    backend.update_config_item_gateway(&gateway_name, gateway).await.map_err(InternalError)
 }
 
 async fn put_config_item_route<B: Update>(
@@ -127,7 +125,7 @@ async fn put_config_item_route<B: Update>(
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(route): Json<SgHttpRoute>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_config_item_route(&name, &route_name, &route).await.map_err(InternalError)
+    backend.update_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 
 async fn put_config_item<B: Update>(
@@ -135,11 +133,11 @@ async fn put_config_item<B: Update>(
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(config_item): Json<ConfigItem>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_config_item(&name, &config_item).await.map_err(InternalError)
+    backend.update_config_item(&name, config_item).await.map_err(InternalError)
 }
 
 async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B>>, Json(config): Json<Config>) -> Result<(), InternalError<BoxError>> {
-    backend.update_config(&config).await.map_err(InternalError)
+    backend.update_config(config).await.map_err(InternalError)
 }
 
 /**********************************************
@@ -175,9 +173,13 @@ where
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = <crate::clap::Args as ::clap::Parser>::parse();
     let addr = SocketAddr::new(args.host, args.port);
-    let app = match args.config_backend {
+    let app = match args.config {
         clap::ConfigBackend::File(path) => {
             let backend = service::backend::fs::Fs::new(path, config_format::Json::default());
+            create_app(backend)
+        }
+        clap::ConfigBackend::K8s(ns) => {
+            let backend = service::backend::k8s::K8s::with_default_client(ns).await?;
             create_app(backend)
         }
     };
@@ -190,61 +192,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct Version {
-    pub version: Arc<AtomicU64>,
-}
-
-impl Version {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn update(&self) -> u64 {
-        self.version.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.version.load(std::sync::atomic::Ordering::Relaxed)
-    }
-    pub fn equal(&self, version: u64) -> bool {
-        self.version.load(std::sync::atomic::Ordering::Relaxed) == version
-    }
-    pub fn fetch(&self) -> u64 {
-        self.version.load(std::sync::atomic::Ordering::Relaxed)
-    }
-}
-
-async fn version_control<B>(State(state): State<AppState<B>>, request: extract::Request, next: Next) -> Response {
-    const CLIENT_HEADER: &str = "X-Client-Version";
-    const SERVER_HEADER: &str = "X-Server-Version";
-    // do something with `request`...
-    let client_version = request.headers().get(CLIENT_HEADER).and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or_default();
-    let method = request.method().clone();
-    if method == Method::DELETE || method == Method::POST || method == Method::PUT {
-        if state.version.equal(client_version) {
-            // up to date, update version
-            state.version.update();
-        } else {
-            // out of date, tell client to update
-            return Response::builder()
-                .status(StatusCode::CONFLICT)
-                .header(SERVER_HEADER, state.version.fetch())
-                .body(axum::body::Body::empty())
-                .expect("should be valid response");
-        }
-    }
-    let version = state.version.fetch();
-    let mut response = next.run(request).await;
-    if method == Method::GET {
-        response.headers_mut().insert(SERVER_HEADER, version.into());
-    }
-    response
-}
-
 pub fn create_app<B>(backend: B) -> Router<()>
 where
     B: Create + Retrieve + Update + Delete + Send + Sync + 'static,
 {
     let state = AppState {
         backend: Arc::new(backend),
-        version: Version::new(),
+        version: mw::version_control::Version::new(),
     };
     Router::new().nest(
         "/config",
@@ -269,7 +223,7 @@ where
                         get(get_config_item_gateway::<B>).post(post_config_item_gateway::<B>).put(put_config_item_gateway::<B>).delete(delete_config_item_gateway::<B>),
                     ),
             )
-            .layer(middleware::from_fn_with_state(state.clone(), version_control))
+            .layer(middleware::from_fn_with_state(state.clone(), mw::version_control::version_control))
             .with_state(state),
     )
 }

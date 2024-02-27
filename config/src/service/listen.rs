@@ -2,9 +2,10 @@ use std::error::Error;
 
 use futures_util::Future;
 
-use crate::{model::SgGateway, BoxError, Config};
+use crate::{BoxError, Config};
 
 mod fs;
+mod k8s;
 mod memory;
 
 pub enum ConfigEventType {

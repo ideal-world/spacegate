@@ -1,3 +1,7 @@
+use std::hash::{Hash, Hasher};
+
+use crate::constants;
+
 #[cfg(feature = "k8s")]
 #[derive(Clone)]
 pub struct SgSingeFilter {
@@ -7,17 +11,40 @@ pub struct SgSingeFilter {
     pub target_ref: crate::k8s_crd::sg_filter::K8sSgFilterSpecTargetRef,
 }
 
-impl SgSingeFilter{
-    pub fn to_sg_filter(&self) -> crate::k8s_crd::sg_filter::SgFilter {
+impl PartialEq for SgSingeFilter {
+    fn eq(&self, other: &Self) -> bool {
+        self.namespace == other.namespace
+            && self.filter.code == other.filter.code
+            && self.target_ref.kind == other.target_ref.kind
+            && self.target_ref.name == other.target_ref.name
+            && self.target_ref.namespace.as_ref().unwrap_or(&constants::DEFAULT_NAMESPACE.to_string())
+                == other.target_ref.namespace.as_ref().unwrap_or(&constants::DEFAULT_NAMESPACE.to_string())
+    }
+}
+
+impl Eq for SgSingeFilter {}
+
+impl Hash for SgSingeFilter {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.namespace.hash(state);
+        self.target_ref.kind.hash(state);
+        self.target_ref.name.hash(state);
+        self.target_ref.namespace.hash(state);
+    }
+}
+
+impl From<SgSingeFilter> for crate::k8s_crd::sg_filter::SgFilter {
+    fn from(value: SgSingeFilter) -> Self {
         crate::k8s_crd::sg_filter::SgFilter {
             metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                name: self.name.clone(),
-                namespace: Some(self.namespace.clone()),
+                name: value.name.clone(),
+                namespace: Some(value.namespace.clone()),
                 ..Default::default()
             },
             spec: crate::k8s_crd::sg_filter::K8sSgFilterSpec {
-                filters: vec![self.filter.clone()],
-                target_refs: vec![self.target_ref.clone()],
+                filters: vec![value.filter.clone()],
+                target_refs: vec![value.target_ref.clone()],
             },
         }
     }
