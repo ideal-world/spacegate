@@ -21,7 +21,9 @@ impl Stream for ListenerWrapper {
     type Item = (ConfigType, ConfigEventType);
 
     fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
-        self.0.poll_next(cx)
+        self.0.poll_next(cx).map_err(|e| {
+            log::error!("[SG.Config] listening gateway error: {e}")
+        }).map(Result::ok)
     }
 }
 
@@ -31,8 +33,7 @@ where
 {
     use crate::server::RunningSgGateway;
     tardis::tokio::task::spawn_local(async move {
-        let listener = config.create_listener()?;
-        let init_config = config.retrieve_config().await?;
+        let (init_config, listener) = config.create_listener().await?;
         for (name, item) in init_config.gateways {
             let (gateway, routes) = item.into_gateway_and_routes();
             match RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {

@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, task::ready};
 
 use notify::{Event, Watcher};
 
@@ -7,8 +7,9 @@ use crate::{
         backend::fs::Fs,
         config_format::ConfigFormat,
         listen::{ConfigEventType, ConfigType},
+        Retrieve,
     },
-    BoxError,
+    BoxError, Config,
 };
 
 use super::{CreateListener, Listen};
@@ -20,12 +21,13 @@ pub struct FsListener {
 
 impl<F> CreateListener for Fs<F>
 where
-    F: ConfigFormat + Clone + Send + 'static,
+    F: ConfigFormat + Clone + Send + Sync + 'static,
 {
     const CONFIG_LISTENER_NAME: &'static str = "file";
 
-    fn create_listener(&self) -> Result<Box<dyn Listen>, Box<dyn Error + Sync + Send + 'static>> {
-        Ok(Box::new(FsListener::new(self.clone())?))
+    async fn create_listener(&self) -> Result<(Config, Box<dyn super::Listen>), Box<dyn std::error::Error + Sync + Send + 'static>> {
+        let config = self.retrieve_config().await?;
+        Ok((config, Box::new(FsListener::new(self.clone())?)))
     }
 }
 
@@ -102,7 +104,11 @@ impl FsListener {
 }
 
 impl Listen for FsListener {
-    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<(super::ConfigType, super::ConfigEventType)>> {
-        self.rx.poll_recv(cx)
+    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<super::ListenEvent, BoxError>> {
+        if let Some(next) = ready!(self.rx.poll_recv(cx)) {
+            std::task::Poll::Ready(Ok(next))
+        } else {
+            std::task::Poll::Pending
+        }
     }
 }
