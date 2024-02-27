@@ -22,7 +22,7 @@ impl SgRouteFilter {
             Ok(SgRouteFilter {
                 code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
                 name: None,
-                spec: serde_json::to_value(&SgFilterHeaderModifier {
+                spec: serde_json::to_value(SgFilterHeaderModifier {
                     kind: modifier_kind,
                     sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
                     remove: header_modifier.remove,
@@ -39,7 +39,7 @@ impl SgRouteFilter {
             k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
                 code: SG_FILTER_REDIRECT_CODE.to_string(),
                 name: None,
-                spec: serde_json::to_value(&SgFilterRedirect {
+                spec: serde_json::to_value(SgFilterRedirect {
                     scheme: request_redirect.scheme,
                     hostname: request_redirect.hostname,
                     path: request_redirect.path.map(|path| match path {
@@ -59,7 +59,7 @@ impl SgRouteFilter {
             k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
                 code: SG_FILTER_REWRITE_CODE.to_string(),
                 name: None,
-                spec: serde_json::to_value(&SgFilterRewrite {
+                spec: serde_json::to_value(SgFilterRewrite {
                     hostname: url_rewrite.hostname,
                     path: url_rewrite.path.map(|path| match path {
                         k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {

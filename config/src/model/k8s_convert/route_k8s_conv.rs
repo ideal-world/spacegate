@@ -50,7 +50,7 @@ impl SgHttpHeaderMatch {
 impl SgHttpQueryMatch {
     pub(crate) fn from_kube_httproute(query_match: HttpQueryParamMatch) -> SgHttpQueryMatch {
         match query_match {
-            HttpQueryParamMatch::Exact { name, value } => SgHttpQueryMatch::Exact { key: name, value: value },
+            HttpQueryParamMatch::Exact { name, value } => SgHttpQueryMatch::Exact { key: name, value },
             HttpQueryParamMatch::RegularExpression { name, value } => SgHttpQueryMatch::Regular { key: name, re: value },
         }
     }

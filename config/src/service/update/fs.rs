@@ -1,6 +1,6 @@
 use tokio::{
     fs::OpenOptions,
-    io::{self, AsyncWriteExt},
+    io::{AsyncWriteExt},
 };
 
 use crate::{

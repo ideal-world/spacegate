@@ -11,7 +11,7 @@ impl K8s {
     pub fn new(namespace: impl Into<Arc<str>>, client: kube::Client) -> Self {
         Self {
             namespace: namespace.into(),
-            client: client,
+            client,
         }
     }
 

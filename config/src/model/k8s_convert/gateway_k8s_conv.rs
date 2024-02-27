@@ -38,7 +38,7 @@ impl SgGateway {
                             crate::model::SgProtocolConfig::Http => None,
                             crate::model::SgProtocolConfig::Https { tls } => {
                                 let current_time_utc = Utc::now().timestamp();
-                                let name = (&tls.key[..2]).to_string() + &current_time_utc.to_string();
+                                let name = tls.key[..2].to_string() + &current_time_utc.to_string();
                                 secret = Some(Secret {
                                     metadata: ObjectMeta {
                                         name: Some(name.clone()),

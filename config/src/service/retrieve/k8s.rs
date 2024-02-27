@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+
 
 use futures_util::future::join_all;
 use gateway::{SgListener, SgParameters, SgProtocolConfig, SgTlsConfig};
-use http_route::{BackendHost, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch, SgHttpRouteRule};
-use k8s_gateway_api::{Gateway, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRequestHeaderFilter, HttpRoute, HttpRouteFilter, HttpRouteMatch, Listener};
+use http_route::{SgHttpRouteRule};
+use k8s_gateway_api::{Gateway, HttpRoute, Listener};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
 
@@ -11,7 +11,7 @@ use super::Retrieve;
 use crate::{
     constants::{self, GATEWAY_CLASS_NAME},
     k8s_crd::{
-        http_spaceroute::{self, HttpBackendRef, HttpSpaceroute},
+        http_spaceroute::{HttpSpaceroute},
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
     },
     model::{gateway, http_route, SgGateway, SgHttpRoute, SgRouteFilter},
@@ -23,7 +23,7 @@ impl Retrieve for K8s {
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> BoxResult<Option<SgGateway>> {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
 
-        let result = if let Some(gateway_obj) = gateway_api.get_opt(&gateway_name).await?.and_then(|gateway_obj| {
+        let result = if let Some(gateway_obj) = gateway_api.get_opt(gateway_name).await?.and_then(|gateway_obj| {
             if gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME {
                 Some(gateway_obj)
             } else {
@@ -42,7 +42,7 @@ impl Retrieve for K8s {
         let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
         let httproute_api: Api<HttpRoute> = self.get_namespace_api();
 
-        let result = if let Some(httpspaceroute) = http_spaceroute_api.get_opt(&route_name).await?.and_then(|http_route_obj| {
+        let result = if let Some(httpspaceroute) = http_spaceroute_api.get_opt(route_name).await?.and_then(|http_route_obj| {
             if http_route_obj
                 .spec
                 .inner
@@ -57,25 +57,23 @@ impl Retrieve for K8s {
             }
         }) {
             Some(self.from_kube_httpspaceroute(httpspaceroute).await?)
-        } else {
-            if let Some(http_route) = httproute_api.get_opt(&route_name).await?.and_then(|http_route| {
-                if http_route
-                    .spec
-                    .inner
-                    .parent_refs
-                    .as_ref()
-                    .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == http_route.namespace() && parent_ref.name == gateway_name))
-                    .unwrap_or(false)
-                {
-                    Some(http_route)
-                } else {
-                    None
-                }
-            }) {
-                Some(self.from_kube_httproute(http_route).await?)
+        } else if let Some(http_route) = httproute_api.get_opt(route_name).await?.and_then(|http_route| {
+            if http_route
+                .spec
+                .inner
+                .parent_refs
+                .as_ref()
+                .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == http_route.namespace() && parent_ref.name == gateway_name))
+                .unwrap_or(false)
+            {
+                Some(http_route)
             } else {
                 None
             }
+        }) {
+            Some(self.from_kube_httproute(http_route).await?)
+        } else {
+            None
         };
 
         Ok(result)
@@ -165,7 +163,7 @@ impl K8s {
             })
             .await?;
         Ok(SgHttpRoute {
-            gateway_name: gateway_refs.get(0).map(|x| x.name.clone()).unwrap_or_default(),
+            gateway_name: gateway_refs.first().map(|x| x.name.clone()).unwrap_or_default(),
             hostnames: httpspace_route.spec.hostnames.clone(),
             filters,
             rules: httpspace_route
@@ -191,7 +189,7 @@ impl K8s {
         let filter_objs: Vec<SgRouteFilter> = filter_api
             .list(&ListParams::default())
             .await
-            .map_err(|error| Box::new(error))?
+            .map_err(Box::new)?
             .into_iter()
             .filter(|filter_obj| {
                 filter_obj.spec.target_refs.iter().any(|target_ref| {
@@ -225,7 +223,7 @@ impl K8s {
     async fn retrieve_config_item_listeners(&self, listeners: &Vec<Listener>) -> BoxResult<Vec<SgListener>> {
         join_all(
             listeners
-                .into_iter()
+                .iter()
                 .map(|listener| async move {
                     let sg_listener = SgListener {
                         name: listener.name.clone(),
@@ -235,7 +233,7 @@ impl K8s {
                             "http" => SgProtocolConfig::Http,
                             "https" => {
                                 if let Some(tls_config) = &listener.tls {
-                                    if let Some(certificate_ref) = tls_config.certificate_refs.as_ref().and_then(|vec| vec.get(0)) {
+                                    if let Some(certificate_ref) = tls_config.certificate_refs.as_ref().and_then(|vec| vec.first()) {
                                         let secret_api: Api<Secret> = self.get_namespace_api();
                                         if let Some(secret_obj) = secret_api.get_opt(&certificate_ref.name).await? {
                                             let tls = if let Some(secret_data) = secret_obj.data {
