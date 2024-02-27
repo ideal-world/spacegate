@@ -51,10 +51,12 @@ pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<Join
     startup(config)
 }
 #[cfg(feature = "k8s")]
-pub async fn startup_k8s(_namespace: Option<&str>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    unimplemented!("k8s feature is not implemented yet")
-    // let config_listener = config::config_by_k8s::K8sConfigListener::new(namespace).await?;
-    // startup(config_listener)
+pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    use spacegate_config::service::backend::k8s::K8s;
+    let namespace = namespace.unwrap_or("default");
+    let config = K8s::new(namespace, kube::Client::try_default().await?);
+    unimplemented!("")
+    // startup(config)
 }
 #[cfg(feature = "cache")]
 pub async fn startup_cache(_url: impl AsRef<str>, _poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {

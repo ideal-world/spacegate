@@ -1,5 +1,9 @@
 use std::error::Error;
 
+use futures_util::Future;
+
+use crate::{model::SgGateway, BoxError, Config};
+
 mod fs;
 mod memory;
 
@@ -16,9 +20,10 @@ pub enum ConfigType {
 
 pub trait CreateListener {
     const CONFIG_LISTENER_NAME: &'static str;
-    fn create_listener(&self) -> Result<Box<dyn Listen>, Box<dyn Error + Sync + Send + 'static>>;
+    fn create_listener(&self) -> impl Future<Output = Result<(Config, Box<dyn Listen>), Box<dyn Error + Sync + Send + 'static>>> + Send;
 }
 
+pub type ListenEvent = (ConfigType, ConfigEventType);
 pub trait Listen: Unpin {
-    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<(ConfigType, ConfigEventType)>>;
+    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<ListenEvent, BoxError>>;
 }
