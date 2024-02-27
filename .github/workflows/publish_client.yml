@@ -3,10 +3,10 @@ name: Publish Admin Client package
 on:
   push:
     branches:
-      - main
       - v2
     paths:
       - './admin-client/**'
+      - './.github/workflows/publish_client.yml'
 
 jobs:
   build-and-publish:
