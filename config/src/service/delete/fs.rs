@@ -1,5 +1,3 @@
-
-
 use crate::{
     service::{backend::fs::Fs, config_format::ConfigFormat},
     BoxError,

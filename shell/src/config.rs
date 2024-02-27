@@ -21,9 +21,7 @@ impl Stream for ListenerWrapper {
     type Item = (ConfigType, ConfigEventType);
 
     fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
-        self.0.poll_next(cx).map_err(|e| {
-            log::error!("[SG.Config] listening gateway error: {e}")
-        }).map(Result::ok)
+        self.0.poll_next(cx).map_err(|e| log::error!("[SG.Config] listening gateway error: {e}")).map(Result::ok)
     }
 }
 

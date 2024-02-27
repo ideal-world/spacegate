@@ -11,6 +11,7 @@ use crate::service::http_client_service::get_client;
 use crate::utils::x_forwarded_for;
 use crate::BoxError;
 use crate::SgBody;
+use crate::SgResponse;
 use crate::SgResponseExt;
 
 pub mod echo;
@@ -73,7 +74,7 @@ impl hyper::service::Service<Request<SgBody>> for BoxHyperService {
 /// This function could be a bottom layer of a http router, it will handle http and websocket request.
 ///
 /// This can handle both websocket connection and http request.
-pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<Response<SgBody>, BoxError> {
+pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgResponse, BoxError> {
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;
     let mut client = get_client();

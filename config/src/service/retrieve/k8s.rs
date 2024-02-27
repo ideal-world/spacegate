@@ -1,8 +1,6 @@
-
-
 use futures_util::future::join_all;
 use gateway::{SgListener, SgParameters, SgProtocolConfig, SgTlsConfig};
-use http_route::{SgHttpRouteRule};
+use http_route::SgHttpRouteRule;
 use k8s_gateway_api::{Gateway, HttpRoute, Listener};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
@@ -11,7 +9,7 @@ use super::Retrieve;
 use crate::{
     constants::{self, GATEWAY_CLASS_NAME},
     k8s_crd::{
-        http_spaceroute::{HttpSpaceroute},
+        http_spaceroute::HttpSpaceroute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
     },
     model::{gateway, http_route, SgGateway, SgHttpRoute, SgRouteFilter},
@@ -30,7 +28,7 @@ impl Retrieve for K8s {
                 None
             }
         }) {
-            Some(self.from_kube_gateway(gateway_obj).await?)
+            Some(self.kube_gateway_2_sg_gateway(gateway_obj).await?)
         } else {
             None
         };
@@ -56,7 +54,7 @@ impl Retrieve for K8s {
                 None
             }
         }) {
-            Some(self.from_kube_httpspaceroute(httpspaceroute).await?)
+            Some(self.kube_httpspaceroute_2_sg_route(httpspaceroute).await?)
         } else if let Some(http_route) = httproute_api.get_opt(route_name).await?.and_then(|http_route| {
             if http_route
                 .spec
@@ -71,7 +69,7 @@ impl Retrieve for K8s {
                 None
             }
         }) {
-            Some(self.from_kube_httproute(http_route).await?)
+            Some(self.kube_httproute_2_sg_route(http_route).await?)
         } else {
             None
         };
@@ -129,7 +127,7 @@ impl Retrieve for K8s {
 }
 
 impl K8s {
-    async fn from_kube_gateway(&self, gateway_obj: Gateway) -> BoxResult<SgGateway> {
+    async fn kube_gateway_2_sg_gateway(&self, gateway_obj: Gateway) -> BoxResult<SgGateway> {
         let gateway_name = gateway_obj.name_any();
         let filters = self
             .retrieve_config_item_filters(K8sSgFilterSpecTargetRef {
@@ -147,7 +145,7 @@ impl K8s {
         Ok(result)
     }
 
-    async fn from_kube_httpspaceroute(&self, httpspace_route: HttpSpaceroute) -> BoxResult<SgHttpRoute> {
+    async fn kube_httpspaceroute_2_sg_route(&self, httpspace_route: HttpSpaceroute) -> BoxResult<SgHttpRoute> {
         let kind = if let Some(kind) = httpspace_route.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
             kind.clone()
         } else {
@@ -176,8 +174,8 @@ impl K8s {
         })
     }
 
-    async fn from_kube_httproute(&self, http_route: HttpRoute) -> BoxResult<SgHttpRoute> {
-        self.from_kube_httpspaceroute(http_route.into()).await
+    async fn kube_httproute_2_sg_route(&self, http_route: HttpRoute) -> BoxResult<SgHttpRoute> {
+        self.kube_httpspaceroute_2_sg_route(http_route.into()).await
     }
 
     async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<SgRouteFilter>> {
@@ -220,7 +218,7 @@ impl K8s {
         }
     }
 
-    async fn retrieve_config_item_listeners(&self, listeners: &Vec<Listener>) -> BoxResult<Vec<SgListener>> {
+    async fn retrieve_config_item_listeners(&self, listeners: &[Listener]) -> BoxResult<Vec<SgListener>> {
         join_all(
             listeners
                 .iter()

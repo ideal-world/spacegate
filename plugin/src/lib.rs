@@ -5,11 +5,14 @@ use std::{
 };
 
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
-use spacegate_kernel::layers::{
-    gateway::builder::SgGatewayLayerBuilder,
-    http_route::builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
-};
 pub use spacegate_kernel::SgBoxLayer;
+use spacegate_kernel::{
+    layers::{
+        gateway::builder::SgGatewayLayerBuilder,
+        http_route::builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
+    },
+    BoxResult,
+};
 pub use tardis::serde_json;
 pub use tardis::serde_json::{Error as SerdeJsonError, Value as JsonValue};
 
@@ -29,11 +32,11 @@ pub trait Plugin {
 }
 
 pub trait InstallOn<T> {
-    fn install_on(&self, t: &mut T) -> Result<(), BoxError>;
+    fn install_on(&self, t: &mut T) -> BoxResult<()>;
 }
 
 pub trait MakeSgLayer {
-    fn make_layer(&self) -> Result<SgBoxLayer, BoxError>;
+    fn make_layer(&self) -> BoxResult<SgBoxLayer>;
     fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> Result<(), BoxError> {
         let layer = self.make_layer()?;
         gateway.http_plugins.push(layer);

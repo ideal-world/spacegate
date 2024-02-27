@@ -6,14 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use spacegate_config::model::SgBackendProtocol;
 use spacegate_shell::config::BackendHost;
-use spacegate_shell::config::SgProtocolConfig::Https;
-// use spacegate_shell::plugins::context::SgRoutePluginContext;
-// use spacegate_shell::plugins::filters::SgPluginFilterInitDto;
 use spacegate_shell::config::{SgBackendRef, SgGateway, SgHttpRoute, SgHttpRouteRule, SgListener, SgRouteFilter};
 
 use spacegate_kernel::helper_layers::filter::Filter;
-use spacegate_kernel::BoxError;
 use spacegate_kernel::SgResponseExt;
+use spacegate_kernel::{BoxError, BoxResult};
 use spacegate_plugin::{def_filter_plugin, SgPluginRepository};
 use spacegate_shell::ctrl_c_cancel_token;
 
@@ -39,7 +36,7 @@ impl Filter for SgFilterAuth {
 def_filter_plugin!("auth", SgFilterAuthPlugin, SgFilterAuth);
 
 #[tokio::test]
-async fn test_custom_plugin() -> Result<(), BoxError> {
+async fn test_custom_plugin() -> BoxResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_shell=trace,spacegate_plugin=trace,spacegate_kernel");
     tracing_subscriber::fmt::init();
     SgPluginRepository::global().register::<SgFilterAuthPlugin>();

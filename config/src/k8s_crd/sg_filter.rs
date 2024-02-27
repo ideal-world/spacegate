@@ -36,6 +36,12 @@ pub struct K8sSgFilterSpecTargetRef {
     pub namespace: Option<String>,
 }
 
+impl PartialEq for K8sSgFilterSpecTargetRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.kind == other.kind && self.namespace.as_ref().unwrap_or(&"".to_string()) == other.namespace.as_ref().unwrap_or(&"".to_string())
+    }
+}
+
 pub enum SgFilterTargetKind {
     Gateway,
     Httproute,
@@ -51,11 +57,3 @@ impl From<SgFilterTargetKind> for String {
         }
     }
 }
-
-// impl PartialEq for K8sSgFilterSpecTargetRef {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.name == other.name
-//             && self.kind == other.kind
-//             && self.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string()) == other.namespace.as_ref().unwrap_or(&DEFAULT_NAMESPACE.to_string())
-//     }
-// }

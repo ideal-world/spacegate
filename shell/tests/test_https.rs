@@ -1,14 +1,9 @@
 use std::{env, time::Duration, vec};
 
 use serde_json::{json, Value};
+use spacegate_config::model::{BackendHost, SgBackendProtocol, SgBackendRef, SgGateway, SgHttpRoute, SgHttpRouteRule, SgListener, SgProtocolConfig, SgTlsConfig, SgTlsMode};
 use spacegate_kernel::BoxError;
-use spacegate_shell::{
-    config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocolConfig, SgTlsConfig, SgTlsMode},
-        http_route_dto::{BackendHost, SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-    },
-    ctrl_c_cancel_token,
-};
+use spacegate_shell::ctrl_c_cancel_token;
 use tardis::{
     basic::tracing::TardisTracingInitializer,
     config::config_dto::WebClientModuleConfig,
@@ -113,32 +108,35 @@ async fn test_https() -> Result<(), BoxError> {
                 listeners: vec![
                     SgListener {
                         port: 8888,
-                        protocol: SgProtocolConfig::Https,
-                        tls: Some(SgTlsConfig {
-                            mode: SgTlsMode::Terminate,
-                            key: TLS_RSA_KEY.to_string(),
-                            cert: TLS_CERT.to_string(),
-                        }),
+                        protocol: SgProtocolConfig::Https {
+                            tls: SgTlsConfig {
+                                mode: SgTlsMode::Terminate,
+                                key: TLS_RSA_KEY.to_string(),
+                                cert: TLS_CERT.to_string(),
+                            },
+                        },
                         ..Default::default()
                     },
                     SgListener {
                         port: 8889,
-                        protocol: SgProtocolConfig::Https,
-                        tls: Some(SgTlsConfig {
-                            mode: SgTlsMode::Terminate,
-                            key: TLS_PKCS8_KEY.to_string(),
-                            cert: TLS_EC_CERT.to_string(),
-                        }),
+                        protocol: SgProtocolConfig::Https {
+                            tls: SgTlsConfig {
+                                mode: SgTlsMode::Terminate,
+                                key: TLS_PKCS8_KEY.to_string(),
+                                cert: TLS_EC_CERT.to_string(),
+                            },
+                        },
                         ..Default::default()
                     },
                     SgListener {
                         port: 8890,
-                        protocol: SgProtocolConfig::Https,
-                        tls: Some(SgTlsConfig {
-                            mode: SgTlsMode::Terminate,
-                            key: TLS_EC_KEY.to_string(),
-                            cert: TLS_EC_CERT.to_string(),
-                        }),
+                        protocol: SgProtocolConfig::Https {
+                            tls: SgTlsConfig {
+                                mode: SgTlsMode::Terminate,
+                                key: TLS_EC_KEY.to_string(),
+                                cert: TLS_EC_CERT.to_string(),
+                            },
+                        },
                         ..Default::default()
                     },
                 ],
@@ -147,15 +145,15 @@ async fn test_https() -> Result<(), BoxError> {
             vec![SgHttpRoute {
                 hostnames: Some(vec!["localhost".to_string()]),
                 gateway_name: "test_gw".to_string(),
-                rules: Some(vec![SgHttpRouteRule {
-                    backends: Some(vec![SgBackendRef {
+                rules: vec![SgHttpRouteRule {
+                    backends: vec![SgBackendRef {
                         host: BackendHost::Host { host: "postman-echo.com".into() },
                         port: 443,
-                        protocol: Some(SgProtocolConfig::Https),
+                        protocol: Some(SgBackendProtocol::Https),
                         ..Default::default()
-                    }]),
+                    }],
                     ..Default::default()
-                }]),
+                }],
                 ..Default::default()
             }],
             token.clone(),

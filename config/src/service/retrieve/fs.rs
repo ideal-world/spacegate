@@ -1,6 +1,6 @@
 use std::ffi::OsStr;
 
-use tokio::{fs};
+use tokio::fs;
 
 use crate::service::backend::fs::{Fs, GATEWAY_SUFFIX};
 use crate::service::config_format::ConfigFormat;
