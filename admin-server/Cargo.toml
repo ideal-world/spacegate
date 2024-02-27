@@ -28,7 +28,7 @@ default = []
 
 [dependencies]
 clap ={ version = "4.5", features = ["derive"]}
-spacegate-config = { version = "0.1.0-alpha.7", path = "../config", features = [
+spacegate-config = { path = "../config", features = [
     "full",
 ] }
 axum = "0.7.4"
