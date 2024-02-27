@@ -6,7 +6,7 @@ on:
       - main
       - v2
     paths:
-      - './admin-client/**'
+      - 'admin-client/**'
 
 jobs:
   build-and-publish:
