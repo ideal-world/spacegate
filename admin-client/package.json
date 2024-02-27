@@ -1,7 +1,7 @@
 {
   "name": "spacegate-admin-client",
   "version": "0.2.0-alpha.1",
-  "description": "Ts Client Lib for Spacegate Admin Server",
+  "description": "Type Script Client Lib for Spacegate Admin Server",
   "homepage": "https://github.com/ideal-world/spacegate",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
