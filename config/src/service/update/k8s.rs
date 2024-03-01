@@ -6,7 +6,7 @@ use std::{
 use k8s_gateway_api::Gateway;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
-    api::{ListParams, PostParams},
+    api::{DeleteParams, ListParams, PostParams},
     Api, ResourceExt,
 };
 
@@ -145,25 +145,35 @@ impl K8s {
         Ok(())
     }
 
-    //todo delete
     pub async fn delete_sgfilter_vec(&self, sgfilters: Vec<&SgSingeFilter>) -> BoxResult<()> {
-        let mut filter_map = HashMap::new();
+        let mut sg_filter_ns_map = HashMap::new();
 
         for sf in sgfilters {
             let filter_api: Api<SgFilter> = self.get_namespace_api();
 
-            let namespace_filter = if let Some(filter_list) = filter_map.get(&sf.namespace) {
+            let namespace_filter = if let Some(filter_list) = sg_filter_ns_map.get(&sf.namespace) {
                 filter_list
             } else {
                 let filter_list = filter_api.list(&ListParams::default()).await?;
-                filter_map.insert(sf.namespace.clone(), filter_list);
-                filter_map.get(&sf.namespace).expect("")
+                sg_filter_ns_map.insert(sf.namespace.clone(), filter_list);
+                sg_filter_ns_map.get(&sf.namespace).expect("")
             };
 
             if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
                 if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
                     old_sf.spec.target_refs.retain(|t_r| t_r != &sf.target_ref);
-                    Self::replace_filter(old_sf, &filter_api).await?;
+                    if old_sf.spec.target_refs.is_empty() {
+                        filter_api.delete(&old_sf.name_any(), &DeleteParams::default()).await?;
+                    } else {
+                        Self::replace_filter(old_sf, &filter_api).await?;
+                    }
+                } else if old_sf.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code) {
+                    old_sf.spec.filters.retain(|qsf| qsf.code != sf.filter.code);
+                    if old_sf.spec.filters.is_empty() {
+                        filter_api.delete(&old_sf.name_any(), &DeleteParams::default()).await?;
+                    } else {
+                        Self::replace_filter(old_sf, &filter_api).await?;
+                    }
                 }
             }
         }
