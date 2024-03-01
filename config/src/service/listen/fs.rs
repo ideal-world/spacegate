@@ -1,4 +1,4 @@
-use std::{error::Error, task::ready};
+use std::task::ready;
 
 use notify::{Event, Watcher};
 

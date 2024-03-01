@@ -7,17 +7,17 @@ pub struct SgSingeFilter {
     pub target_ref: crate::k8s_crd::sg_filter::K8sSgFilterSpecTargetRef,
 }
 
-impl SgSingeFilter{
-    pub fn to_sg_filter(&self) -> crate::k8s_crd::sg_filter::SgFilter {
+impl From<SgSingeFilter> for crate::k8s_crd::sg_filter::SgFilter {
+    fn from(value: SgSingeFilter) -> Self {
         crate::k8s_crd::sg_filter::SgFilter {
             metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                name: self.name.clone(),
-                namespace: Some(self.namespace.clone()),
+                name: value.name.clone(),
+                namespace: Some(value.namespace.clone()),
                 ..Default::default()
             },
             spec: crate::k8s_crd::sg_filter::K8sSgFilterSpec {
-                filters: vec![self.filter.clone()],
-                target_refs: vec![self.target_ref.clone()],
+                filters: vec![value.filter.clone()],
+                target_refs: vec![value.target_ref.clone()],
             },
         }
     }
