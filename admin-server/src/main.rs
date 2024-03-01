@@ -1,13 +1,13 @@
 use std::{
     collections::BTreeMap,
     net::SocketAddr,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{Arc},
 };
 
 use axum::{
-    extract::{self, Path, State},
-    http::{Method, StatusCode},
-    middleware::{self, Next},
+    extract::{Path, State},
+    http::{StatusCode},
+    middleware::{self},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,

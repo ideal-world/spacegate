@@ -12,8 +12,7 @@ use crate::{
         },
         helper_filter::SgSingeFilter,
         SgRouteFilter,
-    },
-    BoxError, BoxResult,
+    }, BoxResult,
 };
 
 impl SgRouteFilter {

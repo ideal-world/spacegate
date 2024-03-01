@@ -1,6 +1,5 @@
 use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Hostname, HttpRoute, HttpRouteFilter, HttpRouteMatch, RouteStatus};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::ResourceExt;
 use std::collections::BTreeMap;
 
 use crate::constants;

@@ -59,7 +59,7 @@ impl SgHttpRouteLayerBuilder {
         self.extensions = extensions;
         self
     }
-    pub fn build(mut self) -> BoxResult<SgHttpRoute> {
+    pub fn build(mut self) -> Result<SgHttpRoute, BoxError> {
         if self.hostnames.iter().any(|host| host == "*") {
             self.hostnames = vec!["*".to_string()]
         }
@@ -124,7 +124,7 @@ impl SgHttpRouteRuleLayerBuilder {
         self.backends.extend(backend);
         self
     }
-    pub fn build(self) -> BoxResult<SgHttpRouteRuleLayer> {
+    pub fn build(self) -> Result<SgHttpRouteRuleLayer, BoxError> {
         Ok(SgHttpRouteRuleLayer {
             r#match: self.r#match.into(),
             plugins: Arc::from(self.plugins),
@@ -199,7 +199,7 @@ impl SgHttpBackendLayerBuilder {
         self.extensions = extension;
         self
     }
-    pub fn build(self) -> BoxResult<SgHttpBackendLayer> {
+    pub fn build(self) -> Result<SgHttpBackendLayer, BoxError> {
         Ok(SgHttpBackendLayer {
             host: self.host.map(Into::into),
             port: self.port,

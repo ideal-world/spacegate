@@ -2,7 +2,6 @@ use std::{collections::HashMap, task::ready};
 
 use futures_util::{pin_mut, TryStreamExt};
 use k8s_gateway_api::{Gateway, HttpRoute};
-use k8s_openapi::Metadata;
 use kube::{
     api::ObjectMeta,
     runtime::{watcher, WatchStreamExt},

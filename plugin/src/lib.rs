@@ -5,11 +5,14 @@ use std::{
 };
 
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
-use spacegate_kernel::layers::{
-    gateway::builder::SgGatewayLayerBuilder,
-    http_route::builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
-};
 pub use spacegate_kernel::SgBoxLayer;
+use spacegate_kernel::{
+    layers::{
+        gateway::builder::SgGatewayLayerBuilder,
+        http_route::builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
+    },
+    BoxResult,
+};
 pub use tardis::serde_json;
 pub use tardis::serde_json::{Error as SerdeJsonError, Value as JsonValue};
 
@@ -34,22 +37,22 @@ pub trait InstallOn<T> {
 
 pub trait MakeSgLayer {
     fn make_layer(&self) -> BoxResult<SgBoxLayer>;
-    fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> BoxResult<()> {
+    fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> Result<(), BoxError> {
         let layer = self.make_layer()?;
         gateway.http_plugins.push(layer);
         Ok(())
     }
-    fn install_on_backend(&self, backend: &mut SgHttpBackendLayerBuilder) -> BoxResult<()> {
+    fn install_on_backend(&self, backend: &mut SgHttpBackendLayerBuilder) -> Result<(), BoxError> {
         let layer = self.make_layer()?;
         backend.plugins.push(layer);
         Ok(())
     }
-    fn install_on_route(&self, route: &mut SgHttpRouteLayerBuilder) -> BoxResult<()> {
+    fn install_on_route(&self, route: &mut SgHttpRouteLayerBuilder) -> Result<(), BoxError> {
         let layer = self.make_layer()?;
         route.plugins.push(layer);
         Ok(())
     }
-    fn install_on_rule(&self, rule: &mut SgHttpRouteRuleLayerBuilder) -> BoxResult<()> {
+    fn install_on_rule(&self, rule: &mut SgHttpRouteRuleLayerBuilder) -> Result<(), BoxError> {
         let layer = self.make_layer()?;
         rule.plugins.push(layer);
         Ok(())

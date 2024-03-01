@@ -138,7 +138,7 @@ where
         tls_cfg: Option<Arc<rustls::ServerConfig>>,
         #[allow(unused_variables)] cancel_token: CancellationToken,
         service: S,
-    ) -> BoxResult<()> {
+    ) -> Result<(), BoxError> {
         tracing::debug!("[Sg.Listen] Accepted connection");
         let service = HyperServiceAdapter::new(service, peer_addr);
         match tls_cfg {
@@ -159,7 +159,7 @@ where
         Ok(())
     }
     #[instrument()]
-    pub async fn listen(self) -> BoxResult<()> {
+    pub async fn listen(self) -> Result<(), BoxError> {
         tracing::debug!("[Sg.Listen] start binding...");
         let listener = tokio::net::TcpListener::bind(self.socket_addr).await?;
         let cancel_token = self.cancel_token;

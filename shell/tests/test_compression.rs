@@ -1,15 +1,11 @@
 use std::{env, time::Duration, vec};
 
 use serde_json::{json, Value};
-use spacegate_shell::{
-    config::{
-        gateway_dto::{SgGateway, SgListener, SgProtocolConfig, SgTlsConfig, SgTlsMode},
-        http_route_dto::{SgBackendRef, SgHttpRoute, SgHttpRouteRule},
-        plugin_filter_dto::SgRouteFilter,
-    },
-    ctrl_c_cancel_token,
-    spacegate_plugin::plugins::decompression,
+use spacegate_config::model::{
+    BackendHost, SgBackendProtocol, SgBackendRef, SgGateway, SgHttpPathMatch, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule, SgListener, SgProtocolConfig, SgRouteFilter,
+    SgTlsConfig, SgTlsMode,
 };
+use spacegate_shell::ctrl_c_cancel_token;
 use tardis::{
     basic::result::TardisResult,
     log::info,
@@ -31,12 +27,13 @@ async fn test_compression() -> TardisResult<()> {
                 },
                 SgListener {
                     port: HTTPS_PORT,
-                    protocol: SgProtocolConfig::Https,
-                    tls: Some(SgTlsConfig {
-                        mode: SgTlsMode::Terminate,
-                        key: TLS_KEY.to_string(),
-                        cert: TLS_CERT.to_string(),
-                    }),
+                    protocol: SgProtocolConfig::Https {
+                        tls: SgTlsConfig {
+                            mode: SgTlsMode::Terminate,
+                            key: TLS_KEY.to_string(),
+                            cert: TLS_CERT.to_string(),
+                        },
+                    },
                     ..Default::default()
                 },
             ],
@@ -44,20 +41,20 @@ async fn test_compression() -> TardisResult<()> {
         },
         vec![SgHttpRoute {
             gateway_name: "test_gw".to_string(),
-            rules: Some(vec![SgHttpRouteRule {
-                backends: Some(vec![SgBackendRef {
-                    name_or_host: "postman-echo.com".to_string(),
+            rules: vec![SgHttpRouteRule {
+                backends: vec![SgBackendRef {
+                    host: BackendHost::Host { host: "postman-echo.com".into() },
                     port: 443,
-                    protocol: Some(SgProtocolConfig::Https),
+                    protocol: Some(SgBackendProtocol::Https),
                     ..Default::default()
-                }]),
+                }],
                 ..Default::default()
-            }]),
-            filters: Some(vec![SgRouteFilter {
+            }],
+            filters: vec![SgRouteFilter {
                 code: decompression::CODE.to_string(),
                 name: None,
                 spec: json!({}),
-            }]),
+            }],
             ..Default::default()
         }],
         ctrl_c_cancel_token(),

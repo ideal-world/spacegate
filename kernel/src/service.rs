@@ -74,7 +74,7 @@ impl hyper::service::Service<Request<SgBody>> for BoxHyperService {
 /// This function could be a bottom layer of a http router, it will handle http and websocket request.
 ///
 /// This can handle both websocket connection and http request.
-pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> BoxResult<SgResponse> {
+pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgResponse, BoxError> {
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;
     let mut client = get_client();
@@ -107,7 +107,7 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> BoxResult<S
             let upgrade_as_client = c?;
             // start a websocket forward
             ws_client_service::service(upgrade_as_server, upgrade_as_client).await?;
-            <BoxResult<()>>::Ok(())
+            <Result<(), BoxError>>::Ok(())
         });
         tracing::trace!(elapsed = ?resp.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend websocket forward");
         // return response to client

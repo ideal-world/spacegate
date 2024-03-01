@@ -1,22 +1,14 @@
 use std::{
-    collections::BTreeMap,
-    net::SocketAddr,
     sync::{atomic::AtomicU64, Arc},
 };
 
 use axum::{
-    extract::{self, Path, State},
+    extract::{self, State},
     http::{Method, StatusCode},
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::get,
-    Json, Router,
+    middleware::{Next},
+    response::{Response},
 };
-use spacegate_config::{
-    model::{SgGateway, SgHttpRoute},
-    service::{self, *},
-    BoxError, Config, ConfigItem,
-};
+
 
 use crate::AppState;
 #[derive(Debug, Clone, Default)]

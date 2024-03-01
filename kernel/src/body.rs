@@ -62,7 +62,7 @@ impl SgBody {
     pub fn is_dumped(&self) -> bool {
         self.dump.is_none()
     }
-    pub async fn dump(self) -> BoxResult<Self> {
+    pub async fn dump(self) -> Result<Self, BoxError> {
         let bytes = self.body.collect().await?.to_bytes();
         Ok(Self {
             body: BoxBody::new(Full::new(bytes.clone()).map_err(never)),
