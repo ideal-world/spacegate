@@ -14,7 +14,8 @@ use crate::{
     model::{
         gateway, helper_filter::SgSingeFilter, http_route, BackendHost, K8sServiceData, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch,
         SgHttpRouteRule, SgRouteFilter,
-    }, BoxResult,
+    },
+    BoxResult,
 };
 
 impl SgHttpRoute {

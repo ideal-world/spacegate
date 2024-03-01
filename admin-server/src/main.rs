@@ -1,12 +1,8 @@
-use std::{
-    collections::BTreeMap,
-    net::SocketAddr,
-    sync::{Arc},
-};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{Path, State},
-    http::{StatusCode},
+    http::StatusCode,
     middleware::{self},
     response::{IntoResponse, Response},
     routing::get,

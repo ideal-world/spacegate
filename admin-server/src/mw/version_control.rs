@@ -1,14 +1,11 @@
-use std::{
-    sync::{atomic::AtomicU64, Arc},
-};
+use std::sync::{atomic::AtomicU64, Arc};
 
 use axum::{
     extract::{self, State},
     http::{Method, StatusCode},
-    middleware::{Next},
-    response::{Response},
+    middleware::Next,
+    response::Response,
 };
-
 
 use crate::AppState;
 #[derive(Debug, Clone, Default)]
