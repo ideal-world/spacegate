@@ -47,7 +47,6 @@ pub trait FilterInstallExt: Sized {
     }
 }
 
-
 impl FilterInstallExt for SgRouteFilter {
     fn into_layer(self) -> Result<SgBoxLayer, BoxError> {
         let plugin_repo = spacegate_plugin::SgPluginRepository::global();

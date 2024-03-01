@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tokio::sync::RwLock;
-
 use crate::Config;
 
 /// In-memory Config Backend
@@ -12,8 +10,6 @@ pub struct Memory {
 
 impl Memory {
     pub fn new(config: Config) -> Self {
-        Self {
-            config: Arc::new(config),
-        }
+        Self { config: Arc::new(config) }
     }
 }

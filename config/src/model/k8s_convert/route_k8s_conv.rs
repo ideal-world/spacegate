@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use chrono::expect;
 use gateway::SgBackendProtocol;
 use http_route::SgHttpRoute;
 use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, HttpHeaderMatch, HttpPathMatch, HttpQueryParamMatch, HttpRouteMatch, ParentReference};
@@ -33,8 +32,6 @@ impl SgHttpRoute {
     }
 
     pub fn to_kube_httproute(self, name: &str, namespace: &str, self_kind: &str) -> (HttpSpaceroute, Vec<SgSingeFilter>) {
-        let gateway_name = &self.gateway_name;
-
         let mut sgfilters: Vec<SgSingeFilter> = self
             .rules
             .iter()
@@ -282,10 +279,7 @@ impl SgBackendRef {
                     )
                 };
                 Ok(SgBackendRef {
-                    host: BackendHost::K8sService(K8sServiceData {
-                        name: backend.inner.name,
-                        namespace: backend.inner.namespace,
-                    }),
+                    host: backend_host,
                     port: backend.inner.port.unwrap_or(80),
                     timeout_ms: backend.timeout_ms,
                     protocol,

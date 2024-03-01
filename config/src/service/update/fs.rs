@@ -1,7 +1,4 @@
-use tokio::{
-    fs::OpenOptions,
-    io::{AsyncWriteExt},
-};
+use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 
 use crate::{
     service::{backend::fs::Fs, config_format::ConfigFormat},

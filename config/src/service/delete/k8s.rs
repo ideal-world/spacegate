@@ -21,9 +21,8 @@ impl Delete for K8s {
             Ok(_) => Ok(()),
             Err(f_e) => match httproute_api.delete(route_name, &DeleteParams::default()).await {
                 Ok(_) => Ok(()),
-                Err(s_e) =>  Err(format!("Failed to delete route {}: httpspaceroute: {}, httproute: {}", route_name, f_e,s_e).into()),
-            } ,
+                Err(s_e) => Err(format!("Failed to delete route {}: httpspaceroute: {}, httproute: {}", route_name, f_e, s_e).into()),
+            },
         }
-
     }
 }

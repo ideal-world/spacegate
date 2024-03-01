@@ -1,4 +1,4 @@
-use std::{collections::HashMap, os::unix::process, task::ready};
+use std::{collections::HashMap, task::ready};
 
 use futures_util::{pin_mut, TryStreamExt};
 use k8s_gateway_api::{Gateway, HttpRoute};
@@ -11,15 +11,8 @@ use kube::{
 
 use crate::{
     constants,
-    k8s_crd::{
-        http_spaceroute::HttpSpaceroute,
-        sg_filter::{self, SgFilter},
-    },
-    model::{gateway, http_route},
-    service::{
-        backend::k8s::{self, K8s},
-        Retrieve,
-    },
+    k8s_crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter},
+    service::{backend::k8s::K8s, Retrieve},
     BoxResult, Config,
 };
 
@@ -45,7 +38,7 @@ impl K8s {
                 uid_version_map.insert(http_route.uid(), http_route.meta().clone());
                 return;
             }
-            if uid_version_map.get(&http_route.uid()).map(|resource_version| resource_version) == Some(&http_route.meta()) {
+            if uid_version_map.get(&http_route.uid()) == Some(http_route.meta()) {
                 // ignore same version obj
                 return;
             }
@@ -53,7 +46,7 @@ impl K8s {
                 .send((
                     ConfigType::Route {
                         name: http_route.name_any(),
-                        gateway_name: http_route.get_gateway_name(&move_namespace),
+                        gateway_name: http_route.get_gateway_name(move_namespace),
                     },
                     ConfigEventType::Delete,
                 ))
@@ -67,7 +60,7 @@ impl K8s {
                     .send((
                         ConfigType::Route {
                             name: http_route.name_any(),
-                            gateway_name: http_route.get_gateway_name(&move_namespace),
+                            gateway_name: http_route.get_gateway_name(move_namespace),
                         },
                         ConfigEventType::Delete,
                     ))
@@ -83,7 +76,7 @@ impl K8s {
                     uid_version_map_clone.remove(&http_route.uid());
                 }
 
-                uid_version_map_clone.into_values().into_iter().for_each(|meta| {
+                uid_version_map_clone.into_values().for_each(|meta| {
                     move_evt_tx
                         .send((
                             ConfigType::Gateway {
@@ -158,7 +151,7 @@ impl CreateListener for K8s {
                             gateway_uid_version_map_clone.remove(&gateway.uid());
                         }
 
-                        gateway_uid_version_map_clone.into_values().into_iter().for_each(|meta| {
+                        gateway_uid_version_map_clone.into_values().for_each(|meta| {
                             move_evt_tx
                                 .send((
                                     ConfigType::Gateway {
@@ -173,7 +166,7 @@ impl CreateListener for K8s {
             }
         });
 
-        let move_http_route_names = config.gateways.clone().into_values().map(|item| item.routes.keys().cloned().collect::<Vec<_>>()).flatten().collect::<Vec<_>>();
+        let move_http_route_names = config.gateways.clone().into_values().flat_map(|item| item.routes.keys().cloned().collect::<Vec<_>>()).collect::<Vec<_>>();
         let move_evt_tx = evt_tx.clone();
         let move_namespace = self.namespace.to_string();
         let move_http_spaceroute_api = http_spaceroute_api.clone();
@@ -187,7 +180,7 @@ impl CreateListener for K8s {
             }
         });
 
-        let move_http_route_names = config.gateways.clone().into_values().map(|item| item.routes.keys().cloned().collect::<Vec<_>>()).flatten().collect::<Vec<_>>();
+        let move_http_route_names = config.gateways.clone().into_values().flat_map(|item| item.routes.keys().cloned().collect::<Vec<_>>()).collect::<Vec<_>>();
         let move_evt_tx = evt_tx.clone();
         let move_namespace = self.namespace.to_string();
         let move_http_route_api = http_route_api.clone();
@@ -212,13 +205,12 @@ impl CreateListener for K8s {
             .gateways
             .clone()
             .into_values()
-            .map(|item| {
+            .flat_map(|item| {
                 let mut filters = item.gateway.filters.clone();
-                let route_filters = item.routes.values().into_iter().map(|route| route.filters.clone()).flatten().collect::<Vec<_>>();
+                let route_filters = item.routes.values().flat_map(|route| route.filters.clone()).collect::<Vec<_>>();
                 filters.extend(route_filters);
                 filters
             })
-            .flatten()
             .map(|f| (f.code, f.name))
             .collect::<Vec<_>>();
         let move_evt_tx = evt_tx.clone();
@@ -250,12 +242,10 @@ impl CreateListener for K8s {
                         "HTTPRoute" | "HTTPSpaceroute" => {
                             let target_route: Option<HttpSpaceroute> = if let Ok(Some(http_route)) = http_spaceroute_api.get_opt(&target_ref.name).await {
                                 Some(http_route)
+                            } else if let Ok(Some(http_route)) = http_route_api.get_opt(&target_ref.name).await {
+                                Some(http_route.into())
                             } else {
-                                if let Ok(Some(http_route)) = http_route_api.get_opt(&target_ref.name).await {
-                                    Some(http_route.into())
-                                } else {
-                                    None
-                                }
+                                None
                             };
                             if let Some(target_route) = target_route {
                                 move_evt_tx

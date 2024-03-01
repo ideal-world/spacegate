@@ -1,7 +1,4 @@
 use crate::{service::backend::memory::Memory, Config};
-use futures_util::FutureExt;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 use super::{CreateListener, Listen};
 #[derive(Debug, Clone, Default)]

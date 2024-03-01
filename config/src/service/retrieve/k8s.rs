@@ -1,8 +1,6 @@
-
-
 use futures_util::future::join_all;
 use gateway::{SgListener, SgParameters, SgProtocolConfig, SgTlsConfig};
-use http_route::{SgHttpRouteRule};
+use http_route::SgHttpRouteRule;
 use k8s_gateway_api::{Gateway, HttpRoute, Listener};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
@@ -11,7 +9,7 @@ use super::Retrieve;
 use crate::{
     constants::{self, GATEWAY_CLASS_NAME},
     k8s_crd::{
-        http_spaceroute::{HttpSpaceroute},
+        http_spaceroute::HttpSpaceroute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
     },
     model::{gateway, http_route, SgGateway, SgHttpRoute, SgRouteFilter},
