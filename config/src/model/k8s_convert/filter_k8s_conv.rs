@@ -92,7 +92,7 @@ impl SgRouteFilter {
     }
 
     pub(crate) fn from_http_route_filter(route_filter: HttpRouteFilter) -> BoxResult<SgRouteFilter> {
-        let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> Result<SgRouteFilter, BoxError> {
+        let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> BoxResult<SgRouteFilter> {
             let mut sg_sets = HashMap::new();
             if let Some(adds) = header_modifier.add {
                 for add in adds {

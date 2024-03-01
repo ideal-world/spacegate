@@ -21,6 +21,8 @@ use hyper::{body::Bytes, Request, Response, StatusCode};
 
 use tower_layer::layer_fn;
 use utils::fold_sg_layers::fold_sg_layers;
+
+pub type BoxResult<T> = Result<T, BoxError>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub type SgRequest = Request<SgBody>;

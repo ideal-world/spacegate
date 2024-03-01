@@ -29,27 +29,27 @@ pub trait Plugin {
 }
 
 pub trait InstallOn<T> {
-    fn install_on(&self, t: &mut T) -> Result<(), BoxError>;
+    fn install_on(&self, t: &mut T) -> BoxResult<()>;
 }
 
 pub trait MakeSgLayer {
-    fn make_layer(&self) -> Result<SgBoxLayer, BoxError>;
-    fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> Result<(), BoxError> {
+    fn make_layer(&self) -> BoxResult<SgBoxLayer>;
+    fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> BoxResult<()> {
         let layer = self.make_layer()?;
         gateway.http_plugins.push(layer);
         Ok(())
     }
-    fn install_on_backend(&self, backend: &mut SgHttpBackendLayerBuilder) -> Result<(), BoxError> {
+    fn install_on_backend(&self, backend: &mut SgHttpBackendLayerBuilder) -> BoxResult<()> {
         let layer = self.make_layer()?;
         backend.plugins.push(layer);
         Ok(())
     }
-    fn install_on_route(&self, route: &mut SgHttpRouteLayerBuilder) -> Result<(), BoxError> {
+    fn install_on_route(&self, route: &mut SgHttpRouteLayerBuilder) -> BoxResult<()> {
         let layer = self.make_layer()?;
         route.plugins.push(layer);
         Ok(())
     }
-    fn install_on_rule(&self, rule: &mut SgHttpRouteRuleLayerBuilder) -> Result<(), BoxError> {
+    fn install_on_rule(&self, rule: &mut SgHttpRouteRuleLayerBuilder) -> BoxResult<()> {
         let layer = self.make_layer()?;
         rule.plugins.push(layer);
         Ok(())

@@ -1,3 +1,7 @@
+use std::hash::{Hash, Hasher};
+
+use crate::constants;
+
 #[cfg(feature = "k8s")]
 #[derive(Clone)]
 pub struct SgSingeFilter {
@@ -5,6 +9,29 @@ pub struct SgSingeFilter {
     pub namespace: String,
     pub filter: crate::k8s_crd::sg_filter::K8sSgFilterSpecFilter,
     pub target_ref: crate::k8s_crd::sg_filter::K8sSgFilterSpecTargetRef,
+}
+
+impl PartialEq for SgSingeFilter {
+    fn eq(&self, other: &Self) -> bool {
+        self.namespace == other.namespace
+            && self.filter.code == other.filter.code
+            && self.target_ref.kind == other.target_ref.kind
+            && self.target_ref.name == other.target_ref.name
+            && self.target_ref.namespace.as_ref().unwrap_or(&constants::DEFAULT_NAMESPACE.to_string())
+                == other.target_ref.namespace.as_ref().unwrap_or(&constants::DEFAULT_NAMESPACE.to_string())
+    }
+}
+
+impl Eq for SgSingeFilter {}
+
+impl Hash for SgSingeFilter {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.namespace.hash(state);
+        self.target_ref.kind.hash(state);
+        self.target_ref.name.hash(state);
+        self.target_ref.namespace.hash(state);
+    }
 }
 
 impl From<SgSingeFilter> for crate::k8s_crd::sg_filter::SgFilter {

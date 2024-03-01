@@ -39,7 +39,7 @@ impl Filter for SgFilterAuth {
 def_filter_plugin!("auth", SgFilterAuthPlugin, SgFilterAuth);
 
 #[tokio::test]
-async fn test_custom_plugin() -> Result<(), BoxError> {
+async fn test_custom_plugin() -> BoxResult<()> {
     env::set_var("RUST_LOG", "info,spacegate_shell=trace,spacegate_plugin=trace,spacegate_kernel");
     tracing_subscriber::fmt::init();
     SgPluginRepository::global().register::<SgFilterAuthPlugin>();

@@ -121,7 +121,7 @@ async fn put_config_item_gateway<B: Update>(
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(gateway): Json<SgGateway>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_config_item_gateway(&gateway_name, &gateway).await.map_err(InternalError)
+    backend.update_config_item_gateway(&gateway_name, gateway).await.map_err(InternalError)
 }
 
 async fn put_config_item_route<B: Update>(
@@ -129,7 +129,7 @@ async fn put_config_item_route<B: Update>(
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(route): Json<SgHttpRoute>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_config_item_route(&name, &route_name, &route).await.map_err(InternalError)
+    backend.update_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 
 async fn put_config_item<B: Update>(
@@ -137,11 +137,11 @@ async fn put_config_item<B: Update>(
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(config_item): Json<ConfigItem>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_config_item(&name, &config_item).await.map_err(InternalError)
+    backend.update_config_item(&name, config_item).await.map_err(InternalError)
 }
 
 async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B>>, Json(config): Json<Config>) -> Result<(), InternalError<BoxError>> {
-    backend.update_config(&config).await.map_err(InternalError)
+    backend.update_config(config).await.map_err(InternalError)
 }
 
 /**********************************************

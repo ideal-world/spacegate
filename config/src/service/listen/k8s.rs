@@ -27,7 +27,7 @@ impl K8sListener {}
 impl K8s {
     async fn process_http_spaceroute_event(
         move_evt_tx: &tokio::sync::mpsc::UnboundedSender<(ConfigType, ConfigEventType)>,
-        move_http_route_names: &Vec<String>,
+        move_http_route_names: &[String],
         move_namespace: &str,
         http_route_event: watcher::Event<HttpSpaceroute>,
         uid_version_map: &mut HashMap<Option<String>, ObjectMeta>,

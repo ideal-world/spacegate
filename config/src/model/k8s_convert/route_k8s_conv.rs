@@ -15,7 +15,7 @@ use crate::{
         gateway, helper_filter::SgSingeFilter, http_route, BackendHost, K8sServiceData, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch,
         SgHttpRouteRule, SgRouteFilter,
     },
-    BoxError,
+    BoxError, BoxResult,
 };
 
 impl SgHttpRoute {
@@ -126,13 +126,13 @@ impl SgHttpRouteRule {
         }
     }
 
-    pub(crate) fn from_kube_httproute(rule: http_spaceroute::HttpRouteRule) -> Result<SgHttpRouteRule, BoxError> {
+    pub(crate) fn from_kube_httproute(rule: http_spaceroute::HttpRouteRule) -> BoxResult<SgHttpRouteRule> {
         Ok(SgHttpRouteRule {
             matches: rule.matches.map(|m_vec| m_vec.into_iter().map(SgHttpRouteMatch::from_kube_httproute).collect::<Vec<_>>()),
-            filters: rule.filters.map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<Result<Vec<_>, BoxError>>()).transpose()?.unwrap_or_default(),
+            filters: rule.filters.map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<BoxResult<Vec<_>>>()).transpose()?.unwrap_or_default(),
             backends: rule
                 .backend_refs
-                .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<Result<Vec<_>, BoxError>>())
+                .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<BoxResult<Vec<_>>>())
                 .transpose()?
                 .unwrap_or_default(),
             timeout_ms: rule.timeout_ms,
@@ -256,7 +256,7 @@ impl SgBackendRef {
         }
     }
 
-    pub(crate) fn from_kube_httproute(http_backend: HttpBackendRef) -> Result<Option<SgBackendRef>, BoxError> {
+    pub(crate) fn from_kube_httproute(http_backend: HttpBackendRef) -> BoxResult<Option<SgBackendRef>> {
         http_backend
             .backend_ref
             .map(|backend| {
@@ -286,7 +286,7 @@ impl SgBackendRef {
                     weight: backend.weight.unwrap_or(1),
                     filters: http_backend
                         .filters
-                        .map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<Result<Vec<SgRouteFilter>, BoxError>>())
+                        .map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<BoxResult<Vec<SgRouteFilter>>>())
                         .transpose()?
                         .unwrap_or_default(),
                 })
