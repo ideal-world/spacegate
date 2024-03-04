@@ -6,6 +6,7 @@ use tower_layer::Layer;
 
 use crate::SgBody;
 
+#[derive(Debug, Clone)]
 pub struct MapResponseLayer<F> {
     map: F,
 }
