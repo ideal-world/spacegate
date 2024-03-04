@@ -261,14 +261,18 @@ impl SgBackendRef {
             .backend_ref
             .map(|backend| {
                 let (protocol, backend_host) = if let Some(kind) = backend.inner.kind.as_ref() {
-                    (
-                        match kind.as_str() {
-                            constants::BANCKEND_KIND_EXTERNAL_HTTP => Some(gateway::SgBackendProtocol::Http),
-                            constants::BANCKEND_KIND_EXTERNAL_HTTPS => Some(gateway::SgBackendProtocol::Https),
-                            _ => None,
-                        },
-                        BackendHost::Host { host: backend.inner.name },
-                    )
+                    match kind.as_str() {
+                        constants::BANCKEND_KIND_SERVICE => (
+                            None,
+                            BackendHost::K8sService(K8sServiceData {
+                                name: backend.inner.name,
+                                namespace: backend.inner.namespace,
+                            }),
+                        ),
+                        constants::BANCKEND_KIND_EXTERNAL_HTTP => (Some(gateway::SgBackendProtocol::Http), BackendHost::Host { host: backend.inner.name }),
+                        constants::BANCKEND_KIND_EXTERNAL_HTTPS => (Some(gateway::SgBackendProtocol::Https), BackendHost::Host { host: backend.inner.name }),
+                        _ => (None, BackendHost::Host { host: backend.inner.name }),
+                    }
                 } else {
                     (
                         None,
