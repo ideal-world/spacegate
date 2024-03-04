@@ -3,7 +3,7 @@ use std::{
     mem,
 };
 
-use k8s_gateway_api::Gateway;
+use k8s_gateway_api::{Gateway, HttpRoute};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::{DeleteParams, ListParams, PostParams},
@@ -47,9 +47,20 @@ impl Update for K8s {
         let (mut http_spaceroute, update_filter) = route.to_kube_httproute_spaceroute_filters(route_name, &self.namespace);
 
         let http_spaceroute_api: Api<http_spaceroute::HttpSpaceroute> = self.get_namespace_api();
+        let http_route_api: Api<HttpRoute> = self.get_namespace_api();
+
         let old_sg_httproute = self.retrieve_config_item_route(gateway_name, route_name).await?;
 
-        http_spaceroute.metadata.resource_version = http_spaceroute_api.get_metadata(&http_spaceroute.name_any()).await?.resource_version();
+        http_spaceroute.metadata.resource_version = if let Some(old_route) = http_spaceroute_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
+            old_route.resource_version()
+        } else {
+            if let Some(old_route) = http_route_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
+                old_route.resource_version()
+            } else {
+                return Err(format!("raw http route {route_name} not found").into());
+            }
+        };
+
         http_spaceroute_api.replace(&http_spaceroute.name_any(), &PostParams::default(), &http_spaceroute).await?;
 
         self.update_filter_changes(
@@ -159,20 +170,13 @@ impl K8s {
                 sg_filter_ns_map.get(&sf.namespace).expect("")
             };
 
-            if let Some(mut old_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
-                if old_sf.spec.target_refs.iter().any(|t_r| t_r == &sf.target_ref) {
-                    old_sf.spec.target_refs.retain(|t_r| t_r != &sf.target_ref);
-                    if old_sf.spec.target_refs.is_empty() {
-                        filter_api.delete(&old_sf.name_any(), &DeleteParams::default()).await?;
+            if let Some(mut raw_sf) = namespace_filter.items.iter().find(|f| f.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code)).cloned() {
+                if raw_sf.spec.target_refs.iter().any(|t_r| *t_r == sf.target_ref) {
+                    raw_sf.spec.target_refs.retain(|t_r| *t_r != sf.target_ref);
+                    if raw_sf.spec.target_refs.is_empty() {
+                        filter_api.delete(&raw_sf.name_any(), &DeleteParams::default()).await?;
                     } else {
-                        Self::replace_filter(old_sf, &filter_api).await?;
-                    }
-                } else if old_sf.spec.filters.iter().any(|qsf| qsf.code == sf.filter.code) {
-                    old_sf.spec.filters.retain(|qsf| qsf.code != sf.filter.code);
-                    if old_sf.spec.filters.is_empty() {
-                        filter_api.delete(&old_sf.name_any(), &DeleteParams::default()).await?;
-                    } else {
-                        Self::replace_filter(old_sf, &filter_api).await?;
+                        Self::replace_filter(raw_sf, &filter_api).await?;
                     }
                 }
             }
