@@ -3,12 +3,12 @@ name: ADMIN SERVER CICD
 on:
   push:
     paths:
-      - 'admin-server/**'
-      - 'config/**'
-      - 'Cargo.toml'
-      - '.github/workflows/admin-server-cicd.yml'
+      - "admin-server/**"
+      - "config/**"
+      - "Cargo.toml"
+      - ".github/workflows/admin-server-cicd.yml"
     tags:
-      - '*'
+      - "*"
 
 env:
   ARTIFACT_DIR: release-artifacts
