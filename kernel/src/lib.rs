@@ -1,111 +1,159 @@
-//! **A library-first, lightweight, high-performance, cloud-native supported API gateway🪐**
-//!
-//! ## 🚀 Installation
-//!
-//! see [installation.md](https://github.com/ideal-world/spacegate/blob/master/docs/k8s/installation.md)
-//!
-//! ## Special instructions for configuration
-//! ### Setting HTTP Route Priority
-//! You can specify the priority of an httproute by adding a priority field in the annotations section of the route.
-//! A higher value for the priority field indicates a higher priority. The httproute library stores the priority
-//! value using the i64 data type, so the maximum and minimum values for the priority are [i64::MAX]
-//! (https://doc.rust-lang.org/std/primitive.i64.html#associatedconstant.MAX) and
-//! [i64::MIN](https://doc.rust-lang.org/std/primitive.i64.html#associatedconstant.MIN) respectively.
-//!
-//! If the priority field is not present in an httproute, its priority will be default to 0, and the default priority
-//! will be determined based on the creation order (earlier routes will have higher priority).
-//!
-//! Note: Trace-level logs will print the contents of both the request and response bodies,
-//! potentially causing significant performance overhead. It is recommended to use debug level
-//! logs at most.
+#![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
 
-#![warn(clippy::unwrap_used)]
-use config::{gateway_dto::SgGateway, http_route_dto::SgHttpRoute};
-use functions::{http_route, server};
-pub use http;
-pub use hyper;
-use plugins::filters::{self, SgPluginFilterDef};
-use tardis::{basic::result::TardisResult, log, tokio::signal};
+// pub mod config;
+pub mod body;
+pub mod extension;
+pub mod header;
+pub mod helper_layers;
+pub mod layers;
+pub mod listener;
+pub mod service;
+pub mod utils;
 
-pub mod config;
-pub mod constants;
-pub mod functions;
-pub mod helpers;
-pub mod instance;
-pub mod plugins;
+pub use body::SgBody;
+use extension::Reflect;
+use helper_layers::response_error::ErrorFormatter;
+pub use service::BoxHyperService;
+use std::{convert::Infallible, fmt, sync::Arc};
+pub use tower_layer::Layer;
 
-#[inline]
-pub async fn startup_k8s(namespace: Option<String>) -> TardisResult<()> {
-    startup(true, namespace, None).await
+use hyper::{body::Bytes, Request, Response, StatusCode};
+
+use tower_layer::layer_fn;
+use utils::fold_sg_layers::fold_sg_layers;
+
+pub type BoxResult<T> = Result<T, BoxError>;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+pub type SgRequest = Request<SgBody>;
+pub type SgResponse = Response<SgBody>;
+
+pub trait SgRequestExt {
+    fn with_reflect(&mut self);
+    fn reflect_mut(&mut self) -> &mut Reflect;
+    fn reflect(&self) -> &Reflect;
 }
 
-#[inline]
-pub async fn startup_native(conf_uri: String, check_interval_sec: u64) -> TardisResult<()> {
-    startup(false, Some(conf_uri), Some(check_interval_sec)).await
-}
-
-#[inline]
-pub async fn startup_simplify(conf_path: String, check_interval_sec: u64) -> TardisResult<()> {
-    startup(false, Some(conf_path), Some(check_interval_sec)).await
-}
-
-pub async fn startup(k8s_mode: bool, namespace_or_conf_uri: Option<String>, check_interval_sec: Option<u64>) -> TardisResult<()> {
-    // Initialize configuration according to different modes
-    let configs = config::init(k8s_mode, namespace_or_conf_uri, check_interval_sec).await?;
-    for (gateway, http_routes) in configs {
-        do_startup(gateway, http_routes).await?;
+impl SgRequestExt for SgRequest {
+    /// Get a mutable reference to the reflect extension.
+    ///
+    /// # Panics
+    /// Panics if the reflect extension is not found.
+    /// If you are using a request created by spacegate, this should never happen.
+    fn reflect_mut(&mut self) -> &mut Reflect {
+        self.extensions_mut().get_mut::<Reflect>().expect("reflect extension not found")
     }
-    Ok(())
+    /// Get a reference to the reflect extension.
+    ///
+    /// # Panics
+    /// Panics if the reflect extension is not found.
+    /// If you are using a request created by spacegate, this should never happen.
+    fn reflect(&self) -> &Reflect {
+        self.extensions().get::<Reflect>().expect("reflect extension not found")
+    }
+    /// Add a reflect extension to the request if it does not exist.
+    fn with_reflect(&mut self) {
+        if self.extensions().get::<Reflect>().is_none() {
+            self.extensions_mut().insert(Reflect::new());
+        }
+    }
 }
 
-pub async fn do_startup(gateway: SgGateway, http_routes: Vec<SgHttpRoute>) -> TardisResult<()> {
-    // Initialize service instances
-    let server_insts = server::init(&gateway).await?;
-    let gateway_name = &gateway.name.clone();
-    #[cfg(feature = "cache")]
+pub trait SgResponseExt {
+    fn with_code_message(code: StatusCode, message: impl Into<Bytes>) -> Self;
+    fn bad_gateway<E: std::error::Error>(e: E) -> Self
+    where
+        Self: Sized,
     {
-        // Initialize cache instances
-        if let Some(url) = &gateway.parameters.redis_url {
-            log::trace!("Initialize cache client...url:{url}");
-            functions::cache_client::init(gateway_name, url).await?;
-        }
+        let message = e.to_string();
+        tracing::debug!(message, "[Sg] gateway internal error");
+        Self::with_code_message(StatusCode::BAD_GATEWAY, message)
     }
-    // Initialize route instances
-    http_route::init(gateway, http_routes).await?;
-    // Start service instances
-    server::startup(gateway_name, server_insts).await
-}
-
-pub async fn shutdown(gateway_name: &str) -> TardisResult<()> {
-    // Remove route instances
-    http_route::remove(gateway_name).await?;
-    #[cfg(feature = "cache")]
+    fn plugin_error<E: std::error::Error>(e: E) -> Self
+    where
+        Self: Sized,
     {
-        // Remove cache instances
-        functions::cache_client::remove(gateway_name).await?;
+        let message = e.to_string();
+        tracing::debug!(message, "[Sg] gateway plugin internal error");
+        Self::with_code_message(StatusCode::BAD_GATEWAY, message)
     }
-    // Shutdown service instances
-    server::shutdown(gateway_name).await
-}
-
-pub async fn wait_graceful_shutdown() -> TardisResult<()> {
-    match signal::ctrl_c().await {
-        Ok(_) => {
-            log::info!("Received ctrl+c signal, shutting down...");
-        }
-        Err(error) => {
-            log::error!("Received the ctrl+c signal, but with an error: {error}");
-        }
+    fn from_error<E: std::error::Error, F: ErrorFormatter>(e: E, formatter: &F) -> Self
+    where
+        Self: Sized,
+    {
+        let message = formatter.format(&e);
+        tracing::debug!(message, "[Sg] gateway internal error");
+        Self::with_code_message(StatusCode::BAD_GATEWAY, formatter.format(&e))
     }
-    Ok(())
 }
 
-#[inline]
-pub fn register_filter_def(filter_def: impl SgPluginFilterDef + 'static) {
-    register_filter_def_boxed(Box::new(filter_def))
+impl SgResponseExt for Response<SgBody> {
+    fn with_code_message(code: StatusCode, message: impl Into<Bytes>) -> Self {
+        let body = SgBody::full(message);
+        let mut resp = Response::builder().status(code).body(body).expect("response builder error");
+        resp.extensions_mut().insert(Reflect::new());
+        resp
+    }
 }
 
-#[inline]
-pub fn register_filter_def_boxed(filter_def: Box<dyn SgPluginFilterDef>) {
-    filters::register_filter_def(filter_def.get_code().to_string(), filter_def)
+pub type ReqOrResp = Result<Request<SgBody>, Response<SgBody>>;
+
+pub struct SgBoxLayer {
+    boxed: Arc<dyn Layer<BoxHyperService, Service = BoxHyperService> + Send + Sync + 'static>,
+}
+
+impl FromIterator<SgBoxLayer> for SgBoxLayer {
+    fn from_iter<T: IntoIterator<Item = SgBoxLayer>>(iter: T) -> Self {
+        fold_sg_layers(iter.into_iter())
+    }
+}
+
+impl<'a> FromIterator<&'a SgBoxLayer> for SgBoxLayer {
+    fn from_iter<T: IntoIterator<Item = &'a SgBoxLayer>>(iter: T) -> Self {
+        fold_sg_layers(iter.into_iter().cloned())
+    }
+}
+
+impl SgBoxLayer {
+    /// Create a new [`BoxLayer`].
+    pub fn new<L>(inner_layer: L) -> Self
+    where
+        L: Layer<BoxHyperService> + Send + Sync + 'static,
+        L::Service: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
+        <L::Service as hyper::service::Service<Request<SgBody>>>::Future: Send + 'static,
+    {
+        let layer = layer_fn(move |inner: BoxHyperService| {
+            let out = inner_layer.layer(inner);
+            BoxHyperService::new(out)
+        });
+
+        Self { boxed: Arc::new(layer) }
+    }
+    pub fn layer_boxed(&self, inner: BoxHyperService) -> BoxHyperService {
+        self.boxed.layer(inner)
+    }
+}
+
+impl<S> Layer<S> for SgBoxLayer
+where
+    S: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
+    <S as hyper::service::Service<hyper::Request<SgBody>>>::Future: std::marker::Send,
+{
+    type Service = BoxHyperService;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        self.boxed.layer(BoxHyperService::new(inner))
+    }
+}
+
+impl Clone for SgBoxLayer {
+    fn clone(&self) -> Self {
+        Self { boxed: Arc::clone(&self.boxed) }
+    }
+}
+
+impl fmt::Debug for SgBoxLayer {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("BoxLayer").finish()
+    }
 }

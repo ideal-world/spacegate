@@ -5,7 +5,7 @@
       "matches": [
         {
           "path": {
-            "kind": "prefix",
+            "kind": "Prefix",
             "value": "/"
           }
         }

@@ -13,17 +13,17 @@ edition.workspace = true
 readme = "../../README.md"
 
 [features]
-default=[]
+default = []
 # Used to statically link openssl at compile time
-static-openssl=["openssl/vendored"]
+static-openssl = ["openssl/vendored"]
 
 [dependencies]
-spacegate-kernel = { version = "0.1.0-alpha.7", path = "../../kernel", features = [
-    "ws",
-    "cache",
-    "k8s",
+spacegate-shell = { path = "../../shell", features = [
+  "ws",
+  "cache",
+  "k8s",
 ] }
-openssl = {version = "0.10"}
+openssl = { version = "0.10" }
 tardis = { workspace = true }
 
 [dev-dependencies]
