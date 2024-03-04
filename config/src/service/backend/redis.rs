@@ -26,6 +26,6 @@ where
     }
 
     pub async fn get_con(&self) -> BoxResult<Connection> {
-        Ok(self.redis_con_pool.get().await.map_err(|e| Box::new(e))?)
+        Ok(self.redis_con_pool.get().await.map_err(Box::new)?)
     }
 }

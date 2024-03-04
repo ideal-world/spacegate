@@ -99,7 +99,7 @@ impl SgHttpRoute {
                     parent_refs: Some(vec![ParentReference {
                         group: None,
                         kind: Some("Gateway".to_string()),
-                        namespace: Some(name.to_string()),
+                        namespace: Some(namespace.to_string()),
                         name: self.gateway_name.clone(),
                         section_name: None,
                         port: None,

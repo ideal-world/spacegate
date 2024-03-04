@@ -18,7 +18,6 @@ use crate::{
 use super::{ConfigEventType, ConfigType, CreateListener, Listen};
 
 pub struct K8sListener {
-    // _watcher: watcher::watcher,
     rx: tokio::sync::mpsc::UnboundedReceiver<(ConfigType, ConfigEventType)>,
 }
 impl K8sListener {}
