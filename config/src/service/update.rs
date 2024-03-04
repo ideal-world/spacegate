@@ -8,6 +8,8 @@ use crate::{
 pub mod fs;
 #[cfg(feature = "k8s")]
 pub mod k8s;
+#[cfg(feature = "redis")]
+mod redis;
 
 pub trait Update: Sync + Send {
     fn update_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> impl Future<Output = Result<(), BoxError>> + Send;
