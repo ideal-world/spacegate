@@ -7,8 +7,6 @@ on:
       - "config/**"
       - "Cargo.toml"
       - ".github/workflows/admin-server-cicd.yml"
-    tags:
-      - "*"
 
 env:
   ARTIFACT_DIR: release-artifacts
