@@ -4,7 +4,7 @@ WORKDIR /usr/src/app
 
 COPY ./dist /usr/share/nginx/html
 
-COPY ./admin-server /usr/src/app/admin-server
+COPY ./spacegate-admin-server /usr/src/app/admin-server
 
 COPY nginx-default.conf /etc/nginx/nginx.conf
 COPY start.sh /usr/src/app/start.sh
