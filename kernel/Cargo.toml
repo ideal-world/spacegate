@@ -16,61 +16,38 @@ readme = "../README.md"
 name = "spacegate_kernel"
 path = "src/lib.rs"
 
-[features]
-local = ["tardis/fs"]
-cache = ["tardis/cache"]
-ws = ["tardis/ws-client"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "cache"]
-
 [dependencies]
-serde.workspace = true
-serde_json.workspace = true
-lazy_static.workspace = true
-async-trait.workspace = true
-itertools.workspace = true
-urlencoding.workspace = true
-async-compression.workspace = true
+spacegate-config = { path = "../config" }
+regex = { workspace = true }
+hyper = { workspace = true }
+http-body-util = { workspace = true }
+tower-layer = { workspace = true }
+pin-project-lite = { workspace = true }
 
-tardis = { workspace = true, features = ["future", "crypto", "tls"] }
-http.workspace = true
-rustls = { workspace = true, features = ["dangerous_configuration"] }
-hyper.workspace = true
-hyper-rustls.workspace = true
-rustls-pemfile.workspace = true
-tokio-rustls.workspace = true
-ipnet = { version = "2", features = ["serde"] }
-
-kube = { workspace = true, optional = true }
-k8s-openapi = { workspace = true, optional = true }
-k8s-gateway-api = { workspace = true, optional = true }
-schemars = { workspace = true, optional = true }
-async-stream = "0.3.5"
-tokio-util = { version = "0.7.8", features = ["io"] }
+# serde
+serde = { workspace = true, features = ["derive"] }
+serde_regex = "1.1.0"
+# http-serde = "2"
 
 
+tracing = { workspace = true }
+hyper-util = { workspace = true, features = [
+    "server-auto",
+    "client-legacy",
+    "tokio",
+] }
+tokio = { version = "1", features = ["net", "time", "macros"] }
+
+rand = { version = "0" }
+# future
+futures-util = { workspace = true }
+tokio-tungstenite = { workspace = true }
+
+# Tls
+hyper-rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+tokio-rustls = { workspace = true }
+
+tokio-util = { workspace = true }
 [dev-dependencies]
-tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
-reqwest = { workspace = true }
-tracing-subscriber = { workspace = true }
-criterion = { version = "0.5", features = ["async_tokio"] }
-testcontainers-modules ={ workspace = true }
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
-
-[[test]]
-name = "test_config_by_redis"
-required-features = ["cache"]
-
-[[test]]
-name = "test_websocket"
-required-features = ["ws"]
-
-[[bench]]
-name = "cache_sliding_window_benchmark"
-required-features = ["cache"]
-harness = false
-
-[[bench]]
-name = "local_sliding_window_benchmark"
-harness = false
+tokio = { version = "1", features = ["net", "time", "rt", "macros"] }

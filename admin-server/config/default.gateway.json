@@ -1,0 +1,1 @@
+{"name":"gateway","parameters":{"redis_url":"1","log_level":null,"lang":null,"ignore_tls_verification":null},"listeners":[{"name":"default_listener","ip":"0.0.0.0","port":9001,"protocol":{"type":"http"},"hostname":null}],"filters":[]}

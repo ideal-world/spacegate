@@ -1,0 +1,146 @@
+name: ADMIN SERVER CICD
+
+on:
+  push:
+    paths:
+      - "admin-server/**"
+      - "config/**"
+      - "Cargo.toml"
+      - ".github/workflows/admin-server-cicd.yml"
+    tags:
+      - "*"
+
+env:
+  ARTIFACT_DIR: release-artifacts
+  FRONTEND_ARTIFACT_NAME: frontend-artifact
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Init rust envrionment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check format
+        run: cargo fmt --all -- --check
+
+      - name: Check clippy
+        run: cargo clippy -p spacegate-admin-server --all-features
+
+      - name: Run rust test
+        run: cargo test -p spacegate-admin-server --all-features
+
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          docker-images: false
+          swap-storage: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+
+  push-docker:
+    if: startsWith(github.ref, 'refs/tags/') != true
+    needs: [check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build rust
+        run: cargo build --release -p spacegate-admin-server
+
+      - name: Copy artifact to workspace
+        run: cp ./target/release/spacegate-admin-server admin-server/res/
+
+      - name: Get front run id
+        run: |
+          run_id=$(curl https://api.github.com/repos/ideal-world/spacegate-admin-fe/actions/workflows/cicd.yml/runs\?status\=success |jq '.workflow_runs[0].id' )
+          echo "FRONTEND_RUN_ID=${run_id}" >> $GITHUB_ENV
+
+      - name: Download front artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.FRONTEND_ARTIFACT_NAME }}
+          repository: ideal-world/spacegate-admin-fe
+          path: admin-server/res/
+          run-id: ${{ env.FRONTEND_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract front artifact
+        run: cd admin-server/res/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
+
+      - name: Build and push Docker image to dockerhub
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: admin-server/res/
+          dockerfile: admin-server/res/Dockerfile
+          registry: docker.io
+          image: ecfront/spacegate-admin-server
+          tags: latest
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+  release-docker:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Cache rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build rust
+        run: cargo build --release -p spacegate-admin-server
+
+      - name: Copy artifact to workspace
+        run: cp ./target/release/spacegate-admin-server admin-server/res/
+
+      - name: Get front run id
+        run: |
+          run_id=$(curl https://api.github.com/repos/ideal-world/spacegate-admin-fe/actions/workflows/cicd.yml/runs\?status\=success |jq '.workflow_runs[0].id' )
+          echo "FRONTEND_RUN_ID=${run_id}" >> $GITHUB_ENV
+
+      - name: Download front artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.FRONTEND_ARTIFACT_NAME }}
+          repository: ideal-world/spacegate-admin-fe
+          path: admin-server/res/
+          run-id: ${{ env.FRONTEND_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract front artifact
+        run: cd admin-server/res/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
+
+      - name: Build and push Docker image to dockerhub
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: admin-server/res/
+          dockerfile: admin-server/res/Dockerfile
+          registry: docker.io
+          image: ecfront/spacegate-admin-server
+          tags: ${{ github.ref_name }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
