@@ -171,7 +171,10 @@ where
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
     let args = <crate::clap::Args as ::clap::Parser>::parse();
+    tracing::info!("server started with args: {:?}", args);
     let addr = SocketAddr::new(args.host, args.port);
     let app = match args.config {
         clap::ConfigBackend::File(path) => {
@@ -184,7 +187,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
+    axum::serve(listener, app.layer(tower_http::trace::TraceLayer::new_for_http()))
         .with_graceful_shutdown(async move {
             let _ = tokio::signal::ctrl_c().await;
         })
