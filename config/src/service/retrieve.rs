@@ -9,6 +9,8 @@ mod fs;
 #[cfg(feature = "k8s")]
 mod k8s;
 mod memory;
+#[cfg(feature = "redis")]
+mod redis;
 
 pub trait Retrieve: Sync + Send {
     fn retrieve_config_item_gateway(&self, gateway_name: &str) -> impl Future<Output = Result<Option<SgGateway>, BoxError>> + Send;

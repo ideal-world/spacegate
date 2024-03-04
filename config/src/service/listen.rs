@@ -5,8 +5,11 @@ use futures_util::Future;
 use crate::{BoxError, Config};
 
 mod fs;
+#[cfg(feature = "k8s")]
 mod k8s;
 mod memory;
+#[cfg(feature = "redis")]
+mod redis;
 
 pub enum ConfigEventType {
     Create,
