@@ -84,13 +84,13 @@ testcontainers-modules = { workspace = true }
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-[[test]]
-name = "test_config_by_redis"
-required-features = ["cache", "plugin-decompression"]
+# [[test]]
+# name = "test_config_by_redis"
+# required-features = ["cache", "plugin-decompression"]
 
-[[test]]
-name = "test_websocket"
-required-features = ["ws"]
+# [[test]]
+# name = "test_websocket"
+# required-features = ["ws"]
 
 [[bench]]
 name = "cache_sliding_window_benchmark"
