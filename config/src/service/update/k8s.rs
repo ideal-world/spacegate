@@ -51,17 +51,15 @@ impl Update for K8s {
 
         let old_sg_httproute = self.retrieve_config_item_route(gateway_name, route_name).await?;
 
-        http_spaceroute.metadata.resource_version = if let Some(old_route) = http_spaceroute_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
-            old_route.resource_version()
+        if let Some(old_route) = http_spaceroute_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
+            http_spaceroute.metadata.resource_version = old_route.resource_version();
+            http_spaceroute_api.replace(&http_spaceroute.name_any(), &PostParams::default(), &http_spaceroute).await?;
+        } else if let Some(_) = http_route_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
+            http_route_api.delete(&http_spaceroute.name_any(), &DeleteParams::default()).await?;
+            http_spaceroute_api.create(&PostParams::default(), &http_spaceroute).await?;
         } else {
-            if let Some(old_route) = http_route_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
-                old_route.resource_version()
-            } else {
-                return Err(format!("raw http route {route_name} not found").into());
-            }
+            return Err(format!("raw http route {route_name} not found").into());
         };
-
-        http_spaceroute_api.replace(&http_spaceroute.name_any(), &PostParams::default(), &http_spaceroute).await?;
 
         self.update_filter_changes(
             old_sg_httproute.map(|r| r.to_kube_httproute_spaceroute_filters(route_name, &self.namespace).1).unwrap_or_default(),

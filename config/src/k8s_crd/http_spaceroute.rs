@@ -2,7 +2,7 @@ use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Hostname, HttpRou
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use std::collections::BTreeMap;
 
-use crate::constants;
+use crate::constants::{self, DEFAULT_NAMESPACE};
 
 #[derive(Clone, Debug, Default, kube::CustomResource, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[kube(
@@ -286,7 +286,12 @@ impl HttpSpaceroute {
             .inner
             .parent_refs
             .as_ref()
-            .map(|p_rs| p_rs.iter().filter(|p_r| p_r.namespace.eq(&Some(namespace.to_string()))).map(|p_r| p_r.name.clone()).next())
+            .map(|p_rs| {
+                p_rs.iter()
+                    .filter(|p_r| p_r.namespace.eq(&Some(namespace.to_string())) || (namespace == DEFAULT_NAMESPACE && p_r.namespace.is_none()))
+                    .map(|p_r| p_r.name.clone())
+                    .next()
+            })
             .unwrap_or_default()
             .unwrap_or_default()
     }
