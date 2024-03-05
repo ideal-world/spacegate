@@ -77,10 +77,16 @@ where
 
     fn layer(&self, inner: S) -> Self::Service {
         use crate::helper_layers::timeout::TimeoutLayer;
-        let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
-        let random_picker = random_pick::RandomPick::new(service_iter);
+        let empty = self.backends.is_empty();
         let filter_layer = self.plugins.iter().collect::<SgBoxLayer>();
-        let service = filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(random_picker));
+        
+        let service = if empty {
+            filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(inner))
+        } else {
+            let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
+            let random_picker = random_pick::RandomPick::new(service_iter);
+            filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(random_picker))
+        };
 
         SgRouteRule {
             r#match: self.r#match.clone(),
