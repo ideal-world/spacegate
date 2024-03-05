@@ -79,7 +79,7 @@ where
         use crate::helper_layers::timeout::TimeoutLayer;
         let empty = self.backends.is_empty();
         let filter_layer = self.plugins.iter().collect::<SgBoxLayer>();
-        
+
         let service = if empty {
             filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(inner))
         } else {
