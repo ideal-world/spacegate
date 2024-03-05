@@ -58,7 +58,6 @@ pub struct SgHttpPathModifier {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
-#[serde(rename_all = "lowercase")]
 pub enum SgHttpPathModifierType {
     /// This type of modifier indicates that the full path will be replaced by the
     /// specified value.
