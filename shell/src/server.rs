@@ -290,7 +290,7 @@ impl RunningSgGateway {
                 log::info!(gateway = gateway_name.as_ref(), "[Sg.Server] start all listeners");
                 local_set.run_until(cancel_task).await;
                 log::info!(gateway = gateway_name.as_ref(), "[Sg.Server] cancelled");
-            })
+            })  
         };
         log::info!("[SG.Server] start finished");
         Ok(RunningSgGateway {
