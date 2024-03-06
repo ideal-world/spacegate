@@ -58,6 +58,8 @@ impl SgFilterRewrite {
                         uri_part.path_and_query = Some(new_pq)
                     }
                 }
+            } else {
+                tracing::warn!("missing matched route");
             }
         }
         Ok(req)

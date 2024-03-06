@@ -1,6 +1,5 @@
 use chrono::Utc;
-use redis::AsyncCommands as _
-;
+use redis::AsyncCommands as _;
 
 use crate::{
     service::{
