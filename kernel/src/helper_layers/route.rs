@@ -4,7 +4,7 @@ use futures_util::future::BoxFuture;
 pub use hyper::http::request::Parts;
 use hyper::{Request, Response};
 
-use crate::SgBody;
+use crate::{extension::Matched, SgBody};
 
 pub trait Router: Clone {
     type Index: Clone;
@@ -34,7 +34,7 @@ where
 impl<S, R, F> hyper::service::Service<Request<SgBody>> for Route<S, R, F>
 where
     R: Router + Send + Sync + 'static,
-    R::Index: Send + Sync + 'static,
+    R::Index: Send + Sync + 'static + Clone,
     S: Index<R::Index>,
     S::Output: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + 'static,
     F: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + 'static,
@@ -44,8 +44,12 @@ where
     type Error = Infallible;
     type Response = Response<SgBody>;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-    fn call(&self, req: Request<SgBody>) -> Self::Future {
+    fn call(&self, mut req: Request<SgBody>) -> Self::Future {
         let fut: Self::Future = if let Some(index) = self.router.route(&req) {
+            req.extensions_mut().insert(Matched {
+                index: index.clone(),
+                router: self.router.clone(),
+            });
             let fut = self.services.index(index).call(req);
             Box::pin(fut)
         } else {
