@@ -32,8 +32,11 @@ impl SgHttpPathModifier {
             }
             SgHttpPathModifierType::ReplacePrefixMatch => {
                 let prefix_match = prefix_match?;
-                let mut path_segments = path.split('/').filter(|s| !s.is_empty());
-                let mut prefix_segments = prefix_match.split('/').filter(|s| !s.is_empty());
+                fn not_empty(s: &&str) -> bool {
+                    !s.is_empty()
+                }
+                let mut path_segments = path.split('/').filter(not_empty);
+                let mut prefix_segments = prefix_match.split('/').filter(not_empty);
                 let mut new_path = vec![""];
                 loop {
                     match (path_segments.next(), prefix_segments.next()) {
@@ -41,9 +44,10 @@ impl SgHttpPathModifier {
                             if !path_seg.eq_ignore_ascii_case(prefix_seg) {
                                 return None;
                             }
-                            new_path.push(path_seg)
+                            // new_path.push(path_seg)
                         }
                         (rest_path, None) => {
+                            new_path.extend(self.value.split('/').filter(not_empty));
                             new_path.extend(rest_path);
                             new_path.extend(path_segments);
                             return Some(new_path.join("/"));
@@ -54,4 +58,13 @@ impl SgHttpPathModifier {
             }
         }
     }
+}
+
+#[test]
+fn test_replace() {
+    let modifier = SgHttpPathModifier {
+        kind: SgHttpPathModifierType::ReplacePrefixMatch,
+        value: "/iam".into(),
+    };
+    assert_eq!(Some("/iam/get_name"), modifier.replace("api/iam/get_name", Some("api/iam")).as_deref());
 }
