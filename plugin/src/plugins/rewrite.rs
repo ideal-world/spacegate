@@ -1,5 +1,5 @@
 use hyper::header::{HeaderValue, HOST};
-use hyper::{Request, Response};
+use hyper::{Request, Response, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::extension::Matched;
 use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
@@ -61,6 +61,7 @@ impl SgFilterRewrite {
             } else {
                 tracing::warn!("missing matched route");
             }
+            *req.uri_mut() = Uri::from_parts(uri_part).map_err(Response::bad_gateway)?;
         }
         Ok(req)
     }
