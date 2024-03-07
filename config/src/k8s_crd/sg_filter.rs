@@ -51,9 +51,9 @@ pub enum SgFilterTargetKind {
 impl From<SgFilterTargetKind> for String {
     fn from(value: SgFilterTargetKind) -> Self {
         match value {
-            SgFilterTargetKind::Gateway => "gateway".to_string(),
-            SgFilterTargetKind::Httproute => "httproute".to_string(),
-            SgFilterTargetKind::Httpspaceroute => "httpspaceroute".to_string(),
+            SgFilterTargetKind::Gateway => "Gateway".to_string(),
+            SgFilterTargetKind::Httproute => "HTTPRoute".to_string(),
+            SgFilterTargetKind::Httpspaceroute => "HTTPSpaceroute".to_string(),
         }
     }
 }
