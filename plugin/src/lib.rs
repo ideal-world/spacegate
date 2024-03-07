@@ -125,7 +125,8 @@ impl SgPluginRepository {
     }
 
     pub fn create_layer(&self, code: &str, value: JsonValue) -> Result<SgBoxLayer, BoxError> {
-        self.create(code, value)?.make_layer()
+        let inner = self.create(code, value)?.make_layer()?;
+        Ok(inner)
     }
 }
 
