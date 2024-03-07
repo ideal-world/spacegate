@@ -17,7 +17,7 @@ use crate::{
     },
     model::helper_filter::SgSingeFilter,
     service::{backend::k8s::K8s, Retrieve as _},
-    BoxResult,
+    BoxError, BoxResult,
 };
 
 use super::Update;
@@ -27,18 +27,28 @@ impl Update for K8s {
         let (mut gateway, secret, update_filter) = gateway.to_kube_gateway(&self.namespace);
 
         let gateway_api: Api<Gateway> = self.get_namespace_api();
-        let old_gateway = self.retrieve_config_item_gateway(gateway_name).await?;
+        let old_gateway = self
+            .retrieve_config_item_gateway(gateway_name)
+            .await?
+            .map(|g| g.to_kube_gateway(&self.namespace))
+            .ok_or_else(|| -> BoxError { format!("[Sg.Config] gateway [{gateway_name}] not found ,update failed").into() })?;
 
         gateway.metadata.resource_version = gateway_api.get_metadata(gateway_name).await?.resource_version();
         gateway_api.replace(gateway_name, &PostParams::default(), &gateway).await?;
 
-        if let Some(mut secret) = secret {
-            let secret_api: Api<Secret> = self.get_namespace_api();
-            secret.metadata.resource_version = secret_api.get_metadata(&secret.name_any()).await?.resource_version();
-            secret_api.replace(&secret.name_any(), &PostParams::default(), &secret).await?;
+        let secret_api: Api<Secret> = self.get_namespace_api();
+        if let Some(old_secret) = old_gateway.1 {
+            if let Some(mut secret) = secret {
+                secret.metadata.resource_version = old_secret.resource_version();
+                secret_api.replace(&secret.name_any(), &PostParams::default(), &secret).await?;
+            } else {
+                secret_api.delete(&old_secret.name_any(), &DeleteParams::default()).await?;
+            }
+        } else if let Some(secret) = secret {
+            secret_api.create(&PostParams::default(), &secret).await?;
         }
 
-        self.update_filter_changes(old_gateway.map(|r| r.to_kube_gateway(&self.namespace).2).unwrap_or_default(), update_filter).await?;
+        self.update_filter_changes(old_gateway.2, update_filter).await?;
 
         Ok(())
     }
@@ -54,7 +64,7 @@ impl Update for K8s {
         if let Some(old_route) = http_spaceroute_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
             http_spaceroute.metadata.resource_version = old_route.resource_version();
             http_spaceroute_api.replace(&http_spaceroute.name_any(), &PostParams::default(), &http_spaceroute).await?;
-        } else if let Some(_) = http_route_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
+        } else if http_route_api.get_metadata_opt(&http_spaceroute.name_any()).await?.is_some() {
             http_route_api.delete(&http_spaceroute.name_any(), &DeleteParams::default()).await?;
             http_spaceroute_api.create(&PostParams::default(), &http_spaceroute).await?;
         } else {
