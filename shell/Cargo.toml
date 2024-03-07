@@ -44,7 +44,7 @@ plugin-status = ["spacegate-plugin/status"]
 
 
 [dependencies]
-spacegate-kernel = { path = "../kernel" }
+spacegate-kernel = { path = "../kernel", features = ["reload"] }
 spacegate-plugin = { path = "../plugin" }
 spacegate-config = { path = "../config" }
 
@@ -56,7 +56,12 @@ itertools.workspace = true
 urlencoding.workspace = true
 async-compression.workspace = true
 
-tardis = { workspace = true, features = ["future", "crypto", "tls", "build-info"] }
+tardis = { workspace = true, features = [
+    "future",
+    "crypto",
+    "tls",
+    "build-info",
+] }
 hyper.workspace = true
 hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
@@ -72,7 +77,9 @@ schemars = { workspace = true, optional = true }
 async-stream = "0.3.5"
 tokio-util = { version = "0.7.8", features = ["io"] }
 
-notify = { version = "6.1.1", default-features = false, features = ["macos_kqueue"], optional = true }
+notify = { version = "6.1.1", default-features = false, features = [
+    "macos_kqueue",
+], optional = true }
 
 [dev-dependencies]
 tardis = { workspace = true, features = ["test", "web-client", "web-server"] }

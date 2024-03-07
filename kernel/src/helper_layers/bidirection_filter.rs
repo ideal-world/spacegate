@@ -119,6 +119,7 @@ where
         loop {
             match this.state.as_mut().project() {
                 FilterFutureStateProj::Start => {
+                    tracing::trace!("enter bdf {}", std::any::type_name::<F>());
                     let fut = this.filter.filter.clone().on_req(this.request.take().expect("missing request at start state"));
                     this.state.set(FilterFutureState::Request { fut });
                 }
@@ -127,6 +128,7 @@ where
                     match request_result {
                         Ok(req) => {
                             let fut = this.filter.as_mut().project().service.call(req);
+                            tracing::trace!("leave bdf {}", std::any::type_name::<F>());
                             this.state.set(FilterFutureState::InnerCall { fut });
                         }
                         Err(resp) => {
@@ -141,6 +143,7 @@ where
                 }
                 FilterFutureStateProj::Response { fut } => {
                     let request_result = ready!(fut.poll(cx));
+                    tracing::trace!("leave bdf {}", std::any::type_name::<F>());
                     return Poll::Ready(Ok(request_result));
                 }
             }

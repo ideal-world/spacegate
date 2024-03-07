@@ -107,7 +107,12 @@ impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter route rule");
-        self.service.call(req)
+        let fut = self.service.call(req);
+        Box::pin(async move {
+            let result = fut.await;
+            tracing::trace!("finished route rule");
+            result
+        })
     }
 }
 

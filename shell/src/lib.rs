@@ -54,7 +54,6 @@ pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<()
     use spacegate_config::service::backend::k8s::K8s;
     let namespace = namespace.unwrap_or("default");
     let config = K8s::new(namespace, kube::Client::try_default().await?);
-    // unimplemented!("")
     startup(config)
 }
 #[cfg(feature = "cache")]
