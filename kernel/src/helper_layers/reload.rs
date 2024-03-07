@@ -73,7 +73,9 @@ where
         let service = self.service.clone();
         Box::pin(async move {
             let rg = service.read_owned().await;
-            rg.call(req).await
+            let fut = rg.call(req);
+            drop(rg);
+            fut.await
         })
     }
 }

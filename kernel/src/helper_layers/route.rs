@@ -51,10 +51,20 @@ where
                 router: self.router.clone(),
             });
             let fut = self.services.index(index).call(req);
-            Box::pin(fut)
+            Box::pin(async move {
+                tracing::trace!("enter route");
+                let result = fut.await;
+                tracing::trace!("leave route");
+                result
+            })
         } else {
             let fut = self.fallback.call(req);
-            Box::pin(fut)
+            Box::pin(async move {
+                tracing::trace!("enter route");
+                let result = fut.await;
+                tracing::trace!("leave route");
+                result
+            })
         };
         fut
     }
