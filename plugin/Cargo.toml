@@ -24,7 +24,7 @@ inject = []
 redirect = []
 retry = []
 rewrite = []
-maintenance = ["ipnet"]
+maintenance = ["ipnet", "schemars/chrono"]
 # decompression = ["tower-http/decompression-full"]
 status = ["hyper-util"]
 full = [
@@ -39,6 +39,8 @@ full = [
     # "decompression",
     "status",
 ]
+schema = ["schemars"]
+
 [dependencies]
 spacegate-kernel = { path = "../kernel" }
 tracing = { workspace = true }
@@ -52,7 +54,7 @@ hyper-util = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 tokio-util = { workspace = true, features = ["io"] }
 tardis = { workspace = true, features = ["cache"] }
-
+schemars = { workspace = true, optional = true }
 # future
 futures-util = { workspace = true }
 

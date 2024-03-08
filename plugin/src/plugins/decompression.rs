@@ -19,6 +19,7 @@ use tower_service::Service;
 use crate::{def_plugin, MakeSgLayer};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct DecompressionConfig {}
 

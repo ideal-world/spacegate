@@ -14,6 +14,7 @@ use crate::{def_plugin, MakeSgLayer};
 ///
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SgFilterRewriteConfig {
     /// Hostname is the value to be used to replace the Host header value during forwarding.
     pub hostname: Option<String>,
@@ -89,7 +90,8 @@ impl MakeSgLayer for SgFilterRewriteConfig {
 }
 
 def_plugin!("rewrite", RewritePlugin, SgFilterRewriteConfig);
-
+#[cfg(feature = "schema")]
+crate::schema!(RewritePlugin, SgFilterRewriteConfig);
 // #[cfg(test)]
 
 // mod tests {

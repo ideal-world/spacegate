@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SgHttpPathModifier {
     /// Type defines the type of path modifier.
     pub kind: SgHttpPathModifierType,
@@ -9,6 +10,7 @@ pub struct SgHttpPathModifier {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "PascalCase")]
 pub enum SgHttpPathModifierType {
     /// This type of modifier indicates that the full path will be replaced by the specified value.

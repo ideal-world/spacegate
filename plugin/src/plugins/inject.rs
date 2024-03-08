@@ -14,6 +14,7 @@ use crate::{def_plugin, MakeSgLayer};
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SgFilterInject {
     pub req_inject_url: Option<String>,
     pub req_timeout: Duration,
@@ -126,3 +127,13 @@ impl MakeSgLayer for SgFilterInject {
 }
 
 def_plugin!("inject", InjectPlugin, SgFilterInject);
+#[cfg(feature = "schema")]
+crate::schema!(
+    InjectPlugin,
+    SgFilterInject {
+        req_inject_url: Some("http://localhost:8080/inject".to_string()),
+        req_timeout: Duration::from_secs(5),
+        resp_inject_url: Some("http://localhost:8080/inject".to_string()),
+        resp_timeout: Duration::from_secs(5),
+    }
+);

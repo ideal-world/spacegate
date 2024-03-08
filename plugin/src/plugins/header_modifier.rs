@@ -13,6 +13,7 @@ use spacegate_kernel::SgBody;
 use crate::{def_plugin, MakeSgLayer};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum SgFilterHeaderModifierKind {
     #[default]
     Request,
@@ -20,6 +21,8 @@ pub enum SgFilterHeaderModifierKind {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+
 pub struct SgFilterHeaderModifier {
     pub kind: SgFilterHeaderModifierKind,
     pub sets: Option<HashMap<String, String>>,
@@ -97,3 +100,9 @@ impl Layer<BoxHyperService> for HeaderModifierLayer {
 }
 
 def_plugin!("header_modifier", HeaderModifierPlugin, SgFilterHeaderModifier);
+#[cfg(feature = "schema")]
+crate::schema!(HeaderModifierPlugin, SgFilterHeaderModifier {
+    kind: SgFilterHeaderModifierKind::Request,
+    sets: Some(HashMap::new()),
+    remove: Some(Vec::new()),
+});

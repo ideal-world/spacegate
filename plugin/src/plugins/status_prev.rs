@@ -40,6 +40,7 @@ pub mod status_plugin;
 def_filter!("status", SgFilterStatusDef, SgFilterStatus);
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct SgFilterStatus {
     pub serv_addr: String,
