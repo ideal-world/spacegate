@@ -195,6 +195,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// create app for an backend
 pub fn create_app<B>(backend: B) -> Router<()>
 where
     B: Create + Retrieve + Update + Delete + Send + Sync + 'static,
