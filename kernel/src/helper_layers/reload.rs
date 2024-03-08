@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use futures_util::future::BoxFuture;
 use tokio::sync::RwLock;
@@ -27,17 +27,17 @@ pub struct Reload<S>
 where
     S: Send,
 {
-    service: Arc<RwLock<S>>,
+    pub(crate) service: Arc<RwLock<S>>,
 }
 
 #[derive(Debug)]
 pub struct Reloader<S> {
-    pub service: Arc<Option<RwLock<S>>>,
+    pub service: OnceLock<Arc<RwLock<S>>>,
 }
 
 impl<S> Default for Reloader<S> {
     fn default() -> Self {
-        Self { service: Arc::default() }
+        Self { service: OnceLock::new() }
     }
 }
 
@@ -48,8 +48,11 @@ impl<S> Clone for Reloader<S> {
 }
 
 impl<S> Reloader<S> {
+    pub fn setup(&self, service: Arc<RwLock<S>>) {
+        self.service.set(service);
+    }
     pub async fn reload(&self, service: S) {
-        if let Some(wg) = self.service.as_ref() {
+        if let Some(wg) = self.service.get() {
             let mut wg = wg.write().await;
             *wg = service;
         } else {
