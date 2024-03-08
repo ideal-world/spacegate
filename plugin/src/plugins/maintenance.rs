@@ -20,6 +20,7 @@ use crate::{def_plugin, MakeSgLayer};
 // def_filter!("maintenance", SgMaintenanceFilterPlugin, SgFilterMaintenanceConfig);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct SgFilterMaintenanceConfig {
     enabled_time_range: Option<Vec<Range<NaiveTime>>>,
@@ -195,7 +196,13 @@ impl MakeSgLayer for SgFilterMaintenanceConfig {
 }
 
 def_plugin!("maintenance", MaintenancePlugin, SgFilterMaintenanceConfig);
-
+#[cfg(feature = "schema")]
+crate::schema!(MaintenancePlugin, SgFilterMaintenanceConfig {
+    enabled_time_range: None,
+    exclude_ip_range: None,
+    title: "maintenance title".into(),
+    msg: "under maintenance".into(),
+});
 #[cfg(test)]
 mod test {
 

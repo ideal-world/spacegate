@@ -23,7 +23,8 @@ pub mod error;
 pub mod model;
 pub mod plugins;
 pub use error::PluginError;
-
+#[cfg(feature = "schema")]
+pub use schemars;
 pub trait Plugin {
     type Error: std::error::Error + Send + Sync + 'static;
     type MakeLayer: MakeSgLayer + 'static;
@@ -31,9 +32,11 @@ pub trait Plugin {
     fn create(value: JsonValue) -> Result<Self::MakeLayer, Self::Error>;
 }
 
-pub trait InstallOn<T> {
-    fn install_on(&self, t: &mut T) -> BoxResult<()>;
+#[cfg(feature = "schema")]
+pub trait PluginSchemaExt {
+    fn schema() -> schemars::schema::RootSchema;
 }
+
 
 pub trait MakeSgLayer {
     fn make_layer(&self) -> BoxResult<SgBoxLayer>;
@@ -208,6 +211,25 @@ macro_rules! def_filter_plugin {
             fn make_layer(&self) -> Result<$crate::SgBoxLayer, $crate::BoxError> {
                 let layer = $crate::FilterRequestLayer::new(self.clone());
                 Ok($crate::SgBoxLayer::new(layer))
+            }
+        }
+    };
+}
+
+#[cfg(feature = "schema")]
+#[macro_export]
+macro_rules! schema {
+    ($plugin:ident, $schema:ty) => {
+        impl $crate::PluginSchemaExt for $plugin {
+            fn schema() -> $crate::schemars::schema::RootSchema {
+                $crate::schemars::schema_for!($schema)
+            }
+        }
+    };
+    ($plugin:ident, $schema:expr) => {
+        impl $crate::PluginSchemaExt for $plugin {
+            fn schema() -> $crate::schemars::schema::RootSchema {
+                $crate::schemars::schema_for_value!($schema)
             }
         }
     };

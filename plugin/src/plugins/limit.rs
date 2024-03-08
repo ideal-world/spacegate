@@ -13,6 +13,7 @@ use spacegate_kernel::{
 use crate::{cache::Cache, def_plugin, MakeSgLayer};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RateLimitConfig {
     pub max_request_number: Option<u64>,
     pub time_window_ms: Option<u64>,
@@ -137,3 +138,9 @@ impl MakeSgLayer for RateLimitConfig {
 }
 
 def_plugin!("limit", RateLimitPlugin, RateLimitConfig);
+#[cfg(feature = "schema")]
+crate::schema! { RateLimitPlugin, RateLimitConfig { 
+    max_request_number: Some(100), 
+    time_window_ms: Some(1000), 
+    id: "limit".into() 
+} }

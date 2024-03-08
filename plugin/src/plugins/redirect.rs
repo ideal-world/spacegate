@@ -15,6 +15,7 @@ use crate::{def_plugin, model::SgHttpPathModifier, MakeSgLayer};
 ///
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RedirectFilter {
     /// Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.
     pub scheme: Option<String>,
@@ -69,3 +70,5 @@ impl MakeSgLayer for RedirectFilter {
 }
 
 def_plugin!("redirect", RedirectPlugin, RedirectFilter);
+#[cfg(feature = "schema")]
+crate::schema!(RedirectPlugin, RedirectFilter);

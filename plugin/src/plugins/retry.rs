@@ -42,6 +42,7 @@ where
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum BackOff {
     /// Fixed interval
     Fixed,
@@ -55,6 +56,7 @@ pub enum BackOff {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct SgPluginRetryConfig {
     pub retries: u16,
@@ -285,3 +287,8 @@ impl MakeSgLayer for SgPluginRetryConfig {
 }
 
 def_plugin!("retry", RetryPlugin, SgPluginRetryConfig);
+#[cfg(feature = "schema")]
+crate::schema! {
+    RetryPlugin,
+    SgPluginRetryConfig
+}

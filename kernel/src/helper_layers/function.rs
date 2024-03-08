@@ -1,10 +1,16 @@
+use futures_util::future::BoxFuture;
 use futures_util::FutureExt;
 use futures_util::{future::Map, Future};
 use hyper::{service::Service, Request, Response};
 use std::convert::Infallible;
+use std::sync::Arc;
 use tower_layer::Layer;
 
 use crate::{BoxHyperService, SgBody};
+
+pub trait FnLayerMethod {
+    fn call(&self, req: Request<SgBody>, next: Next) -> impl Future<Output = Response<SgBody>> + Send;
+}
 
 pub struct FnLayer<F, Fut>
 where
@@ -21,6 +27,19 @@ where
 {
     pub fn new(f: F) -> Self {
         Self { f }
+    }
+}
+
+impl FnLayer<Box<dyn Fn(Request<SgBody>, Next) -> BoxFuture<'static, Response<SgBody>>>, BoxFuture<'static, Response<SgBody>>> {
+    pub fn from_method<M>(m: M) -> Self
+    where
+        M: FnLayerMethod + 'static + Send + Sync,
+    {
+        let method = Arc::new(m);
+        Self::new(Box::new(move |req, next| {
+            let method = method.clone();
+            Box::pin(async move { method.call(req, next).await })
+        }))
     }
 }
 
@@ -69,22 +88,12 @@ where
 }
 
 pub struct Next {
-    pub inner: BoxHyperService,
+    inner: BoxHyperService,
 }
 
 impl Next {
-    async fn call(self, req: Request<SgBody>) -> Response<SgBody> {
+    pub async fn call(self, req: Request<SgBody>) -> Response<SgBody> {
         // just infallible
         unsafe { self.inner.call(req).await.unwrap_unchecked() }
     }
-}
-
-#[test]
-fn test_fn_layer() {
-    async fn some_option(req: Request<SgBody>, next: Next) -> Response<SgBody> {
-        let resp = next.call(req).await;
-        resp
-    }
-
-    let layer = FnLayer::new(some_option);
 }

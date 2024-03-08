@@ -17,13 +17,14 @@ use tardis::{
     tokio::{self},
 };
 
-use crate::MakeSgLayer;
+use crate::{def_plugin, MakeSgLayer};
 
 use self::{
     sliding_window::SlidingWindowCounter,
     status_plugin::{get_status, update_status},
 };
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct SgFilterStatusConfig {
     #[serde(alias = "serv_addr")]
@@ -194,3 +195,9 @@ impl MakeSgLayer for SgFilterStatusConfig {
         Ok(())
     }
 }
+
+
+def_plugin!("status", StatusPlugin, SgFilterStatusConfig);
+
+#[cfg(feature = "schema")]
+crate::schema!(SgFilterStatusConfig, SgFilterStatusConfig);
