@@ -32,12 +32,12 @@ where
 
 #[derive(Debug)]
 pub struct Reloader<S> {
-    pub service: OnceLock<Arc<RwLock<S>>>,
+    pub service: Arc<OnceLock<Arc<RwLock<S>>>>,
 }
 
 impl<S> Default for Reloader<S> {
     fn default() -> Self {
-        Self { service: OnceLock::new() }
+        Self { service: Default::default() }
     }
 }
 
