@@ -37,7 +37,6 @@ pub trait PluginSchemaExt {
     fn schema() -> schemars::schema::RootSchema;
 }
 
-
 pub trait MakeSgLayer {
     fn make_layer(&self) -> BoxResult<SgBoxLayer>;
     fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> Result<(), BoxError> {

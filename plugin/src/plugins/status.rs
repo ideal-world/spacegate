@@ -196,7 +196,6 @@ impl MakeSgLayer for SgFilterStatusConfig {
     }
 }
 
-
 def_plugin!("status", StatusPlugin, SgFilterStatusConfig);
 
 #[cfg(feature = "schema")]

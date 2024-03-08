@@ -20,24 +20,18 @@ macro_rules! export_plugins {
 #[test]
 fn export_schema() {
     use plugins::{
-        header_modifier::HeaderModifierPlugin,
-        inject::InjectPlugin,
-        limit::RateLimitPlugin,
-        maintenance::MaintenancePlugin,
-        redirect::RedirectPlugin,
-        retry::RetryPlugin,
-        rewrite::RewritePlugin,
-        status::SgFilterStatusConfig,
+        header_modifier::HeaderModifierPlugin, inject::InjectPlugin, limit::RateLimitPlugin, maintenance::MaintenancePlugin, redirect::RedirectPlugin, retry::RetryPlugin,
+        rewrite::RewritePlugin, status::SgFilterStatusConfig,
     };
-    export_plugins!("schema": 
-    HeaderModifierPlugin
-    InjectPlugin
-    RateLimitPlugin
-    MaintenancePlugin
-    RedirectPlugin
-    RetryPlugin
-    RewritePlugin
-    SgFilterStatusConfig
+    export_plugins!("schema":
+        HeaderModifierPlugin
+        InjectPlugin
+        RateLimitPlugin
+        MaintenancePlugin
+        RedirectPlugin
+        RetryPlugin
+        RewritePlugin
+        SgFilterStatusConfig
 
-);
+    );
 }
