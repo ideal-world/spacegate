@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tower_layer::Layer;
 
 #[derive(Default, Debug, Clone)]
@@ -32,7 +32,7 @@ where
 
 #[derive(Debug)]
 pub struct Reloader<S> {
-    pub service: Arc<Mutex<Option<S>>>,
+    pub service: Arc<Option<RwLock<S>>>,
 }
 
 impl<S> Default for Reloader<S> {
@@ -48,9 +48,13 @@ impl<S> Clone for Reloader<S> {
 }
 
 impl<S> Reloader<S> {
-    pub async fn reload(&self, service: S) -> Option<S> {
-        let mut wg = self.service.lock().await;
-        wg.replace(service)
+    pub async fn reload(&self, service: S) {
+        if let Some(wg) = self.service.as_ref() {
+            let mut wg = wg.write().await;
+            *wg = service;
+        } else {
+            tracing::warn!("reloader not initialized");
+        }
     }
     pub fn into_layer(self) -> ReloadLayer<S> {
         ReloadLayer { reloader: self }
