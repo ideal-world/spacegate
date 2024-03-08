@@ -16,9 +16,9 @@ where
     type Service = Reload<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        Reload {
-            service: Arc::new(RwLock::new(inner)),
-        }
+        let inner = Arc::new(RwLock::new(inner));
+        self.reloader.setup(inner.clone());
+        Reload { service: inner }
     }
 }
 
@@ -49,7 +49,9 @@ impl<S> Clone for Reloader<S> {
 
 impl<S> Reloader<S> {
     pub fn setup(&self, service: Arc<RwLock<S>>) {
-        self.service.set(service);
+        if self.service.set(service).is_err() {
+            tracing::warn!("reloader already settled");
+        }
     }
     pub async fn reload(&self, service: S) {
         if let Some(wg) = self.service.get() {

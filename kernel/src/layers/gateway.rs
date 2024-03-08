@@ -99,9 +99,7 @@ where
         #[cfg(feature = "reload")]
         let service = {
             let reloader = self.http_route_reloader.clone();
-            let service = reloader.clone().into_layer().layer(route);
-            reloader.setup(service.service.clone());
-            service
+            reloader.clone().into_layer().layer(route)
         };
         #[cfg(not(feature = "reload"))]
         let service = route;
