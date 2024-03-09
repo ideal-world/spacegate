@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SgFilterInject",
+  "examples": [
+    {
+      "req_inject_url": "http://localhost:8080/inject",
+      "req_timeout": {
+        "secs": 5,
+        "nanos": 0
+      },
+      "resp_inject_url": "http://localhost:8080/inject",
+      "resp_timeout": {
+        "secs": 5,
+        "nanos": 0
+      }
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "req_inject_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "req_timeout": {
+      "type": "object",
+      "properties": {
+        "nanos": {
+          "type": "integer"
+        },
+        "secs": {
+          "type": "integer"
+        }
+      }
+    },
+    "resp_inject_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resp_timeout": {
+      "type": "object",
+      "properties": {
+        "nanos": {
+          "type": "integer"
+        },
+        "secs": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

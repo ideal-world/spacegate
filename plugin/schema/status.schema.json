@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SgFilterStatusConfig",
+  "type": "object",
+  "properties": {
+    "host": {
+      "default": "0.0.0.0",
+      "type": "string"
+    },
+    "interval": {
+      "description": "second",
+      "default": 5,
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "port": {
+      "default": 8110,
+      "type": "integer",
+      "format": "uint16",
+      "minimum": 0.0
+    },
+    "status_cache_key": {
+      "default": "spacegate:cache:plugin:status",
+      "type": "string"
+    },
+    "title": {
+      "default": "System Status",
+      "type": "string"
+    },
+    "unhealthy_threshold": {
+      "description": "Unhealthy threshold , if server error more than this, server will be tag as unhealthy",
+      "default": 3,
+      "type": "integer",
+      "format": "uint16",
+      "minimum": 0.0
+    },
+    "window_cache_key": {
+      "default": "sg:plugin:filter:window:key",
+      "type": "string"
+    }
+  }
+}

@@ -69,3 +69,9 @@ async-compression = { version = "0.4", features = [
     "deflate",
     "brotli",
 ] }
+
+
+[[test]]
+name = "export_schema"
+path = "tests/export_schema.rs"
+required-features = ["schema"]

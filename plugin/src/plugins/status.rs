@@ -199,4 +199,4 @@ impl MakeSgLayer for SgFilterStatusConfig {
 def_plugin!("status", StatusPlugin, SgFilterStatusConfig);
 
 #[cfg(feature = "schema")]
-crate::schema!(SgFilterStatusConfig, SgFilterStatusConfig);
+crate::schema!(StatusPlugin, SgFilterStatusConfig);
