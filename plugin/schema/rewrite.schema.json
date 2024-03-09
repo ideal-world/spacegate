@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SgFilterRewriteConfig",
+  "description": "RewriteFilter defines a filter that modifies a request during forwarding.\n\nhttps://gateway-api.sigs.k8s.io/geps/gep-726/",
+  "type": "object",
+  "properties": {
+    "hostname": {
+      "description": "Hostname is the value to be used to replace the Host header value during forwarding.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "path": {
+      "description": "Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SgHttpPathModifier"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "SgHttpPathModifier": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "description": "Type defines the type of path modifier.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SgHttpPathModifierType"
+            }
+          ]
+        },
+        "value": {
+          "description": "Value is the value to be used to replace the path during forwarding.",
+          "type": "string"
+        }
+      }
+    },
+    "SgHttpPathModifierType": {
+      "oneOf": [
+        {
+          "description": "This type of modifier indicates that the full path will be replaced by the specified value.",
+          "type": "string",
+          "enum": [
+            "ReplaceFullPath"
+          ]
+        },
+        {
+          "description": "This type of modifier indicates that any prefix path matches will be replaced by the substitution value. For example, a path with a prefix match of “/foo” and a ReplacePrefixMatch substitution of “/bar” will have the “/foo” prefix replaced with “/bar” in matching requests.",
+          "type": "string",
+          "enum": [
+            "ReplacePrefixMatch"
+          ]
+        }
+      ]
+    }
+  }
+}

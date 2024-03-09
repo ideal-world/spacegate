@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RedirectFilter",
+  "description": "RedirectFilter defines a filter that redirects a request.\n\nhttps://gateway-api.sigs.k8s.io/geps/gep-726/",
+  "type": "object",
+  "properties": {
+    "hostname": {
+      "description": "Hostname is the hostname to be used in the value of the Location header in the response. When empty, the hostname in the Host header of the request is used.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "path": {
+      "description": "Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SgHttpPathModifier"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "port": {
+      "description": "Port is the port to be used in the value of the Location header in the response.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint16",
+      "minimum": 0.0
+    },
+    "scheme": {
+      "description": "Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status_code": {
+      "description": "StatusCode is the HTTP status code to be used in response.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint16",
+      "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "SgHttpPathModifier": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "description": "Type defines the type of path modifier.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SgHttpPathModifierType"
+            }
+          ]
+        },
+        "value": {
+          "description": "Value is the value to be used to replace the path during forwarding.",
+          "type": "string"
+        }
+      }
+    },
+    "SgHttpPathModifierType": {
+      "oneOf": [
+        {
+          "description": "This type of modifier indicates that the full path will be replaced by the specified value.",
+          "type": "string",
+          "enum": [
+            "ReplaceFullPath"
+          ]
+        },
+        {
+          "description": "This type of modifier indicates that any prefix path matches will be replaced by the substitution value. For example, a path with a prefix match of “/foo” and a ReplacePrefixMatch substitution of “/bar” will have the “/foo” prefix replaced with “/bar” in matching requests.",
+          "type": "string",
+          "enum": [
+            "ReplacePrefixMatch"
+          ]
+        }
+      ]
+    }
+  }
+}
