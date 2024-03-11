@@ -73,8 +73,10 @@ fn collect_tower_http_route(
                             }
                             builder = SgRouteFilter::install_on_backend(plugins, builder);
                             builder = builder.host(host).port(backend.port);
-                            let protocol = backend.protocol;
-                            if let Some(protocol) = protocol {
+                            if let Some(timeout) = backend.timeout_ms.map(|timeout| Duration::from_millis(timeout as u64)) {
+                                builder = builder.timeout(timeout)
+                            }
+                            if let Some(protocol) = backend.protocol {
                                 builder = builder.protocol(protocol.to_string());
                             }
                             builder.build()
