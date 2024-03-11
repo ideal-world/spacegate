@@ -17,7 +17,7 @@ use hyper::{header::HOST, Request, Response};
 use tokio_util::sync::CancellationToken;
 
 use tower_layer::Layer;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use super::http_route::{match_hostname::HostnameTree, match_request::MatchRequest, SgHttpRoute, SgHttpRouter};
 
@@ -152,6 +152,7 @@ where
     // sort the indices by priority
     // we put the highest priority at the front of the vector
     hostname_tree.iter_mut().for_each(|indices| indices.sort_unstable_by_key(|(_, p)| u16::MAX - *p));
+    debug!("hostname_tree: {hostname_tree:?}");
     Route::new(
         SgGatewayRoutedServices { services: services.into() },
         SgGatewayRouter {
