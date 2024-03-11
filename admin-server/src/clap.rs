@@ -19,10 +19,10 @@ const DEFAULT_PORT: u16 = 80;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    /// 
+    ///
     #[arg(short, long, default_value_t = DEFAULT_PORT)]
     pub port: u16,
-    /// 
+    ///
     #[arg(short='H', long, default_value_t = DEFAULT_HOST)]
     pub host: IpAddr,
     /// the config backend you choose
@@ -31,7 +31,7 @@ pub struct Args {
     #[arg(short, long, default_value_t = ConfigBackend::File(PathBuf::from("./config")))]
     pub config: ConfigBackend,
     /// the plugin schemas
-    /// 
+    ///
     /// see [`Schemas`]
     #[arg(short, long, default_value_t = Schemas(PathBuf::from("./schema")))]
     pub schemas: Schemas,
