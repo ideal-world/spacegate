@@ -31,10 +31,10 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct HostnameTree<T> {
-    ipv4: BTreeMap<Ipv4Addr, T>,
-    ipv6: BTreeMap<Ipv6Addr, T>,
-    host: HostnameMatcherNode<T>,
-    fallback: Option<T>,
+    pub(crate) ipv4: BTreeMap<Ipv4Addr, T>,
+    pub(crate) ipv6: BTreeMap<Ipv6Addr, T>,
+    pub(crate) host: HostnameMatcherNode<T>,
+    pub(crate) fallback: Option<T>,
 }
 
 impl<T> Default for HostnameTree<T> {
