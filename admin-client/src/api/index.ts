@@ -154,3 +154,16 @@ export async function delete_config_item(gatewayName: string,): Promise<AxiosRes
 export async function delete_config_item_all_routes(gatewayName: string,): Promise<AxiosResponse> {
     return Client.axiosInstance.delete(`/config/item/${gatewayName}/route/all`)
 }
+
+
+/**********************************************
+                        plugin
+**********************************************/
+
+export async function pluginList(): Promise<AxiosResponse<Array<string>>> {
+    return Client.axiosInstance.delete(`/plugin/list`)
+}
+
+export async function pluginSchema(code: string): Promise<AxiosResponse<unknown>> {
+    return Client.axiosInstance.delete(`/plugin/schema/${code}`)
+}
