@@ -89,7 +89,11 @@ fn collect_tower_http_route(
                     builder.build()
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut builder = spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).ext(builder_ext.clone());
+            let mut builder = spacegate_kernel::layers::http_route::SgHttpRoute::builder()
+                .hostnames(route.hostnames.unwrap_or_default())
+                .rules(rules)
+                .ext(builder_ext.clone())
+                .priority(route.priority);
             builder = SgRouteFilter::install_on_route(plugins, builder);
             builder.build()
         })
