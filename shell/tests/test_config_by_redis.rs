@@ -78,7 +78,7 @@ async fn test_config_by_redis() -> Result<(), BoxError> {
 
     sleep(Duration::from_secs(5)).await;
 
-    let resp = http_client.get::<Value>("https://localhost/get?dd1", None).await?;
+    let resp = http_client.get::<Value>("http://localhost:8888/get?dd1", None).await?;
     let resp = resp.body.unwrap();
     println!("resp: {:?}", resp);
     assert!(resp.get("url").unwrap().as_str().unwrap().contains("https://localhost/get?dd1"));
