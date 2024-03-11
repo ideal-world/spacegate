@@ -4,7 +4,7 @@ use tardis::serde_json;
 fn export_plugin<P: PluginSchemaExt + Plugin>(dir: std::path::PathBuf) {
     let schema = P::schema();
     let json = serde_json::to_string_pretty(&schema).unwrap();
-    let filename = format!("{}.schema.json", P::CODE);
+    let filename = format!("{}.json", P::CODE);
     let path = dir.join(filename);
     std::fs::write(path, json).unwrap();
 }
