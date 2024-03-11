@@ -18,17 +18,17 @@ path = "src/lib.rs"
 
 [features]
 local = ["tardis/fs", "notify"]
-cache = ["tardis/cache", "spacegate-plugin/cache"]
+cache = ["tardis/cache", "spacegate-plugin/cache", "deadpool-redis"]
 ws = ["tardis/ws-client"]
 k8s = [
-    "kube",
-    "k8s-openapi",
-    "k8s-gateway-api",
-    "schemars",
-    "cache",
-    "spacegate-plugin/rewrite",
-    "spacegate-plugin/header-modifier",
-    "spacegate-plugin/redirect",
+  "kube",
+  "k8s-openapi",
+  "k8s-gateway-api",
+  "schemars",
+  "cache",
+  "spacegate-plugin/rewrite",
+  "spacegate-plugin/header-modifier",
+  "spacegate-plugin/redirect",
 ]
 plugin-all = ["spacegate-plugin/full"]
 plugin-cache = ["spacegate-plugin/cache"]
@@ -57,16 +57,16 @@ urlencoding.workspace = true
 async-compression.workspace = true
 
 tardis = { workspace = true, features = [
-    "future",
-    "crypto",
-    "tls",
-    "build-info",
+  "future",
+  "crypto",
+  "tls",
+  "build-info",
 ] }
 hyper.workspace = true
 hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
 tokio-rustls.workspace = true
-ipnet = { version = "2", features = ["serde"] }
+ipnet = { workspace = true, features = ["serde"] }
 
 bytes = { workspace = true }
 
@@ -77,23 +77,24 @@ schemars = { workspace = true, optional = true }
 async-stream = "0.3.5"
 tokio-util = { version = "0.7.8", features = ["io"] }
 
-notify = { version = "6.1.1", default-features = false, features = [
-    "macos_kqueue",
+notify = { workspace = true, default-features = false, features = [
+  "macos_kqueue",
 ], optional = true }
 
+deadpool-redis = { workspace = true, optional = true }
 [dev-dependencies]
 tardis = { workspace = true, features = ["test", "web-client", "web-server"] }
 reqwest = { workspace = true }
 tracing-subscriber = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio"] }
-testcontainers-modules = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["redis"] }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-# [[test]]
-# name = "test_config_by_redis"
-# required-features = ["cache", "plugin-decompression"]
+[[test]]
+name = "test_config_by_redis"
+required-features = ["cache"]
 
 # [[test]]
 # name = "test_websocket"

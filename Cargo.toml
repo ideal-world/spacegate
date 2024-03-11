@@ -41,11 +41,10 @@ urlencoding = { version = "2" }
 tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "8d37621" }
 
 # Http
-http = { version = "0.2" }
 rustls = { version = "0.21.0" }
 hyper = { version = "1", features = ["full"] }
 http-body-util = { version = "0" }
-hyper-util = { version = "0"}
+hyper-util = { version = "0" }
 
 # ws
 tokio-tungstenite = { version = "0" }
@@ -65,7 +64,7 @@ schemars = { version = "0.8.6" }
 
 # Test
 reqwest = { version = "0.11", features = ["json", "gzip", "brotli"] }
-testcontainers-modules = { version = "0.2" }
+testcontainers-modules = { version = "0.3" }
 async-compression = { version = "0.3.13", default-features = false, features = [
   "tokio",
   "gzip",
@@ -86,6 +85,7 @@ duration-str = "0.7.1"
 
 # regex
 regex = { version = "1" }
+serde_regex = { version = "1.1.0" }
 
 # futures
 pin-project-lite = { version = "0.2" }
@@ -95,3 +95,8 @@ futures-util = { version = "0" }
 # utils
 ipnet = { version = "2" }
 
+# notify
+notify = { version = "6.1.1" }
+
+# redis
+deadpool-redis = { version = "0.14" }

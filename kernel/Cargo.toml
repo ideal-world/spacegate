@@ -30,17 +30,17 @@ pin-project-lite = { workspace = true }
 
 # serde
 serde = { workspace = true, features = ["derive"] }
-serde_regex = "1.1.0"
+serde_regex = { workspace = true }
 # http-serde = "2"
 
 
 tracing = { workspace = true }
 hyper-util = { workspace = true, features = [
-    "server-auto",
-    "client-legacy",
-    "tokio",
+  "server-auto",
+  "client-legacy",
+  "tokio",
 ] }
-tokio = { version = "1", features = ["net", "time", "macros"] }
+tokio = { workspace = true, features = ["net", "time", "macros"] }
 
 rand = { version = "0" }
 # future
