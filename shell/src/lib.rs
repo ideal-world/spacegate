@@ -57,10 +57,14 @@ pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<()
     startup(config)
 }
 #[cfg(feature = "cache")]
-pub async fn startup_cache(_url: impl AsRef<str>, _poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    unimplemented!("cache feature is not implemented yet")
-    // let config_listener = config::config_by_redis::RedisConfigListener::new(url.as_ref(), poll_interval_sec).await?;
-    // startup(config_listener)
+pub async fn startup_cache(url: &str, _poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    use deadpool_redis::Runtime;
+    use spacegate_config::service::{backend::redis::Redis, config_format::Json};
+
+    let cfg = deadpool_redis::Config::from_url(url);
+    let pool = cfg.create_pool(Some(Runtime::Tokio1)).map_err(|e| -> BoxError { format!("create redis pool error: {e}").into() })?;
+    let config = Redis::new(pool, Json::default());
+    startup(config)
 }
 
 pub fn startup_static(config: Config) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {

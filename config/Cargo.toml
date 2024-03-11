@@ -26,7 +26,7 @@ k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars"]
 typegen = ["ts-rs"]
 [dependencies]
 ts-rs = { version = "7.1", optional = true }
-serde_regex = "1.1.0"
+serde_regex = { workspace = true }
 regex = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 serde.workspace = true
@@ -38,7 +38,7 @@ hyper.workspace = true
 hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
 tokio-rustls.workspace = true
-ipnet = { version = "2", features = ["serde"] }
+ipnet = { workspace = true, features = ["serde"] }
 
 bytes = { workspace = true }
 
@@ -48,7 +48,7 @@ k8s-gateway-api = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 lazy_static.workspace = true
 
-notify = { version = "6.1.1", default-features = false, features = [
+notify = { workspace = true, default-features = false, features = [
   "macos_kqueue",
 ], optional = true }
 

@@ -11,7 +11,7 @@ async fn main() -> Result<(), BoxError> {
         let local_set = tokio::task::LocalSet::new();
         local_set
             .run_until(async move {
-                let join_handle = spacegate_shell::startup_cache(conf_url, check_interval_sec).await.expect("fail to start spacegate");
+                let join_handle = spacegate_shell::startup_cache(&conf_url, check_interval_sec).await.expect("fail to start spacegate");
                 join_handle.await.expect("join handle error")
             })
             .await

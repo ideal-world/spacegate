@@ -12,6 +12,7 @@ use spacegate_kernel::{
     layers::gateway::builder::SgGatewayLayerBuilder,
     SgBody, SgBoxLayer,
 };
+use tardis::chrono::TimeDelta;
 use tardis::{
     chrono::{Duration, Utc},
     tokio::{self},
@@ -101,7 +102,7 @@ impl spacegate_kernel::helper_layers::stat::Policy for DefaultPolicy {
 #[cfg(feature = "cache")]
 pub struct CachePolicy {
     unhealthy_threshold: u16,
-    pub interval: u64,
+    pub interval: TimeDelta,
     status_cache_key: Arc<str>,
     window_cache_key: Arc<str>,
     gateway_name: Arc<str>,
@@ -132,7 +133,7 @@ impl spacegate_kernel::helper_layers::stat::Policy for CachePolicy {
 
                 tardis::tokio::spawn(async move {
                     let client = crate::cache::Cache::get(&gateway_name).await?;
-                    let count = SlidingWindowCounter::new(Duration::seconds(interval as i64), &cache_window_key).add_and_count(now, client).await?;
+                    let count = SlidingWindowCounter::new(interval, &cache_window_key).add_and_count(now, client).await?;
                     let status = if count >= unhealthy_threshold as u64 {
                         status_plugin::Status::Major
                     } else {
@@ -175,7 +176,7 @@ impl MakeSgLayer for SgFilterStatusConfig {
         let layer = {
             let policy = CachePolicy {
                 unhealthy_threshold: self.unhealthy_threshold,
-                interval: self.interval,
+                interval: Duration::try_seconds(self.interval as i64).ok_or_else(|| format!("[SG.Filter.Status] invalid interval config[{}]", self.interval))?,
                 status_cache_key: self.status_cache_key.clone().into(),
                 window_cache_key: self.window_cache_key.clone().into(),
                 gateway_name,
