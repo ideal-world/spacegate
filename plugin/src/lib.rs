@@ -92,6 +92,8 @@ impl SgPluginRepository {
         self.register::<plugins::rewrite::RewritePlugin>();
         #[cfg(feature = "maintenance")]
         self.register::<plugins::maintenance::MaintenancePlugin>();
+        #[cfg(feature = "status")]
+        self.register::<plugins::status::StatusPlugin>();
         #[cfg(feature = "decompression")]
         self.register::<plugins::decompression::DecompressionPlugin>()
     }
