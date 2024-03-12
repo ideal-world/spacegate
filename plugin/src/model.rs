@@ -84,6 +84,9 @@ fn test_replace() {
         value: "/iam".into(),
     };
     assert_eq!(Some("/iam/get_name"), modifier.replace("api/iam/get_name", Some("api/iam")).as_deref());
-    assert_eq!(Some("/iam/get_name/example.js"), modifier.replace("api/iam/get_name/example.js", Some("api/iam")).as_deref());
+    assert_eq!(
+        Some("/iam/get_name/example.js"),
+        modifier.replace("api/iam/get_name/example.js", Some("api/iam")).as_deref()
+    );
     assert_eq!(Some("/iam/get_name/"), modifier.replace("api/iam/get_name/", Some("api/iam")).as_deref());
 }
