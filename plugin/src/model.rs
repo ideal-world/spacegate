@@ -39,20 +39,35 @@ impl SgHttpPathModifier {
                 }
                 let mut path_segments = path.split('/').filter(not_empty);
                 let mut prefix_segments = prefix_match.split('/').filter(not_empty);
-                let mut new_path = vec![""];
                 loop {
                     match (path_segments.next(), prefix_segments.next()) {
                         (Some(path_seg), Some(prefix_seg)) => {
                             if !path_seg.eq_ignore_ascii_case(prefix_seg) {
                                 return None;
                             }
-                            // new_path.push(path_seg)
                         }
-                        (rest_path, None) => {
-                            new_path.extend(self.value.split('/').filter(not_empty));
-                            new_path.extend(rest_path);
-                            new_path.extend(path_segments);
-                            return Some(new_path.join("/"));
+                        (None, None) => {
+                            // handle with duplicated stash and no stash
+                            let mut new_path = String::from("/");
+                            new_path.push_str(self.value.trim_start_matches('/'));
+                            return Some(new_path);
+                        }
+                        (Some(rest_path), None) => {
+                            let mut new_path = String::from("/");
+                            let replace_value = self.value.trim_matches('/');
+                            new_path.push_str(replace_value);
+                            if !replace_value.is_empty() {
+                                new_path.push('/');
+                            }
+                            new_path.push_str(rest_path);
+                            for seg in path_segments {
+                                new_path.push('/');
+                                new_path.push_str(seg);
+                            }
+                            if path.ends_with('/') {
+                                new_path.push('/')
+                            }
+                            return Some(new_path);
                         }
                         (None, Some(_)) => return None,
                     }
@@ -69,4 +84,6 @@ fn test_replace() {
         value: "/iam".into(),
     };
     assert_eq!(Some("/iam/get_name"), modifier.replace("api/iam/get_name", Some("api/iam")).as_deref());
+    assert_eq!(Some("/iam/get_name/example.js"), modifier.replace("api/iam/get_name/example.js", Some("api/iam")).as_deref());
+    assert_eq!(Some("/iam/get_name/"), modifier.replace("api/iam/get_name/", Some("api/iam")).as_deref());
 }

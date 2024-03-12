@@ -60,7 +60,6 @@ pub struct SgHttpMethodMatch(pub String);
 /// HTTPRouteMatch defines the predicate used to match requests to a given action.
 /// Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct SgHttpRouteMatch {
     /// Path specifies a HTTP request path matcher.
     /// If this field is not specified, a default prefix match on the “/” path is provided.
@@ -156,4 +155,10 @@ where
     fn match_request(&self, req: &Request<SgBody>) -> bool {
         self.iter().any(|query| query.match_request(req))
     }
+}
+
+#[test]
+fn test_match_path() {
+    let req = Request::builder().uri("https://localhost:8080/child/subApp").body(SgBody::empty()).expect("invalid request");
+    assert!(SgHttpPathMatch::Prefix("/child/subApp".into()).match_request(&req));
 }

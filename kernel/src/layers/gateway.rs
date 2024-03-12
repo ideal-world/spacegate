@@ -74,9 +74,12 @@ impl Router for SgGatewayRouter {
         let indices = self.hostname_tree.get(host)?;
         for (route_index, _p) in indices {
             for (idx1, r#match) in self.routers.as_ref().index(*route_index).rules.iter().enumerate() {
+                // tracing::trace!("try match {match:?} [{route_index},{idx1}:{_p}]");
                 if r#match.match_request(req) {
-                    tracing::trace!("matches {match:?}");
+                    tracing::trace!("matches {match:?} [{route_index},{idx1}:{_p}]");
                     return Some((*route_index, idx1));
+                } else {
+                    // tracing::trace!("unmatched {match:?}");
                 }
             }
         }
