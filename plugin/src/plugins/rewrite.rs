@@ -55,7 +55,12 @@ impl SgFilterRewrite {
                 if let Some(ref pq) = uri_part.path_and_query {
                     if let Some(new_path) = modifier.replace(pq.path(), prefix_match) {
                         tracing::debug!("[Sg.Plugin.Rewrite] rewrite path from {} to {}", pq.path(), new_path);
-                        let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_path).map_err(Response::bad_gateway)?;
+                        let mut new_pq = new_path;
+                        if let Some(query) = pq.query() {
+                            new_pq.push('?');
+                            new_pq.push_str(query)
+                        }
+                        let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_pq).map_err(Response::bad_gateway)?;
                         uri_part.path_and_query = Some(new_pq)
                     }
                 }

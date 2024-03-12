@@ -38,7 +38,7 @@ urlencoding = { version = "2" }
 # Tardis
 # tardis = { version = "=0.1.0-rc.8" }
 # tardis = { path = "../tardis/tardis" }
-tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "8d37621" }
+tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "aa8931b" }
 
 # Http
 rustls = { version = "0.21.0" }
