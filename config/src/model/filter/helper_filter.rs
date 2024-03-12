@@ -13,7 +13,8 @@ pub struct SgSingeFilter {
 
 impl PartialEq for SgSingeFilter {
     fn eq(&self, other: &Self) -> bool {
-        self.namespace == other.namespace
+        self.name == other.name
+            && self.namespace == other.namespace
             && self.filter.code == other.filter.code
             && self.target_ref.kind == other.target_ref.kind
             && self.target_ref.name == other.target_ref.name

@@ -27,11 +27,11 @@ impl SgRouteFilter {
             None
         } else {
             Some(SgSingeFilter {
-                name: self.name,
+                name: self.name.clone(),
                 namespace: target.namespace.clone().unwrap_or(constants::DEFAULT_NAMESPACE.to_string()),
                 filter: K8sSgFilterSpecFilter {
                     code: self.code,
-                    name: None,
+                    name: self.name,
                     config: self.spec,
                     enable: true,
                 },
