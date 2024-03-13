@@ -19,6 +19,8 @@ path = "src/lib.rs"
 
 [features]
 reload = []
+ext-redis = ["spacegate-ext-redis"]
+
 
 [dependencies]
 spacegate-config = { path = "../config" }
@@ -53,5 +55,10 @@ rustls-pemfile = { workspace = true }
 tokio-rustls = { workspace = true }
 
 tokio-util = { workspace = true }
+
+# ext-redis
+spacegate-ext-redis = { path = "../extension/redis", optional = true }
+
+
 [dev-dependencies]
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }

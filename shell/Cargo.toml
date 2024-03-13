@@ -18,7 +18,7 @@ path = "src/lib.rs"
 
 [features]
 local = ["tardis/fs", "notify"]
-cache = ["tardis/cache", "spacegate-plugin/cache", "deadpool-redis"]
+cache = ["spacegate-plugin/cache", "deadpool-redis", "spacegate-ext-redis"]
 ws = ["tardis/ws-client"]
 k8s = [
   "kube",
@@ -47,6 +47,7 @@ plugin-status = ["spacegate-plugin/status"]
 spacegate-kernel = { path = "../kernel", features = ["reload"] }
 spacegate-plugin = { path = "../plugin" }
 spacegate-config = { path = "../config" }
+spacegate-ext-redis = { path = "../extension/redis", optional = true }
 
 serde.workspace = true
 serde_json.workspace = true

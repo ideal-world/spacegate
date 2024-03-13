@@ -7,12 +7,14 @@ pub mod header;
 pub mod helper_layers;
 pub mod layers;
 pub mod listener;
+pub mod marker;
 pub mod service;
 pub mod utils;
 
 pub use body::SgBody;
 use extension::Reflect;
 use helper_layers::response_error::ErrorFormatter;
+pub use marker::Marker;
 pub use service::BoxHyperService;
 use std::{convert::Infallible, fmt, sync::Arc};
 pub use tower_layer::Layer;
@@ -32,6 +34,11 @@ pub trait SgRequestExt {
     fn with_reflect(&mut self);
     fn reflect_mut(&mut self) -> &mut Reflect;
     fn reflect(&self) -> &Reflect;
+    #[cfg(feature = "ext-redis")]
+    fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
+    fn extract_marker<M: Marker>(&self) -> Option<M>;
+    fn attach_marker<M: Marker>(&mut self, marker: M);
+    fn detach_marker<M: Marker>(&mut self) -> Option<M>;
 }
 
 impl SgRequestExt for SgRequest {
@@ -56,6 +63,23 @@ impl SgRequestExt for SgRequest {
         if self.extensions().get::<Reflect>().is_none() {
             self.extensions_mut().insert(Reflect::new());
         }
+    }
+
+    #[cfg(feature = "ext-redis")]
+    fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient> {
+        self.extensions().get::<extension::GatewayName>().and_then(|gateway_name| spacegate_ext_redis::RedisClientRepo::global().get(gateway_name))
+    }
+
+    fn extract_marker<M: Marker>(&self) -> Option<M> {
+        M::extract(self)
+    }
+
+    fn attach_marker<M: Marker>(&mut self, marker: M) {
+        marker.attach(self);
+    }
+
+    fn detach_marker<M: Marker>(&mut self) -> Option<M> {
+        M::detach(self)
     }
 }
 

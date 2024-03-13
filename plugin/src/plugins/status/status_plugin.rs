@@ -13,7 +13,9 @@ use tardis::tardis_static;
 #[cfg(not(feature = "cache"))]
 use tardis::tokio::sync::RwLock;
 #[cfg(feature = "cache")]
-use tardis::{cache::cache_client::TardisCacheClient, TardisFuns};
+use spacegate_ext_redis::{redis::AsyncCommands};
+#[cfg(feature = "cache")]
+use tardis::TardisFuns;
 #[cfg(not(feature = "cache"))]
 tardis_static! {
     server_status: Arc<RwLock<HashMap<String, Status>>> = <_>::default();
@@ -87,8 +89,8 @@ pub(crate) async fn create_status_html<B>(
 }
 
 #[cfg(feature = "cache")]
-pub(crate) async fn update_status(server_name: &str, _cache_key: &str, client: impl AsRef<TardisCacheClient>, status: Status) -> BoxResult<()> {
-    client.as_ref().hset(_cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
+pub(crate) async fn update_status(server_name: &str, _cache_key: &str, client: &spacegate_ext_redis::RedisClient, status: Status) -> BoxResult<()> {
+    client.get_conn().await.hset(_cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
     Ok(())
 }
 #[cfg(not(feature = "cache"))]
@@ -99,8 +101,8 @@ pub(crate) async fn update_status(server_name: &str, status: Status) -> BoxResul
 }
 
 #[cfg(feature = "cache")]
-pub(crate) async fn get_status(server_name: &str, cache_key: &str, client: impl AsRef<TardisCacheClient>) -> BoxResult<Option<Status>> {
-    match client.as_ref().hget(cache_key, server_name).await? {
+pub(crate) async fn get_status(server_name: &str, cache_key: &str, client: &spacegate_ext_redis::RedisClient) -> BoxResult<Option<Status>> {
+    match client.get_conn().await.hget(cache_key, server_name).await? {
         Some(result) => Ok(Some(TardisFuns::json.str_to_obj(&result)?)),
         None => Ok(None),
     }
@@ -113,8 +115,8 @@ pub(crate) async fn get_status(server_name: &str) -> BoxResult<Option<Status>> {
 
 #[cfg(feature = "cache")]
 pub(crate) async fn clean_status(cache_key: &str, gateway_name: &str) -> BoxResult<()> {
-    let client = crate::cache::Cache::get(gateway_name).await?;
-    client.as_ref().del(cache_key).await?;
+    let client = spacegate_ext_redis::RedisClientRepo::global().get(gateway_name);
+    client.del(cache_key).await?;
     Ok(())
 }
 

@@ -36,8 +36,7 @@ use tardis::{
     tokio::{signal, task::JoinHandle},
 };
 
-#[cfg(feature = "cache")]
-pub mod cache_client;
+
 pub mod config;
 pub mod constants;
 pub mod extension;

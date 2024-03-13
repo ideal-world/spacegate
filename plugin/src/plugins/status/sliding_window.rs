@@ -195,13 +195,13 @@ impl SlidingWindowCounter {
     }
 
     #[cfg(feature = "cache")]
-    pub async fn add_and_count(&self, now: DateTime<Utc>, client: impl AsRef<tardis::cache::cache_client::TardisCacheClient>) -> TardisResult<u64> {
+    pub async fn add_and_count(&self, now: DateTime<Utc>, client: &spacegate_ext_redis::RedisClient) -> TardisResult<u64> {
         let result: u64 = script()
             .key((if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }).to_string())
             .arg(self.window_size.num_milliseconds())
             .arg(now.timestamp())
             .arg(now.timestamp_subsec_micros())
-            .invoke_async(&mut client.as_ref().cmd().await?)
+            .invoke_async(&mut client.get_conn().await)
             .await
             .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Status] redis error : {e}"), ""))?;
         Ok(result)
@@ -238,8 +238,6 @@ impl Slot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "cache")]
-    use crate::cache::Cache;
     #[cfg(feature = "cache")]
     use tardis::test::test_container::TardisTestContainer;
     #[cfg(feature = "cache")]
@@ -321,8 +319,9 @@ mod tests {
         let redis_container = TardisTestContainer::redis_custom(&docker);
         let port = redis_container.get_host_port_ipv4(6379);
         let url = format!("redis://127.0.0.1:{port}/0",);
-        Cache::init("test_gate1", &url).await.unwrap();
-        let client = Cache::get("test_gate1").await.unwrap();
+        let repo = spacegate_ext_redis::RedisClientRepo::global();
+        repo.add("test_gate1".to_owned(), url.as_str());
+        let client = std::sync::Arc::new(repo.get("test_gate1").unwrap());
         // fn new_ctx() -> SgRoutePluginContext {
         //     SgRoutePluginContext::new_http(
         //         Method::GET,
