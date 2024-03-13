@@ -191,19 +191,10 @@ impl RunningSgGateway {
         {
             if let Some(url) = &config.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
-                let name = config.name.clone();
-
                 builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
-                tokio::spawn(async move {
-                    // Initialize cache instances
-                    log::trace!("Initialize cache client...url:{url}");
-                    match crate::cache_client::init(name, &url).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            log::error!("Initialize cache client failed:{e}");
-                        }
-                    }
-                });
+                // Initialize cache instances
+                log::trace!("Initialize cache client...url:{url}");
+                spacegate_ext_redis::RedisClientRepo::global().add(&config.name, url.as_ref());
             }
         }
         log::info!("[SG.Server] start gateway");
@@ -316,7 +307,7 @@ impl RunningSgGateway {
         {
             let name = self.gateway_name.clone();
             log::trace!("[SG.Cache] Remove cache client...");
-            tokio::spawn(async move { crate::cache_client::remove(name.as_ref()).await });
+            spacegate_ext_redis::global_repo().remove(name.as_ref());
         }
         match timeout(self.shutdown_timeout, self.handle).await {
             Ok(_) => {}

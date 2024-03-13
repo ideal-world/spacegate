@@ -7,10 +7,11 @@ use tardis::{cache::Script, tardis_static};
 use spacegate_kernel::{
     extension::GatewayName,
     helper_layers::async_filter::{AsyncFilter, AsyncFilterRequest, AsyncFilterRequestLayer},
-    SgBody, SgBoxLayer, SgResponseExt,
+    SgBody, SgBoxLayer, SgRequestExt, SgResponseExt,
 };
 
-use crate::{cache::Cache, def_plugin, MakeSgLayer};
+use crate::{def_plugin, MakeSgLayer, PluginError};
+use spacegate_ext_redis::redis::AsyncCommands;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -86,28 +87,24 @@ impl RateLimitConfig {
     async fn req_filter(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
         let id = &self.id;
         if let Some(max_request_number) = &self.max_request_number {
-            if let Some(gateway_name) = req.extensions().get::<GatewayName>() {
-                let mut conn = Cache::get(gateway_name).await.map_err(Response::<SgBody>::bad_gateway)?.cmd().await.map_err(Response::<SgBody>::bad_gateway)?;
-                let result: &bool = &script()
-                    // counter key
-                    .key(format!("{CONF_LIMIT_KEY}{id}"))
-                    // last counter reset timestamp key
-                    .key(format!("{CONF_LIMIT_KEY}{id}_ts"))
-                    // maximum number of request
-                    .arg(max_request_number)
-                    // time window
-                    .arg(self.time_window_ms.unwrap_or(1000))
-                    // current timestamp
-                    .arg(SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("invalid system time: before unix epoch").as_millis() as u64)
-                    .invoke_async(&mut conn)
-                    .await
-                    .map_err(|e| Response::<SgBody>::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, format!("[SG.Filter.Limit] redis error: {e}")))?;
+            let mut conn = req.get_redis_client_by_gateway_name().ok_or(PluginError::bad_gateway::<RateLimitPlugin>("missing gateway name"))?.get_conn().await;
+            let result: &bool = &script()
+                // counter key
+                .key(format!("{CONF_LIMIT_KEY}{id}"))
+                // last counter reset timestamp key
+                .key(format!("{CONF_LIMIT_KEY}{id}_ts"))
+                // maximum number of request
+                .arg(max_request_number)
+                // time window
+                .arg(self.time_window_ms.unwrap_or(1000))
+                // current timestamp
+                .arg(SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("invalid system time: before unix epoch").as_millis() as u64)
+                .invoke_async(&mut conn)
+                .await
+                .map_err(|e| Response::<SgBody>::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, format!("[SG.Filter.Limit] redis error: {e}")))?;
 
-                if !result {
-                    return Err(Response::<SgBody>::with_code_message(StatusCode::TOO_MANY_REQUESTS, "[SG.Filter.Limit] too many requests"));
-                }
-            } else {
-                // missing context
+            if !result {
+                return Err(Response::<SgBody>::with_code_message(StatusCode::TOO_MANY_REQUESTS, "[SG.Filter.Limit] too many requests"));
             }
         }
         Ok(req)

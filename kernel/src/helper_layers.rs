@@ -11,3 +11,4 @@ pub mod response_error;
 pub mod route;
 pub mod stat;
 pub mod timeout;
+pub mod check;

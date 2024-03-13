@@ -17,7 +17,7 @@ name = "spacegate_plugin"
 path = "src/lib.rs"
 
 [features]
-cache = ["tardis/cache"]
+cache = ["spacegate-kernel/ext-redis", "spacegate-ext-redis"]
 limit = ["cache"]
 header-modifier = []
 inject = []
@@ -60,6 +60,13 @@ futures-util = { workspace = true }
 
 # plugin-maintenance
 ipnet = { workspace = true, optional = true }
+
+# time
+chrono = { workspace = true }
+
+
+# cache
+spacegate-ext-redis = { path = "../extension/redis", optional = true }
 
 [dev-dependencies]
 tardis = { workspace = true, features = ["cache", "test"] }

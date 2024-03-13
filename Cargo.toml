@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "services/*", "shell", "plugin", "config", "admin-server"]
+members = ["kernel", "services/*", "shell", "plugin", "config", "admin-server", "extension/*"]
 resolver = "2"
 
 [profile.release]
@@ -34,6 +34,10 @@ itertools = { version = "0" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = { version = "0" }
 urlencoding = { version = "2" }
+
+
+# Time
+chrono = { version = "0.4" }
 
 # Tardis
 # tardis = { version = "=0.1.0-rc.8" }

@@ -17,12 +17,11 @@ pub use tardis::serde_json;
 pub use tardis::serde_json::{Error as SerdeJsonError, Value as JsonValue};
 
 pub use spacegate_kernel::BoxError;
-#[cfg(feature = "cache")]
-pub mod cache;
 pub mod error;
 pub mod model;
 pub mod plugins;
 pub use error::PluginError;
+
 #[cfg(feature = "schema")]
 pub use schemars;
 pub trait Plugin {
@@ -92,8 +91,8 @@ impl SgPluginRepository {
         self.register::<plugins::rewrite::RewritePlugin>();
         #[cfg(feature = "maintenance")]
         self.register::<plugins::maintenance::MaintenancePlugin>();
-        #[cfg(feature = "status")]
-        self.register::<plugins::status::StatusPlugin>();
+        // #[cfg(feature = "status")]
+        // self.register::<plugins::status::StatusPlugin>();
         #[cfg(feature = "decompression")]
         self.register::<plugins::decompression::DecompressionPlugin>()
     }
