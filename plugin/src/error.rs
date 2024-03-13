@@ -47,7 +47,10 @@ where
     }
 }
 
-impl<E> std::error::Error for PluginError<E> where E: std::error::Error + 'static {
+impl<E> std::error::Error for PluginError<E>
+where
+    E: std::error::Error + 'static,
+{
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.source)
     }

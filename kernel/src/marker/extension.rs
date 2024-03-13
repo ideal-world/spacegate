@@ -14,7 +14,7 @@ impl<E> Extension<E> {
     pub fn into_inner(self) -> E {
         self.0
     }
-} 
+}
 
 impl<E> Marker for Extension<E>
 where

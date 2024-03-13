@@ -36,7 +36,6 @@ use tardis::{
     tokio::{signal, task::JoinHandle},
 };
 
-
 pub mod config;
 pub mod constants;
 pub mod extension;

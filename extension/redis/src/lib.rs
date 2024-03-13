@@ -77,7 +77,10 @@ pub struct RedisClientRepoError {
 
 impl RedisClientRepoError {
     pub fn new(name: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { name: name.into(), message: message.into() }
+        Self {
+            name: name.into(),
+            message: message.into(),
+        }
     }
 }
 
@@ -95,13 +98,10 @@ impl std::fmt::Display for RedisClientRepoError {
 
 impl std::error::Error for RedisClientRepoError {}
 
-
 pub fn global_repo() -> &'static RedisClientRepo {
     RedisClientRepo::global()
 }
 
-
 pub trait AsRedisKey {
     fn as_redis_key(&self) -> String;
 }
-
