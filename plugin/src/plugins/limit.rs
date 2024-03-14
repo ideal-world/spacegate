@@ -1,17 +1,20 @@
-use std::{future::Future, pin::Pin, sync::Arc, time::SystemTime};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, OnceLock},
+    time::SystemTime,
+};
 
 use hyper::{Request, Response, StatusCode};
 use serde::{Deserialize, Serialize};
-use tardis::{cache::Script, tardis_static};
 
 use spacegate_kernel::{
-    extension::GatewayName,
     helper_layers::async_filter::{AsyncFilter, AsyncFilterRequest, AsyncFilterRequestLayer},
     SgBody, SgBoxLayer, SgRequestExt, SgResponseExt,
 };
 
 use crate::{def_plugin, MakeSgLayer, PluginError};
-use spacegate_ext_redis::redis::AsyncCommands;
+use spacegate_ext_redis::redis::Script;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -23,64 +26,49 @@ pub struct RateLimitConfig {
 
 const CONF_LIMIT_KEY: &str = "sg:plugin:filter:limit:";
 
-tardis_static! {
-    /// Flow limit script
-    ///
-    /// # Arguments
-    ///
-    /// * KEYS[1]  counter key
-    /// * KEYS[2]  last counter reset timestamp key
-    /// * ARGV[1]  maximum number of request
-    /// * ARGV[2]  time window
-    /// * ARGV[3]  current timestamp
-    ///
-    /// # Return
-    ///
-    /// * 1   passed
-    /// * 0   limited
-    ///
-    /// # Kernel logic
-    ///
-    /// ```lua
-    /// -- Use `counter` to accumulate 1 for each request
-    /// local current_count = tonumber(redis.call('incr', KEYS[1]));
-    /// if current_count == 1 then
-    ///     -- The current request is the first request, record the current timestamp
-    ///     redis.call('set', KEYS[2], ARGV[3]);
-    /// end
-    /// -- When the `counter` value reaches the maximum number of requests
-    /// if current_count > tonumber(ARGV[1]) then
-    ///     local last_refresh_time = tonumber(redis.call('get', KEYS[2]));
-    ///     if last_refresh_time + tonumber(ARGV[2]) > tonumber(ARGV[3]) then
-    ///          -- Last reset time + time window > current time,
-    ///          -- indicating that the request has reached the upper limit within this time period,
-    ///          -- so the request is limited
-    ///         return 0;
-    ///     end
-    ///     -- Otherwise reset the counter and timestamp,
-    ///     -- and allow the request
-    ///     redis.call('set', KEYS[1], '1')
-    ///     redis.call('set', KEYS[2], ARGV[3]);
-    /// end
-    /// return 1;
-    /// ```
-    pub script: Script = Script::new(
-        r"
-    local current_count = tonumber(redis.call('incr', KEYS[1]));
-    if current_count == 1 then
-        redis.call('set', KEYS[2], ARGV[3]);
-    end
-    if current_count > tonumber(ARGV[1]) then
-        local last_refresh_time = tonumber(redis.call('get', KEYS[2]));
-        if last_refresh_time + tonumber(ARGV[2]) > tonumber(ARGV[3]) then
-            return 0;
-        end
-        redis.call('set', KEYS[1], '1')
-        redis.call('set', KEYS[2], ARGV[3]);
-    end
-    return 1;
-    ",
-    );
+/// Flow limit script
+///
+/// # Arguments
+///
+/// * KEYS[1]  counter key
+/// * KEYS[2]  last counter reset timestamp key
+/// * ARGV[1]  maximum number of request
+/// * ARGV[2]  time window
+/// * ARGV[3]  current timestamp
+///
+/// # Return
+///
+/// * 1   passed
+/// * 0   limited
+///
+/// # Kernel logic
+///
+/// ```lua
+/// -- Use `counter` to accumulate 1 for each request
+/// local current_count = tonumber(redis.call('incr', KEYS[1]));
+/// if current_count == 1 then
+///     -- The current request is the first request, record the current timestamp
+///     redis.call('set', KEYS[2], ARGV[3]);
+/// end
+/// -- When the `counter` value reaches the maximum number of requests
+/// if current_count > tonumber(ARGV[1]) then
+///     local last_refresh_time = tonumber(redis.call('get', KEYS[2]));
+///     if last_refresh_time + tonumber(ARGV[2]) > tonumber(ARGV[3]) then
+///          -- Last reset time + time window > current time,
+///          -- indicating that the request has reached the upper limit within this time period,
+///          -- so the request is limited
+///         return 0;
+///     end
+///     -- Otherwise reset the counter and timestamp,
+///     -- and allow the request
+///     redis.call('set', KEYS[1], '1')
+///     redis.call('set', KEYS[2], ARGV[3]);
+/// end
+/// return 1;
+/// ```
+pub fn script() -> &'static Script {
+    static SCRIPT: OnceLock<Script> = OnceLock::new();
+    SCRIPT.get_or_init(|| Script::new(include_str!("./limit/script.lua")))
 }
 
 impl RateLimitConfig {

@@ -13,8 +13,8 @@ use spacegate_kernel::{
     },
     BoxResult,
 };
-pub use tardis::serde_json;
-pub use tardis::serde_json::{Error as SerdeJsonError, Value as JsonValue};
+pub use serde_json;
+pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 
 pub use spacegate_kernel::BoxError;
 pub mod error;

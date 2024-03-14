@@ -19,15 +19,10 @@ use spacegate_kernel::{
 use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
-use tardis::log::{instrument, warn};
-use tardis::tokio::time::timeout;
-use tardis::{config::config_dto::LogConfig, consts::IP_UNSPECIFIED};
-use tardis::{
-    log::{self as tracing, debug, info},
-    log::{self, error},
-    tokio::{self, sync::watch::Sender, task::JoinHandle},
-    TardisFuns,
-};
+use tokio::time::timeout;
+use tokio::{self, sync::watch::Sender, task::JoinHandle};
+use tracing::{debug, error, info, instrument, warn};
+
 use tokio_rustls::rustls::{self, pki_types::PrivateKeyDer};
 use tokio_util::sync::CancellationToken;
 
@@ -193,44 +188,46 @@ impl RunningSgGateway {
                 let url: Arc<str> = url.clone().into();
                 builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
                 // Initialize cache instances
-                log::trace!("Initialize cache client...url:{url}");
+                tracing::trace!("Initialize cache client...url:{url}");
                 spacegate_ext_redis::RedisClientRepo::global().add(&config.name, url.as_ref());
             }
         }
-        log::info!("[SG.Server] start gateway");
+        tracing::info!("[SG.Server] start gateway");
         let reloader = <Reloader<SgGatewayRoute>>::default();
         let service = create_service(&config.name, cancel_token.clone(), config.filters, http_routes, reloader.clone(), builder_ext)?;
         if config.listeners.is_empty() {
             return Err("[SG.Server] Missing Listeners".into());
         }
-        if let Some(log_level) = config.parameters.log_level.clone() {
-            log::debug!("[SG.Server] change log level to {log_level}");
-            let fw_config = TardisFuns::fw_config();
-            let old_configs = fw_config.log();
-            let directive = format!("{domain}={log_level}", domain = crate::constants::DOMAIN_CODE).parse().expect("invalid directive");
-            let mut directives = old_configs.directives.clone();
-            if let Some(index) = directives.iter().position(|d| d.to_string().starts_with(crate::constants::DOMAIN_CODE)) {
-                directives.remove(index);
-            }
-            directives.push(directive);
-            TardisFuns::tracing().update_config(&LogConfig {
-                level: old_configs.level.clone(),
-                directives,
-                ..Default::default()
-            })?;
+        if let Some(_log_level) = config.parameters.log_level.clone() {
+            // not supported yet
+
+            // tracing::debug!("[SG.Server] change log level to {log_level}");
+            // let fw_config = TardisFuns::fw_config();
+            // let old_configs = fw_config.log();
+            // let directive = format!("{domain}={log_level}", domain = crate::constants::DOMAIN_CODE).parse().expect("invalid directive");
+            // let mut directives = old_configs.directives.clone();
+            // if let Some(index) = directives.iter().position(|d| d.to_string().starts_with(crate::constants::DOMAIN_CODE)) {
+            //     directives.remove(index);
+            // }
+            // directives.push(directive);
+            // TardisFuns::tracing().update_config(&LogConfig {
+            //     level: old_configs.level.clone(),
+            //     directives,
+            //     ..Default::default()
+            // })?;
         }
 
         let gateway_name: Arc<str> = Arc::from(config.name.to_string());
         let mut listens: Vec<SgListen<BoxHyperService>> = Vec::new();
         for listener in &config.listeners {
-            let ip = listener.ip.unwrap_or(IP_UNSPECIFIED);
+            let ip = listener.ip.unwrap_or(std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED));
             let addr = SocketAddr::new(ip, listener.port);
 
             let gateway_name = gateway_name.clone();
             let protocol = listener.protocol.to_string();
             let mut tls_cfg = None;
             if let SgProtocolConfig::Https { ref tls } = listener.protocol {
-                log::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
+                tracing::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
                 if SgTlsMode::Terminate == tls.mode {
                     {
                         let certs = rustls_pemfile::certs(&mut tls.cert.as_bytes()).filter_map(Result::ok).collect::<Vec<_>>();
@@ -273,9 +270,9 @@ impl RunningSgGateway {
             local_set.spawn_local(async move {
                 let id = listen.listener_id.clone();
                 if let Err(e) = listen.listen().await {
-                    log::error!("[Sg.Server] listen error: {e}")
+                    tracing::error!("[Sg.Server] listen error: {e}")
                 }
-                log::info!("[Sg.Server] listener[{id}] quit listening")
+                tracing::info!("[Sg.Server] listener[{id}] quit listening")
             });
         }
 
@@ -284,12 +281,12 @@ impl RunningSgGateway {
         let handle = {
             let gateway_name = gateway_name.clone();
             tokio::task::spawn_local(async move {
-                log::info!(gateway = gateway_name.as_ref(), "[Sg.Server] start all listeners");
+                tracing::info!(gateway = gateway_name.as_ref(), "[Sg.Server] start all listeners");
                 local_set.run_until(cancel_task).await;
-                log::info!(gateway = gateway_name.as_ref(), "[Sg.Server] cancelled");
+                tracing::info!(gateway = gateway_name.as_ref(), "[Sg.Server] cancelled");
             })
         };
-        log::info!("[SG.Server] start finished");
+        tracing::info!("[SG.Server] start finished");
         Ok(RunningSgGateway {
             gateway_name: gateway_name.clone(),
             token: cancel_token,
@@ -306,15 +303,15 @@ impl RunningSgGateway {
         #[cfg(feature = "cache")]
         {
             let name = self.gateway_name.clone();
-            log::trace!("[SG.Cache] Remove cache client...");
+            tracing::trace!("[SG.Cache] Remove cache client...");
             spacegate_ext_redis::global_repo().remove(name.as_ref());
         }
         match timeout(self.shutdown_timeout, self.handle).await {
             Ok(_) => {}
             Err(e) => {
-                log::warn!("[SG.Server] Wait shutdown timeout:{e}");
+                tracing::warn!("[SG.Server] Wait shutdown timeout:{e}");
             }
         };
-        log::info!("[SG.Server] Gateway shutdown");
+        tracing::info!("[SG.Server] Gateway shutdown");
     }
 }

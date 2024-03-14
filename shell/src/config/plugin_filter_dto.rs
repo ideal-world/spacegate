@@ -7,7 +7,6 @@ use spacegate_kernel::{
     BoxError, SgBoxLayer,
 };
 use spacegate_plugin::MakeSgLayer;
-use tardis::log;
 
 /// Extension trait for [`SgRouteFilter`] to install on backend, gateway, rule and route in a more convenient way.
 pub trait FilterInstallExt: Sized {
@@ -16,7 +15,7 @@ pub trait FilterInstallExt: Sized {
     fn install_on_backend(iter: impl IntoIterator<Item = Self>, mut builder: SgHttpBackendLayerBuilder) -> SgHttpBackendLayerBuilder {
         for filter in iter {
             if let Err(e) = filter.create().and_then(|layer| layer.install_on_backend(&mut builder)) {
-                log::error!("[Sg.Plugins] install_on_backend error: {}", e);
+                tracing::error!("[Sg.Plugins] install_on_backend error: {}", e);
             }
         }
         builder
@@ -24,7 +23,7 @@ pub trait FilterInstallExt: Sized {
     fn install_on_gateway(iter: impl IntoIterator<Item = Self>, mut builder: SgGatewayLayerBuilder) -> SgGatewayLayerBuilder {
         for filter in iter {
             if let Err(e) = filter.create().and_then(|layer| layer.install_on_gateway(&mut builder)) {
-                log::error!("[Sg.Plugins] install_on_gateway error: {}", e);
+                tracing::error!("[Sg.Plugins] install_on_gateway error: {}", e);
             }
         }
         builder
@@ -32,7 +31,7 @@ pub trait FilterInstallExt: Sized {
     fn install_on_rule(iter: impl IntoIterator<Item = Self>, mut builder: SgHttpRouteRuleLayerBuilder) -> SgHttpRouteRuleLayerBuilder {
         for filter in iter {
             if let Err(e) = filter.create().and_then(|layer| layer.install_on_rule(&mut builder)) {
-                log::error!("[Sg.Plugins] install_on_rule error: {}", e);
+                tracing::error!("[Sg.Plugins] install_on_rule error: {}", e);
             }
         }
         builder
@@ -40,7 +39,7 @@ pub trait FilterInstallExt: Sized {
     fn install_on_route(iter: impl IntoIterator<Item = Self>, mut builder: SgHttpRouteLayerBuilder) -> SgHttpRouteLayerBuilder {
         for filter in iter {
             if let Err(e) = filter.create().and_then(|layer| layer.install_on_route(&mut builder)) {
-                log::error!("[Sg.Plugins] install_on_route error: {}", e);
+                tracing::error!("[Sg.Plugins] install_on_route error: {}", e);
             }
         }
         builder

@@ -21,7 +21,7 @@ cache = ["spacegate-kernel/ext-redis", "spacegate-ext-redis"]
 limit = ["cache"]
 header-modifier = []
 inject = []
-redirect = []
+redirect = ["url"]
 retry = []
 rewrite = []
 maintenance = ["ipnet", "schemars/chrono"]
@@ -52,8 +52,8 @@ pin-project-lite = { workspace = true }
 hyper-util = { workspace = true, optional = true }
 # serde
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tokio-util = { workspace = true, features = ["io"] }
-tardis = { workspace = true, features = ["cache"] }
 schemars = { workspace = true, optional = true }
 # future
 futures-util = { workspace = true }
@@ -64,9 +64,14 @@ ipnet = { workspace = true, optional = true }
 # time
 chrono = { workspace = true }
 
+rand = { version = "0" }
+url = { version = "2", optional = true }
 
 # cache
 spacegate-ext-redis = { path = "../extension/redis", optional = true }
+
+# rt
+tokio = { workspace = true }
 
 [dev-dependencies]
 tardis = { workspace = true, features = ["cache", "test"] }

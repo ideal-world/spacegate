@@ -3,11 +3,9 @@ use std::{convert::Infallible, future::Future, pin::Pin, sync::Arc, task::ready,
 use http_body_util::BodyExt;
 use hyper::{Request, Response, StatusCode};
 use pin_project_lite::pin_project;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-use tardis::{
-    rand::{self, Rng},
-    tokio::{self, time::Sleep},
-};
+use tokio::time::Sleep;
 use tower_layer::Layer;
 
 use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
