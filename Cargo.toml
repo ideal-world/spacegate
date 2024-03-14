@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "services/*", "shell", "plugin", "config", "admin-server", "extension/*"]
+members = ["kernel", "shell", "plugin", "config", "admin-server", "extension/*"]
 resolver = "2"
 
 [profile.release]

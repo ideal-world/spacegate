@@ -1,11 +1,9 @@
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 
 use crate::{utils::query_kv::QueryKvIter, Request, SgBody};
 
 /// PathMatchType specifies the semantics of how HTTP paths should be compared.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "kind", content = "value", rename_all = "PascalCase")]
+#[derive(Debug, Clone)]
 pub enum SgHttpPathMatch {
     /// Matches the URL path exactly and with case sensitivity.
     Exact(String),
@@ -13,53 +11,45 @@ pub enum SgHttpPathMatch {
     /// A path element refers to the list of labels in the path split by the / separator. When specified, a trailing / is ignored.
     Prefix(String),
     /// Matches if the URL path matches the given regular expression with case sensitivity.
-    #[serde(with = "serde_regex")]
     Regular(Regex),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum SgHttpHeaderMatchPolicy {
     /// Matches the HTTP header exactly and with case sensitivity.
     Exact(String),
     /// Matches if the Http header matches the given regular expression with case sensitivity.
-    #[serde(with = "serde_regex")]
     Regular(Regex),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct SgHttpHeaderMatch {
     /// Name is the name of the HTTP Header to be matched. Name matching MUST be case insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2).
     pub name: String,
-    #[serde(flatten)]
     pub policy: SgHttpHeaderMatchPolicy,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum SgHttpQueryMatchPolicy {
     /// Matches the HTTP query parameter exactly and with case sensitivity.
     Exact(String),
     /// Matches if the Http query parameter matches the given regular expression with case sensitivity.
-    #[serde(with = "serde_regex")]
     Regular(Regex),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct SgHttpQueryMatch {
     pub name: String,
-    #[serde(flatten)]
     pub policy: SgHttpQueryMatchPolicy,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Default, Debug, Clone)]
 
 pub struct SgHttpMethodMatch(pub String);
 
 /// HTTPRouteMatch defines the predicate used to match requests to a given action.
 /// Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone)]
 pub struct SgHttpRouteMatch {
     /// Path specifies a HTTP request path matcher.
     /// If this field is not specified, a default prefix match on the “/” path is provided.

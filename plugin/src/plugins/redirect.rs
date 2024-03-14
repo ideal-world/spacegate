@@ -5,7 +5,7 @@ use spacegate_kernel::{
     helper_layers::filter::{Filter, FilterRequestLayer},
     SgBoxLayer,
 };
-use tardis::url::Url;
+use url::Url;
 
 use spacegate_kernel::SgBody;
 

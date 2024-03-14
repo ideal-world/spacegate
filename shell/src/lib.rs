@@ -29,17 +29,16 @@ use spacegate_config::Config;
 pub use spacegate_kernel as kernel;
 pub use spacegate_kernel::{BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 pub use spacegate_plugin as plugin;
-use tardis::log::instrument;
-use tardis::{
-    basic::result::TardisResult,
-    log::{self as tracing, info},
-    tokio::{signal, task::JoinHandle},
-};
+use tracing::{instrument, info};
+use tokio::{signal, task::JoinHandle};
 
 pub mod config;
 pub mod constants;
 pub mod extension;
 pub mod server;
+
+#[cfg(feature = "ext-redis")]
+pub use spacegate_ext_redis;
 
 #[cfg(feature = "local")]
 pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
@@ -83,13 +82,13 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct Meta {
     pub version: &'static str,
-    pub commit: &'static str,
+    // pub commit: &'static str,
 }
 
 impl Meta {
     const DEFAULT: Meta = Self {
         version: env!("CARGO_PKG_VERSION"),
-        commit: tardis::utils::build_info::git_version!(cargo_prefix = "cargo:", fallback = "unknown"),
+        // commit: tardis::utils::build_info::git_version!(cargo_prefix = "cargo:", fallback = "unknown"),
     };
     pub const fn new() -> Self {
         Self::DEFAULT
@@ -102,7 +101,7 @@ impl Default for Meta {
     }
 }
 
-pub async fn wait_graceful_shutdown() -> TardisResult<()> {
+pub async fn wait_graceful_shutdown() {
     match signal::ctrl_c().await {
         Ok(_) => {
             let instances = server::RunningSgGateway::global_store().lock().expect("fail to lock").drain().collect::<Vec<_>>();
@@ -115,15 +114,14 @@ pub async fn wait_graceful_shutdown() -> TardisResult<()> {
             tracing::error!("Received the ctrl+c signal, but with an error: {error}");
         }
     }
-    Ok(())
 }
 
 pub fn ctrl_c_cancel_token() -> tokio_util::sync::CancellationToken {
     let cancel_token = tokio_util::sync::CancellationToken::new();
     {
         let cancel_token = cancel_token.clone();
-        tardis::tokio::spawn(async move {
-            let _ = tardis::tokio::signal::ctrl_c().await;
+        tokio::spawn(async move {
+            let _ = tokio::signal::ctrl_c().await;
             info!("Received ctrl+c signal, shutting down...");
             cancel_token.cancel();
         });
