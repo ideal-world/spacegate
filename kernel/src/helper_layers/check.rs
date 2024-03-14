@@ -1,38 +1,31 @@
+#[cfg(feature = "ext-redis")]
+pub mod redis;
+
 use std::{convert::Infallible, future::ready};
 
 use futures_util::{future::BoxFuture, Future};
 use hyper::{Request, Response, StatusCode};
 
-use crate::{Marker, ReqOrResp, SgBody, SgResponseExt};
+use crate::{Marker, SgBody, SgResponseExt};
 
 pub trait Check<M>: Sync + Send + 'static
 where
     M: Marker + Send + Sync + 'static,
 {
-    fn check(&self, _marker: M) -> impl Future<Output = bool> + Send {
+    fn check(&self, _marker: &M) -> impl Future<Output = bool> + Send {
         ready(true)
     }
-    fn on_pass(&self) -> Response<SgBody> {
+    fn on_forbidden(&self, _marker: M) -> Response<SgBody> {
         Response::with_code_message(StatusCode::FORBIDDEN, "forbidden")
     }
     fn on_missing(&self) -> Response<SgBody> {
         Response::with_code_message(StatusCode::UNAUTHORIZED, "unauthorized")
     }
-    fn on_response(&self, resp: Response<SgBody>) -> Response<SgBody> {
-        resp
+    fn on_pass(&self, request: Request<SgBody>) -> Request<SgBody> {
+        request
     }
-    fn on_request(&self, req: Request<SgBody>) -> impl Future<Output = ReqOrResp> + Send {
-        Box::pin(async move {
-            if let Some(authority) = M::extract(&req) {
-                if self.check(authority).await {
-                    Ok(req)
-                } else {
-                    Err(self.on_pass())
-                }
-            } else {
-                Err(self.on_missing())
-            }
-        })
+    fn on_response(&self, _marker: M, resp: Response<SgBody>) -> Response<SgBody> {
+        resp
     }
 }
 
@@ -98,13 +91,18 @@ where
 
     fn call(&self, request: Request<SgBody>) -> Self::Future {
         let cloned = self.clone();
+        let marker = M::extract(&request);
         Box::pin(async move {
-            match cloned.check.on_request(request).await {
-                Ok(req) => {
-                    let resp = cloned.service.call(req).await.expect("infallible");
-                    Ok(cloned.check.on_response(resp))
+            let checker = &cloned.check;
+            if let Some(marker) = marker {
+                if checker.check(&marker).await {
+                    let resp = cloned.service.call(checker.on_pass(request)).await.expect("infallible");
+                    Ok(checker.on_response(marker, resp))
+                } else {
+                    Ok(checker.on_forbidden(marker))
                 }
-                Err(resp) => Ok(resp),
+            } else {
+                Ok(checker.on_missing())
             }
         })
     }
