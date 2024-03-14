@@ -1,7 +1,6 @@
+use futures_util::{Stream, StreamExt};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
 use spacegate_kernel::BoxError;
-use futures_util::{Stream, StreamExt};
-
 
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;

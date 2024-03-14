@@ -29,8 +29,8 @@ use spacegate_config::Config;
 pub use spacegate_kernel as kernel;
 pub use spacegate_kernel::{BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 pub use spacegate_plugin as plugin;
-use tracing::{instrument, info};
 use tokio::{signal, task::JoinHandle};
+use tracing::{info, instrument};
 
 pub mod config;
 pub mod constants;
