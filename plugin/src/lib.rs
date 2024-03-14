@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, OnceLock, RwLock},
 };
 
+pub use serde_json;
+pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
 pub use spacegate_kernel::SgBoxLayer;
 use spacegate_kernel::{
@@ -13,8 +15,6 @@ use spacegate_kernel::{
     },
     BoxResult,
 };
-pub use serde_json;
-pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 
 pub use spacegate_kernel::BoxError;
 pub mod error;
