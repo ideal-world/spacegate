@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::RwLock};
 
-use deadpool_redis::{Connection, Manager, Pool};
+pub use deadpool_redis::{Connection, Manager, Pool};
 pub use redis;
 use redis::RedisResult;
 /// hash: {gateway name} -> {gateway config}
@@ -103,5 +103,5 @@ pub fn global_repo() -> &'static RedisClientRepo {
 }
 
 pub trait AsRedisKey {
-    fn as_redis_key(&self) -> String;
+    fn as_redis_key(&self, prefix: impl AsRef<str>) -> String;
 }

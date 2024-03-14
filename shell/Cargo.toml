@@ -101,11 +101,11 @@ required-features = ["cache"]
 # name = "test_websocket"
 # required-features = ["ws"]
 
-[[bench]]
-name = "cache_sliding_window_benchmark"
-required-features = ["cache"]
-harness = false
+# [[bench]]
+# name = "cache_sliding_window_benchmark"
+# required-features = ["cache"]
+# harness = false
 
-[[bench]]
-name = "local_sliding_window_benchmark"
-harness = false
+# [[bench]]
+# name = "local_sliding_window_benchmark"
+# harness = false

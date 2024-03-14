@@ -1,7 +1,7 @@
-use std::{collections::HashMap, env};
+use std::env;
 
 mod init_cache_container;
-use hyper::HeaderMap;
+
 use serde_json::Value;
 use spacegate_kernel::BoxError;
 use tardis::{
