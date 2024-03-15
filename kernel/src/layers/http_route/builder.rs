@@ -125,8 +125,9 @@ impl SgHttpRouteRuleLayerBuilder {
         self
     }
     pub fn build(self) -> Result<SgHttpRouteRuleLayer, BoxError> {
+        let r#match = self.r#match.map(|ms| ms.into_iter().map(Arc::new).collect());
         Ok(SgHttpRouteRuleLayer {
-            r#match: self.r#match.into(),
+            r#match,
             plugins: Arc::from(self.plugins),
             timeouts: self.timeouts,
             backends: Arc::from_iter(self.backends),

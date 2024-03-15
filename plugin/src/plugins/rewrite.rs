@@ -1,10 +1,9 @@
 use hyper::header::{HeaderValue, HOST};
 use hyper::{Request, Response, Uri};
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::extension::Matched;
+use spacegate_kernel::extension::MatchedSgRouter;
 use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
-use spacegate_kernel::layers::gateway::SgGatewayRouter;
-use spacegate_kernel::layers::http_route::match_request::{MatchRequest, SgHttpPathMatch};
+use spacegate_kernel::layers::http_route::match_request::SgHttpPathMatch;
 use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
 
 use crate::model::SgHttpPathModifier;
@@ -38,19 +37,10 @@ impl SgFilterRewrite {
         }
         if let Some(ref modifier) = self.path {
             let mut uri_part = req.uri().clone().into_parts();
-            if let Some(matched) = req.extensions().get::<Matched<SgGatewayRouter>>() {
+            if let Some(matched_path) = req.extensions().get::<MatchedSgRouter>() {
                 let mut prefix_match = None;
-                let router = &matched.router;
-                let index = &matched.index;
-                if let Some(matches) = router.routers[index.0].rules[index.1].as_ref() {
-                    for path_match in matches.iter().filter_map(|m| m.path.as_ref()) {
-                        if let SgHttpPathMatch::Prefix(prefix) = path_match {
-                            if path_match.match_request(&req) {
-                                prefix_match = Some(prefix.as_str());
-                                break;
-                            }
-                        }
-                    }
+                if let Some(SgHttpPathMatch::Prefix(prefix)) = matched_path.0.path.as_ref() {
+                    prefix_match = Some(prefix.as_str());
                 }
                 if let Some(ref pq) = uri_part.path_and_query {
                     if let Some(new_path) = modifier.replace(pq.path(), prefix_match) {

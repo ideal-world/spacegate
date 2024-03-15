@@ -3,7 +3,7 @@ pub mod builder;
 use std::{convert::Infallible, ops::Index, sync::Arc};
 
 use crate::{
-    extension::GatewayName,
+    extension::{GatewayName, MatchedSgRouter},
     helper_layers::{
         map_request::{add_extension::add_extension, MapRequestLayer},
         reload::Reloader,
@@ -69,17 +69,25 @@ impl Index<(usize, usize)> for SgGatewayRoutedServices {
 impl Router for SgGatewayRouter {
     type Index = (usize, usize);
     #[instrument(skip_all, fields(uri = req.uri().to_string(), method = req.method().as_str(), host = ?req.headers().get(HOST) ))]
-    fn route(&self, req: &Request<SgBody>) -> Option<Self::Index> {
+    fn route(&self, req: &mut Request<SgBody>) -> Option<Self::Index> {
         let host = req.headers().get(HOST).and_then(|x| x.to_str().ok())?;
         let indices = self.hostname_tree.get(host)?;
         for (route_index, _p) in indices {
-            for (idx1, r#match) in self.routers.as_ref().index(*route_index).rules.iter().enumerate() {
+            for (idx1, matches) in self.routers.as_ref().index(*route_index).rules.iter().enumerate() {
                 // tracing::trace!("try match {match:?} [{route_index},{idx1}:{_p}]");
-                if r#match.match_request(req) {
-                    tracing::trace!("matches {match:?} [{route_index},{idx1}:{_p}]");
-                    return Some((*route_index, idx1));
+                let index = (*route_index, idx1);
+                if let Some(ref matches) = matches {
+                    for m in matches.as_ref() {
+                        if m.match_request(req) {
+                            req.extensions_mut().insert(MatchedSgRouter(m.clone()));
+                            tracing::trace!("matches {m:?} [{route_index},{idx1}:{_p}]");
+                            return Some(index);
+                        }
+                    }
+                    continue;
                 } else {
-                    // tracing::trace!("unmatched {match:?}");
+                    tracing::trace!("matches wildcard [{route_index},{idx1}:{_p}]");
+                    return Some(index);
                 }
             }
         }

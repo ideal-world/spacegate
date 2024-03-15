@@ -23,12 +23,4 @@ where
     fn extract(req: &Request<SgBody>) -> Option<Self> {
         req.extensions().get::<E>().cloned().map(Extension)
     }
-
-    fn attach(self, req: &mut Request<SgBody>) {
-        req.extensions_mut().insert(Extension(self));
-    }
-
-    fn detach(req: &mut Request<SgBody>) -> Option<Self> {
-        req.extensions_mut().remove::<E>().map(Extension)
-    }
 }

@@ -45,7 +45,7 @@ impl SgHttpRoute {
 #[derive(Debug, Clone)]
 pub struct SgHttpRouter {
     pub hostnames: Arc<[String]>,
-    pub rules: Arc<[Arc<Option<Vec<SgHttpRouteMatch>>>]>,
+    pub rules: Arc<[Option<Arc<[Arc<SgHttpRouteMatch>]>>]>,
 }
 
 /****************************************************************************************
@@ -56,7 +56,7 @@ pub struct SgHttpRouter {
 
 #[derive(Debug, Clone)]
 pub struct SgHttpRouteRuleLayer {
-    pub r#match: Arc<Option<Vec<SgHttpRouteMatch>>>,
+    pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
     pub plugins: Arc<[SgBoxLayer]>,
     timeouts: Option<Duration>,
     backends: Arc<[SgHttpBackendLayer]>,
@@ -96,7 +96,7 @@ where
 }
 #[derive(Clone)]
 pub struct SgRouteRule {
-    pub r#match: Arc<Option<Vec<SgHttpRouteMatch>>>,
+    pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
     pub service: BoxHyperService,
 }
 

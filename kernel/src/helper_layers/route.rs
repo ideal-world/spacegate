@@ -8,7 +8,7 @@ use crate::{extension::Matched, SgBody};
 
 pub trait Router: Clone {
     type Index: Clone;
-    fn route(&self, req: &Request<SgBody>) -> Option<Self::Index>;
+    fn route(&self, req: &mut Request<SgBody>) -> Option<Self::Index>;
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +45,7 @@ where
     type Response = Response<SgBody>;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
     fn call(&self, mut req: Request<SgBody>) -> Self::Future {
-        let fut: Self::Future = if let Some(index) = self.router.route(&req) {
+        let fut: Self::Future = if let Some(index) = self.router.route(&mut req) {
             req.extensions_mut().insert(Matched {
                 index: index.clone(),
                 router: self.router.clone(),

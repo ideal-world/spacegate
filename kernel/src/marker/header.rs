@@ -35,12 +35,4 @@ where
     fn extract(req: &Request<SgBody>) -> Option<Self> {
         req.headers().get(H::NAME).map(<Header<H>>::new)
     }
-
-    fn attach(self, req: &mut Request<SgBody>) {
-        req.headers_mut().insert(H::NAME, self.value.clone());
-    }
-
-    fn detach(req: &mut Request<SgBody>) -> Option<Self> {
-        req.headers_mut().remove(H::NAME).map(<Header<H>>::new)
-    }
 }

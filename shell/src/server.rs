@@ -187,6 +187,7 @@ impl RunningSgGateway {
             if let Some(url) = &config.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
                 builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
+                builder_ext.insert(spacegate_kernel::extension::GatewayName(config.name.clone().into()));
                 // Initialize cache instances
                 tracing::trace!("Initialize cache client...url:{url}");
                 spacegate_ext_redis::RedisClientRepo::global().add(&config.name, url.as_ref());
