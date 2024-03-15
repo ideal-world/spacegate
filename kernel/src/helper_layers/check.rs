@@ -1,10 +1,11 @@
 #[cfg(feature = "ext-redis")]
 pub mod redis;
 
-use std::{convert::Infallible, future::ready};
+use std::{convert::Infallible, future::ready, marker::PhantomData};
 
 use futures_util::{future::BoxFuture, Future};
 use hyper::{Request, Response, StatusCode};
+use tower_layer::Layer;
 
 use crate::{Marker, SgBody, SgResponseExt};
 
@@ -29,22 +30,41 @@ where
     }
 }
 
-pub struct CheckLayer<C> {
+pub struct CheckLayer<C, M> {
     check: C,
+    marker: PhantomData<fn() -> M>,
 }
 
-impl<C> CheckLayer<C> {
+impl<C, M> CheckLayer<C, M> {
     pub fn new(check: C) -> Self {
-        Self { check }
+        Self { check, marker: PhantomData }
     }
 }
 
-impl<C> Clone for CheckLayer<C>
+impl<C, S, M> Layer<S> for CheckLayer<C, M>
+where
+    C: Clone,
+{
+    type Service = CheckService<C, S, M>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        CheckService {
+            check: self.check.clone(),
+            service: inner,
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<C, M> Clone for CheckLayer<C, M>
 where
     C: Clone,
 {
     fn clone(&self) -> Self {
-        Self { check: self.check.clone() }
+        Self {
+            check: self.check.clone(),
+            marker: PhantomData,
+        }
     }
 }
 

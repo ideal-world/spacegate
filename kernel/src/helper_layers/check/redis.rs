@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
-use hyper::Response;
-use spacegate_ext_redis::{redis::Script, AsRedisKey, Connection, RedisClient};
+use hyper::{body::Bytes, Response, StatusCode};
+use spacegate_ext_redis::{
+    redis::{self, Script, ToRedisArgs},
+    AsRedisKey, Connection, RedisClient,
+};
 
-use crate::{Marker, SgBody};
+use crate::{Marker, SgBody, SgResponseExt};
 
 use super::Check;
 
@@ -15,6 +18,7 @@ pub struct RedisCheck {
     pub response_script: Option<RedisResponseScript>,
     pub key_prefix: Arc<str>,
     pub client: RedisClient,
+    pub on_fail: Option<(StatusCode, Bytes)>,
 }
 
 #[derive(Clone)]
@@ -38,12 +42,6 @@ impl From<Script> for RedisCheckScript {
 impl From<Arc<Script>> for RedisCheckScript {
     fn from(script: Arc<Script>) -> Self {
         RedisCheckScript::Lua(script)
-    }
-}
-
-impl From<Box<dyn Fn(Connection, String) -> BoxFuture<'static, bool> + Send + Sync>> for RedisCheckScript {
-    fn from(f: Box<dyn Fn(Connection, String) -> BoxFuture<'static, bool> + Send + Sync>) -> Self {
-        RedisCheckScript::Rust(Arc::new(f))
     }
 }
 
@@ -72,12 +70,16 @@ impl From<Box<dyn Fn(Connection, String, u16) -> BoxFuture<'static, ()> + Send +
 }
 
 impl RedisCheckScript {
-    pub async fn call(&self, mut conn: Connection, key: String) -> bool {
+    pub async fn call<A>(&self, mut conn: Connection, key: String, args: A) -> bool
+    where
+        A: ToRedisArgs,
+    {
         match self {
             RedisCheckScript::Lua(script) => {
                 let result: Result<bool, _> = script
                     // counter key
                     .key(&key)
+                    .arg(args)
                     .invoke_async(&mut conn)
                     .await;
                 result
@@ -92,13 +94,17 @@ impl RedisCheckScript {
 }
 
 impl RedisResponseScript {
-    pub async fn call(&self, mut conn: Connection, key: String, status: u16) {
+    pub async fn call<A>(&self, mut conn: Connection, key: String, status: u16, args: A)
+    where
+        A: ToRedisArgs,
+    {
         match self {
             RedisResponseScript::Lua(script) => {
                 let result: Result<(), _> = script
                     // counter key
                     .key(&key)
                     .arg(status)
+                    .arg(args)
                     .invoke_async(&mut conn)
                     .await;
                 if let Err(e) = result {
@@ -112,13 +118,13 @@ impl RedisResponseScript {
 
 impl<M> Check<M> for RedisCheck
 where
-    M: AsRedisKey + Marker + Send + Sync + 'static,
+    M: AsRedisKey + redis::ToRedisArgs + Marker + Send + Sync + 'static,
 {
     async fn check(&self, marker: &M) -> bool {
         let script = self.check_script.as_ref();
         let key = marker.as_redis_key(&self.key_prefix);
         if let Some(script) = script {
-            script.call(self.client.get_conn().await, key).await
+            script.call(self.client.get_conn().await, key, marker).await
         } else {
             true
         }
@@ -132,11 +138,18 @@ where
                 let status = resp.status().as_u16();
                 let task = async move {
                     let conn = client.get_conn().await;
-                    script.call(conn, key, status).await;
+                    script.call(conn, key, status, marker).await;
                 };
                 tokio::spawn(task);
             }
         }
         resp
+    }
+    fn on_forbidden(&self, _marker: M) -> Response<SgBody> {
+        if let Some((status, bytes)) = &self.on_fail {
+            Response::with_code_message(status.clone(), bytes.clone())
+        } else {
+            Response::with_code_message(StatusCode::FORBIDDEN, "redis script check auth fail")
+        }
     }
 }

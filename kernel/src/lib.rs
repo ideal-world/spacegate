@@ -37,8 +37,6 @@ pub trait SgRequestExt {
     #[cfg(feature = "ext-redis")]
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
     fn extract_marker<M: Marker>(&self) -> Option<M>;
-    fn attach_marker<M: Marker>(&mut self, marker: M);
-    fn detach_marker<M: Marker>(&mut self) -> Option<M>;
 }
 
 impl SgRequestExt for SgRequest {
@@ -72,14 +70,6 @@ impl SgRequestExt for SgRequest {
 
     fn extract_marker<M: Marker>(&self) -> Option<M> {
         M::extract(self)
-    }
-
-    fn attach_marker<M: Marker>(&mut self, marker: M) {
-        marker.attach(self);
-    }
-
-    fn detach_marker<M: Marker>(&mut self) -> Option<M> {
-        M::detach(self)
     }
 }
 
