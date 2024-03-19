@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 COPY ./dist /usr/share/nginx/html
 
 COPY ./spacegate-admin-server /usr/src/app/admin-server
-
+COPY ./res/schema /usr/src/app/schema
 COPY nginx-default.conf /etc/nginx/nginx.conf
 COPY start.sh /usr/src/app/start.sh
 RUN chmod +x start.sh
