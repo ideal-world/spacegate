@@ -5,7 +5,6 @@ mod init_cache_container;
 use serde_json::Value;
 use spacegate_kernel::BoxError;
 use tardis::{
-    cache::cache_client::TardisCacheClient,
     config::config_dto::{CacheModuleConfig, WebClientModuleConfig},
     testcontainers,
     tokio::{

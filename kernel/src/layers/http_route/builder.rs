@@ -11,7 +11,7 @@ pub struct SgHttpRouteLayerBuilder {
     pub hostnames: Vec<String>,
     pub rules: Vec<SgHttpRouteRuleLayer>,
     pub plugins: Vec<SgBoxLayer>,
-    pub priority: Option<u16>,
+    pub priority: Option<i16>,
     pub extensions: hyper::http::Extensions,
 }
 
@@ -51,7 +51,7 @@ impl SgHttpRouteLayerBuilder {
         self.plugins.extend(plugins);
         self
     }
-    pub fn priority(mut self, priority: u16) -> Self {
+    pub fn priority(mut self, priority: i16) -> Self {
         self.priority = Some(priority);
         self
     }

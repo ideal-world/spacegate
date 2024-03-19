@@ -10,7 +10,7 @@ use std::{
 
 use clap::Parser;
 use serde_json::Value;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::state::PluginCode;
 const DEFAULT_HOST: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
@@ -55,6 +55,7 @@ impl Schemas {
                 }
             }
         }
+        info!("all schema loaded");
         Ok(map)
     }
 }
