@@ -48,7 +48,7 @@ impl Default for SgFilterStatusConfig {
             title: "System Status".to_string(),
             unhealthy_threshold: 3,
             interval: 5,
-            status_cache_key: "spacegate:cache:plugin:status".to_string(),
+            status_cache_key: "sg:plugin:status".to_string(),
             window_cache_key: sliding_window::DEFAULT_CONF_WINDOW_KEY.to_string(),
         }
     }
@@ -132,7 +132,9 @@ impl spacegate_kernel::helper_layers::stat::Policy for CachePolicy {
                 let now = Utc::now();
 
                 tardis::tokio::spawn(async move {
-                    let client = spacegate_ext_redis::RedisClientRepo::global().get(&gateway_name).ok_or_else(||spacegate_ext_redis::RedisClientRepoError::new(gateway_name.as_ref(), "not found"))?;
+                    let client = spacegate_ext_redis::RedisClientRepo::global()
+                        .get(&gateway_name)
+                        .ok_or_else(|| spacegate_ext_redis::RedisClientRepoError::new(gateway_name.as_ref(), "not found"))?;
                     let count = SlidingWindowCounter::new(interval, &cache_window_key).add_and_count(now, &client).await?;
                     let status = if count >= unhealthy_threshold as u64 {
                         status_plugin::Status::Major
@@ -144,7 +146,9 @@ impl spacegate_kernel::helper_layers::stat::Policy for CachePolicy {
                 });
             } else {
                 tardis::tokio::spawn(async move {
-                    let client = spacegate_ext_redis::RedisClientRepo::global().get(&gateway_name).ok_or_else(||spacegate_ext_redis::RedisClientRepoError::new(gateway_name.as_ref(), "not found"))?;
+                    let client = spacegate_ext_redis::RedisClientRepo::global()
+                        .get(&gateway_name)
+                        .ok_or_else(|| spacegate_ext_redis::RedisClientRepoError::new(gateway_name.as_ref(), "not found"))?;
                     if let Some(status) = get_status(&backend_host, &cache_key, &client).await? {
                         if status != status_plugin::Status::Good {
                             update_status(&backend_host, &cache_key, client, status_plugin::Status::Good).await?;
