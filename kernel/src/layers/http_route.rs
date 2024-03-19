@@ -34,7 +34,7 @@ pub struct SgHttpRoute {
     pub hostnames: Arc<[String]>,
     pub plugins: Arc<[SgBoxLayer]>,
     pub rules: Arc<[SgHttpRouteRuleLayer]>,
-    pub priority: u16,
+    pub priority: i16,
 }
 
 impl SgHttpRoute {

@@ -90,9 +90,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 name = "test_config_by_redis"
 required-features = ["cache"]
 
-# [[test]]
-# name = "test_websocket"
-# required-features = ["ws"]
+[[test]]
+name = "test_websocket"
+required-features = ["plugin-rewrite"]
 
 # [[bench]]
 # name = "cache_sliding_window_benchmark"

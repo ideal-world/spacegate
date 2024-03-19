@@ -19,7 +19,7 @@ pub struct SgHttpRoute {
     /// Rules are a list of HTTP matchers, filters and actions.
     pub rules: Vec<SgHttpRouteRule>,
     /// Rule priority, the rule of higher priority will be chosen.
-    pub priority: u16,
+    pub priority: i16,
 }
 
 impl Default for SgHttpRoute {
@@ -105,10 +105,8 @@ impl ToString for K8sServiceData {
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
 #[serde(tag = "kind")]
 pub enum BackendHost {
-    Host {
-        host: String,
-    },
-    #[cfg(feature = "k8s")]
+    Host { host: String },
+    // #[cfg(feature = "k8s")]
     K8sService(K8sServiceData),
 }
 
@@ -116,7 +114,7 @@ impl ToString for BackendHost {
     fn to_string(&self) -> String {
         match self {
             Self::Host { host } => host.clone(),
-            #[cfg(feature = "k8s")]
+            // #[cfg(feature = "k8s")]
             Self::K8sService(k8s_service) => k8s_service.to_string(),
         }
     }

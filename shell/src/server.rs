@@ -4,9 +4,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::config::{
-    matches_convert::convert_config_to_kernel, plugin_filter_dto::FilterInstallExt, BackendHost, SgGateway, SgHttpRoute, SgProtocolConfig, SgRouteFilter, SgTlsMode,
-};
+use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::FilterInstallExt, SgGateway, SgHttpRoute, SgProtocolConfig, SgRouteFilter, SgTlsMode};
 
 use lazy_static::lazy_static;
 use spacegate_kernel::{
@@ -59,6 +57,7 @@ fn collect_tower_http_route(
                             #[cfg(feature = "k8s")]
                             {
                                 use crate::extension::k8s_service::K8sService;
+                                use spacegate_config::model::BackendHost;
                                 use spacegate_kernel::helper_layers::map_request::{add_extension::add_extension, MapRequestLayer};
                                 use spacegate_kernel::SgBoxLayer;
                                 if let BackendHost::K8sService(data) = backend.host {
@@ -181,7 +180,7 @@ impl RunningSgGateway {
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config.name), skip_all, err)]
     pub fn create(config: SgGateway, http_routes: Vec<SgHttpRoute>, cancel_token: CancellationToken) -> Result<Self, BoxError> {
-        let mut builder_ext = hyper::http::Extensions::new();
+        let builder_ext = hyper::http::Extensions::new();
         #[cfg(feature = "cache")]
         {
             if let Some(url) = &config.parameters.redis_url {

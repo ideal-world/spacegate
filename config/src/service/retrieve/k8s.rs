@@ -151,7 +151,7 @@ impl K8s {
         } else {
             SgFilterTargetKind::Httpspaceroute.into()
         };
-        let priority = httpspace_route.annotations().get(crate::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<u16>().ok()).unwrap_or(0);
+        let priority = httpspace_route.annotations().get(crate::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i16>().ok()).unwrap_or(0);
         let gateway_refs = httpspace_route.spec.inner.parent_refs.clone().unwrap_or_default();
         let filters = self
             .retrieve_config_item_filters(K8sSgFilterSpecTargetRef {
