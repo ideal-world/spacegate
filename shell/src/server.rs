@@ -180,7 +180,8 @@ impl RunningSgGateway {
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config.name), skip_all, err)]
     pub fn create(config: SgGateway, http_routes: Vec<SgHttpRoute>, cancel_token: CancellationToken) -> Result<Self, BoxError> {
-        let builder_ext = hyper::http::Extensions::new();
+        #[allow(unused_mut)]
+        let mut builder_ext = hyper::http::Extensions::new();
         #[cfg(feature = "cache")]
         {
             if let Some(url) = &config.parameters.redis_url {

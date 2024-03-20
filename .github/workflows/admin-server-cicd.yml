@@ -71,7 +71,7 @@ jobs:
         run: cp ./target/release/spacegate-admin-server admin-server/res/
       
       - name: Copy plugin schema to workspace
-        run: cp -r ./plugin/schema admin-server/res/
+        run: rm admin-server/res/schema && cp -r ./plugin/schema admin-server/res/
         
       - name: Get front run id
         run: |
