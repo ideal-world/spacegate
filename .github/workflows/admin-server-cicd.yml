@@ -69,7 +69,10 @@ jobs:
 
       - name: Copy artifact to workspace
         run: cp ./target/release/spacegate-admin-server admin-server/res/
-
+      
+      - name: Copy plugin schema to workspace
+        run: cp -r ./plugin/schema admin-server/res/
+        
       - name: Get front run id
         run: |
           run_id=$(curl https://api.github.com/repos/ideal-world/spacegate-admin-fe/actions/workflows/cicd.yml/runs\?status\=success |jq '.workflow_runs[0].id' )
