@@ -14,7 +14,6 @@ pub struct PluginError<E> {
 
 const PLUGIN_ERROR_HEADER: &str = "X-Plugin-Error";
 
-
 impl<E> From<PluginError<E>> for Response<SgBody>
 where
     E: Display,
