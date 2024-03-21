@@ -11,7 +11,8 @@ pub trait FnLayerMethod: Send + 'static {
 }
 
 impl<T> FnLayerMethod for Arc<T>
-where T: FnLayerMethod + std::marker::Sync
+where
+    T: FnLayerMethod + std::marker::Sync,
 {
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
         self.as_ref().call(req, inner).await
