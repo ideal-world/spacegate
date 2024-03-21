@@ -75,7 +75,7 @@ impl RateLimitConfig {
     async fn req_filter(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
         let id = &self.id;
         if let Some(max_request_number) = &self.max_request_number {
-            let mut conn = req.get_redis_client_by_gateway_name().ok_or(PluginError::bad_gateway::<RateLimitPlugin>("missing gateway name"))?.get_conn().await;
+            let mut conn = req.get_redis_client_by_gateway_name().ok_or(PluginError::internal_error::<RateLimitPlugin>("missing gateway name"))?.get_conn().await;
             let result: &bool = &script()
                 // counter key
                 .key(format!("{CONF_LIMIT_KEY}{id}"))

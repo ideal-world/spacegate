@@ -19,4 +19,5 @@ pub mod rewrite;
 
 pub mod traffic;
 
+pub mod static_resource;
 // pub mod ffi;

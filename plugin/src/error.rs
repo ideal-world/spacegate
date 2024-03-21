@@ -1,39 +1,44 @@
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, fmt::Display, num::NonZeroU16};
 
-use hyper::{Response, StatusCode};
+use hyper::{header::HeaderValue, Response, StatusCode};
 use spacegate_kernel::{SgBody, SgResponseExt};
 
 use crate::Plugin;
 
 #[derive(Debug)]
 pub struct PluginError<E> {
-    plugin_code: Cow<'static, str>,
+    plugin_code: &'static str,
     source: E,
     status: StatusCode,
 }
+
+const PLUGIN_ERROR_HEADER: &str = "X-Plugin-Error";
+
 
 impl<E> From<PluginError<E>> for Response<SgBody>
 where
     E: Display,
 {
     fn from(val: PluginError<E>) -> Self {
-        Response::with_code_message(val.status, val.to_string())
+        let mut resp = Response::with_code_message(val.status, val.to_string());
+        resp.headers_mut().insert(PLUGIN_ERROR_HEADER, HeaderValue::from_static(val.plugin_code));
+        resp
     }
 }
 
 impl<E> PluginError<E> {
-    pub fn status<P: Plugin>(status: StatusCode) -> impl Fn(E) -> Self {
+    pub fn status<P: Plugin, const S: u16>(error: E) -> Self {
         move |e: E| Self {
-            plugin_code: Cow::Borrowed(P::CODE),
+            plugin_code: P::CODE,
             source: e,
-            status,
+            status: StatusCode::from_u16(S),
         }
     }
-    pub fn bad_gateway<P: Plugin>(e: E) -> Self {
+    pub fn internal_error<P: Plugin>(e: E) -> Self {
         Self {
-            plugin_code: Cow::Borrowed(P::CODE),
+            plugin_code: P::CODE,
             source: e,
-            status: StatusCode::BAD_GATEWAY,
+            status: StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
