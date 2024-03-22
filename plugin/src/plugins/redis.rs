@@ -1,7 +1,10 @@
 use hyper::{header::HeaderName, Request};
 use spacegate_kernel::{extension::MatchedSgRouter, layers::http_route::match_request::SgHttpPathMatch, SgBody};
 
-pub mod redis_freq_limit;
+pub mod redis_count;
+pub mod redis_dynamic_route;
+pub mod redis_limit;
+pub mod redis_time_range;
 
 pub struct RedisRateLimitConfig {
     pub key: RedisRateLimitKey,
@@ -13,7 +16,7 @@ pub enum RedisRateLimitKey {
     Header(String),
 }
 
-fn format_key(req: &Request<SgBody>, matched: &MatchedSgRouter, header: &HeaderName) -> Option<String> {
+fn redis_format_key(req: &Request<SgBody>, matched: &MatchedSgRouter, header: &HeaderName) -> Option<String> {
     let is_method_any_match = matched.method.as_ref().is_none();
     let method = if !is_method_any_match { req.method().as_str() } else { "*" };
     let path = matched

@@ -25,10 +25,19 @@ pub use error::PluginError;
 #[cfg(feature = "schema")]
 pub use schemars;
 pub trait Plugin {
-    type Error: std::error::Error + Send + Sync + 'static;
     type MakeLayer: MakeSgLayer + 'static;
     const CODE: &'static str;
-    fn create(value: JsonValue) -> Result<Self::MakeLayer, Self::Error>;
+    fn create(id: Option<String>, value: JsonValue) -> Result<Self::MakeLayer, BoxError>;
+    fn redis_prefix(id: Option<&str>) -> String {
+        let id = id.unwrap_or("*");
+        format!("sg:plugin:{code}:{id}", code = Self::CODE)
+    }
+}
+
+pub struct PluginConfig {
+    pub code: String,
+    pub spec: JsonValue,
+    pub name: Option<String>,
 }
 
 #[cfg(feature = "schema")]
@@ -60,7 +69,7 @@ pub trait MakeSgLayer {
     }
 }
 
-type BoxCreateFn = Box<dyn Fn(JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> + Send + Sync>;
+type BoxCreateFn = Box<dyn Fn(Option<String>, JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> + Send + Sync>;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
     pub map: Arc<RwLock<HashMap<&'static str, BoxCreateFn>>>,
@@ -103,32 +112,21 @@ impl SgPluginRepository {
 
     pub fn register<P: Plugin>(&self) {
         let mut map = self.map.write().expect("SgPluginTypeMap register error");
-        let create_fn = Box::new(move |value| P::create(value).map_err(BoxError::from).map(|x| Box::new(x) as Box<dyn MakeSgLayer>));
+        let create_fn = Box::new(move |id: Option<String>, value| P::create(id, value).map_err(BoxError::from).map(|x| Box::new(x) as Box<dyn MakeSgLayer>));
         map.insert(P::CODE, Box::new(create_fn));
     }
 
-    pub fn register_custom<F, M, E>(&self, code: &'static str, f: F)
-    where
-        F: Fn(JsonValue) -> Result<M, E> + 'static + Send + Sync,
-        M: MakeSgLayer + 'static,
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        let mut map = self.map.write().expect("SgPluginTypeMap register error");
-        let create_fn = Box::new(move |value| f(value).map_err(BoxError::from).map(|x| Box::new(x) as Box<dyn MakeSgLayer>));
-        map.insert(code, Box::new(create_fn));
-    }
-
-    pub fn create(&self, code: &str, value: JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> {
+    pub fn create(&self, name: Option<String>, code: &str, value: JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> {
         let map = self.map.read().expect("SgPluginTypeMap register error");
         if let Some(t) = map.get(code) {
-            (t)(value)
+            (t)(name, value)
         } else {
             Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into())
         }
     }
 
-    pub fn create_layer(&self, code: &str, value: JsonValue) -> Result<SgBoxLayer, BoxError> {
-        let inner = self.create(code, value)?.make_layer()?;
+    pub fn create_layer(&self, name: Option<String>, code: &str, value: JsonValue) -> Result<SgBoxLayer, BoxError> {
+        let inner = self.create(name, code, value)?.make_layer()?;
         Ok(inner)
     }
 }
@@ -156,8 +154,7 @@ macro_rules! def_plugin {
         impl $crate::Plugin for $def {
             const CODE: &'static str = CODE;
             type MakeLayer = $filter_type;
-            type Error = $crate::SerdeJsonError;
-            fn create(value: $crate::JsonValue) -> Result<Self::MakeLayer, Self::Error> {
+            fn create(_name: Option<String>, value: $crate::JsonValue) -> Result<Self::MakeLayer, $crate::BoxError> {
                 let filter: $filter_type = $crate::serde_json::from_value(value)?;
                 Ok(filter)
             }
@@ -200,8 +197,7 @@ macro_rules! def_filter_plugin {
         impl $crate::Plugin for $def {
             const CODE: &'static str = CODE;
             type MakeLayer = $filter_type;
-            type Error = $crate::SerdeJsonError;
-            fn create(value: $crate::JsonValue) -> Result<Self::MakeLayer, Self::Error> {
+            fn create(_name: Option<String>, value: $crate::JsonValue) -> Result<Self::MakeLayer, $crate::BoxError> {
                 let filter: $filter_type = $crate::serde_json::from_value(value)?;
                 Ok(filter)
             }
