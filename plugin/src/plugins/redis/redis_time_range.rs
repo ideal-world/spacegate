@@ -98,9 +98,7 @@ impl Plugin for RedisTimeRangePlugin {
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(
-    RedisTimeRangePlugin
-);
+crate::schema!(RedisTimeRangePlugin);
 
 #[cfg(test)]
 mod test {

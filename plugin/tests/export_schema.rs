@@ -28,7 +28,7 @@ fn export_schema() {
         redis::{redis_count::RedisCountPlugin, redis_dynamic_route::RedisDynamicRoutePlugin, redis_limit::RedisLimitPlugin, redis_time_range::RedisTimeRangePlugin},
         retry::RetryPlugin,
         rewrite::RewritePlugin,
-        static_resource::StaticResourcePlugin
+        static_resource::StaticResourcePlugin,
     };
     export_plugins!("schema":
         HeaderModifierPlugin

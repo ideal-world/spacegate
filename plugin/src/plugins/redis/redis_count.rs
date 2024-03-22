@@ -104,9 +104,7 @@ impl Plugin for RedisCountPlugin {
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(
-    RedisCountPlugin
-);
+crate::schema!(RedisCountPlugin);
 
 #[cfg(test)]
 mod test {
