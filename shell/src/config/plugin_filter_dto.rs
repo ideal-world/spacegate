@@ -49,10 +49,10 @@ pub trait FilterInstallExt: Sized {
 impl FilterInstallExt for SgRouteFilter {
     fn into_layer(self) -> Result<SgBoxLayer, BoxError> {
         let plugin_repo = spacegate_plugin::SgPluginRepository::global();
-        plugin_repo.create(&self.code, self.spec)?.make_layer()
+        plugin_repo.create(self.name, &self.code, self.spec)?.make_layer()
     }
     fn create(self) -> Result<Box<dyn MakeSgLayer>, BoxError> {
         let plugin_repo = spacegate_plugin::SgPluginRepository::global();
-        plugin_repo.create(&self.code, self.spec)
+        plugin_repo.create(self.name, &self.code, self.spec)
     }
 }

@@ -17,7 +17,8 @@ name = "spacegate_plugin"
 path = "src/lib.rs"
 
 [features]
-cache = ["spacegate-kernel/ext-redis", "spacegate-ext-redis"]
+cache = ["redis"]
+redis = ["spacegate-kernel/ext-redis", "spacegate-ext-redis"]
 limit = ["cache"]
 header-modifier = []
 inject = []
@@ -81,9 +82,11 @@ async-compression = { version = "0.4", features = [
     "deflate",
     "brotli",
 ] }
+testcontainers = "0.15.0"
+testcontainers-modules = { workspace = true, features = ["redis"] }
 
 
 [[test]]
 name = "export_schema"
 path = "tests/export_schema.rs"
-required-features = ["schema"]
+required-features = ["schema", "cache"]

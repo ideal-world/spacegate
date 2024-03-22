@@ -1,99 +1,188 @@
 use futures_util::future::BoxFuture;
-use futures_util::FutureExt;
-use futures_util::{future::Map, Future};
+use futures_util::Future;
 use hyper::{service::Service, Request, Response};
-use std::convert::Infallible;
-use std::sync::Arc;
+use std::{convert::Infallible, sync::Arc};
 use tower_layer::Layer;
 
 use crate::{BoxHyperService, SgBody};
 
-pub trait FnLayerMethod {
-    fn call(&self, req: Request<SgBody>, next: Next) -> impl Future<Output = Response<SgBody>> + Send;
+pub trait FnLayerMethod: Send + 'static {
+    fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Response<SgBody>> + Send;
 }
 
-pub struct FnLayer<F, Fut>
+impl<T> FnLayerMethod for Arc<T>
 where
-    F: Fn(Request<SgBody>, Next) -> Fut,
-    Fut: Future<Output = Response<SgBody>>,
+    T: FnLayerMethod + std::marker::Sync,
 {
-    f: F,
-}
-
-impl<F, Fut> FnLayer<F, Fut>
-where
-    F: Fn(Request<SgBody>, Next) -> Fut,
-    Fut: Future<Output = Response<SgBody>>,
-{
-    pub fn new(f: F) -> Self {
-        Self { f }
+    async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
+        self.as_ref().call(req, inner).await
     }
 }
 
-impl FnLayer<Box<dyn Fn(Request<SgBody>, Next) -> BoxFuture<'static, Response<SgBody>>>, BoxFuture<'static, Response<SgBody>>> {
-    pub fn from_method<M>(m: M) -> Self
-    where
-        M: FnLayerMethod + 'static + Send + Sync,
-    {
-        let method = Arc::new(m);
-        Self::new(Box::new(move |req, next| {
-            let method = method.clone();
-            Box::pin(async move { method.call(req, next).await })
-        }))
+#[derive(Debug)]
+pub struct Closure<F, Fut>
+where
+    F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
+    Fut: Future<Output = Response<SgBody>> + Send + 'static,
+{
+    pub f: F,
+}
+
+impl<F, Fut> From<F> for Closure<F, Fut>
+where
+    F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
+    Fut: Future<Output = Response<SgBody>> + Send + 'static,
+{
+    fn from(value: F) -> Self {
+        Closure { f: value }
     }
 }
 
-impl<F, Fut, S> Layer<S> for FnLayer<F, Fut>
+impl<F, Fut> Clone for Closure<F, Fut>
 where
-    F: Fn(Request<SgBody>, Next) -> Fut + Clone,
-    Fut: Future<Output = Response<SgBody>>,
+    F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
+    Fut: Future<Output = Response<SgBody>> + Send + 'static,
+{
+    fn clone(&self) -> Self {
+        Self { f: self.f.clone() }
+    }
+}
+
+impl<F, Fut> FnLayerMethod for Closure<F, Fut>
+where
+    F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
+    Fut: Future<Output = Response<SgBody>> + Send + 'static,
+{
+    async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
+        (self.f)(req, inner).await
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FnLayer<M> {
+    method: M,
+}
+
+impl<M> FnLayer<M> {
+    pub fn new(method: M) -> Self {
+        Self { method }
+    }
+}
+
+impl<F, Fut> FnLayer<Closure<F, Fut>>
+where
+    F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
+    Fut: Future<Output = Response<SgBody>> + Send + 'static,
+{
+    pub fn new_closure(f: F) -> Self {
+        Self::new(f.into())
+    }
+}
+
+impl<M, S> Layer<S> for FnLayer<M>
+where
+    M: FnLayerMethod + Clone,
     S: Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + Clone + 'static,
     <S as Service<Request<SgBody>>>::Future: Future<Output = Result<Response<SgBody>, Infallible>> + 'static + Send,
 {
-    type Service = FnService<F, Fut>;
+    type Service = FnService<M>;
 
     fn layer(&self, inner: S) -> Self::Service {
         FnService {
-            f: self.f.clone(),
+            m: self.method.clone(),
             inner: BoxHyperService::new(inner),
         }
     }
 }
-
-pub struct FnService<F, Fut>
-where
-    F: Fn(Request<SgBody>, Next) -> Fut,
-    Fut: Future<Output = Response<SgBody>>,
-{
-    f: F,
+#[derive(Debug, Clone)]
+pub struct FnService<M> {
+    m: M,
     inner: BoxHyperService,
 }
 
-impl<F, Fut> Service<Request<SgBody>> for FnService<F, Fut>
+impl<M> Service<Request<SgBody>> for FnService<M>
 where
-    F: Fn(Request<SgBody>, Next) -> Fut,
-    Fut: Future<Output = Response<SgBody>>,
+    M: FnLayerMethod + Clone,
 {
     type Response = Response<SgBody>;
 
     type Error = Infallible;
 
-    type Future = Map<Fut, fn(Response<SgBody>) -> Result<Response<SgBody>, Infallible>>;
+    type Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>;
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
-        let next = Next { inner: self.inner.clone() };
-        let fut = (self.f)(req, next);
-        fut.map(Result::Ok)
+        let next = Inner { inner: self.inner.clone() };
+        let method = self.m.clone();
+        Box::pin(async move { Ok(method.call(req, next).await) })
     }
 }
 
-pub struct Next {
+pub struct Inner {
     inner: BoxHyperService,
 }
 
-impl Next {
+impl Inner {
     pub async fn call(self, req: Request<SgBody>) -> Response<SgBody> {
         // just infallible
         unsafe { self.inner.call(req).await.unwrap_unchecked() }
+    }
+}
+
+#[macro_export]
+macro_rules! ret_error {
+    ($expr: expr) => {
+        match $expr {
+            Ok(x) => x,
+            Err(e) => return e.into(),
+        }
+    };
+}
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashMap, sync::Arc};
+
+    use hyper::{header::HeaderValue, StatusCode};
+    #[derive(Debug, Default, Clone)]
+    pub struct MyPlugin {
+        status_message: HashMap<StatusCode, String>,
+    }
+
+    impl FnLayerMethod for MyPlugin {
+        async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
+            let host = req.headers().get("host");
+            if let Some(Ok(host)) = host.map(HeaderValue::to_str) {
+                println!("{host}");
+            }
+            let resp = inner.call(req).await;
+            if let Some(message) = self.status_message.get(&resp.status()) {
+                println!("{message}");
+            }
+            resp
+        }
+    }
+    use crate::SgBoxLayer;
+
+    use super::*;
+    #[test]
+    fn test_fn_layer() {
+        let status_message = Arc::new(<HashMap<StatusCode, String>>::default());
+        let boxed_layer = SgBoxLayer::new(FnLayer::new(MyPlugin::default()));
+        let boxed_layer2 = SgBoxLayer::new(FnLayer::new_closure(move |req, inner| {
+            let host = req.headers().get("host");
+            if let Some(Ok(host)) = host.map(HeaderValue::to_str) {
+                println!("{host}");
+            }
+            let status_message = status_message.clone();
+            async move {
+                let resp = inner.call(req).await;
+                if let Some(message) = status_message.get(&resp.status()) {
+                    println!("{message}");
+                }
+                resp
+            }
+        }));
+        drop(boxed_layer);
+        drop(boxed_layer2);
     }
 }

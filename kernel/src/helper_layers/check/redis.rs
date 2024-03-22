@@ -147,7 +147,7 @@ where
     }
     fn on_forbidden(&self, _marker: M) -> Response<SgBody> {
         if let Some((status, bytes)) = &self.on_fail {
-            Response::with_code_message(status.clone(), bytes.clone())
+            Response::with_code_message(*status, bytes.clone())
         } else {
             Response::with_code_message(StatusCode::FORBIDDEN, "redis script check auth fail")
         }

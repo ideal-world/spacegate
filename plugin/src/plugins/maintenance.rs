@@ -8,16 +8,10 @@ use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
 use std::net::IpAddr;
 use std::ops::Range;
 
-// use crate::def_filter;
-// use itertools::Itertools;
 use chrono::{Local, NaiveTime};
 use serde::{Deserialize, Serialize};
 
-// use crate::plugins::context::SgRouteFilterRequestAction;
-
 use crate::{def_plugin, MakeSgLayer};
-
-// def_filter!("maintenance", SgMaintenanceFilterPlugin, SgFilterMaintenanceConfig);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -229,6 +223,7 @@ mod test {
         let end_time = now + duration;
         let repo = crate::SgPluginRepository::global()
             .create_layer(
+                None,
                 crate::plugins::maintenance::CODE,
                 json!({
                   "enabled_time_range": [
