@@ -5,13 +5,13 @@
     {
       "req_inject_url": "http://localhost:8080/inject",
       "req_timeout": {
-        "secs": 5,
-        "nanos": 0
+        "nanos": 0,
+        "secs": 5
       },
       "resp_inject_url": "http://localhost:8080/inject",
       "resp_timeout": {
-        "secs": 5,
-        "nanos": 0
+        "nanos": 0,
+        "secs": 5
       }
     }
   ],

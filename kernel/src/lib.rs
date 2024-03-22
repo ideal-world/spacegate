@@ -89,7 +89,7 @@ pub trait SgResponseExt {
     {
         let message = e.to_string();
         tracing::debug!(message, "[Sg] gateway plugin internal error");
-        Self::with_code_message(StatusCode::BAD_GATEWAY, message)
+        Self::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, message)
     }
     fn from_error<E: std::error::Error, F: ErrorFormatter>(e: E, formatter: &F) -> Self
     where
@@ -97,7 +97,7 @@ pub trait SgResponseExt {
     {
         let message = formatter.format(&e);
         tracing::debug!(message, "[Sg] gateway internal error");
-        Self::with_code_message(StatusCode::BAD_GATEWAY, formatter.format(&e))
+        Self::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, formatter.format(&e))
     }
 }
 

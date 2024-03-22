@@ -5,8 +5,8 @@
     {
       "enabled_time_range": null,
       "exclude_ip_range": null,
-      "title": "maintenance title",
-      "msg": "under maintenance"
+      "msg": "under maintenance",
+      "title": "maintenance title"
     }
   ],
   "type": "object",
