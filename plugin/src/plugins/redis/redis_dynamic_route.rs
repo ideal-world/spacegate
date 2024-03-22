@@ -96,6 +96,4 @@ impl Plugin for RedisDynamicRoutePlugin {
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(
-    RedisDynamicRoutePlugin
-);
+crate::schema!(RedisDynamicRoutePlugin);

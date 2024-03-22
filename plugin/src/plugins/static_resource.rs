@@ -88,6 +88,4 @@ impl Plugin for StaticResourcePlugin {
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(
-    StaticResourcePlugin
-);
+crate::schema!(StaticResourcePlugin);

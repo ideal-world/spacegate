@@ -81,9 +81,7 @@ impl Plugin for RedisLimitPlugin {
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(
-    RedisLimitPlugin
-);
+crate::schema!(RedisLimitPlugin);
 
 #[cfg(test)]
 mod test {
