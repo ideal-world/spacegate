@@ -20,8 +20,15 @@ macro_rules! export_plugins {
 #[test]
 fn export_schema() {
     use plugins::{
-        header_modifier::HeaderModifierPlugin, inject::InjectPlugin, limit::RateLimitPlugin, maintenance::MaintenancePlugin, redirect::RedirectPlugin, retry::RetryPlugin,
-        rewrite::RewritePlugin, status::StatusPlugin,
+        header_modifier::HeaderModifierPlugin,
+        inject::InjectPlugin,
+        limit::RateLimitPlugin,
+        maintenance::MaintenancePlugin,
+        redirect::RedirectPlugin,
+        redis::{redis_count::RedisCountPlugin, redis_dynamic_route::RedisDynamicRoutePlugin, redis_limit::RedisLimitPlugin, redis_time_range::RedisTimeRangePlugin},
+        retry::RetryPlugin,
+        rewrite::RewritePlugin,
+        static_resource::StaticResourcePlugin
     };
     export_plugins!("schema":
         HeaderModifierPlugin
@@ -31,7 +38,10 @@ fn export_schema() {
         RedirectPlugin
         RetryPlugin
         RewritePlugin
-        StatusPlugin
-
+        StaticResourcePlugin
+        RedisCountPlugin
+        RedisDynamicRoutePlugin
+        RedisLimitPlugin
+        RedisTimeRangePlugin
     );
 }

@@ -20,7 +20,8 @@ use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RedisTimeRangeConfig {
     pub id: Option<String>,
     pub header: String,
@@ -95,6 +96,11 @@ impl Plugin for RedisTimeRangePlugin {
         })
     }
 }
+
+#[cfg(feature = "schema")]
+crate::schema!(
+    RedisTimeRangePlugin
+);
 
 #[cfg(test)]
 mod test {

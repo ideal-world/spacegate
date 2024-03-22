@@ -86,6 +86,7 @@ impl SgPluginRepository {
     }
 
     pub fn register_prelude(&self) {
+        self.register::<plugins::static_resource::StaticResourcePlugin>();
         #[cfg(feature = "limit")]
         self.register::<plugins::limit::RateLimitPlugin>();
         #[cfg(feature = "redirect")]
@@ -233,6 +234,13 @@ macro_rules! schema {
         impl $crate::PluginSchemaExt for $plugin {
             fn schema() -> $crate::schemars::schema::RootSchema {
                 $crate::schemars::schema_for_value!($schema)
+            }
+        }
+    };
+    ($plugin:ident) => {
+        impl $crate::PluginSchemaExt for $plugin {
+            fn schema() -> $crate::schemars::schema::RootSchema {
+                $crate::schemars::schema_for!(<$plugin as $crate::Plugin>::MakeLayer)
             }
         }
     };

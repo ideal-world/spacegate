@@ -4,8 +4,8 @@
   "examples": [
     {
       "kind": "Request",
-      "sets": {},
-      "remove": []
+      "remove": [],
+      "sets": {}
     }
   ],
   "type": "object",
