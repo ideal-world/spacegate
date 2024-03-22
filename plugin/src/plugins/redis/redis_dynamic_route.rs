@@ -18,6 +18,7 @@ use spacegate_kernel::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RedisDynamicRouteConfig {
     pub id: Option<String>,
     pub header: String,
@@ -93,3 +94,8 @@ impl Plugin for RedisDynamicRoutePlugin {
         })
     }
 }
+
+#[cfg(feature = "schema")]
+crate::schema!(
+    RedisDynamicRoutePlugin
+);

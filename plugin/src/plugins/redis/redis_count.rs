@@ -19,7 +19,8 @@ use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RedisCountConfig {
     pub id: Option<String>,
     pub header: String,
@@ -101,6 +102,11 @@ impl Plugin for RedisCountPlugin {
         })
     }
 }
+
+#[cfg(feature = "schema")]
+crate::schema!(
+    RedisCountPlugin
+);
 
 #[cfg(test)]
 mod test {

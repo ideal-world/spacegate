@@ -89,4 +89,4 @@ testcontainers-modules = { workspace = true, features = ["redis"] }
 [[test]]
 name = "export_schema"
 path = "tests/export_schema.rs"
-required-features = ["schema"]
+required-features = ["schema", "cache"]

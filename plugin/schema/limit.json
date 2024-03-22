@@ -1,14 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "RateLimitConfig",
-  "examples": [
-    {
-      "max_request_number": 100,
-      "time_window_ms": 1000,
-      "id": "limit"
-    }
-  ],
   "type": "object",
+  "required": [
+    "id"
+  ],
   "properties": {
     "id": {
       "type": "string"
@@ -17,13 +13,17 @@
       "type": [
         "integer",
         "null"
-      ]
+      ],
+      "format": "uint64",
+      "minimum": 0.0
     },
     "time_window_ms": {
       "type": [
         "integer",
         "null"
-      ]
+      ],
+      "format": "uint64",
+      "minimum": 0.0
     }
   }
 }
