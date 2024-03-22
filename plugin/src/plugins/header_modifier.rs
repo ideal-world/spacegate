@@ -102,10 +102,5 @@ impl Layer<BoxHyperService> for HeaderModifierLayer {
 def_plugin!("header_modifier", HeaderModifierPlugin, SgFilterHeaderModifier);
 #[cfg(feature = "schema")]
 crate::schema!(
-    HeaderModifierPlugin,
-    SgFilterHeaderModifier {
-        kind: SgFilterHeaderModifierKind::Request,
-        sets: Some(HashMap::new()),
-        remove: Some(Vec::new()),
-    }
+    HeaderModifierPlugin
 );
