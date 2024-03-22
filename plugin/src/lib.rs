@@ -103,7 +103,14 @@ impl SgPluginRepository {
         // #[cfg(feature = "status")]
         // self.register::<plugins::status::StatusPlugin>();
         #[cfg(feature = "decompression")]
-        self.register::<plugins::decompression::DecompressionPlugin>()
+        self.register::<plugins::decompression::DecompressionPlugin>();
+        #[cfg(feature = "redis")]
+        {
+            self.register::<plugins::redis::redis_count::RedisCountPlugin>();
+            self.register::<plugins::redis::redis_limit::RedisLimitPlugin>();
+            self.register::<plugins::redis::redis_time_range::RedisTimeRangePlugin>();
+            self.register::<plugins::redis::redis_dynamic_route::RedisDynamicRoutePlugin>();
+        }
     }
 
     pub fn new() -> Self {

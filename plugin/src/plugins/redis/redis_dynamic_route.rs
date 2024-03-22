@@ -2,9 +2,8 @@ use std::{str::FromStr, sync::Arc};
 
 use super::redis_format_key;
 use crate::{
-    def_plugin,
     model::{SgHttpPathModifier, SgHttpPathModifierType},
-    MakeSgLayer, PluginError,
+    MakeSgLayer, Plugin, PluginError,
 };
 use futures_util::future::BoxFuture;
 use hyper::http;
@@ -15,12 +14,12 @@ use spacegate_kernel::{
     extension::MatchedSgRouter,
     helper_layers::async_filter::{AsyncFilter, AsyncFilterRequestLayer},
     layers::http_route::match_request::SgHttpPathMatch,
-    ReqOrResp, SgBody, SgBoxLayer, SgRequestExt,
+    BoxError, ReqOrResp, SgBody, SgBoxLayer, SgRequestExt,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedisDynamicRouteConfig {
-    pub prefix: String,
+    pub id: Option<String>,
     pub header: String,
 }
 
@@ -74,10 +73,23 @@ impl AsyncFilter for RedisDynamicRoute {
 impl MakeSgLayer for RedisDynamicRouteConfig {
     fn make_layer(&self) -> spacegate_kernel::BoxResult<SgBoxLayer> {
         Ok(SgBoxLayer::new(AsyncFilterRequestLayer::new(RedisDynamicRoute {
-            prefix: self.prefix.clone().into(),
+            prefix: RedisDynamicRoutePlugin::redis_prefix(self.id.as_deref()).into(),
             header: HeaderName::from_str(&self.header)?.into(),
         })))
     }
 }
 
-def_plugin!("redis-dynamic-route", RedisDynamicRoutePlugin, RedisDynamicRouteConfig);
+pub struct RedisDynamicRoutePlugin;
+impl Plugin for RedisDynamicRoutePlugin {
+    type MakeLayer = RedisDynamicRouteConfig;
+
+    const CODE: &'static str = "redis-dynamic-route";
+
+    fn create(id: Option<String>, value: serde_json::Value) -> Result<Self::MakeLayer, BoxError> {
+        let config = serde_json::from_value::<RedisDynamicRouteConfig>(value)?;
+        Ok(RedisDynamicRouteConfig {
+            id: id.or(config.id),
+            header: config.header,
+        })
+    }
+}
