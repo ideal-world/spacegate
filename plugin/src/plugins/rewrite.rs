@@ -3,7 +3,6 @@ use hyper::{Request, Response, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::extension::MatchedSgRouter;
 use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
-use spacegate_kernel::layers::http_route::match_request::SgHttpPathMatch;
 use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
 
 use crate::model::SgHttpPathModifier;
@@ -38,20 +37,19 @@ impl SgFilterRewrite {
         if let Some(ref modifier) = self.path {
             let mut uri_part = req.uri().clone().into_parts();
             if let Some(matched_path) = req.extensions().get::<MatchedSgRouter>() {
-                let mut prefix_match = None;
-                if let Some(SgHttpPathMatch::Prefix(prefix)) = matched_path.0.path.as_ref() {
-                    prefix_match = Some(prefix.as_str());
-                }
+                let path_match = matched_path.0.path.as_ref();
                 if let Some(ref pq) = uri_part.path_and_query {
-                    if let Some(new_path) = modifier.replace(pq.path(), prefix_match) {
-                        tracing::debug!("[Sg.Plugin.Rewrite] rewrite path from {} to {}", pq.path(), new_path);
-                        let mut new_pq = new_path;
-                        if let Some(query) = pq.query() {
-                            new_pq.push('?');
-                            new_pq.push_str(query)
+                    if let Some(path_match) = path_match {
+                        if let Some(new_path) = modifier.replace(pq.path(), path_match) {
+                            tracing::debug!("[Sg.Plugin.Rewrite] rewrite path from {} to {}", pq.path(), new_path);
+                            let mut new_pq = new_path;
+                            if let Some(query) = pq.query() {
+                                new_pq.push('?');
+                                new_pq.push_str(query)
+                            }
+                            let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_pq).map_err(Response::bad_gateway)?;
+                            uri_part.path_and_query = Some(new_pq)
                         }
-                        let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_pq).map_err(Response::bad_gateway)?;
-                        uri_part.path_and_query = Some(new_pq)
                     }
                 }
             } else {

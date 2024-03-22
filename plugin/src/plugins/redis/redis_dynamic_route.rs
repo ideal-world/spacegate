@@ -13,7 +13,6 @@ use spacegate_ext_redis::redis::AsyncCommands;
 use spacegate_kernel::{
     extension::MatchedSgRouter,
     helper_layers::async_filter::{AsyncFilter, AsyncFilterRequestLayer},
-    layers::http_route::match_request::SgHttpPathMatch,
     BoxError, ReqOrResp, SgBody, SgBoxLayer, SgRequestExt,
 };
 
@@ -41,7 +40,7 @@ impl AsyncFilter for RedisDynamicRoute {
             let Some(matched) = req.extensions().get::<MatchedSgRouter>() else {
                 return Err(PluginError::internal_error::<RedisDynamicRoutePlugin>("unmatched request").into());
             };
-            let Some(SgHttpPathMatch::Prefix(prefix_match)) = &matched.path else {
+            let Some(path_match) = &matched.path else {
                 return Err(PluginError::internal_error::<RedisDynamicRoutePlugin>("only prefix match was supported").into());
             };
             let Some(key) = redis_format_key(&req, matched, &header) else {
@@ -56,7 +55,7 @@ impl AsyncFilter for RedisDynamicRoute {
                 kind: SgHttpPathModifierType::ReplacePrefixMatch,
                 value: "/".to_string(),
             }
-            .replace(path, Some(prefix_match.as_str()))
+            .replace(path, path_match)
             .ok_or_else(|| PluginError::internal_error::<RedisDynamicRoutePlugin>("gateway internal error: fail to rewrite path."))?;
             if let Some(query) = req.uri().query().filter(|q| !q.is_empty()) {
                 new_pq.push('?');
