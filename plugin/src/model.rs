@@ -74,10 +74,8 @@ impl SgHttpPathModifier {
                     }
                 }
             }
-            (SgHttpPathModifierType::ReplaceRegex, SgHttpPathMatch::Regular(re)) => {
-                Some(re.replace(path, value).to_string())
-            },
-            _ => None
+            (SgHttpPathModifierType::ReplaceRegex, SgHttpPathMatch::Regular(re)) => Some(re.replace(path, value).to_string()),
+            _ => None,
         }
     }
 }
@@ -90,10 +88,7 @@ fn test_prefix_replace() {
     };
     let replace = SgHttpPathMatch::Prefix("api/iam".into());
     assert_eq!(Some("/iam/get_name"), modifier.replace("api/iam/get_name", &replace).as_deref());
-    assert_eq!(
-        Some("/iam/get_name/example.js"),
-        modifier.replace("api/iam/get_name/example.js", &replace).as_deref()
-    );
+    assert_eq!(Some("/iam/get_name/example.js"), modifier.replace("api/iam/get_name/example.js", &replace).as_deref());
     assert_eq!(Some("/iam/get_name/"), modifier.replace("api/iam/get_name/", &replace).as_deref());
 }
 
