@@ -84,6 +84,7 @@ async-compression = { version = "0.4", features = [
 ] }
 testcontainers = "0.15.0"
 testcontainers-modules = { workspace = true, features = ["redis"] }
+regex.workspace = true
 
 
 [[test]]
