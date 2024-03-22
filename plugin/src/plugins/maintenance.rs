@@ -11,9 +11,7 @@ use std::ops::Range;
 use chrono::{Local, NaiveTime};
 use serde::{Deserialize, Serialize};
 
-
 use crate::{def_plugin, MakeSgLayer};
-
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
