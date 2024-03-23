@@ -1,7 +1,8 @@
 #![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
 use std::{
+    any::TypeId,
     collections::HashMap,
-    sync::{Arc, OnceLock, RwLock},
+    sync::{Arc, OnceLock, RwLock, Weak},
 };
 
 pub use serde_json;
@@ -20,8 +21,10 @@ pub use spacegate_kernel::BoxError;
 pub mod error;
 pub mod model;
 pub mod plugins;
+pub mod mount;
 pub use error::PluginError;
 
+/// 我们的设计应该是无状态的函数式的。
 #[cfg(feature = "schema")]
 pub use schemars;
 pub trait Plugin {
@@ -33,6 +36,25 @@ pub trait Plugin {
         format!("sg:plugin:{code}:{id}", code = Self::CODE)
     }
 }
+
+pub struct PluginInstance {
+    pub plugin: TypeId,
+    pub code: &'static str,
+    pub id: Option<String>,
+    pub global_id: u128,
+    pub layer: SgBoxLayer,
+    pub mount_point: Option<Weak<dyn MountPoint>>,
+    pub hooks: PluginInstanceHooks,
+}
+
+pub struct PluginInstanceHooks {
+    pub before_mount: Option<Box<dyn Fn(&PluginInstance)>>,
+    pub after_mount: Option<Box<dyn Fn(&PluginInstance)>>,
+    pub before_unmount: Option<Box<dyn Fn(&PluginInstance)>>,
+    pub after_unmount: Option<Box<dyn Fn(&PluginInstance)>>,
+}
+
+impl PluginInstance {}
 
 pub struct PluginConfig {
     pub code: String,
@@ -73,6 +95,11 @@ type BoxCreateFn = Box<dyn Fn(Option<String>, JsonValue) -> Result<Box<dyn MakeS
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
     pub map: Arc<RwLock<HashMap<&'static str, BoxCreateFn>>>,
+}
+
+pub trait MountPoint {
+    fn name(&self) -> String;
+    fn mount(&mut self, instance: PluginInstance);
 }
 
 impl SgPluginRepository {

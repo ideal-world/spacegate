@@ -2,7 +2,14 @@ pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
 mod predicate;
-use std::{convert::Infallible, num::NonZeroU16, sync::Arc, time::Duration};
+use std::{
+    cell::{Cell, Ref, RefCell},
+    convert::Infallible,
+    num::NonZeroU16,
+    rc::Rc,
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use crate::{
     extension::{BackendHost, Reflect},
@@ -23,6 +30,8 @@ use self::{
     match_request::SgHttpRouteMatch,
 };
 
+use super::gateway::{SgGatewayLayer, SgGatewayView};
+
 /****************************************************************************************
 
                                           Route
@@ -31,10 +40,33 @@ use self::{
 
 #[derive(Debug, Clone)]
 pub struct SgHttpRoute {
-    pub hostnames: Arc<[String]>,
-    pub plugins: Arc<[SgBoxLayer]>,
-    pub rules: Arc<[SgHttpRouteRuleLayer]>,
+    pub name: String,
+    pub hostnames: Vec<String>,
+    pub plugins: Vec<SgBoxLayer>,
+    pub rules: Vec<SgHttpRouteRuleLayer>,
     pub priority: i16,
+}
+
+pub struct SgHttpRouteView {
+    pub data: *const SgHttpRoute,
+    pub gateway: *const SgGatewayLayer,
+}
+
+impl SgHttpRouteView {
+    // pub fn gateway(&self) -> Option<Ref<'_, SgGatewayLayer>> {
+    //     self.gateway.try_borrow().ok()
+    // }
+    // pub fn data(&self) -> Ref<'_, SgHttpRoute> {
+    //     self.data.borrow()
+    // }
+    // pub fn get_from_gateway(gateway: RefCell<SgGatewayLayer>, name: &str) -> Self {
+    //     let data = gateway.borrow().http_routes.iter().find(|r| r.name == name).unwrap();
+    //     Self {
+    //         data: RefCell::new(data.clone()),
+    //         gateway: Rc::clone(gateway),
+    //         name: name.to_string(),
+    //     }
+    // }
 }
 
 impl SgHttpRoute {
@@ -56,10 +88,10 @@ pub struct SgHttpRouter {
 
 #[derive(Debug, Clone)]
 pub struct SgHttpRouteRuleLayer {
-    pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
-    pub plugins: Arc<[SgBoxLayer]>,
+    pub r#match: Option<Vec<SgHttpRouteMatch>>,
+    pub plugins: Vec<SgBoxLayer>,
     timeouts: Option<Duration>,
-    backends: Arc<[SgHttpBackendLayer]>,
+    backends: Vec<SgHttpBackendLayer>,
 }
 
 impl SgHttpRouteRuleLayer {
@@ -88,10 +120,8 @@ where
             filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(random_picker))
         };
 
-        SgRouteRule {
-            r#match: self.r#match.clone(),
-            service,
-        }
+        let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
+        SgRouteRule { r#match, service }
     }
 }
 #[derive(Clone)]
@@ -124,10 +154,10 @@ impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
 
 #[derive(Debug, Clone)]
 pub struct SgHttpBackendLayer {
-    pub filters: Arc<[SgBoxLayer]>,
-    pub host: Option<Arc<str>>,
-    pub port: Option<NonZeroU16>,
-    pub scheme: Option<Arc<str>>,
+    pub filters: Vec<SgBoxLayer>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub scheme: Option<String>,
     pub weight: u16,
     pub timeout: Option<Duration>,
 }
@@ -150,9 +180,9 @@ where
         let filtered = self.filters.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
         SgHttpBackend {
             weight: self.weight,
-            host: self.host.clone(),
+            host: self.host.clone().map(Into::into),
             port: self.port,
-            scheme: self.scheme.clone(),
+            scheme: self.scheme.clone().map(Into::into),
             timeout: self.timeout,
             inner_service: BoxHyperService::new(filtered),
         }
@@ -162,7 +192,7 @@ where
 #[derive(Clone)]
 pub struct SgHttpBackend<S> {
     pub host: Option<Arc<str>>,
-    pub port: Option<NonZeroU16>,
+    pub port: Option<u16>,
     pub scheme: Option<Arc<str>>,
     pub weight: u16,
     pub timeout: Option<Duration>,
