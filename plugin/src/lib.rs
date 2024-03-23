@@ -20,8 +20,8 @@ use spacegate_kernel::{
 pub use spacegate_kernel::BoxError;
 pub mod error;
 pub mod model;
-pub mod plugins;
 pub mod mount;
+pub mod plugins;
 pub use error::PluginError;
 
 /// 我们的设计应该是无状态的函数式的。

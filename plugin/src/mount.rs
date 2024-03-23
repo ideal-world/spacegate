@@ -14,7 +14,5 @@ impl MountPoint for SgGatewayLayer {
         self.name()
     }
 
-    fn mount(self: Arc<Self>, instance: PluginInstance) {
-        
-    }
+    fn mount(self: Arc<Self>, instance: PluginInstance) {}
 }

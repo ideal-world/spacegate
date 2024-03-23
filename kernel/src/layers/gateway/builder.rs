@@ -1,4 +1,8 @@
-use std::{collections::HashMap, hash::Hash, sync::{Arc, OnceLock}};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    sync::{Arc, OnceLock},
+};
 
 use tokio_util::sync::CancellationToken;
 
