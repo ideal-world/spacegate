@@ -1,4 +1,4 @@
-use std::sync::{Arc, OnceLock};
+use std::{collections::HashMap, hash::Hash, sync::{Arc, OnceLock}};
 
 use tokio_util::sync::CancellationToken;
 
@@ -16,7 +16,7 @@ use super::{SgGatewayLayer, SgGatewayRoute};
 pub struct SgGatewayLayerBuilder {
     pub gateway_name: Arc<str>,
     pub cancel_token: CancellationToken,
-    http_routers: Vec<SgHttpRoute>,
+    http_routers: HashMap<String, SgHttpRoute>,
     pub http_plugins: Vec<SgBoxLayer>,
     http_fallback: SgBoxLayer,
     http_route_reloader: Reloader<SgGatewayRoute>,
@@ -38,7 +38,7 @@ impl SgGatewayLayerBuilder {
         Self {
             cancel_token,
             gateway_name: gateway_name.into(),
-            http_routers: Vec::new(),
+            http_routers: HashMap::new(),
             http_plugins: Vec::new(),
             http_fallback: default_gateway_route_fallback().clone(),
             http_route_reloader: Default::default(),
@@ -46,13 +46,13 @@ impl SgGatewayLayerBuilder {
         }
     }
     pub fn http_router(mut self, route: SgHttpRoute) -> Self {
-        self.http_routers.push(route);
+        self.http_routers.insert(route.name.clone(), route);
         self
     }
-    pub fn http_routers(mut self, routes: impl IntoIterator<Item = SgHttpRoute>) -> Self {
-        self.http_routers.extend(routes);
-        self
-    }
+    // pub fn http_routers(mut self, routes: impl IntoIterator<Item = SgHttpRoute>) -> Self {
+    //     self.http_routers.extend(routes);
+    //     self
+    // }
     pub fn http_plugin(mut self, plugin: SgBoxLayer) -> Self {
         self.http_plugins.push(plugin);
         self
@@ -76,7 +76,7 @@ impl SgGatewayLayerBuilder {
     pub fn build(self) -> SgGatewayLayer {
         SgGatewayLayer {
             gateway_name: self.gateway_name,
-            http_routes: self.http_routers.into(),
+            http_routes: self.http_routers,
             http_plugins: self.http_plugins.into(),
             http_fallback: self.http_fallback,
             http_route_reloader: self.http_route_reloader,

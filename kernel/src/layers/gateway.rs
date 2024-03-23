@@ -1,6 +1,6 @@
 pub mod builder;
 
-use std::{convert::Infallible, ops::Index, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, convert::Infallible, ops::Index, rc::Rc, sync::Arc};
 
 use crate::{
     extension::{GatewayName, MatchedSgRouter},
@@ -29,12 +29,18 @@ use super::http_route::{match_hostname::HostnameTree, match_request::MatchReques
 
 pub type SgGatewayRoute = Route<SgGatewayRoutedServices, SgGatewayRouter, BoxHyperService>;
 
+#[derive(Debug, Clone)]
 pub struct SgGatewayLayer {
-    gateway_name: Arc<str>,
-    http_routes: Arc<[SgHttpRoute]>,
-    http_plugins: Arc<[SgBoxLayer]>,
-    http_fallback: SgBoxLayer,
+    pub(crate) gateway_name: Arc<str>,
+    pub(crate) http_routes: HashMap<String, SgHttpRoute>,
+    pub(crate) http_plugins: Vec<SgBoxLayer>,
+    pub(crate) http_fallback: SgBoxLayer,
     pub http_route_reloader: Reloader<SgGatewayRoute>,
+}
+
+#[derive(Clone)]
+pub struct SgGatewayView {
+    pub(crate) data: Arc<SgGatewayLayer>,
 }
 
 impl SgGatewayLayer {
@@ -106,7 +112,8 @@ where
         let gateway_name = GatewayName::new(self.gateway_name.clone());
         let add_gateway_name_layer = MapRequestLayer::new(add_extension(gateway_name, true));
         let gateway_plugins = self.http_plugins.iter().collect::<SgBoxLayer>();
-        let route = create_http_router(&self.http_routes, &self.http_fallback, inner);
+        let http_routes = self.http_routes.values().cloned().collect::<Vec<_>>();
+        let route = create_http_router(&http_routes, &self.http_fallback, inner);
         #[cfg(feature = "reload")]
         let service = {
             let reloader = self.http_route_reloader.clone();
@@ -155,8 +162,8 @@ where
         }
         services.push(rules_services);
         routers.push(SgHttpRouter {
-            hostnames: route.hostnames.clone(),
-            rules: rules_router.into(),
+            hostnames: route.hostnames.clone().into(),
+            rules: rules_router.into_iter().map(|x| x.map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>())).collect(),
         });
     }
 

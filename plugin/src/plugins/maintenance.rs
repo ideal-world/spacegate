@@ -191,15 +191,7 @@ impl MakeSgLayer for SgFilterMaintenanceConfig {
 
 def_plugin!("maintenance", MaintenancePlugin, SgFilterMaintenanceConfig);
 #[cfg(feature = "schema")]
-crate::schema!(
-    MaintenancePlugin,
-    SgFilterMaintenanceConfig {
-        enabled_time_range: None,
-        exclude_ip_range: None,
-        title: "maintenance title".into(),
-        msg: "under maintenance".into(),
-    }
-);
+crate::schema!(MaintenancePlugin);
 #[cfg(test)]
 mod test {
 
