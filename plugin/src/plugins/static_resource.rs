@@ -13,7 +13,7 @@ use spacegate_kernel::{
     SgBody,
 };
 
-use crate::{MakeSgLayer, Plugin, PluginError};
+use crate::{instance::PluginInstance, MakeSgLayer, Plugin, PluginError};
 
 /// StaticResourceConfig
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,14 +77,27 @@ impl MakeSgLayer for StaticResourceConfig {
 pub struct StaticResourcePlugin {}
 
 impl Plugin for StaticResourcePlugin {
-    type MakeLayer = StaticResourceConfig;
-
     const CODE: &'static str = "static-resource";
-
-    fn create(_id: Option<String>, value: Value) -> Result<Self::MakeLayer, spacegate_kernel::BoxError> {
-        let config = serde_json::from_value(value)?;
-        Ok(config)
+    fn create(config: crate::PluginConfig) -> Result<PluginInstance, spacegate_kernel::BoxError> {
+        let make_config: StaticResourceConfig = serde_json::from_value(config.spec.clone())?;
+        Ok(PluginInstance::new::<Self, _>(config, move || {
+            let content_type = make_config.content_type.clone();
+            let content_type = HeaderValue::from_maybe_shared(content_type)?;
+            let body = match &make_config.body {
+                BodyEnum::Json(value) => Bytes::copy_from_slice(value.to_string().as_bytes()),
+                BodyEnum::Text(text) => Bytes::copy_from_slice(text.as_bytes()),
+                BodyEnum::File(path) => Bytes::copy_from_slice(&std::fs::read(path)?),
+            };
+            let code = StatusCode::from_u16(make_config.code)?;
+            Ok(spacegate_kernel::SgBoxLayer::new(FilterRequestLayer::new(StaticResource { content_type, code, body })))
+        }))
     }
+    // type MakeLayer = StaticResourceConfig;
+
+    // fn create(_id: Option<String>, value: Value) -> Result<Self::MakeLayer, spacegate_kernel::BoxError> {
+    //     let config = serde_json::from_value(value)?;
+    //     Ok(config)
+    // }
 }
 
 #[cfg(feature = "schema")]

@@ -1,4 +1,4 @@
-use std::{num::NonZeroU16, sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crate::BoxError;
 
@@ -71,8 +71,8 @@ impl SgHttpRouteLayerBuilder {
         }
         Ok(SgHttpRoute {
             plugins: self.plugins,
-            hostnames: self.hostnames.into(),
-            rules: self.rules.into(),
+            hostnames: self.hostnames,
+            rules: self.rules,
             priority: self.priority.unwrap_or(1),
             name: self.name,
         })
@@ -212,7 +212,7 @@ impl SgHttpBackendLayerBuilder {
             host: self.host.map(Into::into),
             port: self.port,
             scheme: self.protocol.map(Into::into),
-            filters: self.plugins,
+            plugins: self.plugins,
             timeout: self.timeout,
             weight: self.weight,
         })

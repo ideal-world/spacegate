@@ -31,16 +31,11 @@ pub type SgGatewayRoute = Route<SgGatewayRoutedServices, SgGatewayRouter, BoxHyp
 
 #[derive(Debug, Clone)]
 pub struct SgGatewayLayer {
-    pub(crate) gateway_name: Arc<str>,
-    pub(crate) http_routes: HashMap<String, SgHttpRoute>,
-    pub(crate) http_plugins: Vec<SgBoxLayer>,
-    pub(crate) http_fallback: SgBoxLayer,
+    pub gateway_name: Arc<str>,
+    pub http_routes: HashMap<String, SgHttpRoute>,
+    pub http_plugins: Vec<SgBoxLayer>,
+    pub http_fallback: SgBoxLayer,
     pub http_route_reloader: Reloader<SgGatewayRoute>,
-}
-
-#[derive(Clone)]
-pub struct SgGatewayView {
-    pub(crate) data: Arc<SgGatewayLayer>,
 }
 
 impl SgGatewayLayer {

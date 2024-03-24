@@ -23,9 +23,7 @@ pub struct ConfigItem {
 }
 
 impl ConfigItem {
-    pub fn into_gateway_and_routes(self) -> (SgGateway, Vec<SgHttpRoute>) {
-        (self.gateway, self.routes.into_values().collect())
-    }
+
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]

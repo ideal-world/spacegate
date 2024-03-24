@@ -31,8 +31,7 @@ where
     tokio::task::spawn_local(async move {
         let (init_config, listener) = config.create_listener().await?;
         for (name, item) in init_config.gateways {
-            let (gateway, routes) = item.into_gateway_and_routes();
-            match RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {
+            match RunningSgGateway::create(item, shutdown_signal.clone()) {
                 Ok(inst) => RunningSgGateway::global_save(name, inst),
                 Err(e) => {
                     tracing::error!("[SG.Config] fail to init gateway [{name}]: {e}")
@@ -63,21 +62,19 @@ where
             match event {
                 (ConfigType::Gateway { name }, ConfigEventType::Create) => {
                     if let Some(config) = config.retrieve_config_item(&name).await? {
-                        let (gateway, routes) = config.into_gateway_and_routes();
                         tracing::info!("[SG.Config] gateway {name} created", name = name);
-                        if let Ok(gateway) = RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {
+                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.clone()) {
                             RunningSgGateway::global_save(name, gateway);
                         }
                     }
                 }
                 (ConfigType::Gateway { name }, ConfigEventType::Update) => {
                     if let Some(config) = config.retrieve_config_item(&name).await? {
-                        let (gateway, routes) = config.into_gateway_and_routes();
                         tracing::info!("[SG.Config] gateway {name} updated", name = name);
                         if let Some(inst) = RunningSgGateway::global_remove(&name) {
                             inst.shutdown().await;
                         }
-                        if let Ok(gateway) = RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {
+                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.clone()) {
                             RunningSgGateway::global_save(name, gateway);
                         }
                     }
@@ -89,7 +86,7 @@ where
                     }
                 }
                 (ConfigType::Route { gateway_name, name }, _) => {
-                    let routes = config.retrieve_config_item_all_routes(&gateway_name).await?.into_values().collect::<Vec<_>>();
+                    let routes = config.retrieve_config_item_all_routes(&gateway_name).await?;
                     tracing::info!("[SG.Config] route {name} modified", name = name);
                     if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
                         tracing::error!("[SG.Config] route {name} modified failed: {e}", name = name, e = e);
