@@ -2,14 +2,7 @@ pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
 mod predicate;
-use std::{
-    cell::{Cell, Ref, RefCell},
-    convert::Infallible,
-    num::NonZeroU16,
-    rc::Rc,
-    sync::{Arc, Weak},
-    time::Duration,
-};
+use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use crate::{
     extension::{BackendHost, Reflect},
@@ -30,7 +23,6 @@ use self::{
     match_request::SgHttpRouteMatch,
 };
 
-use super::gateway::{SgGatewayLayer, SgGatewayView};
 
 /****************************************************************************************
 
@@ -45,28 +37,6 @@ pub struct SgHttpRoute {
     pub plugins: Vec<SgBoxLayer>,
     pub rules: Vec<SgHttpRouteRuleLayer>,
     pub priority: i16,
-}
-
-pub struct SgHttpRouteView {
-    pub data: *const SgHttpRoute,
-    pub gateway: *const SgGatewayLayer,
-}
-
-impl SgHttpRouteView {
-    // pub fn gateway(&self) -> Option<Ref<'_, SgGatewayLayer>> {
-    //     self.gateway.try_borrow().ok()
-    // }
-    // pub fn data(&self) -> Ref<'_, SgHttpRoute> {
-    //     self.data.borrow()
-    // }
-    // pub fn get_from_gateway(gateway: RefCell<SgGatewayLayer>, name: &str) -> Self {
-    //     let data = gateway.borrow().http_routes.iter().find(|r| r.name == name).unwrap();
-    //     Self {
-    //         data: RefCell::new(data.clone()),
-    //         gateway: Rc::clone(gateway),
-    //         name: name.to_string(),
-    //     }
-    // }
 }
 
 impl SgHttpRoute {
@@ -154,7 +124,7 @@ impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
 
 #[derive(Debug, Clone)]
 pub struct SgHttpBackendLayer {
-    pub filters: Vec<SgBoxLayer>,
+    pub plugins: Vec<SgBoxLayer>,
     pub host: Option<String>,
     pub port: Option<u16>,
     pub scheme: Option<String>,
@@ -177,7 +147,7 @@ where
 
     fn layer(&self, inner: S) -> Self::Service {
         let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
-        let filtered = self.filters.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
+        let filtered = self.plugins.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
         SgHttpBackend {
             weight: self.weight,
             host: self.host.clone().map(Into::into),

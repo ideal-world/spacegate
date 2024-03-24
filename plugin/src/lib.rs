@@ -1,10 +1,13 @@
 #![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
 use std::{
-    any::TypeId,
-    collections::HashMap,
+    any::{Any, TypeId},
+    borrow::Cow,
+    collections::{HashMap, HashSet},
     sync::{Arc, OnceLock, RwLock, Weak},
 };
 
+use instance::{PluginIncetanceId, PluginInstance, PluginInstanceSnapshot};
+use mount::{MountPoint, MountPointIndex};
 pub use serde_json;
 pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
@@ -21,41 +24,23 @@ pub use spacegate_kernel::BoxError;
 pub mod error;
 pub mod model;
 pub mod mount;
-pub mod plugins;
+// pub mod plugins;
+pub mod instance;
 pub use error::PluginError;
+pub mod plugins;
 
-/// 我们的设计应该是无状态的函数式的。
 #[cfg(feature = "schema")]
 pub use schemars;
-pub trait Plugin {
-    type MakeLayer: MakeSgLayer + 'static;
+pub trait Plugin: Any {
     const CODE: &'static str;
-    fn create(id: Option<String>, value: JsonValue) -> Result<Self::MakeLayer, BoxError>;
-    fn redis_prefix(id: Option<&str>) -> String {
-        let id = id.unwrap_or("*");
-        format!("sg:plugin:{code}:{id}", code = Self::CODE)
-    }
+    fn create(config: PluginConfig) -> Result<PluginInstance, BoxError>;
+    // fn redis_prefix(id: Option<&str>) -> String {
+    //     let id = id.unwrap_or("*");
+    //     format!("sg:plugin:{code}:{id}", code = Self::CODE)
+    // }
 }
 
-pub struct PluginInstance {
-    pub plugin: TypeId,
-    pub code: &'static str,
-    pub id: Option<String>,
-    pub global_id: u128,
-    pub layer: SgBoxLayer,
-    pub mount_point: Option<Weak<dyn MountPoint>>,
-    pub hooks: PluginInstanceHooks,
-}
-
-pub struct PluginInstanceHooks {
-    pub before_mount: Option<Box<dyn Fn(&PluginInstance)>>,
-    pub after_mount: Option<Box<dyn Fn(&PluginInstance)>>,
-    pub before_unmount: Option<Box<dyn Fn(&PluginInstance)>>,
-    pub after_unmount: Option<Box<dyn Fn(&PluginInstance)>>,
-}
-
-impl PluginInstance {}
-
+#[derive(Debug, Clone)]
 pub struct PluginConfig {
     pub code: String,
     pub spec: JsonValue,
@@ -91,15 +76,11 @@ pub trait MakeSgLayer {
     }
 }
 
-type BoxCreateFn = Box<dyn Fn(Option<String>, JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> + Send + Sync>;
+type BoxCreateFn = Box<dyn Fn(PluginConfig) -> Result<PluginInstance, BoxError> + Send + Sync + 'static>;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
-    pub map: Arc<RwLock<HashMap<&'static str, BoxCreateFn>>>,
-}
-
-pub trait MountPoint {
-    fn name(&self) -> String;
-    fn mount(&mut self, instance: PluginInstance);
+    pub creators: Arc<RwLock<HashMap<Cow<'static, str>, BoxCreateFn>>>,
+    pub instances: Arc<RwLock<HashMap<PluginIncetanceId, PluginInstance>>>,
 }
 
 impl SgPluginRepository {
@@ -113,7 +94,7 @@ impl SgPluginRepository {
     }
 
     pub fn register_prelude(&self) {
-        self.register::<plugins::static_resource::StaticResourcePlugin>();
+        // self.register::<plugins::static_resource::StaticResourcePlugin>();
         #[cfg(feature = "limit")]
         self.register::<plugins::limit::RateLimitPlugin>();
         #[cfg(feature = "redirect")]
@@ -146,23 +127,42 @@ impl SgPluginRepository {
     }
 
     pub fn register<P: Plugin>(&self) {
-        let mut map = self.map.write().expect("SgPluginTypeMap register error");
-        let create_fn = Box::new(move |id: Option<String>, value| P::create(id, value).map_err(BoxError::from).map(|x| Box::new(x) as Box<dyn MakeSgLayer>));
-        map.insert(P::CODE, Box::new(create_fn));
+        self.register_fn(P::CODE, P::create)
     }
 
-    pub fn create(&self, name: Option<String>, code: &str, value: JsonValue) -> Result<Box<dyn MakeSgLayer>, BoxError> {
-        let map = self.map.read().expect("SgPluginTypeMap register error");
-        if let Some(t) = map.get(code) {
-            (t)(name, value)
+    pub fn register_fn<C, F>(&self, code: C, create: F)
+    where
+        C: Into<Cow<'static, str>>,
+        F: Fn(PluginConfig) -> Result<PluginInstance, BoxError> + Send + Sync + 'static,
+    {
+        let mut map = self.creators.write().expect("SgPluginRepository register error");
+        let create_fn = Box::new(create);
+        map.insert(code.into(), create_fn);
+    }
+
+    pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, config: PluginConfig) -> Result<(), BoxError> {
+        let map = self.creators.read().expect("SgPluginRepository register error");
+        let code: Cow<'static, str> = config.code.clone().into();
+        let mut instances = self.instances.write().expect("SgPluginRepository register error");
+        let id = PluginIncetanceId {
+            code: code.clone(),
+            name: config.name.clone(),
+        };
+        if let Some(instance) = instances.get_mut(&id) {
+            instance.mount_at(mount_point, mount_index)?;
+            Ok(())
         } else {
-            Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into())
+            let creator = map.get(&code).ok_or_else::<BoxError, _>(|| format!("[Sg.Plugin] unregistered sg plugin type {code}").into())?;
+            let mut instance = (creator)(config)?;
+            instance.mount_at(mount_point, mount_index)?;
+            instances.insert(id.clone(), instance);
+            Ok(())
         }
     }
 
-    pub fn create_layer(&self, name: Option<String>, code: &str, value: JsonValue) -> Result<SgBoxLayer, BoxError> {
-        let inner = self.create(name, code, value)?.make_layer()?;
-        Ok(inner)
+    pub fn instance_snapshot(&self, id: PluginIncetanceId) -> Option<PluginInstanceSnapshot> {
+        let map = self.instances.read().expect("SgPluginRepository register error");
+        map.get(&id).map(PluginInstance::snapshot)
     }
 }
 

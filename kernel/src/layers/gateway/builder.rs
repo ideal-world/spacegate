@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    hash::Hash,
     sync::{Arc, OnceLock},
 };
 
@@ -53,10 +52,10 @@ impl SgGatewayLayerBuilder {
         self.http_routers.insert(route.name.clone(), route);
         self
     }
-    // pub fn http_routers(mut self, routes: impl IntoIterator<Item = SgHttpRoute>) -> Self {
-    //     self.http_routers.extend(routes);
-    //     self
-    // }
+    pub fn http_routers(mut self, routes: impl IntoIterator<Item = (String, SgHttpRoute)>) -> Self {
+        self.http_routers.extend(routes);
+        self
+    }
     pub fn http_plugin(mut self, plugin: SgBoxLayer) -> Self {
         self.http_plugins.push(plugin);
         self
@@ -81,7 +80,7 @@ impl SgGatewayLayerBuilder {
         SgGatewayLayer {
             gateway_name: self.gateway_name,
             http_routes: self.http_routers,
-            http_plugins: self.http_plugins.into(),
+            http_plugins: self.http_plugins,
             http_fallback: self.http_fallback,
             http_route_reloader: self.http_route_reloader,
         }
