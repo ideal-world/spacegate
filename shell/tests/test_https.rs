@@ -1,7 +1,10 @@
 use std::{env, time::Duration, vec};
 
 use serde_json::{json, Value};
-use spacegate_config::model::{BackendHost, SgBackendProtocol, SgBackendRef, SgGateway, SgHttpRoute, SgHttpRouteRule, SgListener, SgProtocolConfig, SgTlsConfig, SgTlsMode};
+use spacegate_config::{
+    model::{BackendHost, SgBackendProtocol, SgBackendRef, SgGateway, SgHttpRoute, SgHttpRouteRule, SgListener, SgProtocolConfig, SgTlsConfig, SgTlsMode},
+    ConfigItem,
+};
 use spacegate_kernel::BoxError;
 use spacegate_shell::ctrl_c_cancel_token;
 use tardis::{
@@ -103,59 +106,65 @@ async fn test_https() -> Result<(), BoxError> {
     localset.spawn_local(async move {
         let token = ctrl_c_cancel_token();
         let _server = spacegate_shell::server::RunningSgGateway::create(
-            SgGateway {
-                name: "test_gw".to_string(),
-                listeners: vec![
-                    SgListener {
-                        port: 8888,
-                        protocol: SgProtocolConfig::Https {
-                            tls: SgTlsConfig {
-                                mode: SgTlsMode::Terminate,
-                                key: TLS_RSA_KEY.to_string(),
-                                cert: TLS_CERT.to_string(),
+            ConfigItem {
+                gateway: SgGateway {
+                    name: "test_gw".to_string(),
+                    listeners: vec![
+                        SgListener {
+                            port: 8888,
+                            protocol: SgProtocolConfig::Https {
+                                tls: SgTlsConfig {
+                                    mode: SgTlsMode::Terminate,
+                                    key: TLS_RSA_KEY.to_string(),
+                                    cert: TLS_CERT.to_string(),
+                                },
                             },
+                            ..Default::default()
                         },
-                        ..Default::default()
-                    },
-                    SgListener {
-                        port: 8889,
-                        protocol: SgProtocolConfig::Https {
-                            tls: SgTlsConfig {
-                                mode: SgTlsMode::Terminate,
-                                key: TLS_PKCS8_KEY.to_string(),
-                                cert: TLS_EC_CERT.to_string(),
+                        SgListener {
+                            port: 8889,
+                            protocol: SgProtocolConfig::Https {
+                                tls: SgTlsConfig {
+                                    mode: SgTlsMode::Terminate,
+                                    key: TLS_PKCS8_KEY.to_string(),
+                                    cert: TLS_EC_CERT.to_string(),
+                                },
                             },
+                            ..Default::default()
                         },
-                        ..Default::default()
-                    },
-                    SgListener {
-                        port: 8890,
-                        protocol: SgProtocolConfig::Https {
-                            tls: SgTlsConfig {
-                                mode: SgTlsMode::Terminate,
-                                key: TLS_EC_KEY.to_string(),
-                                cert: TLS_EC_CERT.to_string(),
+                        SgListener {
+                            port: 8890,
+                            protocol: SgProtocolConfig::Https {
+                                tls: SgTlsConfig {
+                                    mode: SgTlsMode::Terminate,
+                                    key: TLS_EC_KEY.to_string(),
+                                    cert: TLS_EC_CERT.to_string(),
+                                },
                             },
+                            ..Default::default()
                         },
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            },
-            vec![SgHttpRoute {
-                hostnames: Some(vec!["localhost".to_string()]),
-                gateway_name: "test_gw".to_string(),
-                rules: vec![SgHttpRouteRule {
-                    backends: vec![SgBackendRef {
-                        host: BackendHost::Host { host: "postman-echo.com".into() },
-                        port: 443,
-                        protocol: Some(SgBackendProtocol::Https),
-                        ..Default::default()
-                    }],
+                    ],
                     ..Default::default()
-                }],
-                ..Default::default()
-            }],
+                },
+                routes: [(
+                    "default".to_string(),
+                    SgHttpRoute {
+                        hostnames: Some(vec!["localhost".to_string()]),
+                        gateway_name: "test_gw".to_string(),
+                        rules: vec![SgHttpRouteRule {
+                            backends: vec![SgBackendRef {
+                                host: BackendHost::Host { host: "postman-echo.com".into() },
+                                port: 443,
+                                protocol: Some(SgBackendProtocol::Https),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            },
             token.clone(),
         )
         .expect("fail to start up server");

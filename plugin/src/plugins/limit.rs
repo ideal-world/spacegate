@@ -124,4 +124,4 @@ impl MakeSgLayer for RateLimitConfig {
 
 def_plugin!("limit", RateLimitPlugin, RateLimitConfig);
 #[cfg(feature = "schema")]
-crate::schema! { RateLimitPlugin }
+crate::schema! { RateLimitPlugin, RateLimitConfig }

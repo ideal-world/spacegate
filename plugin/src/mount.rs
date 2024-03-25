@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use spacegate_kernel::{
     layers::{
-        gateway::{SgGatewayLayer, SgGatewayRoute, SgGatewayRouter},
+        gateway::SgGatewayLayer,
         http_route::{SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
     },
     BoxError,

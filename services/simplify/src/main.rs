@@ -1,8 +1,6 @@
 use spacegate_shell::BoxError;
-use tardis::{basic::tracing::TardisTracing, tokio};
 
 fn main() -> Result<(), BoxError> {
-    TardisTracing::initializer().with_env_layer().with_fmt_layer().init();
     let conf_path = std::env::args().nth(1).expect("The first parameter is missing: configuration path");
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().thread_name("spacegate").build().expect("fail to build runtime");
     rt.block_on(async move {

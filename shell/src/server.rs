@@ -4,11 +4,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::config::{
-    matches_convert::convert_config_to_kernel,
-    plugin_filter_dto::{batch_mount_plugin, global_batch_mount_plugin},
-    SgGateway, SgHttpRoute, SgProtocolConfig, SgRouteFilter, SgTlsMode,
-};
+use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, SgProtocolConfig, SgRouteFilter, SgTlsMode};
 
 use lazy_static::lazy_static;
 use spacegate_config::ConfigItem;
@@ -19,7 +15,7 @@ use spacegate_kernel::{
     service::get_http_backend_service,
     BoxError, BoxHyperService, Layer,
 };
-use spacegate_plugin::mount::{MountPoint, MountPointIndex};
+use spacegate_plugin::mount::MountPointIndex;
 use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
@@ -35,7 +31,7 @@ lazy_static! {
     static ref START_JOIN_HANDLE: Arc<Mutex<HashMap<String, JoinHandle<()>>>> = <_>::default();
 }
 
-fn collect_tower_http_route(
+fn collect_http_route(
     gateway_name: Arc<str>,
     http_routes: impl IntoIterator<Item = (String, crate::SgHttpRoute)>,
 ) -> Result<HashMap<String, spacegate_kernel::layers::http_route::SgHttpRoute>, BoxError> {
@@ -110,8 +106,8 @@ fn collect_tower_http_route(
                     Result::<_, BoxError>::Ok(layer)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut builder = spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority);
-            let mut layer = builder.build()?;
+            let mut layer =
+                spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build()?;
             global_batch_mount_plugin(plugins, &mut layer, mount_index);
             Ok((name, layer))
         })
@@ -127,9 +123,9 @@ pub(crate) fn create_service(
     reloader: Reloader<SgGatewayRoute>,
 ) -> Result<BoxHyperService, BoxError> {
     let gateway_name: Arc<str> = gateway_name.into();
-    let routes = collect_tower_http_route(gateway_name.clone(), http_routes)?;
+    let routes = collect_http_route(gateway_name.clone(), http_routes)?;
     let mut layer = spacegate_kernel::layers::gateway::SgGatewayLayer::builder(gateway_name.clone(), cancel_token).http_routers(routes).http_route_reloader(reloader).build();
-    global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name.into() });
+    global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
     let backend_service = get_http_backend_service();
     let service = BoxHyperService::new(layer.layer(backend_service));
     Ok(service)
@@ -137,7 +133,7 @@ pub(crate) fn create_service(
 
 /// create a new sg gateway route, which can be sent to reloader
 pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<SgGatewayRoute, BoxError> {
-    let routes = collect_tower_http_route(gateway_name, http_routes.clone())?;
+    let routes = collect_http_route(gateway_name, http_routes.clone())?;
     let route_vec = routes.into_values().collect::<Vec<_>>();
     let service = create_http_router(&route_vec, default_gateway_route_fallback(), get_http_backend_service());
     Ok(service)
@@ -206,7 +202,7 @@ impl RunningSgGateway {
         // let mut builder_ext = hyper::http::Extensions::new();
         #[cfg(feature = "cache")]
         {
-            if let Some(url) = &config.parameters.redis_url {
+            if let Some(url) = &gateway.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
                 // builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
                 // builder_ext.insert(spacegate_kernel::extension::GatewayName(config.gateway.name.clone().into()));

@@ -13,7 +13,7 @@ pub const CONF_HTTP_ROUTE_KEY: &str = "sg:conf:route:http:";
 pub const CONF_CHANGE_TRIGGER: &str = "sg:conf:change:trigger:";
 
 pub struct Redis<F> {
-    redis_con_pool: Pool,
+    redis_conn_pool: Pool,
     pub format: F,
 }
 
@@ -21,11 +21,11 @@ impl<F> Redis<F>
 where
     F: ConfigFormat,
 {
-    pub fn new(redis_con_pool: Pool, format: F) -> Self {
-        Self { redis_con_pool, format }
+    pub fn new(redis_conn_pool: Pool, format: F) -> Self {
+        Self { redis_conn_pool, format }
     }
 
     pub async fn get_con(&self) -> BoxResult<Connection> {
-        Ok(self.redis_con_pool.get().await.map_err(Box::new)?)
+        Ok(self.redis_conn_pool.get().await.map_err(Box::new)?)
     }
 }

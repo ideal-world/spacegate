@@ -11,10 +11,10 @@ use spacegate_ext_redis::{
 use spacegate_kernel::{
     extension::{GatewayName, MatchedSgRouter},
     helper_layers::function::{FnLayer, FnLayerMethod, Inner},
-    BoxError, BoxResult, SgBody, SgBoxLayer,
+    BoxError, SgBody, SgBoxLayer,
 };
 
-use crate::{error::code, MakeSgLayer, Plugin, PluginError};
+use crate::{error::code, Plugin, PluginError};
 use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
@@ -77,34 +77,29 @@ impl FnLayerMethod for RedisCount {
     }
 }
 
-impl MakeSgLayer for RedisCountConfig {
-    fn make_layer(&self) -> BoxResult<spacegate_kernel::SgBoxLayer> {
-        let method = Arc::new(RedisCount {
-            prefix: RedisCountPlugin::redis_prefix(self.id.as_deref()),
-            header: HeaderName::from_bytes(self.header.as_bytes())?,
-        });
-        let layer = FnLayer::new(method);
-        Ok(SgBoxLayer::new(layer))
-    }
-}
-
 pub struct RedisCountPlugin;
 impl Plugin for RedisCountPlugin {
-    type MakeLayer = RedisCountConfig;
-
     const CODE: &'static str = "redis-count";
 
-    fn create(id: Option<String>, value: serde_json::Value) -> Result<Self::MakeLayer, BoxError> {
-        let config = serde_json::from_value::<RedisCountConfig>(value)?;
-        Ok(RedisCountConfig {
-            id: id.or(config.id),
-            header: config.header,
-        })
+    fn create(config: crate::PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
+        let instance_id = config.instance_id();
+
+        let layer_config = serde_json::from_value::<RedisCountConfig>(config.spec.clone())?;
+        let make = move || {
+            let method = Arc::new(RedisCount {
+                prefix: instance_id.redis_prefix(),
+                header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
+            });
+            let layer = FnLayer::new(method);
+            Ok(SgBoxLayer::new(layer))
+        };
+        let instance = crate::instance::PluginInstance::new::<Self, _>(config, make);
+        Ok(instance)
     }
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(RedisCountPlugin);
+crate::schema!(RedisCountPlugin, RedisCountConfig);
 
 #[cfg(test)]
 mod test {
@@ -119,6 +114,8 @@ mod test {
     use testcontainers_modules::redis::REDIS_PORT;
     use tower_layer::Layer;
 
+    use crate::PluginConfig;
+
     use super::*;
     #[tokio::test]
     async fn test_op_res_count_limit() {
@@ -131,20 +128,21 @@ mod test {
         let host_port = redis_container.get_host_port_ipv4(REDIS_PORT);
 
         let url = format!("redis://127.0.0.1:{host_port}");
-        let config = RedisCountPlugin::create(
-            Some("test".into()),
-            json! {
+        let config = RedisCountPlugin::create(PluginConfig {
+            code: Default::default(),
+            name: Some("test".into()),
+            spec: json! {
                 {
-                    "header": AUTHORIZATION.as_str()
+                    "header": AUTHORIZATION.as_str(),
                 }
             },
-        )
+        })
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");
         let mut conn = client.get_conn().await;
         let _: () = conn.set(format!("sg:plugin:redis-count:test:*:op-res:{AK}"), 3).await.expect("fail to set");
-        let layer = config.make_layer().expect("fail to make layer");
+        let layer = config.make().expect("fail to make layer");
         let backend_service = get_echo_service();
         let mut service = layer.layer(backend_service);
         {

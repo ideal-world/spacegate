@@ -191,7 +191,7 @@ impl MakeSgLayer for SgFilterMaintenanceConfig {
 
 def_plugin!("maintenance", MaintenancePlugin, SgFilterMaintenanceConfig);
 #[cfg(feature = "schema")]
-crate::schema!(MaintenancePlugin);
+crate::schema!(MaintenancePlugin, SgFilterMaintenanceConfig);
 #[cfg(test)]
 mod test {
 
@@ -208,36 +208,36 @@ mod test {
     use tardis::tokio;
     use tower_layer::Layer;
 
+    use crate::plugins::maintenance::MaintenancePlugin;
+    use crate::{Plugin, PluginConfig};
+
     #[tokio::test]
     async fn test_config() -> Result<(), BoxError> {
         let now = Local::now();
         let duration = Duration::seconds(100);
         let end_time = now + duration;
-        let repo = crate::SgPluginRepository::global()
-            .create_layer(
-                None,
-                crate::plugins::maintenance::CODE,
-                json!({
-                  "enabled_time_range": [
-                    {
-                      "start": "10:00:00",
-                      "end": "14:30:00"
-                    },
-                    {
-                      "start": now.format("%H:%M:%S").to_string() ,
-                      "end": end_time.format("%H:%M:%S").to_string()
-                    }
-                  ],
-                  "exclude_ip_range": [
-                       "192.168.1.0/24",
-                       "10.0.0.0/16",
-                       "172.30.30.30"
-                  ]
+        let layer = MaintenancePlugin::create(PluginConfig {
+            spec: json!({
+                "enabled_time_range": [
+                {
+                    "start": "10:00:00",
+                    "end": "14:30:00"
+                },
+                {
+                    "start": now.format("%H:%M:%S").to_string() ,
+                    "end": end_time.format("%H:%M:%S").to_string()
                 }
-                ),
-            )
-            .expect("unable to create plugin");
-        let serivce = repo.layer(get_echo_service());
+                ],
+                "exclude_ip_range": [
+                    "192.168.1.0/24",
+                    "10.0.0.0/16",
+                    "172.30.30.30"
+                ]
+            }),
+            ..Default::default()
+        })
+        .expect("invalid config");
+        let service = layer.make().expect("fail to make layer").layer(get_echo_service());
 
         let req = Request::builder()
             .method(Method::POST)
@@ -246,7 +246,7 @@ mod test {
             .extension(PeerAddr("192.168.1.123:10000".parse().expect("invalid addr")))
             .body(SgBody::empty())
             .expect("invalid request");
-        let resp = serivce.call(req).await.unwrap();
+        let resp = service.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
         let req = Request::builder()
@@ -256,7 +256,7 @@ mod test {
             .extension(PeerAddr("192.168.2.123:10000".parse().expect("invalid addr")))
             .body(SgBody::empty())
             .expect("invalid request");
-        let resp = serivce.call(req).await.unwrap();
+        let resp = service.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
 
         let req = Request::builder()
@@ -266,7 +266,7 @@ mod test {
             .extension(PeerAddr("172.30.30.30:10000".parse().expect("invalid addr")))
             .body(SgBody::empty())
             .expect("invalid request");
-        let resp = serivce.call(req).await.unwrap();
+        let resp = service.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
     }

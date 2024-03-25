@@ -1,16 +1,12 @@
 use spacegate_config::model::SgRouteFilter;
-use spacegate_kernel::{
-    layers::{
-        gateway::builder::SgGatewayLayerBuilder,
-        http_route::builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
-    },
-    BoxError, SgBoxLayer,
+use spacegate_plugin::{
+    mount::{MountPoint, MountPointIndex},
+    PluginConfig, SgPluginRepository,
 };
-use spacegate_plugin::{mount::{MountPoint, MountPointIndex}, MakeSgLayer, PluginConfig, SgPluginRepository};
 
 pub fn convert_filter(filter: SgRouteFilter) -> PluginConfig {
     PluginConfig {
-        code: filter.code,
+        code: filter.code.into(),
         spec: filter.spec,
         name: filter.name,
     }

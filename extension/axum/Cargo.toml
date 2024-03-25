@@ -1,5 +1,5 @@
 [package]
-name = "spacegate-axum"
+name = "spacegate-ext-axum"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -20,5 +20,6 @@ tower = { version = "0.4" }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-tower-http = { version = "*", features = ["trace"] }
+tower-http = { workspace = true, features = ["trace"] }
 serde_json = { workspace = true }
+tokio-util = { workspace = true }

@@ -1,6 +1,6 @@
 pub mod builder;
 
-use std::{cell::RefCell, collections::HashMap, convert::Infallible, ops::Index, rc::Rc, sync::Arc};
+use std::{collections::HashMap, convert::Infallible, ops::Index, sync::Arc};
 
 use crate::{
     extension::{GatewayName, MatchedSgRouter},
