@@ -18,7 +18,9 @@ path = "src/lib.rs"
 
 [features]
 ext-redis = ["spacegate-ext-redis"]
+ext-axum = ["spacegate-ext-axum"]
 cache = ["spacegate-plugin/cache", "deadpool-redis", "spacegate-ext-redis"]
+file = []
 k8s = [
   "kube",
   "k8s-openapi",
@@ -47,6 +49,7 @@ spacegate-kernel = { path = "../kernel", features = ["reload"] }
 spacegate-plugin = { path = "../plugin" }
 spacegate-config = { path = "../config" }
 spacegate-ext-redis = { path = "../extension/redis", optional = true }
+spacegate-ext-axum = { path = "../extension/axum", optional = true }
 
 serde.workspace = true
 serde_json.workspace = true

@@ -1,24 +1,18 @@
 #![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     borrow::Cow,
-    collections::{HashMap, HashSet},
-    sync::{Arc, OnceLock, RwLock, Weak},
+    collections::HashMap,
+    sync::{Arc, OnceLock, RwLock},
 };
 
-use instance::{PluginIncetanceId, PluginInstance, PluginInstanceSnapshot};
+use instance::{PluginInstance, PluginInstanceId, PluginInstanceSnapshot};
 use mount::{MountPoint, MountPointIndex};
 pub use serde_json;
 pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
+use spacegate_kernel::BoxResult;
 pub use spacegate_kernel::SgBoxLayer;
-use spacegate_kernel::{
-    layers::{
-        gateway::builder::SgGatewayLayerBuilder,
-        http_route::builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
-    },
-    BoxResult,
-};
 
 pub use spacegate_kernel::BoxError;
 pub mod error;
@@ -34,17 +28,22 @@ pub use schemars;
 pub trait Plugin: Any {
     const CODE: &'static str;
     fn create(config: PluginConfig) -> Result<PluginInstance, BoxError>;
-    // fn redis_prefix(id: Option<&str>) -> String {
-    //     let id = id.unwrap_or("*");
-    //     format!("sg:plugin:{code}:{id}", code = Self::CODE)
-    // }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PluginConfig {
-    pub code: String,
+    pub code: Cow<'static, str>,
     pub spec: JsonValue,
     pub name: Option<String>,
+}
+
+impl PluginConfig {
+    pub fn instance_id(&self) -> PluginInstanceId {
+        PluginInstanceId {
+            code: self.code.clone(),
+            name: self.name.clone(),
+        }
+    }
 }
 
 #[cfg(feature = "schema")]
@@ -54,33 +53,13 @@ pub trait PluginSchemaExt {
 
 pub trait MakeSgLayer {
     fn make_layer(&self) -> BoxResult<SgBoxLayer>;
-    fn install_on_gateway(&self, gateway: &mut SgGatewayLayerBuilder) -> Result<(), BoxError> {
-        let layer = self.make_layer()?;
-        gateway.http_plugins.push(layer);
-        Ok(())
-    }
-    fn install_on_backend(&self, backend: &mut SgHttpBackendLayerBuilder) -> Result<(), BoxError> {
-        let layer = self.make_layer()?;
-        backend.plugins.push(layer);
-        Ok(())
-    }
-    fn install_on_route(&self, route: &mut SgHttpRouteLayerBuilder) -> Result<(), BoxError> {
-        let layer = self.make_layer()?;
-        route.plugins.push(layer);
-        Ok(())
-    }
-    fn install_on_rule(&self, rule: &mut SgHttpRouteRuleLayerBuilder) -> Result<(), BoxError> {
-        let layer = self.make_layer()?;
-        rule.plugins.push(layer);
-        Ok(())
-    }
 }
 
 type BoxCreateFn = Box<dyn Fn(PluginConfig) -> Result<PluginInstance, BoxError> + Send + Sync + 'static>;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
     pub creators: Arc<RwLock<HashMap<Cow<'static, str>, BoxCreateFn>>>,
-    pub instances: Arc<RwLock<HashMap<PluginIncetanceId, PluginInstance>>>,
+    pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
 }
 
 impl SgPluginRepository {
@@ -142,25 +121,35 @@ impl SgPluginRepository {
 
     pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, config: PluginConfig) -> Result<(), BoxError> {
         let map = self.creators.read().expect("SgPluginRepository register error");
-        let code: Cow<'static, str> = config.code.clone().into();
+        let code: Cow<'static, str> = config.code.clone();
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
-        let id = PluginIncetanceId {
+        let id = PluginInstanceId {
             code: code.clone(),
             name: config.name.clone(),
         };
         if let Some(instance) = instances.get_mut(&id) {
+            // before mount hook
+            instance.before_mount()?;
             instance.mount_at(mount_point, mount_index)?;
+            instance.after_mount()?;
+            // after mount hook
             Ok(())
         } else {
             let creator = map.get(&code).ok_or_else::<BoxError, _>(|| format!("[Sg.Plugin] unregistered sg plugin type {code}").into())?;
             let mut instance = (creator)(config)?;
+            instance.after_create()?;
+            // after create hook
+            // before mount hook
+            instance.before_mount()?;
             instance.mount_at(mount_point, mount_index)?;
+            // after mount hook
+            instance.after_mount()?;
             instances.insert(id.clone(), instance);
             Ok(())
         }
     }
 
-    pub fn instance_snapshot(&self, id: PluginIncetanceId) -> Option<PluginInstanceSnapshot> {
+    pub fn instance_snapshot(&self, id: PluginInstanceId) -> Option<PluginInstanceSnapshot> {
         let map = self.instances.read().expect("SgPluginRepository register error");
         map.get(&id).map(PluginInstance::snapshot)
     }
@@ -184,64 +173,15 @@ macro_rules! def_plugin {
     ($CODE:literal, $def:ident, $filter_type:ty) => {
         pub const CODE: &str = $CODE;
 
+        #[derive(Debug, Copy, Clone)]
         pub struct $def;
 
         impl $crate::Plugin for $def {
             const CODE: &'static str = CODE;
-            type MakeLayer = $filter_type;
-            fn create(_name: Option<String>, value: $crate::JsonValue) -> Result<Self::MakeLayer, $crate::BoxError> {
-                let filter: $filter_type = $crate::serde_json::from_value(value)?;
-                Ok(filter)
-            }
-        }
-    };
-}
-
-/// # Define Plugin Filter
-///
-/// use `def_filter_plugin` macro to define a filter plugin for an exsited struct which implemented [Filter](spacegate_kernel::helper_layers::filter::Filter).
-///
-/// ```
-/// # use serde::{Serialize, Deserialize};
-/// # use hyper::{http::{StatusCode, header::AUTHORIZATION}, Response, Request};
-/// # use spacegate_kernel::{SgResponseExt, SgBody};
-/// # use spacegate_plugin::{def_filter_plugin, Filter, MakeSgLayer, SgBoxLayer};
-/// #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-/// pub struct SgFilterAuth {}
-///
-/// impl Filter for SgFilterAuth {
-///     fn filter(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
-///         if req.headers().contains_key(AUTHORIZATION) {
-///             Ok(req)
-///         } else {
-///             Err(Response::with_code_message(StatusCode::UNAUTHORIZED, "missing authorization header"))
-///         }
-///     }
-/// }
-///
-/// def_filter_plugin!("auth", SgFilterAuthPlugin, SgFilterAuth);
-/// ```
-
-#[macro_export]
-macro_rules! def_filter_plugin {
-    ($CODE:literal, $def:ident, $filter_type:ty) => {
-        pub const CODE: &str = $CODE;
-
-        pub struct $def;
-
-        impl $crate::Plugin for $def {
-            const CODE: &'static str = CODE;
-            type MakeLayer = $filter_type;
-            fn create(_name: Option<String>, value: $crate::JsonValue) -> Result<Self::MakeLayer, $crate::BoxError> {
-                let filter: $filter_type = $crate::serde_json::from_value(value)?;
-                Ok(filter)
-            }
-        }
-
-        impl $crate::MakeSgLayer for $filter_type {
-            fn make_layer(&self) -> Result<$crate::SgBoxLayer, $crate::BoxError> {
-                let layer = $crate::FilterRequestLayer::new(self.clone());
-                Ok($crate::SgBoxLayer::new(layer))
+            fn create(config: $crate::PluginConfig) -> Result<$crate::PluginInstance, $crate::BoxError> {
+                let filter: $filter_type = $crate::serde_json::from_value(config.spec.clone())?;
+                let instance = $crate::PluginInstance::new::<Self, _>(config, move || $crate::MakeSgLayer::make_layer(&filter));
+                Ok(instance)
             }
         }
     };
@@ -263,12 +203,11 @@ macro_rules! schema {
                 $crate::schemars::schema_for_value!($schema)
             }
         }
-    };
-    ($plugin:ident) => {
-        impl $crate::PluginSchemaExt for $plugin {
-            fn schema() -> $crate::schemars::schema::RootSchema {
-                $crate::schemars::schema_for!(<$plugin as $crate::Plugin>::MakeLayer)
-            }
-        }
-    };
+    }; // ($plugin:ident) => {
+       //     impl $crate::PluginSchemaExt for $plugin {
+       //         fn schema() -> $crate::schemars::schema::RootSchema {
+       //             $crate::schemars::schema_for!(<$plugin as $crate::Plugin>::MakeLayer)
+       //         }
+       //     }
+       // };
 }

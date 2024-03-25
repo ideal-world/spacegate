@@ -22,9 +22,7 @@ pub struct ConfigItem {
     pub routes: BTreeMap<String, SgHttpRoute>,
 }
 
-impl ConfigItem {
-
-}
+impl ConfigItem {}
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]

@@ -7,10 +7,10 @@ use spacegate_ext_redis::{global_repo, redis::Script};
 use spacegate_kernel::{
     extension::{GatewayName, MatchedSgRouter},
     helper_layers::function::{FnLayer, FnLayerMethod, Inner},
-    BoxError, BoxResult, SgBody, SgBoxLayer,
+    BoxError, SgBody, SgBoxLayer,
 };
 
-use crate::{error::code, MakeSgLayer, Plugin, PluginError};
+use crate::{error::code, Plugin, PluginConfig, PluginError};
 use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
@@ -52,36 +52,40 @@ impl FnLayerMethod for RedisLimit {
     }
 }
 
-impl MakeSgLayer for RedisLimitConfig {
-    fn make_layer(&self) -> BoxResult<spacegate_kernel::SgBoxLayer> {
-        let check_script = Script::new(include_str!("./redis_limit/check.lua"));
-        let method = Arc::new(RedisLimit {
-            prefix: RedisLimitPlugin::redis_prefix(self.id.as_deref()),
-            header: HeaderName::from_bytes(self.header.as_bytes())?,
-            script: check_script,
-        });
-        let layer = FnLayer::new(method);
-        Ok(SgBoxLayer::new(layer))
-    }
-}
+// impl MakeSgLayer for RedisLimitConfig {
+//     fn make_layer(&self) -> BoxResult<spacegate_kernel::SgBoxLayer> {
+//         let check_script = Script::new(include_str!("./redis_limit/check.lua"));
+//         let method = Arc::new(RedisLimit {
+//             prefix: RedisLimitPlugin::redis_prefix(self.id.as_deref()),
+//             header: HeaderName::from_bytes(self.header.as_bytes())?,
+//             script: check_script,
+//         });
+//         let layer = FnLayer::new(method);
+//         Ok(SgBoxLayer::new(layer))
+//     }
+// }
 
 pub struct RedisLimitPlugin;
 impl Plugin for RedisLimitPlugin {
-    type MakeLayer = RedisLimitConfig;
-
     const CODE: &'static str = "redis-limit";
 
-    fn create(id: Option<String>, value: serde_json::Value) -> Result<Self::MakeLayer, BoxError> {
-        let config = serde_json::from_value::<RedisLimitConfig>(value)?;
-        Ok(RedisLimitConfig {
-            id: id.or(config.id),
-            header: config.header,
-        })
+    fn create(config: PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
+        let layer_config = serde_json::from_value::<RedisLimitConfig>(config.spec.clone())?;
+        let instance_id = config.instance_id();
+        Ok(crate::instance::PluginInstance::new::<Self, _>(config, move || {
+            let method = Arc::new(RedisLimit {
+                prefix: instance_id.redis_prefix(),
+                header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
+                script: Script::new(include_str!("./redis_limit/check.lua")),
+            });
+            let layer = FnLayer::new(method);
+            Ok(SgBoxLayer::new(layer))
+        }))
     }
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(RedisLimitPlugin);
+crate::schema!(RedisLimitPlugin, RedisLimitConfig);
 
 #[cfg(test)]
 mod test {
@@ -109,20 +113,21 @@ mod test {
         let host_port = redis_container.get_host_port_ipv4(REDIS_PORT);
 
         let url = format!("redis://127.0.0.1:{host_port}");
-        let config = RedisLimitPlugin::create(
-            Some("test".into()),
-            json! {
+        let config = RedisLimitPlugin::create(PluginConfig {
+            code: Default::default(),
+            name: Some("test".into()),
+            spec: json! {
                 {
                     "header": AUTHORIZATION.as_str(),
                 }
             },
-        )
+        })
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");
         let mut conn = client.get_conn().await;
         let _: () = conn.set(format!("sg:plugin:redis-limit:test:*:op-res:{AK}"), 3).await.expect("fail to set");
-        let layer = config.make_layer().expect("fail to make layer");
+        let layer = config.make().expect("fail to make layer");
         let backend_service = get_echo_service();
         let mut service = layer.layer(backend_service);
         {

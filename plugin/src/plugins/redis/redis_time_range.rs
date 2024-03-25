@@ -11,11 +11,11 @@ use spacegate_ext_redis::{
 use spacegate_kernel::{
     extension::{GatewayName, MatchedSgRouter},
     helper_layers::function::{FnLayer, FnLayerMethod, Inner},
-    BoxError, BoxResult, SgBody, SgBoxLayer,
+    BoxError, SgBody, SgBoxLayer,
 };
 use tracing::debug;
 
-use crate::{error::code, MakeSgLayer, Plugin, PluginError};
+use crate::{error::code, Plugin, PluginError};
 use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
@@ -71,37 +71,33 @@ impl FnLayerMethod for RedisTimeRange {
     }
 }
 
-impl MakeSgLayer for RedisTimeRangeConfig {
-    fn make_layer(&self) -> BoxResult<spacegate_kernel::SgBoxLayer> {
-        let method = Arc::new(RedisTimeRange {
-            prefix: RedisTimeRangePlugin::redis_prefix(self.id.as_deref()),
-            header: HeaderName::from_bytes(self.header.as_bytes())?,
-        });
-        let layer = FnLayer::new(method);
-        Ok(SgBoxLayer::new(layer))
-    }
-}
-
 pub struct RedisTimeRangePlugin;
 impl Plugin for RedisTimeRangePlugin {
-    type MakeLayer = RedisTimeRangeConfig;
+    // type MakeLayer = RedisTimeRangeConfig;
 
     const CODE: &'static str = "redis-time-range";
 
-    fn create(id: Option<String>, value: serde_json::Value) -> Result<Self::MakeLayer, BoxError> {
-        let config = serde_json::from_value::<RedisTimeRangeConfig>(value)?;
-        Ok(RedisTimeRangeConfig {
-            id: id.or(config.id),
-            header: config.header,
-        })
+    fn create(config: crate::PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
+        let layer_config = serde_json::from_value::<RedisTimeRangeConfig>(config.spec.clone())?;
+        let instance_id = config.instance_id();
+        Ok(crate::instance::PluginInstance::new::<Self, _>(config, move || {
+            let method = Arc::new(RedisTimeRange {
+                prefix: instance_id.redis_prefix(),
+                header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
+            });
+            let layer = FnLayer::new(method);
+            Ok(SgBoxLayer::new(layer))
+        }))
     }
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(RedisTimeRangePlugin);
+crate::schema!(RedisTimeRangePlugin, RedisTimeRangeConfig);
 
 #[cfg(test)]
 mod test {
+
+    use crate::PluginConfig;
 
     use super::*;
     use hyper::header::AUTHORIZATION;
@@ -123,14 +119,15 @@ mod test {
         let host_port = redis_container.get_host_port_ipv4(REDIS_PORT);
 
         let url = format!("redis://127.0.0.1:{host_port}");
-        let config = RedisTimeRangePlugin::create(
-            Some("test".into()),
-            json! {
+        let config = RedisTimeRangePlugin::create(PluginConfig {
+            code: Default::default(),
+            name: Some("test".into()),
+            spec: json! {
                 {
-                    "header": AUTHORIZATION.as_str()
+                    "header": AUTHORIZATION.as_str(),
                 }
             },
-        )
+        })
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");
@@ -143,7 +140,7 @@ mod test {
             .await
             .expect("fail to set");
         let _: () = conn.set("sg:plugin:redis-time-range:test:*:op-res:ak-pass", "2024-01-01T00:00:00-08:00,2025-01-01T00:00:00-08:00").await.expect("fail to set");
-        let layer = config.make_layer().expect("fail to make layer");
+        let layer = config.make().expect("fail to make layer");
         let backend_service = get_echo_service();
         let mut service = layer.layer(backend_service);
         {

@@ -19,6 +19,7 @@ path = "src/lib.rs"
 [features]
 cache = ["redis"]
 redis = ["spacegate-kernel/ext-redis", "spacegate-ext-redis"]
+axum = ["spacegate-ext-axum"]
 limit = ["cache"]
 header-modifier = []
 inject = []
@@ -70,6 +71,7 @@ url = { version = "2", optional = true }
 
 # cache
 spacegate-ext-redis = { path = "../extension/redis", optional = true }
+spacegate-ext-axum = { path = "../extension/axum", optional = true }
 
 # rt
 tokio = { workspace = true }

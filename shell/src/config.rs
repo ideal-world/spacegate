@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 // pub mod config_by_local;
 // pub mod config_by_redis;
 pub use spacegate_config::model::*;
+use tracing::info;
 
 pub(crate) mod matches_convert;
 pub mod plugin_filter_dto;
@@ -29,6 +30,22 @@ where
 {
     use crate::server::RunningSgGateway;
     tokio::task::spawn_local(async move {
+        #[cfg(feature = "ext-axum")]
+        {
+            use spacegate_ext_axum::axum;
+            info!("Starting web server...");
+            let cancel_token = shutdown_signal.clone();
+            let server = spacegate_ext_axum::AxumServer::global();
+            let mut wg = server.write().await;
+            let mut swap = axum::Router::default();
+            std::mem::swap(&mut wg.router, &mut swap);
+            wg.router = swap.fallback(axum::routing::any(axum::response::Html(axum::body::Bytes::from_static(include_bytes!(
+                "./config/web-server-index.html"
+            )))));
+            wg.cancel_token = cancel_token;
+            wg.start().await?;
+            info!("Web server started.");
+        }
         let (init_config, listener) = config.create_listener().await?;
         for (name, item) in init_config.gateways {
             match RunningSgGateway::create(item, shutdown_signal.clone()) {

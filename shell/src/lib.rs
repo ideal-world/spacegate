@@ -40,7 +40,7 @@ pub mod server;
 #[cfg(feature = "ext-redis")]
 pub use spacegate_ext_redis;
 
-#[cfg(feature = "local")]
+#[cfg(feature = "file")]
 pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
     use spacegate_config::service::{backend::fs::Fs, config_format::Json};
     let config = Fs::new(conf_path, Json::default());
@@ -55,12 +55,9 @@ pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<()
 }
 #[cfg(feature = "cache")]
 pub async fn startup_cache(url: &str, _poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    use deadpool_redis::Runtime;
     use spacegate_config::service::{backend::redis::Redis, config_format::Json};
-
-    let cfg = deadpool_redis::Config::from_url(url);
-    let pool = cfg.create_pool(Some(Runtime::Tokio1)).map_err(|e| -> BoxError { format!("create redis pool error: {e}").into() })?;
-    let config = Redis::new(pool, Json::default());
+    use spacegate_ext_redis::RedisClient;
+    let config = Redis::new(RedisClient::new(url)?.redis_conn_pool, Json::default());
     startup(config)
 }
 
@@ -74,8 +71,8 @@ pub fn startup<L>(config: L) -> Result<JoinHandle<Result<(), BoxError>>, BoxErro
 where
     L: CreateListener + Retrieve + 'static,
 {
-    info!("Starting spacegate...");
     info!("Spacegate Meta Info: {:?}", Meta::new());
+    info!("Starting gateway...");
     Ok(config::init_with_config(config, ctrl_c_cancel_token()))
 }
 

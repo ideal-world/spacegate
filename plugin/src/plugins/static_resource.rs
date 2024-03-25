@@ -92,13 +92,7 @@ impl Plugin for StaticResourcePlugin {
             Ok(spacegate_kernel::SgBoxLayer::new(FilterRequestLayer::new(StaticResource { content_type, code, body })))
         }))
     }
-    // type MakeLayer = StaticResourceConfig;
-
-    // fn create(_id: Option<String>, value: Value) -> Result<Self::MakeLayer, spacegate_kernel::BoxError> {
-    //     let config = serde_json::from_value(value)?;
-    //     Ok(config)
-    // }
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(StaticResourcePlugin);
+crate::schema!(StaticResourcePlugin, StaticResourceConfig);
