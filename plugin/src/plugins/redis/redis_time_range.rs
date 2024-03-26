@@ -96,9 +96,6 @@ crate::schema!(RedisTimeRangePlugin, RedisTimeRangeConfig);
 
 #[cfg(test)]
 mod test {
-
-    use crate::PluginConfig;
-
     use super::*;
     use hyper::header::AUTHORIZATION;
     use hyper::service::HttpService;
@@ -109,25 +106,26 @@ mod test {
     };
     use testcontainers_modules::redis::REDIS_PORT;
     use tower_layer::Layer;
+    use tracing_subscriber::EnvFilter;
     #[tokio::test]
     async fn test_op_res_count_limit() {
         const GW_NAME: &str = "DEFAULT";
         std::env::set_var("RUST_LOG", "trace");
+        tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
 
         let docker = testcontainers::clients::Cli::default();
         let redis_container = docker.run(testcontainers_modules::redis::Redis);
         let host_port = redis_container.get_host_port_ipv4(REDIS_PORT);
 
         let url = format!("redis://127.0.0.1:{host_port}");
-        let config = RedisTimeRangePlugin::create(PluginConfig {
-            code: Default::default(),
-            name: Some("test".into()),
-            spec: json! {
+        let config = RedisTimeRangePlugin::create_by_spec(
+            json! {
                 {
                     "header": AUTHORIZATION.as_str(),
                 }
             },
-        })
+            Some("test".into()),
+        )
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");

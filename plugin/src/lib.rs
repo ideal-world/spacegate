@@ -28,6 +28,13 @@ pub use schemars;
 pub trait Plugin: Any {
     const CODE: &'static str;
     fn create(config: PluginConfig) -> Result<PluginInstance, BoxError>;
+    fn create_by_spec(spec: JsonValue, name: Option<String>) -> Result<PluginInstance, BoxError> {
+        Self::create(PluginConfig {
+            code: Self::CODE.into(),
+            spec,
+            name,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -43,6 +50,22 @@ impl PluginConfig {
             code: self.code.clone(),
             name: self.name.clone(),
         }
+    }
+    pub fn check_code<P: Plugin>(&self) -> bool {
+        self.code == P::CODE
+    }
+    pub fn new<P: Plugin>(value: impl Into<JsonValue>) -> Self {
+        Self {
+            code: P::CODE.into(),
+            spec: value.into(),
+            ..Default::default()
+        }
+    }
+    pub fn with_name(self, s: impl Into<String>) -> Self {
+        Self { name: Some(s.into()), ..self }
+    }
+    pub fn no_name(self) -> Self {
+        Self { name: None, ..self }
     }
 }
 
@@ -203,11 +226,5 @@ macro_rules! schema {
                 $crate::schemars::schema_for_value!($schema)
             }
         }
-    }; // ($plugin:ident) => {
-       //     impl $crate::PluginSchemaExt for $plugin {
-       //         fn schema() -> $crate::schemars::schema::RootSchema {
-       //             $crate::schemars::schema_for!(<$plugin as $crate::Plugin>::MakeLayer)
-       //         }
-       //     }
-       // };
+    };
 }

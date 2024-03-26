@@ -113,15 +113,14 @@ mod test {
         let host_port = redis_container.get_host_port_ipv4(REDIS_PORT);
 
         let url = format!("redis://127.0.0.1:{host_port}");
-        let config = RedisLimitPlugin::create(PluginConfig {
-            code: Default::default(),
-            name: Some("test".into()),
-            spec: json! {
+        let config = RedisLimitPlugin::create_by_spec(
+            json! {
                 {
                     "header": AUTHORIZATION.as_str(),
                 }
             },
-        })
+            Some("test".into()),
+        )
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");
