@@ -11,7 +11,7 @@ use std::ops::Range;
 use chrono::{Local, NaiveTime};
 use serde::{Deserialize, Serialize};
 
-use crate::{def_plugin, MakeSgLayer};
+use crate::{def_plugin, MakeSgLayer, PluginError};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -153,18 +153,18 @@ impl Filter for SgFilterMaintenance {
                         .status(StatusCode::SERVICE_UNAVAILABLE)
                         .header(CONTENT_TYPE, HeaderValue::from_static("text/html"))
                         .body(SgBody::full(body))
-                        .map_err(Response::bad_gateway)?
+                        .map_err(PluginError::internal_error::<MaintenancePlugin>)?
                 }
                 ContentType::Json => Response::builder()
                     .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
                     .status(StatusCode::SERVICE_UNAVAILABLE)
                     .body(SgBody::full(format!("\"{msg}\"", msg = self.msg)))
-                    .map_err(Response::bad_gateway)?,
+                    .map_err(PluginError::internal_error::<MaintenancePlugin>)?,
                 ContentType::Other => Response::builder()
                     .status(StatusCode::SERVICE_UNAVAILABLE)
                     .header(CONTENT_TYPE, HeaderValue::from_static("text/html"))
                     .body(SgBody::full(format!("<h1>{}</h1>", self.title)))
-                    .map_err(Response::bad_gateway)?,
+                    .map_err(PluginError::internal_error::<MaintenancePlugin>)?,
             };
             Err(resp)
         } else {

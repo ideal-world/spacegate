@@ -3,10 +3,10 @@ use hyper::{Request, Response, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::extension::MatchedSgRouter;
 use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
-use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
+use spacegate_kernel::{SgBody, SgBoxLayer};
 
 use crate::model::SgHttpPathModifier;
-use crate::{def_plugin, MakeSgLayer};
+use crate::{def_plugin, MakeSgLayer, PluginError};
 
 /// RewriteFilter defines a filter that modifies a request during forwarding.
 ///
@@ -47,7 +47,7 @@ impl SgFilterRewrite {
                                 new_pq.push('?');
                                 new_pq.push_str(query)
                             }
-                            let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_pq).map_err(Response::bad_gateway)?;
+                            let new_pq = hyper::http::uri::PathAndQuery::from_maybe_shared(new_pq).map_err(PluginError::internal_error::<RewritePlugin>)?;
                             uri_part.path_and_query = Some(new_pq)
                         }
                     }
@@ -55,7 +55,7 @@ impl SgFilterRewrite {
             } else {
                 tracing::warn!("missing matched route");
             }
-            *req.uri_mut() = Uri::from_parts(uri_part).map_err(Response::bad_gateway)?;
+            *req.uri_mut() = Uri::from_parts(uri_part).map_err(PluginError::internal_error::<RewritePlugin>)?;
         }
         Ok(req)
     }
@@ -83,6 +83,7 @@ impl MakeSgLayer for SgFilterRewriteConfig {
 }
 
 def_plugin!("rewrite", RewritePlugin, SgFilterRewriteConfig);
+
 #[cfg(feature = "schema")]
 crate::schema!(RewritePlugin, SgFilterRewriteConfig);
 // #[cfg(test)]

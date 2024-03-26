@@ -52,19 +52,6 @@ impl FnLayerMethod for RedisLimit {
     }
 }
 
-// impl MakeSgLayer for RedisLimitConfig {
-//     fn make_layer(&self) -> BoxResult<spacegate_kernel::SgBoxLayer> {
-//         let check_script = Script::new(include_str!("./redis_limit/check.lua"));
-//         let method = Arc::new(RedisLimit {
-//             prefix: RedisLimitPlugin::redis_prefix(self.id.as_deref()),
-//             header: HeaderName::from_bytes(self.header.as_bytes())?,
-//             script: check_script,
-//         });
-//         let layer = FnLayer::new(method);
-//         Ok(SgBoxLayer::new(layer))
-//     }
-// }
-
 pub struct RedisLimitPlugin;
 impl Plugin for RedisLimitPlugin {
     const CODE: &'static str = "redis-limit";
