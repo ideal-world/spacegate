@@ -15,7 +15,8 @@ use tower_layer::Layer;
 async fn test_multi_part() {
     tokio::spawn(gateway());
     tokio::spawn(axum_server());
-    
+    let client = reqwest::Client::new();
+    client.post("[::]:9002/md5").body(reqwest::multipart::Form::new())
 }
 
 async fn gateway() {
@@ -29,7 +30,7 @@ async fn gateway() {
                     .rule(
                         SgHttpRouteRuleLayer::builder()
                             .match_all()
-                            .backend(SgHttpBackendLayer::builder().build().expect("fail to build backend"))
+                            .backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build().expect("fail to build backend"))
                             .build()
                             .expect("fail to build rule"),
                     )
