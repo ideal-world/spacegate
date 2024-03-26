@@ -77,6 +77,7 @@ spacegate-ext-axum = { path = "../extension/axum", optional = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+tracing-subscriber = { workspace = true }
 tardis = { workspace = true, features = ["cache", "test"] }
 async-compression = { version = "0.4", features = [
     "tokio",

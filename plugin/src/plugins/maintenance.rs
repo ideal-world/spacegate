@@ -214,7 +214,7 @@ mod test {
     #[tokio::test]
     async fn test_config() -> Result<(), BoxError> {
         let now = Local::now();
-        let duration = Duration::seconds(100);
+        let duration = Duration::try_seconds(100).expect("invalid seconds");
         let end_time = now + duration;
         let layer = MaintenancePlugin::create(PluginConfig {
             spec: json!({
