@@ -104,6 +104,7 @@ crate::schema!(RedisCountPlugin, RedisCountConfig);
 #[cfg(test)]
 mod test {
 
+    use super::*;
     use hyper::header::AUTHORIZATION;
     use hyper::service::HttpService;
     use serde_json::json;
@@ -113,7 +114,6 @@ mod test {
     };
     use testcontainers_modules::redis::REDIS_PORT;
     use tower_layer::Layer;
-    use super::*;
     #[tokio::test]
     async fn test_op_res_count_limit() {
         const GW_NAME: &str = "DEFAULT";
