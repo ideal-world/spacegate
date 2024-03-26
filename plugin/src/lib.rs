@@ -3,11 +3,12 @@ use std::{
     any::Any,
     borrow::Cow,
     collections::HashMap,
-    sync::{Arc, OnceLock, RwLock},
+    sync::{atomic::AtomicU64, Arc, OnceLock, RwLock},
 };
 
 use instance::{PluginInstance, PluginInstanceId, PluginInstanceSnapshot};
 use mount::{MountPoint, MountPointIndex};
+use rand::random;
 pub use serde_json;
 pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
@@ -34,6 +35,13 @@ pub trait Plugin: Any {
             spec,
             name,
         })
+    }
+    fn new_instance<M>(config: PluginConfig, make: M) -> PluginInstance
+    where
+        M: Fn() -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static,
+        Self: Sized,
+    {
+        PluginInstance::new::<Self, _>(config, make)
     }
 }
 
@@ -63,6 +71,12 @@ impl PluginConfig {
     }
     pub fn with_name(self, s: impl Into<String>) -> Self {
         Self { name: Some(s.into()), ..self }
+    }
+    pub fn with_random_name(self) -> Self {
+        Self {
+            name: Some(format!("{:08x}", random::<u128>())),
+            ..self
+        }
     }
     pub fn no_name(self) -> Self {
         Self { name: None, ..self }
@@ -142,9 +156,15 @@ impl SgPluginRepository {
         map.insert(code.into(), create_fn);
     }
 
-    pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, config: PluginConfig) -> Result<(), BoxError> {
-        let map = self.creators.read().expect("SgPluginRepository register error");
+    pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, mut config: PluginConfig) -> Result<(), BoxError> {
+        static SERIAL_NO: AtomicU64 = AtomicU64::new(0);
+        // temporary solution, in the future, it should depends on plugins meta definition
         let code: Cow<'static, str> = config.code.clone();
+        if config.name.is_none() {
+            let no = SERIAL_NO.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            config.name = Some(format!("anon-{no:04x}-{code}"))
+        }
+        let map = self.creators.read().expect("SgPluginRepository register error");
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         let id = PluginInstanceId {
             code: code.clone(),
@@ -159,6 +179,7 @@ impl SgPluginRepository {
             Ok(())
         } else {
             let creator = map.get(&code).ok_or_else::<BoxError, _>(|| format!("[Sg.Plugin] unregistered sg plugin type {code}").into())?;
+            tracing::trace!("code: {code}, config {config:?}");
             let mut instance = (creator)(config)?;
             instance.after_create()?;
             // after create hook
