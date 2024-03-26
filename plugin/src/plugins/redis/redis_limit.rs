@@ -59,7 +59,7 @@ impl Plugin for RedisLimitPlugin {
     fn create(config: PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
         let layer_config = serde_json::from_value::<RedisLimitConfig>(config.spec.clone())?;
         let instance_id = config.instance_id();
-        Ok(crate::instance::PluginInstance::new::<Self, _>(config, move || {
+        let instance = crate::instance::PluginInstance::new::<Self, _>(config, move || {
             let method = Arc::new(RedisLimit {
                 prefix: instance_id.redis_prefix(),
                 header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
@@ -67,13 +67,18 @@ impl Plugin for RedisLimitPlugin {
             });
             let layer = FnLayer::new(method);
             Ok(SgBoxLayer::new(layer))
-        }))
+        });
+        // instance.set_after_create(|x| {
+        // });
+        Ok(instance)
     }
 }
 
 #[cfg(feature = "schema")]
 crate::schema!(RedisLimitPlugin, RedisLimitConfig);
 
+#[cfg(feature = "axum")]
+pub mod axum_ext;
 #[cfg(test)]
 mod test {
     use super::*;

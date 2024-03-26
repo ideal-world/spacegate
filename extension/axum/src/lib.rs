@@ -3,7 +3,9 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 pub use axum;
-use axum::Router;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::{BoxError, Router};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -62,5 +64,25 @@ impl AxumServer {
         } else {
             Ok(())
         }
+    }
+}
+
+pub struct InternalError {
+    reason: BoxError,
+}
+
+impl IntoResponse for InternalError {
+    fn into_response(self) -> Response {
+        let body = axum::body::Body::from(format!("Internal error: {}", self.reason));
+        Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(body).unwrap()
+    }
+}
+
+impl<E> From<E> for InternalError
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    fn from(e: E) -> Self {
+        Self { reason: Box::new(e) }
     }
 }
