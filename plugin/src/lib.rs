@@ -201,7 +201,7 @@ macro_rules! def_plugin {
 
         impl $crate::Plugin for $def {
             const CODE: &'static str = CODE;
-            fn create(config: $crate::PluginConfig) -> Result<$crate::PluginInstance, $crate::BoxError> {
+            fn create(config: $crate::PluginConfig) -> Result<$crate::instance::PluginInstance, $crate::BoxError> {
                 let filter: $filter_type = $crate::serde_json::from_value(config.spec.clone())?;
                 let instance = $crate::instance::PluginInstance::new::<Self, _>(config, move || $crate::MakeSgLayer::make_layer(&filter));
                 Ok(instance)
