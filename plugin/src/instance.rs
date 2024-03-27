@@ -67,7 +67,7 @@ pub struct PluginInstanceSnapshot {
     pub mount_points: HashSet<MountPointIndex>,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq,)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum PluginInstanceName {
     // Anonymous Instance
     Anon(u64),
@@ -107,7 +107,7 @@ impl FromStr for PluginInstanceName {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize,)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginInstanceId {
     pub code: Cow<'static, str>,
     pub name: PluginInstanceName,
@@ -128,7 +128,6 @@ impl<'a> Deserialize<'a> for PluginInstanceName {
         Ok(PluginInstanceName::from_str(s.as_str()).expect("infallible"))
     }
 }
-
 
 macro_rules! expose_hooks {
     ($($hook: ident, $setter: ident)*) => {
