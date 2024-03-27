@@ -15,7 +15,7 @@ use spacegate_kernel::{
     service::get_http_backend_service,
     BoxError, BoxHyperService, Layer,
 };
-use spacegate_plugin::mount::MountPointIndex;
+use spacegate_plugin::{mount::MountPointIndex, SgPluginRepository};
 use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
@@ -133,8 +133,7 @@ pub(crate) fn create_service(
 /// create a new sg gateway route, which can be sent to reloader
 pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<SgGatewayRoute, BoxError> {
     let routes = collect_http_route(gateway_name, http_routes.clone())?;
-    let route_vec = routes.into_values().collect::<Vec<_>>();
-    let service = create_http_router(&route_vec, default_gateway_route_fallback(), get_http_backend_service());
+    let service = create_http_router(routes.values(), &default_gateway_route_fallback(), get_http_backend_service());
     Ok(service)
 }
 
@@ -147,7 +146,7 @@ pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMa
 ///
 /// Though, after it has been dropped, it will shutdown automatically.
 pub struct RunningSgGateway {
-    gateway_name: Arc<str>,
+    pub gateway_name: Arc<str>,
     token: CancellationToken,
     // _guard: tokio_util::sync::DropGuard,
     handle: tokio::task::JoinHandle<()>,
@@ -173,13 +172,14 @@ impl RunningSgGateway {
 
     pub fn global_remove(gateway_name: impl AsRef<str>) -> Option<RunningSgGateway> {
         let global_store = Self::global_store();
+        SgPluginRepository::global().clear_gateway_instances(gateway_name.as_ref());
         let mut global_store = global_store.lock().expect("poisoned lock");
         global_store.remove(gateway_name.as_ref())
     }
 
     pub async fn global_update(gateway_name: impl AsRef<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<(), BoxError> {
         let gateway_name = gateway_name.as_ref();
-
+        SgPluginRepository::global().clear_routes_instances(gateway_name);
         let service = create_router_service(gateway_name.to_string().into(), http_routes)?;
         let reloader = {
             let store = Self::global_store();

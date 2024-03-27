@@ -17,7 +17,6 @@ use crate::{
 
 pub struct PluginInstance {
     // data
-    pub plugin: TypeId,
     pub config: PluginConfig,
     pub mount_points: HashSet<MountPointIndex>,
     pub hooks: PluginInstanceHooks,
@@ -147,7 +146,6 @@ macro_rules! expose_hooks {
 impl PluginInstance {
     pub fn new<P: Plugin, M: Fn(&PluginInstance) -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static>(config: PluginConfig, make: M) -> Self {
         Self {
-            plugin: TypeId::of::<P>(),
             config: PluginConfig { code: P::CODE.into(), ..config },
             make: Box::new(make),
             mount_points: HashSet::new(),

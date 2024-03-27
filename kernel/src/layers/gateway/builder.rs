@@ -23,14 +23,14 @@ pub struct SgGatewayLayerBuilder {
     pub extension: hyper::http::Extensions,
 }
 
-pub fn default_gateway_route_fallback() -> &'static SgBoxLayer {
-    static LAYER: OnceLock<SgBoxLayer> = OnceLock::new();
-    LAYER.get_or_init(|| {
-        SgBoxLayer::new(FilterRequestLayer::new(ResponseAnyway {
-            status: hyper::StatusCode::NOT_FOUND,
-            message: "[Sg.HttpRouteRule] no rule matched".to_string().into(),
-        }))
-    })
+pub fn default_gateway_route_fallback() -> SgBoxLayer {
+    // static LAYER: OnceLock<SgBoxLayer> = OnceLock::new();
+    // LAYER.get_or_init(|| {
+    // })
+    SgBoxLayer::new(FilterRequestLayer::new(ResponseAnyway {
+        status: hyper::StatusCode::NOT_FOUND,
+        message: "[Sg.HttpRouteRule] no rule matched".to_string().into(),
+    }))
 }
 
 impl SgGatewayLayerBuilder {
@@ -39,7 +39,7 @@ impl SgGatewayLayerBuilder {
             gateway_name: gateway_name.into(),
             http_routers: HashMap::new(),
             http_plugins: Vec::new(),
-            http_fallback: default_gateway_route_fallback().clone(),
+            http_fallback: default_gateway_route_fallback(),
             http_route_reloader: Default::default(),
             extension: hyper::http::Extensions::default(),
         }
