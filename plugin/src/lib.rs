@@ -243,6 +243,7 @@ impl SgPluginRepository {
         let id = attr.generate_id(&config);
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.get_mut(&id) {
+            todo!("check if config has changed");
             // before mount hook
             instance.before_mount()?;
             instance.mount_at(mount_point, mount_index)?;
