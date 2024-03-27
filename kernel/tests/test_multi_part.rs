@@ -32,21 +32,19 @@ async fn test_multi_part() {
 async fn gateway() {
     let cancel = CancellationToken::default();
     let gateway = gateway::SgGatewayLayer::builder("test_multi_part")
-        .http_routers([
-            (
-                "test_upload".to_string(),
-                SgHttpRoute::builder()
-                    .rule(
-                        SgHttpRouteRuleLayer::builder()
-                            .match_all()
-                            .backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build().expect("fail to build backend"))
-                            .build()
-                            .expect("fail to build rule"),
-                    )
-                    .build()
-                    .expect("fail_to_build"),
-            ),
-        ])
+        .http_routers([(
+            "test_upload".to_string(),
+            SgHttpRoute::builder()
+                .rule(
+                    SgHttpRouteRuleLayer::builder()
+                        .match_all()
+                        .backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build().expect("fail to build backend"))
+                        .build()
+                        .expect("fail to build rule"),
+                )
+                .build()
+                .expect("fail_to_build"),
+        )])
         .build();
     let addr = SocketAddr::from_str("[::]:9002").expect("invalid host");
     let listener = SgListen::new(addr, gateway.layer(get_http_backend_service()), cancel, "listener");
