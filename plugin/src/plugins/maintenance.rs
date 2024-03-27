@@ -189,7 +189,7 @@ impl MakeSgLayer for SgFilterMaintenanceConfig {
     }
 }
 
-def_plugin!("maintenance", MaintenancePlugin, SgFilterMaintenanceConfig);
+def_plugin!("maintenance", MaintenancePlugin, SgFilterMaintenanceConfig; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
 crate::schema!(MaintenancePlugin, SgFilterMaintenanceConfig);
 #[cfg(test)]

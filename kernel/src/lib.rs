@@ -80,23 +80,12 @@ pub trait SgResponseExt {
         Self: Sized,
     {
         let message = e.to_string();
-        tracing::debug!(message, "[Sg] gateway internal error");
         Self::with_code_message(StatusCode::BAD_GATEWAY, message)
-    }
-    fn plugin_error<E: std::error::Error>(e: E) -> Self
-    where
-        Self: Sized,
-    {
-        let message = e.to_string();
-        tracing::debug!(message, "[Sg] gateway plugin internal error");
-        Self::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, message)
     }
     fn from_error<E: std::error::Error, F: ErrorFormatter>(e: E, formatter: &F) -> Self
     where
         Self: Sized,
     {
-        let message = formatter.format(&e);
-        tracing::debug!(message, "[Sg] gateway internal error");
         Self::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, formatter.format(&e))
     }
 }

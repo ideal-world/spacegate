@@ -14,7 +14,11 @@ use spacegate_kernel::{
     BoxError, SgBody, SgBoxLayer,
 };
 
-use crate::{error::code, Plugin, PluginError};
+use crate::{
+    error::code,
+    instance::{PluginInstance, PluginInstanceId},
+    Plugin, PluginError,
+};
 use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
@@ -82,10 +86,9 @@ impl Plugin for RedisCountPlugin {
     const CODE: &'static str = "redis-count";
 
     fn create(config: crate::PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
-        let instance_id = config.instance_id();
-
         let layer_config = serde_json::from_value::<RedisCountConfig>(config.spec.clone())?;
-        let make = move || {
+        let make = move |instance: &PluginInstance| {
+            let instance_id = instance.resource.get::<PluginInstanceId>().expect("missing instance id");
             let method = Arc::new(RedisCount {
                 prefix: instance_id.redis_prefix(),
                 header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
@@ -95,6 +98,10 @@ impl Plugin for RedisCountPlugin {
         };
         let instance = crate::instance::PluginInstance::new::<Self, _>(config, make);
         Ok(instance)
+    }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        Some(<Self as crate::PluginSchemaExt>::schema())
     }
 }
 

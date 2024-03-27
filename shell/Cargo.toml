@@ -17,8 +17,8 @@ name = "spacegate_shell"
 path = "src/lib.rs"
 
 [features]
-ext-redis = ["spacegate-ext-redis"]
-ext-axum = ["spacegate-ext-axum"]
+ext-redis = ["spacegate-ext-redis", "spacegate-plugin/redis"]
+ext-axum = ["spacegate-ext-axum", "spacegate-plugin/axum"]
 cache = ["spacegate-plugin/cache", "deadpool-redis", "spacegate-ext-redis"]
 file = []
 k8s = [
@@ -46,7 +46,7 @@ plugin-status = ["spacegate-plugin/status"]
 
 [dependencies]
 spacegate-kernel = { path = "../kernel", features = ["reload"] }
-spacegate-plugin = { path = "../plugin" }
+spacegate-plugin = { path = "../plugin", features = ["schema"] }
 spacegate-config = { path = "../config" }
 spacegate-ext-redis = { path = "../extension/redis", optional = true }
 spacegate-ext-axum = { path = "../extension/axum", optional = true }

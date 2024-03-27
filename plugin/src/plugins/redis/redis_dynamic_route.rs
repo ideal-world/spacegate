@@ -2,6 +2,7 @@ use std::{str::FromStr, sync::Arc};
 
 use super::redis_format_key;
 use crate::{
+    instance::{PluginInstance, PluginInstanceId},
     model::{SgHttpPathModifier, SgHttpPathModifierType},
     Plugin, PluginConfig, PluginError,
 };
@@ -75,16 +76,19 @@ impl Plugin for RedisDynamicRoutePlugin {
     const CODE: &'static str = "redis-dynamic-route";
 
     fn create(config: PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
-        let instance_id = config.instance_id();
-
         let layer_config = serde_json::from_value::<RedisDynamicRouteConfig>(config.spec.clone())?;
-        let make = move || {
+        let make = move |instance: &PluginInstance| {
+            let instance_id = instance.resource.get::<PluginInstanceId>().expect("missing instance id");
             Ok(SgBoxLayer::new(AsyncFilterRequestLayer::new(RedisDynamicRoute {
                 prefix: instance_id.redis_prefix().into(),
                 header: HeaderName::from_str(&layer_config.header)?.into(),
             })))
         };
         Ok(crate::instance::PluginInstance::new::<Self, _>(config, make))
+    }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        Some(<Self as crate::PluginSchemaExt>::schema())
     }
 }
 

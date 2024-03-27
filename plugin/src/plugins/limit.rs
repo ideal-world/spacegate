@@ -122,6 +122,6 @@ impl MakeSgLayer for RateLimitConfig {
     }
 }
 
-def_plugin!("limit", RateLimitPlugin, RateLimitConfig);
+def_plugin!("limit", RateLimitPlugin, RateLimitConfig; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
 crate::schema! { RateLimitPlugin, RateLimitConfig }

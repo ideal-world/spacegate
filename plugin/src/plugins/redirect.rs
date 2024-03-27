@@ -69,6 +69,6 @@ impl MakeSgLayer for RedirectFilter {
     }
 }
 
-def_plugin!("redirect", RedirectPlugin, RedirectFilter);
+def_plugin!("redirect", RedirectPlugin, RedirectFilter; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
 crate::schema!(RedirectPlugin, RedirectFilter);

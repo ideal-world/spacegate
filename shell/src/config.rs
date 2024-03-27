@@ -35,15 +35,17 @@ where
             use spacegate_ext_axum::axum;
             info!("Starting web server...");
             let cancel_token = shutdown_signal.clone();
-            let server = spacegate_ext_axum::AxumServer::global();
-            let mut wg = server.write().await;
-            let mut swap = axum::Router::default();
-            std::mem::swap(&mut wg.router, &mut swap);
-            wg.router = swap.fallback(axum::routing::any(axum::response::Html(axum::body::Bytes::from_static(include_bytes!(
-                "./config/web-server-index.html"
-            )))));
-            wg.cancel_token = cancel_token;
-            wg.start().await?;
+            let server = spacegate_ext_axum::GlobalAxumServer::default();
+            server
+                .modify_router(|router| {
+                    router.fallback(axum::routing::any(axum::response::Html(axum::body::Bytes::from_static(include_bytes!(
+                        "./config/web-server-index.html"
+                    )))))
+                })
+                .await;
+            spacegate_plugin::ext::axum::register_plugin_routes().await;
+            server.set_cancellation(cancel_token).await;
+            server.start().await?;
             info!("Web server started.");
         }
         let (init_config, listener) = config.create_listener().await?;
