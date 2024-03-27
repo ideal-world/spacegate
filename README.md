@@ -12,6 +12,39 @@ Do NOT use in production environment!**
 
 > SpaceGate("Spacegates are Stargates suspended in space, or in planetary orbit") From "Stargate".
 
+## Custom your own gateway in a few lines
+```rust
+let cancel = CancellationToken::default();
+// create a gateway layer
+let gateway = SgGatewayLayer::builder("my gateway")
+    .http_routers([
+        (
+            "some router".to_string(),
+            SgHttpRoute::builder()
+                .rule(
+                    SgHttpRouteRuleLayer::builder()
+                        .match_all()
+                        .backend(
+                            SgHttpBackendLayer::builder()
+                            .host("[::]")
+                            .port(9003)
+                            .build()?
+                        )
+                        .build()?,
+                )
+                .build()?,
+        ),
+    ])
+    .build();
+let addr = SocketAddr::from_str("[::]:9002")?;
+// create a listener
+let listener = SgListen::new(addr, gateway.layer(get_http_backend_service()), cancel, "listener");
+// start listen
+listener.listen().await?;
+```
+
+
+
 ## Why create this project
 
 There are a lot of API gateway products out there, but they are mostly in the form of standalone services. The customization ability is relatively poor, and the cost of using and deploying is relatively high.
