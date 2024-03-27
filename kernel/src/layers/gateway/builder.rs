@@ -3,8 +3,6 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use tokio_util::sync::CancellationToken;
-
 use crate::{
     helper_layers::{
         filter::{response_anyway::ResponseAnyway, FilterRequestLayer},
@@ -18,7 +16,6 @@ use super::{SgGatewayLayer, SgGatewayRoute};
 
 pub struct SgGatewayLayerBuilder {
     pub gateway_name: Arc<str>,
-    pub cancel_token: CancellationToken,
     http_routers: HashMap<String, SgHttpRoute>,
     pub http_plugins: Vec<SgBoxLayer>,
     http_fallback: SgBoxLayer,
@@ -37,9 +34,8 @@ pub fn default_gateway_route_fallback() -> &'static SgBoxLayer {
 }
 
 impl SgGatewayLayerBuilder {
-    pub fn new(gateway_name: impl Into<Arc<str>>, cancel_token: CancellationToken) -> Self {
+    pub fn new(gateway_name: impl Into<Arc<str>>) -> Self {
         Self {
-            cancel_token,
             gateway_name: gateway_name.into(),
             http_routers: HashMap::new(),
             http_plugins: Vec::new(),
@@ -53,7 +49,10 @@ impl SgGatewayLayerBuilder {
         self
     }
     pub fn http_routers(mut self, routes: impl IntoIterator<Item = (String, SgHttpRoute)>) -> Self {
-        self.http_routers.extend(routes);
+        for (name, mut route) in routes {
+            route.name = name.clone();
+            self.http_routers.insert(name, route);
+        }
         self
     }
     pub fn http_plugin(mut self, plugin: SgBoxLayer) -> Self {

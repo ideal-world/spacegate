@@ -14,7 +14,6 @@ use crate::{
 };
 
 use hyper::{header::HOST, Request, Response};
-use tokio_util::sync::CancellationToken;
 
 use tower_layer::Layer;
 use tracing::{debug, instrument};
@@ -44,8 +43,8 @@ impl SgGatewayLayer {
     /// * `gateway_name` - The gateway name, this may be used by plugins.
     /// * `cancel_token` - A cancel token hints wether the gateway server is still alive.
     ///
-    pub fn builder(gateway_name: impl Into<Arc<str>>, cancel_token: CancellationToken) -> builder::SgGatewayLayerBuilder {
-        builder::SgGatewayLayerBuilder::new(gateway_name, cancel_token)
+    pub fn builder(gateway_name: impl Into<Arc<str>>) -> builder::SgGatewayLayerBuilder {
+        builder::SgGatewayLayerBuilder::new(gateway_name)
     }
 }
 

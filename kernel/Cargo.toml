@@ -65,4 +65,4 @@ spacegate-ext-redis = { path = "../extension/redis", optional = true }
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
 axum = { workspace = true, features = ["multipart"]}
 md5 = { version = "0.7.0" }
-reqwest = { version = "0.12", features = ["multipart"]}
+reqwest = { version = "0.12", features = ["multipart", "stream"]}

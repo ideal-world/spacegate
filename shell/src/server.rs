@@ -117,14 +117,13 @@ fn collect_http_route(
 /// Create a gateway service from plugins and http_routes
 pub(crate) fn create_service(
     gateway_name: &str,
-    cancel_token: CancellationToken,
     plugins: Vec<SgRouteFilter>,
     http_routes: BTreeMap<String, crate::SgHttpRoute>,
     reloader: Reloader<SgGatewayRoute>,
 ) -> Result<BoxHyperService, BoxError> {
     let gateway_name: Arc<str> = gateway_name.into();
     let routes = collect_http_route(gateway_name.clone(), http_routes)?;
-    let mut layer = spacegate_kernel::layers::gateway::SgGatewayLayer::builder(gateway_name.clone(), cancel_token).http_routers(routes).http_route_reloader(reloader).build();
+    let mut layer = spacegate_kernel::layers::gateway::SgGatewayLayer::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
     global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
     let backend_service = get_http_backend_service();
     let service = BoxHyperService::new(layer.layer(backend_service));
@@ -213,7 +212,7 @@ impl RunningSgGateway {
         }
         tracing::info!("[SG.Server] start gateway");
         let reloader = <Reloader<SgGatewayRoute>>::default();
-        let service = create_service(&gateway.name, cancel_token.clone(), gateway.filters, routes, reloader.clone())?;
+        let service = create_service(&gateway.name, gateway.filters, routes, reloader.clone())?;
         if gateway.listeners.is_empty() {
             return Err("[SG.Server] Missing Listeners".into());
         }

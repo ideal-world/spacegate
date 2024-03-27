@@ -1,32 +1,41 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
 
+use reqwest::{
+    multipart::{Form, Part},
+    Body,
+};
 use spacegate_kernel::{
     layers::{
         gateway,
         http_route::{SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
     },
     listener::SgListen,
-    service::{get_http_backend_service, http_backend_service},
+    service::get_http_backend_service,
 };
+use tokio::fs::File;
+use tokio_util::io::ReaderStream;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Layer;
-
 #[tokio::test]
 async fn test_multi_part() {
     tokio::spawn(gateway());
     tokio::spawn(axum_server());
+    // wait for startup
+    tokio::time::sleep(Duration::from_millis(200)).await;
     let client = reqwest::Client::new();
-    client.post("[::]:9002/md5").body(reqwest::multipart::Form::new())
+    let file = File::open("./tests/test_multi_part.rs").await.expect("fail to open file");
+    let form = Form::new().part("id", Part::text("hello")).part("file", Part::stream(Body::wrap_stream(ReaderStream::new(file))));
+    let md5 = client.post("http://[::]:9002/md5").multipart(form).send().await.expect("fail to send").text().await.expect("fail to get text");
+    println!("md5: {}", md5);
 }
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::SgGatewayLayer::builder("test_multi_part", cancel.clone())
+    let gateway = gateway::SgGatewayLayer::builder("test_multi_part")
         .http_routers([
             (
                 "test_upload".to_string(),
                 SgHttpRoute::builder()
-                    .name("test_upload")
                     .rule(
                         SgHttpRouteRuleLayer::builder()
                             .match_all()
@@ -37,7 +46,6 @@ async fn gateway() {
                     .build()
                     .expect("fail_to_build"),
             ),
-            // ("test_download".to_string(), SgHttpRoute::builder().name("test_download").build().expect("fail_to_build")),
         ])
         .build();
     let addr = SocketAddr::from_str("[::]:9002").expect("invalid host");
@@ -51,6 +59,7 @@ async fn axum_server() {
         let mut md5_context = md5::Context::new();
         while let Some(field) = multipart.next_field().await.unwrap() {
             let bytes = field.bytes().await.expect("fail to load bytes");
+            println!("read field with length: {}", bytes.len());
             md5_context.consume(bytes);
         }
         let v = md5_context.compute().to_vec();
