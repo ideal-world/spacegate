@@ -10,6 +10,7 @@ use crate::{
         route::{Route, Router},
     },
     service::BoxHyperService,
+    utils::fold_sg_layers::sg_layers,
     SgBody, SgBoxLayer,
 };
 
@@ -28,7 +29,7 @@ use super::http_route::{match_hostname::HostnameTree, match_request::MatchReques
 
 pub type SgGatewayRoute = Route<SgGatewayRoutedServices, SgGatewayRouter, BoxHyperService>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SgGatewayLayer {
     pub gateway_name: Arc<str>,
     pub http_routes: HashMap<String, SgHttpRoute>,
@@ -105,9 +106,9 @@ where
     fn layer(&self, inner: S) -> Self::Service {
         let gateway_name = GatewayName::new(self.gateway_name.clone());
         let add_gateway_name_layer = MapRequestLayer::new(add_extension(gateway_name, true));
-        let gateway_plugins = self.http_plugins.iter().collect::<SgBoxLayer>();
-        let http_routes = self.http_routes.values().cloned().collect::<Vec<_>>();
-        let route = create_http_router(&http_routes, &self.http_fallback, inner);
+        let gateway_plugins = self.http_plugins.iter();
+        let http_routes = self.http_routes.values();
+        let route = create_http_router(http_routes, &self.http_fallback, inner);
         #[cfg(feature = "reload")]
         let service = {
             let reloader = self.http_route_reloader.clone();
@@ -115,27 +116,26 @@ where
         };
         #[cfg(not(feature = "reload"))]
         let service = route;
-        BoxHyperService::new(add_gateway_name_layer.layer(gateway_plugins.layer(service)))
+        BoxHyperService::new(add_gateway_name_layer.layer(sg_layers(gateway_plugins, BoxHyperService::new(service))))
     }
 }
 
-pub fn create_http_router<S>(routes: &[SgHttpRoute], fallback: &SgBoxLayer, inner: S) -> Route<SgGatewayRoutedServices, SgGatewayRouter, BoxHyperService>
+pub fn create_http_router<'a, S>(routes: impl Iterator<Item = &'a SgHttpRoute>, fallback: &SgBoxLayer, inner: S) -> Route<SgGatewayRoutedServices, SgGatewayRouter, BoxHyperService>
 where
     S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
     <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
 {
-    let mut services = Vec::with_capacity(routes.len());
-    let mut routers = Vec::with_capacity(routes.len());
+    let mut services = Vec::new();
+    let mut routers = Vec::new();
     let mut hostname_tree = HostnameTree::<Vec<_>>::new();
-    for (idx, route) in routes.iter().enumerate() {
+    for (idx, route) in routes.enumerate() {
         let priority = route.priority;
         let idx_with_priority = (idx, priority);
-        let route_plugins = route.plugins.iter().collect::<SgBoxLayer>();
+        // let route_plugins = route.plugins.iter().map(SgRefLayer::new).collect::<SgRefLayer>();
         let mut rules_services = Vec::with_capacity(route.rules.len());
         let mut rules_router = Vec::with_capacity(route.rules.len());
         for rule in route.rules.iter() {
-            // let rule_service = route_plugins.layer(rule.layer(inner.clone()));
-            let rule_service = route_plugins.layer(rule.layer(inner.clone()));
+            let rule_service = sg_layers(route.plugins.iter(), BoxHyperService::new(rule.layer(inner.clone())));
             rules_services.push(rule_service);
             rules_router.push(rule.r#match.clone());
         }

@@ -8,7 +8,7 @@ use crate::{
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
     service::BoxHyperService,
-    utils::schema_port::port_to_schema,
+    utils::{fold_sg_layers::sg_layers, schema_port::port_to_schema},
     SgBody, SgBoxLayer,
 };
 
@@ -29,7 +29,7 @@ use self::{
 
 *****************************************************************************************/
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SgHttpRoute {
     pub name: String,
     pub hostnames: Vec<String>,
@@ -55,7 +55,7 @@ pub struct SgHttpRouter {
 
 *****************************************************************************************/
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SgHttpRouteRuleLayer {
     pub r#match: Option<Vec<SgHttpRouteMatch>>,
     pub plugins: Vec<SgBoxLayer>,
@@ -79,14 +79,14 @@ where
     fn layer(&self, inner: S) -> Self::Service {
         use crate::helper_layers::timeout::TimeoutLayer;
         let empty = self.backends.is_empty();
-        let filter_layer = self.plugins.iter().collect::<SgBoxLayer>();
+        let filter_layer = self.plugins.iter();
 
         let service = if empty {
-            filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(inner))
+            sg_layers(filter_layer, BoxHyperService::new(TimeoutLayer::new(self.timeouts).layer(inner)))
         } else {
             let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
             let random_picker = random_pick::RandomPick::new(service_iter);
-            filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(random_picker))
+            sg_layers(filter_layer, BoxHyperService::new(TimeoutLayer::new(self.timeouts).layer(random_picker)))
         };
 
         let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
@@ -121,7 +121,7 @@ impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
 
 *****************************************************************************************/
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SgHttpBackendLayer {
     pub plugins: Vec<SgBoxLayer>,
     pub host: Option<String>,
@@ -146,14 +146,14 @@ where
 
     fn layer(&self, inner: S) -> Self::Service {
         let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
-        let filtered = self.plugins.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
+        let filtered = sg_layers(self.plugins.iter(), BoxHyperService::new(timeout_layer.layer(inner)));
         SgHttpBackend {
             weight: self.weight,
             host: self.host.clone().map(Into::into),
             port: self.port,
             scheme: self.scheme.clone().map(Into::into),
             timeout: self.timeout,
-            inner_service: BoxHyperService::new(filtered),
+            inner_service: filtered,
         }
     }
 }

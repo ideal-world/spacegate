@@ -181,6 +181,11 @@ pub struct SgPluginRepository {
     pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
 }
 
+pub struct PluginInstanceRef {
+    pub id: PluginInstanceId,
+    pub digest: u64,
+}
+
 impl SgPluginRepository {
     pub fn global() -> &'static Self {
         static INIT: OnceLock<SgPluginRepository> = OnceLock::new();
@@ -234,6 +239,21 @@ impl SgPluginRepository {
         let _old_attr = map.insert(attr.code.clone(), attr);
     }
 
+    pub fn clear_routes_instances(&self, gateway: &str) {
+        let mut instances = self.instances.write().expect("SgPluginRepository register error");
+        instances.retain(|_, instance| {
+            instance.mount_points.iter().any(|index| match index {
+                MountPointIndex::Gateway { .. } => false,
+                other => other.gateway() == gateway,
+            })
+        });
+    }
+
+    pub fn clear_gateway_instances(&self, gateway: &str) {
+        let mut instances = self.instances.write().expect("SgPluginRepository register error");
+        instances.retain(|_, instance| instance.mount_points.iter().any(|index| index.gateway() == gateway));
+    }
+
     pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, config: PluginConfig) -> Result<(), BoxError> {
         let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
         let code = config.code.clone();
@@ -243,7 +263,7 @@ impl SgPluginRepository {
         let id = attr.generate_id(&config);
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.get_mut(&id) {
-            todo!("check if config has changed");
+            // todo!("check if config has changed");
             // before mount hook
             instance.before_mount()?;
             instance.mount_at(mount_point, mount_index)?;

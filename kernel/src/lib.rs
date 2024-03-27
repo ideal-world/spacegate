@@ -16,13 +16,12 @@ use extension::Reflect;
 use helper_layers::response_error::ErrorFormatter;
 pub use marker::Marker;
 pub use service::BoxHyperService;
-use std::{convert::Infallible, fmt, sync::Arc};
+use std::{convert::Infallible, fmt};
 pub use tower_layer::Layer;
 
 use hyper::{body::Bytes, Request, Response, StatusCode};
 
 use tower_layer::layer_fn;
-use utils::fold_sg_layers::fold_sg_layers;
 
 pub type BoxResult<T> = Result<T, BoxError>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -102,20 +101,16 @@ impl SgResponseExt for Response<SgBody> {
 pub type ReqOrResp = Result<Request<SgBody>, Response<SgBody>>;
 
 pub struct SgBoxLayer {
-    boxed: Arc<dyn Layer<BoxHyperService, Service = BoxHyperService> + Send + Sync + 'static>,
+    boxed: Box<dyn Layer<BoxHyperService, Service = BoxHyperService> + Send + Sync + 'static>,
 }
 
-impl FromIterator<SgBoxLayer> for SgBoxLayer {
-    fn from_iter<T: IntoIterator<Item = SgBoxLayer>>(iter: T) -> Self {
-        fold_sg_layers(iter.into_iter())
-    }
-}
 
-impl<'a> FromIterator<&'a SgBoxLayer> for SgBoxLayer {
-    fn from_iter<T: IntoIterator<Item = &'a SgBoxLayer>>(iter: T) -> Self {
-        fold_sg_layers(iter.into_iter().cloned())
-    }
-}
+
+// impl<'a> FromIterator<&'a SgBoxLayer> for SgBoxLayer {
+//     fn from_iter<T: IntoIterator<Item = &'a SgBoxLayer>>(iter: T) -> Self {
+//         fold_sg_layers(iter.into_iter().cloned())
+//     }
+// }
 
 impl SgBoxLayer {
     /// Create a new [`BoxLayer`].
@@ -130,7 +125,7 @@ impl SgBoxLayer {
             BoxHyperService::new(out)
         });
 
-        Self { boxed: Arc::new(layer) }
+        Self { boxed: Box::new(layer) }
     }
     pub fn layer_boxed(&self, inner: BoxHyperService) -> BoxHyperService {
         self.boxed.layer(inner)
@@ -149,11 +144,11 @@ where
     }
 }
 
-impl Clone for SgBoxLayer {
-    fn clone(&self) -> Self {
-        Self { boxed: Arc::clone(&self.boxed) }
-    }
-}
+// impl Clone for SgBoxLayer {
+//     fn clone(&self) -> Self {
+//         Self { boxed: self.boxed.clone() }
+//     }
+// }
 
 impl fmt::Debug for SgBoxLayer {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {

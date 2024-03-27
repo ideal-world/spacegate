@@ -19,6 +19,16 @@ pub enum MountPointIndex {
     HttpBackend { gateway: Arc<str>, route: Arc<str>, rule: usize, backend: usize },
 }
 
+impl MountPointIndex {
+    pub fn gateway(&self) -> &str {
+        match self {
+            MountPointIndex::Gateway { gateway } => gateway.as_ref(),
+            MountPointIndex::HttpRoute { gateway, .. } => gateway.as_ref(),
+            MountPointIndex::HttpRouteRule { gateway, .. } => gateway.as_ref(),
+            MountPointIndex::HttpBackend { gateway, .. } => gateway.as_ref(),
+        }
+    }
+}
 impl Serialize for MountPointIndex {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
