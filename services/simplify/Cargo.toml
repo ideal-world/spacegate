@@ -30,7 +30,8 @@ static-openssl=["openssl/vendored"]
 [dependencies]
 spacegate-shell = { path = "../../shell", features = [
     "file",
-    "ext-axum"
+    "ext-axum",
+    "plugin-all",
 ] }
 openssl = {version = "0.10"}
 # tardis = { workspace = true, features = ["console-subscriber"] }

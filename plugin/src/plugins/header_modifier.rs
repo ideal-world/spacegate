@@ -99,6 +99,6 @@ impl Layer<BoxHyperService> for HeaderModifierLayer {
     }
 }
 
-def_plugin!("header_modifier", HeaderModifierPlugin, SgFilterHeaderModifier);
+def_plugin!("header_modifier", HeaderModifierPlugin, SgFilterHeaderModifier; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
 crate::schema!(HeaderModifierPlugin, SgFilterHeaderModifier);

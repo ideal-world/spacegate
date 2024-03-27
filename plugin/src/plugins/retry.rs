@@ -284,7 +284,7 @@ impl MakeSgLayer for SgPluginRetryConfig {
     }
 }
 
-def_plugin!("retry", RetryPlugin, SgPluginRetryConfig);
+def_plugin!("retry", RetryPlugin, SgPluginRetryConfig; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
 crate::schema! {
     RetryPlugin,

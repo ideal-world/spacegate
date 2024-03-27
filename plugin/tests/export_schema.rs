@@ -2,7 +2,7 @@ use spacegate_plugin::{plugins, Plugin, PluginSchemaExt};
 use tardis::serde_json;
 
 fn export_plugin<P: PluginSchemaExt + Plugin>(dir: std::path::PathBuf) {
-    let schema = P::schema();
+    let schema = <P as spacegate_plugin::PluginSchemaExt>::schema();
     let json = serde_json::to_string_pretty(&schema).unwrap();
     let filename = format!("{}.json", P::CODE);
     let path = dir.join(filename);

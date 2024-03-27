@@ -10,7 +10,7 @@ use spacegate_kernel::{
     BoxError, SgBody, SgBoxLayer,
 };
 
-use crate::{error::code, Plugin, PluginConfig, PluginError};
+use crate::{error::code, instance::PluginInstanceId, Plugin, PluginConfig, PluginError};
 use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
@@ -58,8 +58,8 @@ impl Plugin for RedisLimitPlugin {
 
     fn create(config: PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
         let layer_config = serde_json::from_value::<RedisLimitConfig>(config.spec.clone())?;
-        let instance_id = config.instance_id();
-        let instance = crate::instance::PluginInstance::new::<Self, _>(config, move || {
+        let instance = crate::instance::PluginInstance::new::<Self, _>(config, move |instance| {
+            let instance_id = instance.resource.get::<PluginInstanceId>().expect("missing instance id");
             let method = Arc::new(RedisLimit {
                 prefix: instance_id.redis_prefix(),
                 header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
@@ -71,6 +71,10 @@ impl Plugin for RedisLimitPlugin {
         // instance.set_after_create(|x| {
         // });
         Ok(instance)
+    }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        Some(<Self as crate::PluginSchemaExt>::schema())
     }
 }
 

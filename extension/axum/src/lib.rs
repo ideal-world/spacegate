@@ -12,20 +12,19 @@ use tokio_util::sync::CancellationToken;
 
 const GLOBAL_SERVER_PORT: u16 = 9876;
 const GLOBAL_SERVER_HOST: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
+const GLOBAL_SERVER_BIND: SocketAddr = SocketAddr::new(GLOBAL_SERVER_HOST, GLOBAL_SERVER_PORT);
 #[derive(Debug)]
-pub struct AxumServer {
-    pub port: u16,
-    pub host: IpAddr,
+struct AxumServerInner {
+    pub bind: SocketAddr,
     pub router: Router,
     pub cancel_token: CancellationToken,
     handle: Option<JoinHandle<Result<(), std::io::Error>>>,
 }
 
-impl Default for AxumServer {
+impl Default for AxumServerInner {
     fn default() -> Self {
         Self {
-            port: GLOBAL_SERVER_PORT,
-            host: GLOBAL_SERVER_HOST,
+            bind: GLOBAL_SERVER_BIND,
             router: Default::default(),
             cancel_token: Default::default(),
             handle: Default::default(),
@@ -33,24 +32,57 @@ impl Default for AxumServer {
     }
 }
 
-impl AxumServer {
-    pub fn global() -> Arc<RwLock<AxumServer>> {
-        static GLOBAL: OnceLock<Arc<RwLock<AxumServer>>> = OnceLock::new();
-        GLOBAL.get_or_init(Default::default).clone()
+#[derive(Debug, Clone)]
+pub struct GlobalAxumServer(Arc<RwLock<AxumServerInner>>);
+
+impl Default for GlobalAxumServer {
+    fn default() -> Self {
+        Self(AxumServerInner::global())
     }
-    pub fn new(port: u16, host: IpAddr, cancel_token: CancellationToken) -> Self {
-        Self {
-            port,
-            host,
-            cancel_token,
-            router: Router::new(),
-            handle: None,
-        }
+}
+
+impl GlobalAxumServer {
+    pub async fn set_bind<A>(&self, socket_addr: A)
+    where
+        A: Into<SocketAddr>,
+    {
+        let socket_addr = socket_addr.into();
+        let mut wg = self.0.write().await;
+        wg.bind = socket_addr;
+    }
+    pub async fn set_cancellation(&self, token: CancellationToken) {
+        let mut wg = self.0.write().await;
+        wg.cancel_token = token;
+    }
+    pub async fn modify_router<M>(&self, modify: M)
+    where
+        M: FnOnce(Router) -> Router,
+    {
+        let mut wg = self.0.write().await;
+        let mut swap_out = Router::default();
+        std::mem::swap(&mut swap_out, &mut wg.router);
+        wg.router = (modify)(swap_out)
+    }
+
+    pub async fn start(&self) -> Result<(), std::io::Error> {
+        let mut wg = self.0.write().await;
+        wg.start().await
+    }
+
+    pub async fn shutdown(&self) -> Result<(), std::io::Error> {
+        let mut wg = self.0.write().await;
+        wg.shutdown().await
+    }
+}
+
+impl AxumServerInner {
+    pub fn global() -> Arc<RwLock<AxumServerInner>> {
+        static GLOBAL: OnceLock<Arc<RwLock<AxumServerInner>>> = OnceLock::new();
+        GLOBAL.get_or_init(Default::default).clone()
     }
     pub async fn start(&mut self) -> Result<(), std::io::Error> {
         let _shutdown_result = self.shutdown().await;
-        let socket_addr = SocketAddr::new(self.host, self.port);
-        let tcp_listener = tokio::net::TcpListener::bind(socket_addr).await?;
+        let tcp_listener = tokio::net::TcpListener::bind(self.bind).await?;
         let cancel = self.cancel_token.clone();
         let router = self.router.clone();
         let task = tokio::spawn(async move { axum::serve(tcp_listener, router).with_graceful_shutdown(cancel.cancelled_owned()).await });

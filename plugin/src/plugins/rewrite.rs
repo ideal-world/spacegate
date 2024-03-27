@@ -82,7 +82,10 @@ impl MakeSgLayer for SgFilterRewriteConfig {
     }
 }
 
-def_plugin!("rewrite", RewritePlugin, SgFilterRewriteConfig);
+def_plugin!("rewrite",
+RewritePlugin,
+SgFilterRewriteConfig;
+#[cfg(feature = "schema")] schema;);
 
 #[cfg(feature = "schema")]
 crate::schema!(RewritePlugin, SgFilterRewriteConfig);

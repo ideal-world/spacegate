@@ -15,7 +15,7 @@ use spacegate_kernel::{
 };
 use tracing::debug;
 
-use crate::{error::code, Plugin, PluginError};
+use crate::{error::code, instance::PluginInstanceId, Plugin, PluginError};
 use spacegate_kernel::ret_error;
 
 use super::redis_format_key;
@@ -79,8 +79,8 @@ impl Plugin for RedisTimeRangePlugin {
 
     fn create(config: crate::PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
         let layer_config = serde_json::from_value::<RedisTimeRangeConfig>(config.spec.clone())?;
-        let instance_id = config.instance_id();
-        Ok(crate::instance::PluginInstance::new::<Self, _>(config, move || {
+        Ok(crate::instance::PluginInstance::new::<Self, _>(config, move |instance| {
+            let instance_id = instance.resource.get::<PluginInstanceId>().expect("missing instance id");
             let method = Arc::new(RedisTimeRange {
                 prefix: instance_id.redis_prefix(),
                 header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
@@ -88,6 +88,10 @@ impl Plugin for RedisTimeRangePlugin {
             let layer = FnLayer::new(method);
             Ok(SgBoxLayer::new(layer))
         }))
+    }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        Some(<Self as crate::PluginSchemaExt>::schema())
     }
 }
 

@@ -80,7 +80,7 @@ impl Plugin for StaticResourcePlugin {
     const CODE: &'static str = "static-resource";
     fn create(config: crate::PluginConfig) -> Result<PluginInstance, spacegate_kernel::BoxError> {
         let make_config: StaticResourceConfig = serde_json::from_value(config.spec.clone())?;
-        Ok(PluginInstance::new::<Self, _>(config, move || {
+        Ok(PluginInstance::new::<Self, _>(config, move |_| {
             let content_type = make_config.content_type.clone();
             let content_type = HeaderValue::from_maybe_shared(content_type)?;
             let body = match &make_config.body {
@@ -91,6 +91,10 @@ impl Plugin for StaticResourcePlugin {
             let code = StatusCode::from_u16(make_config.code)?;
             Ok(spacegate_kernel::SgBoxLayer::new(FilterRequestLayer::new(StaticResource { content_type, code, body })))
         }))
+    }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        Some(<Self as crate::PluginSchemaExt>::schema())
     }
 }
 

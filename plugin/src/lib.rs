@@ -3,12 +3,14 @@ use std::{
     any::Any,
     borrow::Cow,
     collections::HashMap,
-    sync::{atomic::AtomicU64, Arc, OnceLock, RwLock},
+    hash::{DefaultHasher, Hasher},
+    sync::{Arc, OnceLock, RwLock},
 };
 
-use instance::{PluginInstance, PluginInstanceId, PluginInstanceSnapshot};
+use instance::{PluginInstance, PluginInstanceId, PluginInstanceName, PluginInstanceSnapshot};
 use mount::{MountPoint, MountPointIndex};
 use rand::random;
+use serde::{Deserialize, Serialize};
 pub use serde_json;
 pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
@@ -22,12 +24,18 @@ pub mod mount;
 // pub mod plugins;
 pub mod instance;
 pub use error::PluginError;
+pub mod ext;
 pub mod plugins;
 
 #[cfg(feature = "schema")]
 pub use schemars;
 pub trait Plugin: Any {
     const CODE: &'static str;
+    /// is this plugin mono instance
+    const MONO: bool = false;
+    fn meta() -> PluginMetaData {
+        PluginMetaData::default()
+    }
     fn create(config: PluginConfig) -> Result<PluginInstance, BoxError>;
     fn create_by_spec(spec: JsonValue, name: Option<String>) -> Result<PluginInstance, BoxError> {
         Self::create(PluginConfig {
@@ -38,14 +46,87 @@ pub trait Plugin: Any {
     }
     fn new_instance<M>(config: PluginConfig, make: M) -> PluginInstance
     where
-        M: Fn() -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static,
+        M: Fn(&PluginInstance) -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static,
         Self: Sized,
     {
         PluginInstance::new::<Self, _>(config, make)
     }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        None
+    }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct PluginMetaData {
+    pub author: Option<Cow<'static, str>>,
+    pub description: Option<Cow<'static, str>>,
+    pub version: Option<Cow<'static, str>>,
+    pub homepage: Option<Cow<'static, str>>,
+    pub repository: Option<Cow<'static, str>>,
+}
+
+/// Plugin Attributes
+pub struct PluginAttributes {
+    pub mono: bool,
+    pub code: Cow<'static, str>,
+    pub meta: PluginMetaData,
+    #[cfg(feature = "schema")]
+    pub schema: Option<schemars::schema::RootSchema>,
+    pub constructor: BoxConstructFn,
+    pub destructor: Option<BoxDestructFn>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct PluginRepoSnapshot {
+    pub mono: bool,
+    pub code: Cow<'static, str>,
+    pub meta: PluginMetaData,
+    pub instances: HashMap<PluginInstanceId, PluginInstanceSnapshot>,
+}
+
+impl PluginAttributes {
+    pub fn from_trait<P: Plugin>() -> Self {
+        Self {
+            code: P::CODE.into(),
+            #[cfg(feature = "schema")]
+            schema: P::schema_opt(),
+            mono: P::MONO,
+            meta: P::meta(),
+            constructor: Box::new(P::create),
+            destructor: None,
+        }
+    }
+    #[inline]
+    pub fn construct(&self, config: PluginConfig) -> Result<PluginInstance, BoxError> {
+        (self.constructor)(config)
+    }
+    pub fn generate_id(&self, config: &PluginConfig) -> PluginInstanceId {
+        let name = config.name.as_deref();
+        match (name, self.mono) {
+            (_, true) => PluginInstanceId {
+                code: self.code.clone(),
+                name: PluginInstanceName::Mono,
+            },
+            (Some(name), false) => PluginInstanceId {
+                code: self.code.clone(),
+                name: PluginInstanceName::Named(name.to_string()),
+            },
+            (None, false) => {
+                let mut hasher = DefaultHasher::new();
+                hasher.write(config.code.as_bytes());
+                hasher.write(config.spec.to_string().as_bytes());
+                let digest = hasher.finish();
+                PluginInstanceId {
+                    code: self.code.clone(),
+                    name: PluginInstanceName::Anon(digest),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PluginConfig {
     pub code: Cow<'static, str>,
     pub spec: JsonValue,
@@ -53,12 +134,12 @@ pub struct PluginConfig {
 }
 
 impl PluginConfig {
-    pub fn instance_id(&self) -> PluginInstanceId {
-        PluginInstanceId {
-            code: self.code.clone(),
-            name: self.name.clone(),
-        }
-    }
+    // pub fn instance_id(&self) -> PluginInstanceId {
+    //     PluginInstanceId {
+    //         code: self.code.clone(),
+    //         name: self.name.clone(),
+    //     }
+    // }
     pub fn check_code<P: Plugin>(&self) -> bool {
         self.code == P::CODE
     }
@@ -92,10 +173,11 @@ pub trait MakeSgLayer {
     fn make_layer(&self) -> BoxResult<SgBoxLayer>;
 }
 
-type BoxCreateFn = Box<dyn Fn(PluginConfig) -> Result<PluginInstance, BoxError> + Send + Sync + 'static>;
+type BoxConstructFn = Box<dyn Fn(PluginConfig) -> Result<PluginInstance, BoxError> + Send + Sync + 'static>;
+type BoxDestructFn = Box<dyn Fn(PluginInstance) -> Result<(), BoxError> + Send + Sync + 'static>;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
-    pub creators: Arc<RwLock<HashMap<Cow<'static, str>, BoxCreateFn>>>,
+    pub plugins: Arc<RwLock<HashMap<Cow<'static, str>, PluginAttributes>>>,
     pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
 }
 
@@ -143,33 +225,23 @@ impl SgPluginRepository {
     }
 
     pub fn register<P: Plugin>(&self) {
-        self.register_fn(P::CODE, P::create)
+        self.register_custom(PluginAttributes::from_trait::<P>())
     }
 
-    pub fn register_fn<C, F>(&self, code: C, create: F)
-    where
-        C: Into<Cow<'static, str>>,
-        F: Fn(PluginConfig) -> Result<PluginInstance, BoxError> + Send + Sync + 'static,
-    {
-        let mut map = self.creators.write().expect("SgPluginRepository register error");
-        let create_fn = Box::new(create);
-        map.insert(code.into(), create_fn);
+    pub fn register_custom<A: Into<PluginAttributes>>(&self, attr: A) {
+        let attr: PluginAttributes = attr.into();
+        let mut map = self.plugins.write().expect("SgPluginRepository register error");
+        let _old_attr = map.insert(attr.code.clone(), attr);
     }
 
-    pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, mut config: PluginConfig) -> Result<(), BoxError> {
-        static SERIAL_NO: AtomicU64 = AtomicU64::new(0);
-        // temporary solution, in the future, it should depends on plugins meta definition
-        let code: Cow<'static, str> = config.code.clone();
-        if config.name.is_none() {
-            let no = SERIAL_NO.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            config.name = Some(format!("anon-{no:04x}-{code}"))
-        }
-        let map = self.creators.read().expect("SgPluginRepository register error");
-        let mut instances = self.instances.write().expect("SgPluginRepository register error");
-        let id = PluginInstanceId {
-            code: code.clone(),
-            name: config.name.clone(),
+    pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, config: PluginConfig) -> Result<(), BoxError> {
+        let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
+        let code = config.code.clone();
+        let Some(attr) = attr_rg.get(&code) else {
+            return Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into());
         };
+        let id = attr.generate_id(&config);
+        let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.get_mut(&id) {
             // before mount hook
             instance.before_mount()?;
@@ -178,9 +250,9 @@ impl SgPluginRepository {
             // after mount hook
             Ok(())
         } else {
-            let creator = map.get(&code).ok_or_else::<BoxError, _>(|| format!("[Sg.Plugin] unregistered sg plugin type {code}").into())?;
             tracing::trace!("code: {code}, config {config:?}");
-            let mut instance = (creator)(config)?;
+            let mut instance = attr.construct(config)?;
+            instance.resource.insert(id.clone());
             instance.after_create()?;
             // after create hook
             // before mount hook
@@ -196,6 +268,27 @@ impl SgPluginRepository {
     pub fn instance_snapshot(&self, id: PluginInstanceId) -> Option<PluginInstanceSnapshot> {
         let map = self.instances.read().expect("SgPluginRepository register error");
         map.get(&id).map(PluginInstance::snapshot)
+    }
+
+    pub fn repo_snapshot(&self) -> HashMap<Cow<'static, str>, PluginRepoSnapshot> {
+        let plugins = self.plugins.read().expect("SgPluginRepository register error");
+        plugins
+            .iter()
+            .map(|(code, attr)| {
+                let instances = self.instances.read().expect("SgPluginRepository register error");
+                let instances = instances.iter().filter_map(|(id, instance)| if &id.code == code { Some((id.clone(), instance.snapshot())) } else { None }).collect();
+                (
+                    code.clone(),
+                    PluginRepoSnapshot {
+                        code: code.clone(),
+                        mono: attr.mono,
+                        meta: attr.meta.clone(),
+                        instances,
+                    },
+                )
+            })
+            .collect()
+        // self.instances.map
     }
 }
 
@@ -214,7 +307,7 @@ impl SgPluginRepository {
 /// Actual struct of Filter
 #[macro_export]
 macro_rules! def_plugin {
-    ($CODE:literal, $def:ident, $filter_type:ty) => {
+    ($CODE:literal, $def:ident, $filter_type:ty $(;$($rest: tt)*)?) => {
         pub const CODE: &str = $CODE;
 
         #[derive(Debug, Copy, Clone)]
@@ -224,10 +317,31 @@ macro_rules! def_plugin {
             const CODE: &'static str = CODE;
             fn create(config: $crate::PluginConfig) -> Result<$crate::instance::PluginInstance, $crate::BoxError> {
                 let filter: $filter_type = $crate::serde_json::from_value(config.spec.clone())?;
-                let instance = $crate::instance::PluginInstance::new::<Self, _>(config, move || $crate::MakeSgLayer::make_layer(&filter));
+                let instance = $crate::instance::PluginInstance::new::<Self, _>(config, move |_| $crate::MakeSgLayer::make_layer(&filter));
                 Ok(instance)
             }
+            $($crate::def_plugin!(@attr $($rest)*);)?
         }
+    };
+    // finished
+    (@attr) => {};
+    (@attr $(#[$meta:meta])* mono = $mono: literal; $($rest: tt)*) => {
+        const MONO: bool = $mono;
+        $crate::def_plugin!(@attr $($rest)*);
+    };
+    (@attr $(#[$meta:meta])* meta = $metadata: expr; $($rest: tt)*) => {
+        fn meta() -> $crate::PluginMetaData {
+            $metadata
+        }
+        $crate::def_plugin!(@attr $($rest)*);
+    };
+    // enable when schema feature is enabled
+    (@attr $(#[$meta:meta])* schema; $($rest: tt)*) => {
+        $(#[$meta])*
+        fn schema_opt() -> Option<$crate::schemars::schema::RootSchema> {
+            Some(<Self as $crate::PluginSchemaExt>::schema())
+        }
+        $crate::def_plugin!(@attr $($rest)*);
     };
 }
 
