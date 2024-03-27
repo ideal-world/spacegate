@@ -67,7 +67,7 @@ fn get_rustls_config_dangerous() -> rustls::ClientConfig {
 }
 
 pub fn get_client() -> SgHttpClient {
-    unsafe { &GLOBAL }.get_or_init(Default::default).get_default()
+    ClientRepo::global().get_default()
 }
 
 pub struct ClientRepo {
@@ -104,7 +104,7 @@ impl ClientRepo {
         self.default = client;
     }
     pub fn global() -> &'static Self {
-        unsafe { &GLOBAL }.get_or_init(Default::default)
+        unsafe { std::ptr::addr_of!(GLOBAL).cast_mut().as_mut().expect("invalid static global client repo") }.get_or_init(Default::default)
     }
 
     /// # Safety
