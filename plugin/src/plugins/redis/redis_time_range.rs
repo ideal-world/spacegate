@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use hyper::{header::HeaderName, Request, Response};
 use serde::{Deserialize, Serialize};
 
@@ -10,13 +8,12 @@ use spacegate_ext_redis::{
 };
 use spacegate_kernel::{
     extension::{GatewayName, MatchedSgRouter},
-    helper_layers::function::{FnLayer, FnLayerMethod, Inner},
-    BoxError, SgBody, SgBoxLayer,
+    helper_layers::function::{FnLayerMethod, Inner},
+    BoxError, SgBody,
 };
 use tracing::debug;
 
-use crate::{error::code, instance::PluginInstanceId, Plugin, PluginError};
-use spacegate_kernel::ret_error;
+use crate::{error::code, Plugin, PluginError};
 
 use super::redis_format_key;
 
@@ -27,7 +24,7 @@ pub struct RedisTimeRangeConfig {
     pub header: String,
 }
 
-pub struct RedisTimeRange {
+pub struct RedisTimeRangePlugin {
     pub prefix: String,
     pub header: HeaderName,
 }
@@ -49,45 +46,38 @@ async fn redis_call(mut conn: Connection, time_key: String) -> Result<bool, Redi
     Ok(from.to_utc() < utc_now && to.to_utc() >= utc_now)
 }
 
-impl FnLayerMethod for RedisTimeRange {
-    async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
-        let Some(gateway_name) = req.extensions().get::<GatewayName>() else {
-            return PluginError::internal_error::<RedisTimeRangePlugin>("missing gateway name").into();
-        };
-        let Some(client) = global_repo().get(gateway_name) else {
-            return PluginError::internal_error::<RedisTimeRangePlugin>("missing redis client").into();
-        };
-        let Some(matched) = req.extensions().get::<MatchedSgRouter>() else {
-            return PluginError::internal_error::<RedisTimeRangePlugin>("missing matched router").into();
-        };
-        let Some(key) = redis_format_key(&req, matched, &self.header) else {
-            return PluginError::status::<RedisTimeRangePlugin, { code::UNAUTHORIZED }>(format!("missing header {}", self.header.as_str())).into();
-        };
-        let pass: bool = ret_error!(redis_call(client.get_conn().await, format!("{}:{}", self.prefix, key)).await.map_err(PluginError::internal_error::<RedisTimeRangePlugin>));
-        if !pass {
-            return PluginError::status::<RedisTimeRangePlugin, { code::FORBIDDEN }>("request cumulative count reached the limit").into();
-        }
-        inner.call(req).await
-    }
-}
-
-pub struct RedisTimeRangePlugin;
 impl Plugin for RedisTimeRangePlugin {
     // type MakeLayer = RedisTimeRangeConfig;
 
     const CODE: &'static str = "redis-time-range";
 
-    fn create(config: crate::PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
+    fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
+        let instance_id = config.none_mono_id();
         let layer_config = serde_json::from_value::<RedisTimeRangeConfig>(config.spec.clone())?;
-        Ok(crate::instance::PluginInstance::new::<Self, _>(config, move |instance| {
-            let instance_id = instance.resource.get::<PluginInstanceId>().expect("missing instance id");
-            let method = Arc::new(RedisTimeRange {
-                prefix: instance_id.redis_prefix(),
-                header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
-            });
-            let layer = FnLayer::new(method);
-            Ok(SgBoxLayer::new(layer))
-        }))
+        Ok(RedisTimeRangePlugin {
+            prefix: instance_id.redis_prefix(),
+            header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
+        })
+    }
+    async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
+        let _header = self.header.clone();
+        let Some(gateway_name) = req.extensions().get::<GatewayName>() else {
+            return Err("missing gateway name".into());
+        };
+        let Some(client) = global_repo().get(gateway_name) else {
+            return Err("missing redis client".into());
+        };
+        let Some(matched) = req.extensions().get::<MatchedSgRouter>() else {
+            return Err("missing matched router".into());
+        };
+        let Some(key) = redis_format_key(&req, matched, &self.header) else {
+            return Ok(PluginError::status::<Self, { code::UNAUTHORIZED }>(format!("missing header {}", self.header.as_str())).into());
+        };
+        let pass: bool = redis_call(client.get_conn().await, format!("{}:{}", self.prefix, key)).await?;
+        if !pass {
+            return Ok(PluginError::status::<RedisTimeRangePlugin, { code::FORBIDDEN }>("request cumulative count reached the limit").into());
+        }
+        Ok(inner.call(req).await)
     }
     #[cfg(feature = "schema")]
     fn schema_opt() -> Option<schemars::schema::RootSchema> {
@@ -109,7 +99,7 @@ mod test {
         service::get_echo_service,
     };
     use testcontainers_modules::redis::REDIS_PORT;
-    use tower_layer::Layer;
+
     use tracing_subscriber::EnvFilter;
     #[tokio::test]
     async fn test_op_res_count_limit() {
@@ -122,7 +112,7 @@ mod test {
         let host_port = redis_container.get_host_port_ipv4(REDIS_PORT);
 
         let url = format!("redis://127.0.0.1:{host_port}");
-        let config = RedisTimeRangePlugin::create_by_spec(
+        let plugin = RedisTimeRangePlugin::create_by_spec(
             json! {
                 {
                     "header": AUTHORIZATION.as_str(),
@@ -142,9 +132,7 @@ mod test {
             .await
             .expect("fail to set");
         let _: () = conn.set("sg:plugin:redis-time-range:test:*:op-res:ak-pass", "2024-01-01T00:00:00-08:00,2025-01-01T00:00:00-08:00").await.expect("fail to set");
-        let layer = config.make().expect("fail to make layer");
-        let backend_service = get_echo_service();
-        let mut service = layer.layer(backend_service);
+        let inner = Inner::new(get_echo_service());
         {
             let req = Request::builder()
                 .uri("http://127.0.0.1/op-res/example")
@@ -160,7 +148,7 @@ mod test {
                 .header(AUTHORIZATION, "ak-pass")
                 .body(SgBody::empty())
                 .expect("fail to build");
-            let resp = service.call(req).await.expect("infallible");
+            let resp = plugin.call(req, inner.clone()).await.expect("infallible");
             let (parts, body) = resp.into_parts();
             let body = body.dump().await.expect("fail to dump");
             println!("body: {body:?}, parts: {parts:?}");
@@ -181,7 +169,7 @@ mod test {
                 .header(AUTHORIZATION, "ak-not-pass")
                 .body(SgBody::empty())
                 .expect("fail to build");
-            let resp = service.call(req).await.expect("infallible");
+            let resp = plugin.call(req, inner.clone()).await.expect("infallible");
             let (parts, body) = resp.into_parts();
             println!("body: {body:?}, parts: {parts:?}");
             assert!(parts.status.is_client_error());
@@ -200,7 +188,7 @@ mod test {
                 ))
                 .body(SgBody::empty())
                 .expect("fail to build");
-            let resp = service.call(req).await.expect("infallible");
+            let resp = plugin.call(req, inner.clone()).await.expect("infallible");
             let (parts, body) = resp.into_parts();
             println!("body: {body:?}, parts: {parts:?}");
             assert!(parts.status.is_client_error());
@@ -221,7 +209,7 @@ mod test {
                 .header(AUTHORIZATION, "ak-pass")
                 .body(SgBody::empty())
                 .expect("fail to build");
-            let resp = service.call(req).await.expect("infallible");
+            let resp = plugin.call(req, inner.clone()).await.expect("infallible");
             let (parts, body) = resp.into_parts();
             println!("body: {body:?}, parts: {parts:?}");
             assert!(parts.status.is_client_error());

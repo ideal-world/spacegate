@@ -30,25 +30,25 @@ where
         Box::new(self.clone())
     }
 }
-pub struct BoxHyperService {
+pub struct ArcHyperService {
     pub boxed: Arc<
         dyn CloneHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible, Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>> + Send + Sync,
     >,
 }
 
-impl std::fmt::Debug for BoxHyperService {
+impl std::fmt::Debug for ArcHyperService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BoxHyperService").finish()
+        f.debug_struct("ArcHyperService").finish()
     }
 }
 
-impl Clone for BoxHyperService {
+impl Clone for ArcHyperService {
     fn clone(&self) -> Self {
         Self { boxed: self.boxed.clone() }
     }
 }
 
-impl BoxHyperService {
+impl ArcHyperService {
     pub fn new<T>(service: T) -> Self
     where
         T: Clone + CloneHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
@@ -59,7 +59,7 @@ impl BoxHyperService {
     }
 }
 
-impl hyper::service::Service<Request<SgBody>> for BoxHyperService {
+impl hyper::service::Service<Request<SgBody>> for ArcHyperService {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -129,10 +129,10 @@ pub async fn http_backend_service(req: Request<SgBody>) -> Result<Response<SgBod
     }
 }
 
-pub fn get_http_backend_service() -> BoxHyperService {
-    BoxHyperService::new(hyper::service::service_fn(http_backend_service))
+pub fn get_http_backend_service() -> ArcHyperService {
+    ArcHyperService::new(hyper::service::service_fn(http_backend_service))
 }
 
-pub fn get_echo_service() -> BoxHyperService {
-    BoxHyperService::new(hyper::service::service_fn(echo::echo))
+pub fn get_echo_service() -> ArcHyperService {
+    ArcHyperService::new(hyper::service::service_fn(echo::echo))
 }

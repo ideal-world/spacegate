@@ -7,7 +7,7 @@ use std::{convert::Infallible, sync::Arc, time::Duration};
 use crate::{
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
-    service::BoxHyperService,
+    service::ArcHyperService,
     utils::{fold_sg_layers::sg_layers, schema_port::port_to_schema},
     SgBody, SgBoxLayer,
 };
@@ -82,11 +82,11 @@ where
         let filter_layer = self.plugins.iter();
 
         let service = if empty {
-            sg_layers(filter_layer, BoxHyperService::new(TimeoutLayer::new(self.timeouts).layer(inner)))
+            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(inner)))
         } else {
             let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
             let random_picker = random_pick::RandomPick::new(service_iter);
-            sg_layers(filter_layer, BoxHyperService::new(TimeoutLayer::new(self.timeouts).layer(random_picker)))
+            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(random_picker)))
         };
 
         let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
@@ -96,13 +96,13 @@ where
 #[derive(Clone)]
 pub struct SgRouteRule {
     pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
-    pub service: BoxHyperService,
+    pub service: ArcHyperService,
 }
 
 impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
     type Response = Response<SgBody>;
     type Error = Infallible;
-    type Future = <BoxHyperService as hyper::service::Service<Request<SgBody>>>::Future;
+    type Future = <ArcHyperService as hyper::service::Service<Request<SgBody>>>::Future;
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter route rule");
@@ -142,11 +142,11 @@ where
     S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
     <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
 {
-    type Service = SgHttpBackend<BoxHyperService>;
+    type Service = SgHttpBackend<ArcHyperService>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
-        let filtered = sg_layers(self.plugins.iter(), BoxHyperService::new(timeout_layer.layer(inner)));
+        let filtered = sg_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner)));
         SgHttpBackend {
             weight: self.weight,
             host: self.host.clone().map(Into::into),

@@ -4,7 +4,11 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, SgProtocolConfig, SgRouteFilter, SgTlsMode};
+use crate::config::{
+    matches_convert::convert_config_to_kernel,
+    plugin_filter_dto::{global_batch_mount_plugin, global_batch_update_plugin},
+    SgProtocolConfig, SgRouteFilter, SgTlsMode,
+};
 
 use lazy_static::lazy_static;
 use spacegate_config::ConfigItem;
@@ -13,7 +17,7 @@ use spacegate_kernel::{
     layers::gateway::{builder::default_gateway_route_fallback, create_http_router, SgGatewayRoute},
     listener::SgListen,
     service::get_http_backend_service,
-    BoxError, BoxHyperService, Layer,
+    ArcHyperService, BoxError, Layer,
 };
 use spacegate_plugin::{mount::MountPointIndex, SgPluginRepository};
 use std::sync::Arc;
@@ -120,13 +124,13 @@ pub(crate) fn create_service(
     plugins: Vec<SgRouteFilter>,
     http_routes: BTreeMap<String, crate::SgHttpRoute>,
     reloader: Reloader<SgGatewayRoute>,
-) -> Result<BoxHyperService, BoxError> {
+) -> Result<ArcHyperService, BoxError> {
     let gateway_name: Arc<str> = gateway_name.into();
     let routes = collect_http_route(gateway_name.clone(), http_routes)?;
     let mut layer = spacegate_kernel::layers::gateway::SgGatewayLayer::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
     global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
     let backend_service = get_http_backend_service();
-    let service = BoxHyperService::new(layer.layer(backend_service));
+    let service = ArcHyperService::new(layer.layer(backend_service));
     Ok(service)
 }
 
@@ -195,8 +199,10 @@ impl RunningSgGateway {
         Ok(())
     }
     /// Start a gateway from plugins and http_routes
-    #[instrument(fields(gateway=%gateway.name), skip_all, err)]
-    pub fn create(ConfigItem { gateway, routes }: ConfigItem, cancel_token: CancellationToken) -> Result<Self, BoxError> {
+    #[instrument(fields(gateway=%config_item.gateway.name), skip_all, err)]
+    pub fn create(config_item: ConfigItem, cancel_token: CancellationToken) -> Result<Self, BoxError> {
+        global_batch_update_plugin(config_item.collect_all_plugins());
+        let ConfigItem { gateway, routes } = config_item;
         #[allow(unused_mut)]
         // let mut builder_ext = hyper::http::Extensions::new();
         #[cfg(feature = "cache")]
@@ -236,7 +242,7 @@ impl RunningSgGateway {
         }
 
         let gateway_name: Arc<str> = Arc::from(gateway.name.to_string());
-        let mut listens: Vec<SgListen<BoxHyperService>> = Vec::new();
+        let mut listens: Vec<SgListen<ArcHyperService>> = Vec::new();
         for listener in &gateway.listeners {
             let ip = listener.ip.unwrap_or(std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED));
             let addr = SocketAddr::new(ip, listener.port);

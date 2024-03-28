@@ -4,7 +4,7 @@ use hyper::{service::Service, Request, Response};
 use std::{convert::Infallible, sync::Arc};
 use tower_layer::Layer;
 
-use crate::{BoxHyperService, SgBody};
+use crate::{ArcHyperService, SgBody};
 
 pub trait FnLayerMethod: Send + 'static {
     fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Response<SgBody>> + Send;
@@ -90,14 +90,14 @@ where
     fn layer(&self, inner: S) -> Self::Service {
         FnService {
             m: self.method.clone(),
-            inner: BoxHyperService::new(inner),
+            inner: ArcHyperService::new(inner),
         }
     }
 }
 #[derive(Debug, Clone)]
 pub struct FnService<M> {
     m: M,
-    inner: BoxHyperService,
+    inner: ArcHyperService,
 }
 
 impl<M> Service<Request<SgBody>> for FnService<M>
@@ -117,25 +117,19 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct Inner {
-    inner: BoxHyperService,
+    inner: ArcHyperService,
 }
 
 impl Inner {
+    pub fn new(inner: ArcHyperService) -> Self {
+        Inner { inner }
+    }
     pub async fn call(self, req: Request<SgBody>) -> Response<SgBody> {
         // just infallible
         unsafe { self.inner.call(req).await.unwrap_unchecked() }
     }
-}
-
-#[macro_export]
-macro_rules! ret_error {
-    ($expr: expr) => {
-        match $expr {
-            Ok(x) => x,
-            Err(e) => return e.into(),
-        }
-    };
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ use crate::{
         reload::Reloader,
         route::{Route, Router},
     },
-    service::BoxHyperService,
+    service::ArcHyperService,
     utils::fold_sg_layers::sg_layers,
     SgBody, SgBoxLayer,
 };
@@ -27,7 +27,7 @@ use super::http_route::{match_hostname::HostnameTree, match_request::MatchReques
 
 *****************************************************************************************/
 
-pub type SgGatewayRoute = Route<SgGatewayRoutedServices, SgGatewayRouter, BoxHyperService>;
+pub type SgGatewayRoute = Route<SgGatewayRoutedServices, SgGatewayRouter, ArcHyperService>;
 
 #[derive(Debug)]
 pub struct SgGatewayLayer {
@@ -51,7 +51,7 @@ impl SgGatewayLayer {
 
 #[derive(Debug, Clone)]
 pub struct SgGatewayRoutedServices {
-    services: Arc<[Vec<BoxHyperService>]>,
+    services: Arc<[Vec<ArcHyperService>]>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +61,7 @@ pub struct SgGatewayRouter {
 }
 
 impl Index<(usize, usize)> for SgGatewayRoutedServices {
-    type Output = BoxHyperService;
+    type Output = ArcHyperService;
 
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         &self.services.as_ref()[index.0][index.1]
@@ -101,7 +101,7 @@ where
     S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
     <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
 {
-    type Service = BoxHyperService;
+    type Service = ArcHyperService;
 
     fn layer(&self, inner: S) -> Self::Service {
         let gateway_name = GatewayName::new(self.gateway_name.clone());
@@ -116,11 +116,11 @@ where
         };
         #[cfg(not(feature = "reload"))]
         let service = route;
-        BoxHyperService::new(add_gateway_name_layer.layer(sg_layers(gateway_plugins, BoxHyperService::new(service))))
+        ArcHyperService::new(add_gateway_name_layer.layer(sg_layers(gateway_plugins, ArcHyperService::new(service))))
     }
 }
 
-pub fn create_http_router<'a, S>(routes: impl Iterator<Item = &'a SgHttpRoute>, fallback: &SgBoxLayer, inner: S) -> Route<SgGatewayRoutedServices, SgGatewayRouter, BoxHyperService>
+pub fn create_http_router<'a, S>(routes: impl Iterator<Item = &'a SgHttpRoute>, fallback: &SgBoxLayer, inner: S) -> Route<SgGatewayRoutedServices, SgGatewayRouter, ArcHyperService>
 where
     S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
     <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
@@ -135,7 +135,7 @@ where
         let mut rules_services = Vec::with_capacity(route.rules.len());
         let mut rules_router = Vec::with_capacity(route.rules.len());
         for rule in route.rules.iter() {
-            let rule_service = sg_layers(route.plugins.iter(), BoxHyperService::new(rule.layer(inner.clone())));
+            let rule_service = sg_layers(route.plugins.iter(), ArcHyperService::new(rule.layer(inner.clone())));
             rules_services.push(rule_service);
             rules_router.push(rule.r#match.clone());
         }

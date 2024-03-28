@@ -99,28 +99,28 @@ pub trait MountPoint {
 
 impl MountPoint for SgGatewayLayer {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
-        self.http_plugins.push(instance.make()?);
+        self.http_plugins.push(instance.make());
         Ok(())
     }
 }
 
 impl MountPoint for SgHttpRoute {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
-        self.plugins.push(instance.make()?);
+        self.plugins.push(instance.make());
         Ok(())
     }
 }
 
 impl MountPoint for SgHttpRouteRuleLayer {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
-        self.plugins.push(instance.make()?);
+        self.plugins.push(instance.make());
         Ok(())
     }
 }
 
 impl MountPoint for SgHttpBackendLayer {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
-        self.plugins.push(instance.make()?);
+        self.plugins.push(instance.make());
         Ok(())
     }
 }

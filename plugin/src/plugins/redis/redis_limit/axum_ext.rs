@@ -1,16 +1,4 @@
 use serde::{Deserialize, Serialize};
-use spacegate_ext_axum::{
-    axum::{
-        self,
-        extract::{Json, Query},
-        routing::get,
-        BoxError,
-    },
-    InternalError,
-};
-use spacegate_ext_redis::global_repo;
-
-use crate::{instance::PluginInstanceId, plugins::redis::MatchSpecifier};
 
 // pub fn create_route() -> axum::Router {
 //     axum::Router::new().route("/", get(get_limit_rule))

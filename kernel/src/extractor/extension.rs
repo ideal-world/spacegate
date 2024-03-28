@@ -1,6 +1,6 @@
 use hyper::Request;
 
-use crate::{Marker, SgBody};
+use crate::{Extractor, SgBody};
 
 /// Just extract and attach the extension to the request
 #[derive(Debug, Clone)]
@@ -16,7 +16,7 @@ impl<E> Extension<E> {
     }
 }
 
-impl<E> Marker for Extension<E>
+impl<E> Extractor for Extension<E>
 where
     E: Send + Sync + 'static + Clone,
 {

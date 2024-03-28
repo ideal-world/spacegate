@@ -26,7 +26,7 @@ fn export_schema() {
         maintenance::MaintenancePlugin,
         redirect::RedirectPlugin,
         redis::{redis_count::RedisCountPlugin, redis_dynamic_route::RedisDynamicRoutePlugin, redis_limit::RedisLimitPlugin, redis_time_range::RedisTimeRangePlugin},
-        retry::RetryPlugin,
+        // retry::RetryPlugin,
         rewrite::RewritePlugin,
         static_resource::StaticResourcePlugin,
     };
@@ -36,7 +36,7 @@ fn export_schema() {
         RateLimitPlugin
         MaintenancePlugin
         RedirectPlugin
-        RetryPlugin
+        // RetryPlugin
         RewritePlugin
         StaticResourcePlugin
         RedisCountPlugin

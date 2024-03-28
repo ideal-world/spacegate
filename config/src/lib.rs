@@ -22,7 +22,22 @@ pub struct ConfigItem {
     pub routes: BTreeMap<String, SgHttpRoute>,
 }
 
-impl ConfigItem {}
+impl ConfigItem {
+    pub fn collect_all_plugins(&self) -> Vec<crate::model::SgRouteFilter> {
+        let mut plugins = Vec::new();
+        plugins.extend(self.gateway.filters.iter().cloned());
+        for route in self.routes.values() {
+            plugins.extend(route.filters.iter().cloned());
+            for rule in route.rules.iter() {
+                plugins.extend(rule.filters.iter().cloned());
+                for backend in rule.backends.iter() {
+                    plugins.extend(backend.filters.iter().cloned());
+                }
+            }
+        }
+        plugins
+    }
+}
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]

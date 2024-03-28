@@ -8,12 +8,16 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::{BoxError, BoxResult, SgBoxLayer};
+use spacegate_kernel::{helper_layers::function::FnLayer, BoxError, BoxResult, SgBoxLayer};
 
 use crate::{
     mount::{MountPoint, MountPointIndex},
-    Plugin, PluginConfig,
+    PluginConfig,
 };
+
+// pub struct PluginInstanceRef {
+//     id: PluginInstanceId,
+// }
 
 pub struct PluginInstance {
     // data
@@ -21,9 +25,7 @@ pub struct PluginInstance {
     pub mount_points: HashSet<MountPointIndex>,
     pub hooks: PluginInstanceHooks,
     pub resource: PluginInstanceResource,
-
-    // method
-    pub make: BoxMakeFn,
+    pub plugin_function: crate::layer::PluginFunction,
 }
 
 pub type BoxMakeFn = Box<dyn Fn(&PluginInstance) -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static>;
@@ -75,6 +77,8 @@ pub enum PluginInstanceName {
     // Mono Instance
     Mono,
 }
+
+impl PluginInstanceName {}
 
 impl Display for PluginInstanceName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -144,18 +148,6 @@ macro_rules! expose_hooks {
 }
 
 impl PluginInstance {
-    pub fn new<P: Plugin, M: Fn(&PluginInstance) -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static>(config: PluginConfig, make: M) -> Self {
-        Self {
-            config: PluginConfig { code: P::CODE.into(), ..config },
-            make: Box::new(make),
-            mount_points: HashSet::new(),
-            hooks: Default::default(),
-            resource: Default::default(),
-        }
-    }
-    pub fn make(&self) -> Result<SgBoxLayer, BoxError> {
-        (self.make)(self)
-    }
     pub(crate) fn mount_at<M: MountPoint>(&mut self, mount_point: &mut M, index: MountPointIndex) -> Result<(), BoxError> {
         mount_point.mount(self)?;
         self.mount_points.insert(index);
@@ -174,7 +166,9 @@ impl PluginInstance {
             Ok(())
         }
     }
-
+    pub fn make(&self) -> SgBoxLayer {
+        SgBoxLayer::new(FnLayer::new(self.plugin_function.clone()))
+    }
     expose_hooks! {
         after_create, set_after_create
         before_mount, set_before_create

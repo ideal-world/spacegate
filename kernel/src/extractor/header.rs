@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use hyper::{header::HeaderValue, Request};
 
-use crate::{Marker, SgBody};
+use crate::{Extractor, SgBody};
 
 pub trait HeaderName {
     const NAME: &'static str;
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<H> Marker for Header<H>
+impl<H> Extractor for Header<H>
 where
     H: HeaderName + Send + Sync + 'static,
 {
