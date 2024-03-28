@@ -1,6 +1,5 @@
 pub mod async_filter;
 pub mod bidirection_filter;
-pub mod check;
 pub mod filter;
 pub mod function;
 pub mod map_future;

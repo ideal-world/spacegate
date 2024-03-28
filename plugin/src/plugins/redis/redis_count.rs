@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use hyper::{header::HeaderName, Request, Response};
 use serde::{Deserialize, Serialize};
 
@@ -10,16 +8,11 @@ use spacegate_ext_redis::{
 };
 use spacegate_kernel::{
     extension::{GatewayName, MatchedSgRouter},
-    helper_layers::function::{FnLayer, FnLayerMethod, Inner},
-    BoxError, SgBody, SgBoxLayer,
+    helper_layers::function::{FnLayerMethod, Inner},
+    BoxError, SgBody,
 };
 
-use crate::{
-    error::code,
-    instance::{PluginInstance, PluginInstanceId},
-    Plugin, PluginError,
-};
-use spacegate_kernel::ret_error;
+use crate::{error::code, Plugin, PluginError};
 
 use super::redis_format_key;
 
@@ -30,7 +23,7 @@ pub struct RedisCountConfig {
     pub header: String,
 }
 
-pub struct RedisCount {
+pub struct RedisCountPlugin {
     pub prefix: String,
     pub header: HeaderName,
 }
@@ -53,23 +46,34 @@ async fn redis_call_on_resp(mut conn: Connection, count_key: String) -> Result<(
     Ok(())
 }
 
-impl FnLayerMethod for RedisCount {
-    async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
+// pub struct RedisCountPlugin;
+impl Plugin for RedisCountPlugin {
+    const CODE: &'static str = "redis-count";
+
+    fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
+        let layer_config = serde_json::from_value::<RedisCountConfig>(config.spec.clone())?;
+        let id = config.none_mono_id();
+        Ok(Self {
+            prefix: id.redis_prefix(),
+            header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
+        })
+    }
+    async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
         let Some(gateway_name) = req.extensions().get::<GatewayName>() else {
-            return PluginError::internal_error::<RedisCountPlugin>("missing gateway name").into();
+            return Err("missing gateway name".into());
         };
         let Some(client) = global_repo().get(gateway_name) else {
-            return PluginError::internal_error::<RedisCountPlugin>("missing redis client").into();
+            return Err("missing redis client".into());
         };
         let Some(matched) = req.extensions().get::<MatchedSgRouter>() else {
-            return PluginError::internal_error::<RedisCountPlugin>("missing matched router").into();
+            return Err("missing matched router".into());
         };
         let Some(key) = redis_format_key(&req, matched, &self.header) else {
-            return PluginError::status::<RedisCountPlugin, { code::UNAUTHORIZED }>(format!("missing header {}", self.header.as_str())).into();
+            return Ok(PluginError::status::<RedisCountPlugin, { code::UNAUTHORIZED }>(format!("missing header {}", self.header.as_str())).into());
         };
-        let pass: bool = ret_error!(redis_call(client.get_conn().await, format!("{}:{}", self.prefix, key)).await.map_err(PluginError::internal_error::<RedisCountPlugin>));
+        let pass: bool = redis_call(client.get_conn().await, format!("{}:{}", self.prefix, key)).await?;
         if !pass {
-            return PluginError::status::<RedisCountPlugin, { code::FORBIDDEN }>("request cumulative count reached the limit").into();
+            return Ok(PluginError::status::<RedisCountPlugin, { code::FORBIDDEN }>("request cumulative count reached the limit").into());
         }
         let resp = inner.call(req).await;
         if resp.status().is_server_error() || resp.status().is_client_error() {
@@ -77,27 +81,7 @@ impl FnLayerMethod for RedisCount {
                 tracing::error!("redis execution error: {e}")
             }
         }
-        resp
-    }
-}
-
-pub struct RedisCountPlugin;
-impl Plugin for RedisCountPlugin {
-    const CODE: &'static str = "redis-count";
-
-    fn create(config: crate::PluginConfig) -> Result<crate::instance::PluginInstance, BoxError> {
-        let layer_config = serde_json::from_value::<RedisCountConfig>(config.spec.clone())?;
-        let make = move |instance: &PluginInstance| {
-            let instance_id = instance.resource.get::<PluginInstanceId>().expect("missing instance id");
-            let method = Arc::new(RedisCount {
-                prefix: instance_id.redis_prefix(),
-                header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
-            });
-            let layer = FnLayer::new(method);
-            Ok(SgBoxLayer::new(layer))
-        };
-        let instance = crate::instance::PluginInstance::new::<Self, _>(config, make);
-        Ok(instance)
+        Ok(resp)
     }
     #[cfg(feature = "schema")]
     fn schema_opt() -> Option<schemars::schema::RootSchema> {
@@ -120,7 +104,7 @@ mod test {
         service::get_echo_service,
     };
     use testcontainers_modules::redis::REDIS_PORT;
-    use tower_layer::Layer;
+
     #[tokio::test]
     async fn test_op_res_count_limit() {
         const GW_NAME: &str = "DEFAULT";
@@ -132,7 +116,7 @@ mod test {
         let host_port = redis_container.get_host_port_ipv4(REDIS_PORT);
 
         let url = format!("redis://127.0.0.1:{host_port}");
-        let config = RedisCountPlugin::create_by_spec(
+        let plugin = RedisCountPlugin::create_by_spec(
             json! {
                 {
                     "header": AUTHORIZATION.as_str(),
@@ -145,9 +129,8 @@ mod test {
         let client = global_repo().get(GW_NAME).expect("missing client");
         let mut conn = client.get_conn().await;
         let _: () = conn.set(format!("sg:plugin:redis-count:test:*:op-res:{AK}"), 3).await.expect("fail to set");
-        let layer = config.make().expect("fail to make layer");
-        let backend_service = get_echo_service();
-        let mut service = layer.layer(backend_service);
+        let inner = Inner::new(get_echo_service());
+        let _backend_service = get_echo_service();
         {
             fn gen_req(ak: &str) -> Request<SgBody> {
                 Request::builder()
@@ -166,13 +149,13 @@ mod test {
                     .expect("fail to build")
             }
             for _times in 0..3 {
-                let resp = service.call(gen_req(AK)).await.expect("infallible");
+                let resp = plugin.call(gen_req(AK), inner.clone()).await.expect("infallible");
                 let (parts, body) = resp.into_parts();
                 let body = body.dump().await.expect("fail to dump");
                 println!("body: {body:?}, parts: {parts:?}");
                 assert!(parts.status.is_success());
             }
-            let resp = service.call(gen_req(AK)).await.expect("infallible");
+            let resp = plugin.call(gen_req(AK), inner.clone()).await.expect("infallible");
             let (parts, body) = resp.into_parts();
             let body = body.dump().await.expect("fail to dump");
             println!("body: {body:?}, parts: {parts:?}");

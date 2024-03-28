@@ -2,11 +2,11 @@ use hyper::header::{HeaderValue, HOST};
 use hyper::{Request, Response, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::extension::MatchedSgRouter;
-use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
-use spacegate_kernel::{SgBody, SgBoxLayer};
+use spacegate_kernel::helper_layers::function::Inner;
+use spacegate_kernel::{BoxError, SgBody};
 
 use crate::model::SgHttpPathModifier;
-use crate::{def_plugin, MakeSgLayer, PluginError};
+use crate::{Plugin, PluginError};
 
 /// RewriteFilter defines a filter that modifies a request during forwarding.
 ///
@@ -21,15 +21,16 @@ pub struct SgFilterRewriteConfig {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct SgFilterRewrite {
+pub struct RewritePlugin {
     /// Hostname is the value to be used to replace the Host header value during forwarding.
     pub hostname: Option<HeaderValue>,
     /// Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.
     pub path: Option<SgHttpPathModifier>,
 }
 
-impl SgFilterRewrite {
-    fn on_req(&self, mut req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
+impl Plugin for RewritePlugin {
+    const CODE: &'static str = "rewrite";
+    async fn call(&self, mut req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
         if let Some(hostname) = &self.hostname {
             tracing::debug!("[Sg.Plugin.Rewrite] rewrite host {:?}", hostname);
             req.headers_mut().insert(HOST, hostname.clone());
@@ -55,37 +56,20 @@ impl SgFilterRewrite {
             } else {
                 tracing::warn!("missing matched route");
             }
-            *req.uri_mut() = Uri::from_parts(uri_part).map_err(PluginError::internal_error::<RewritePlugin>)?;
+            *req.uri_mut() = Uri::from_parts(uri_part)?;
         }
-        Ok(req)
+        Ok(inner.call(req).await)
     }
-}
 
-impl Filter for SgFilterRewrite {
-    fn filter(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
-        self.on_req(req)
-    }
-}
-
-pub type RedirectFilterLayer = FilterRequestLayer<SgFilterRewriteConfig>;
-pub type Redirect<S> = FilterRequest<SgFilterRewriteConfig, S>;
-
-impl MakeSgLayer for SgFilterRewriteConfig {
-    fn make_layer(&self) -> Result<SgBoxLayer, spacegate_kernel::BoxError> {
-        let hostname = self.hostname.as_deref().map(HeaderValue::from_str).transpose()?;
-        let filter = SgFilterRewrite {
+    fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
+        let plugin_config = serde_json::from_value::<SgFilterRewriteConfig>(config.spec)?;
+        let hostname = plugin_config.hostname.as_deref().map(HeaderValue::from_str).transpose()?;
+        Ok(RewritePlugin {
             hostname,
-            path: self.path.clone(),
-        };
-        let layer = FilterRequestLayer::new(filter);
-        Ok(SgBoxLayer::new(layer))
+            path: plugin_config.path.clone(),
+        })
     }
 }
-
-def_plugin!("rewrite",
-RewritePlugin,
-SgFilterRewriteConfig;
-#[cfg(feature = "schema")] schema;);
 
 #[cfg(feature = "schema")]
 crate::schema!(RewritePlugin, SgFilterRewriteConfig);

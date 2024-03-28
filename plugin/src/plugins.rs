@@ -10,8 +10,8 @@ pub mod limit;
 pub mod maintenance;
 #[cfg(feature = "redirect")]
 pub mod redirect;
-#[cfg(feature = "retry")]
-pub mod retry;
+// #[cfg(feature = "retry")]
+// pub mod retry;
 #[cfg(feature = "rewrite")]
 pub mod rewrite;
 // #[cfg(feature = "status")]

@@ -98,7 +98,7 @@ where
         req.extensions_mut().insert(self.peer);
         // here we will clone underlying service,
         // so it's important that underlying service is cheap to clone.
-        // here, the service are likely to be a `BoxHyperService` so it's ok
+        // here, the service are likely to be a `ArcHyperService` so it's ok
         // but if underlying service is big, it will be expensive to clone.
         // especially the router is big and the too many plugins are installed.
         // so we should avoid that

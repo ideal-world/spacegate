@@ -75,6 +75,7 @@ spacegate-ext-axum = { path = "../extension/axum", optional = true }
 
 # rt
 tokio = { workspace = true }
+arc-swap = "1"
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

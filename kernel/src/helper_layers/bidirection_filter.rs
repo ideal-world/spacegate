@@ -1,4 +1,4 @@
-use crate::{service::BoxHyperService, SgBody};
+use crate::{service::ArcHyperService, SgBody};
 use futures_util::ready;
 use hyper::{Request, Response};
 use pin_project_lite::pin_project;
@@ -41,12 +41,12 @@ pin_project! {
     }
 }
 
-impl<F> Layer<BoxHyperService> for BdfLayer<F>
+impl<F> Layer<ArcHyperService> for BdfLayer<F>
 where
     F: Clone,
 {
-    type Service = BdfService<F, BoxHyperService>;
-    fn layer(&self, service: BoxHyperService) -> Self::Service {
+    type Service = BdfService<F, ArcHyperService>;
+    fn layer(&self, service: ArcHyperService) -> Self::Service {
         Self::Service {
             filter: self.filter.clone(),
             service,

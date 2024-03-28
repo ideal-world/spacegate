@@ -3,19 +3,19 @@
 // pub mod config;
 pub mod body;
 pub mod extension;
+pub mod extractor;
 pub mod header;
 pub mod helper_layers;
 pub mod layers;
 pub mod listener;
-pub mod marker;
 pub mod service;
 pub mod utils;
 
 pub use body::SgBody;
 use extension::Reflect;
+pub use extractor::Extractor;
 use helper_layers::response_error::ErrorFormatter;
-pub use marker::Marker;
-pub use service::BoxHyperService;
+pub use service::ArcHyperService;
 use std::{convert::Infallible, fmt};
 pub use tower_layer::Layer;
 
@@ -35,7 +35,7 @@ pub trait SgRequestExt {
     fn reflect(&self) -> &Reflect;
     #[cfg(feature = "ext-redis")]
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
-    fn extract_marker<M: Marker>(&self) -> Option<M>;
+    fn extract_marker<M: Extractor>(&self) -> Option<M>;
 }
 
 impl SgRequestExt for SgRequest {
@@ -67,7 +67,7 @@ impl SgRequestExt for SgRequest {
         self.extensions().get::<extension::GatewayName>().and_then(|gateway_name| spacegate_ext_redis::RedisClientRepo::global().get(gateway_name))
     }
 
-    fn extract_marker<M: Marker>(&self) -> Option<M> {
+    fn extract_marker<M: Extractor>(&self) -> Option<M> {
         M::extract(self)
     }
 }
@@ -101,10 +101,8 @@ impl SgResponseExt for Response<SgBody> {
 pub type ReqOrResp = Result<Request<SgBody>, Response<SgBody>>;
 
 pub struct SgBoxLayer {
-    boxed: Box<dyn Layer<BoxHyperService, Service = BoxHyperService> + Send + Sync + 'static>,
+    boxed: Box<dyn Layer<ArcHyperService, Service = ArcHyperService> + Send + Sync + 'static>,
 }
-
-
 
 // impl<'a> FromIterator<&'a SgBoxLayer> for SgBoxLayer {
 //     fn from_iter<T: IntoIterator<Item = &'a SgBoxLayer>>(iter: T) -> Self {
@@ -116,18 +114,18 @@ impl SgBoxLayer {
     /// Create a new [`BoxLayer`].
     pub fn new<L>(inner_layer: L) -> Self
     where
-        L: Layer<BoxHyperService> + Send + Sync + 'static,
+        L: Layer<ArcHyperService> + Send + Sync + 'static,
         L::Service: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
         <L::Service as hyper::service::Service<Request<SgBody>>>::Future: Send + 'static,
     {
-        let layer = layer_fn(move |inner: BoxHyperService| {
+        let layer = layer_fn(move |inner: ArcHyperService| {
             let out = inner_layer.layer(inner);
-            BoxHyperService::new(out)
+            ArcHyperService::new(out)
         });
 
         Self { boxed: Box::new(layer) }
     }
-    pub fn layer_boxed(&self, inner: BoxHyperService) -> BoxHyperService {
+    pub fn layer_boxed(&self, inner: ArcHyperService) -> ArcHyperService {
         self.boxed.layer(inner)
     }
 }
@@ -137,18 +135,12 @@ where
     S: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
     <S as hyper::service::Service<hyper::Request<SgBody>>>::Future: std::marker::Send,
 {
-    type Service = BoxHyperService;
+    type Service = ArcHyperService;
 
     fn layer(&self, inner: S) -> Self::Service {
-        self.boxed.layer(BoxHyperService::new(inner))
+        self.boxed.layer(ArcHyperService::new(inner))
     }
 }
-
-// impl Clone for SgBoxLayer {
-//     fn clone(&self) -> Self {
-//         Self { boxed: self.boxed.clone() }
-//     }
-// }
 
 impl fmt::Debug for SgBoxLayer {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {

@@ -16,6 +16,17 @@ pub fn batch_convert_filter(filters: Vec<SgRouteFilter>) -> Vec<PluginConfig> {
     filters.into_iter().map(convert_filter).collect()
 }
 
+pub fn global_batch_update_plugin(filters: Vec<SgRouteFilter>) {
+    for filter in filters {
+        match SgPluginRepository::global().create_or_update_instance(convert_filter(filter)) {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("fail to create or update plugin {e}")
+            }
+        }
+    }
+}
+
 pub fn global_batch_mount_plugin<MP: MountPoint>(filters: Vec<SgRouteFilter>, mount_point: &mut MP, mount_index: MountPointIndex) {
     batch_mount_plugin(SgPluginRepository::global(), filters, mount_point, mount_index);
 }
