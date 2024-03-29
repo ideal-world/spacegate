@@ -7,13 +7,9 @@ use hyper::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_kernel::{
-    extension::Reflect,
-    helper_layers::filter::{Filter, FilterRequestLayer},
-    BoxError, SgBody,
-};
+use spacegate_kernel::{extension::Reflect, helper_layers::filter::Filter, BoxError, SgBody};
 
-use crate::{MakeSgLayer, Plugin, PluginError};
+use crate::{Plugin, PluginError};
 
 /// StaticResourceConfig
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,20 +53,6 @@ impl Filter for StaticResource {
             resp.extensions_mut().extend(reflect.into_inner());
         }
         Err(resp)
-    }
-}
-
-impl MakeSgLayer for StaticResourceConfig {
-    fn make_layer(&self) -> spacegate_kernel::BoxResult<spacegate_kernel::SgBoxLayer> {
-        let content_type = self.content_type.clone();
-        let content_type = HeaderValue::from_maybe_shared(content_type)?;
-        let body = match &self.body {
-            BodyEnum::Json(value) => Bytes::copy_from_slice(value.to_string().as_bytes()),
-            BodyEnum::Text(text) => Bytes::copy_from_slice(text.as_bytes()),
-            BodyEnum::File(path) => Bytes::copy_from_slice(&std::fs::read(path)?),
-        };
-        let code = StatusCode::from_u16(self.code)?;
-        Ok(spacegate_kernel::SgBoxLayer::new(FilterRequestLayer::new(StaticResource { content_type, code, body })))
     }
 }
 

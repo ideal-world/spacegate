@@ -112,16 +112,5 @@ impl Plugin for RateLimitPlugin {
     }
 }
 
-// pub type RateLimitLayer = AsyncFilterRequestLayer<RateLimitFilter>;
-// pub type RateLimit<S> = AsyncFilterRequest<RateLimitFilter, S>;
-
-// impl MakeSgLayer for RateLimitConfig {
-//     fn make_layer(&self) -> Result<SgBoxLayer, spacegate_kernel::BoxError> {
-//         let layer = RateLimitLayer::new(RateLimitFilter { config: Arc::new(self.clone()) });
-//         Ok(SgBoxLayer::new(layer))
-//     }
-// }
-
-// def_plugin!("limit", RateLimitPlugin, RateLimitConfig; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
 crate::schema! { RateLimitPlugin, RateLimitPlugin }
