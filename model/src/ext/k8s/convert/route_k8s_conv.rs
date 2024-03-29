@@ -71,15 +71,7 @@ impl SgHttpRoute {
             })
             .collect::<Vec<SgSingeFilter>>();
 
-        sgfilters.append(
-            &mut self
-                .plugins
-                .into_iter()
-                .filter_map(|f| {
-                    todo!("convert")
-                })
-                .collect::<Vec<_>>(),
-        );
+        sgfilters.append(&mut self.plugins.into_iter().filter_map(|f| todo!("convert")).collect::<Vec<_>>());
 
         let httproute = HttpSpaceroute {
             metadata: ObjectMeta {

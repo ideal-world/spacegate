@@ -14,7 +14,8 @@ use crate::{
             SG_FILTER_REDIRECT_CODE, SG_FILTER_REWRITE_CODE,
         },
         PluginConfig,
-    }, BoxResult, PluginInstanceId,
+    },
+    BoxResult, PluginInstanceId,
 };
 
 impl PluginConfig {

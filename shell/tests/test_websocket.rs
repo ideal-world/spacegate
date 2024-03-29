@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use serde_json::json;
-use spacegate_config::model::{BackendHost, SgBackendRef, SgGateway, SgHttpPathMatch, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule, SgListener, PluginConfig};
+use spacegate_config::model::{BackendHost, PluginConfig, SgBackendRef, SgGateway, SgHttpPathMatch, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule, SgListener};
 use spacegate_kernel::BoxError;
 use spacegate_plugin::{plugins::*, SgPluginRepository};
 use spacegate_shell::ctrl_c_cancel_token;
