@@ -12,7 +12,7 @@ use crate::{
         http_spaceroute::HttpSpaceroute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
     },
-    model::{gateway, http_route, SgGateway, SgHttpRoute, PluginConfig},
+    model::{gateway, http_route, PluginConfig, SgGateway, SgHttpRoute},
     service::backend::k8s::K8s,
     BoxError, BoxResult,
 };

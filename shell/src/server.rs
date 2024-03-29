@@ -7,7 +7,7 @@ use std::{
 use crate::config::{
     matches_convert::convert_config_to_kernel,
     plugin_filter_dto::{global_batch_mount_plugin, global_batch_update_plugin},
-    SgProtocolConfig, PluginConfig, SgTlsMode,
+    PluginConfig, SgProtocolConfig, SgTlsMode,
 };
 
 use lazy_static::lazy_static;
