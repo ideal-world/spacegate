@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use spacegate_config::model::SgBackendProtocol;
 use spacegate_shell::config::BackendHost;
-use spacegate_shell::config::{SgBackendRef, SgGateway, SgHttpRoute, SgHttpRouteRule, SgListener, PluginConfig};
+use spacegate_shell::config::{PluginConfig, SgBackendRef, SgGateway, SgHttpRoute, SgHttpRouteRule, SgListener};
 
 use spacegate_kernel::helper_layers::filter::Filter;
 use spacegate_kernel::SgResponseExt;
