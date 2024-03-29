@@ -195,7 +195,6 @@ crate::schema!(MaintenancePlugin, MaintenancePluginConfig);
 #[cfg(test)]
 mod test {
 
-    use hyper::service::Service;
     use hyper::StatusCode;
     use hyper::{Method, Request, Version};
     use serde_json::json;

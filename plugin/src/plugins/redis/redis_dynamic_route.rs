@@ -10,7 +10,7 @@ use hyper::http;
 use hyper::{header::HeaderName, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_ext_redis::redis::AsyncCommands;
-use spacegate_kernel::{extension::MatchedSgRouter, helper_layers::async_filter::AsyncFilter, BoxError, SgBody, SgRequestExt};
+use spacegate_kernel::{extension::MatchedSgRouter, BoxError, SgBody, SgRequestExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

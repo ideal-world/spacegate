@@ -18,8 +18,8 @@ pub use serde_json;
 pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
 pub use spacegate_kernel::SgBoxLayer;
-use spacegate_kernel::{helper_layers::function::Inner, BoxResult, SgBody};
-
+use spacegate_kernel::{BoxResult, SgBody};
+pub use spacegate_kernel::helper_layers::function::Inner;
 pub use spacegate_kernel::BoxError;
 pub mod error;
 pub mod model;
@@ -41,7 +41,7 @@ pub trait Plugin: Any + Sized + Send + Sync {
         PluginMetaData::default()
     }
     fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Result<Response<SgBody>, BoxError>> + Send;
-    fn create(config: PluginConfig) -> Result<Self, BoxError>;
+    fn create(plugin_config: PluginConfig) -> Result<Self, BoxError>;
     fn create_by_spec(spec: JsonValue, name: Option<String>) -> Result<Self, BoxError> {
         Self::create(PluginConfig {
             code: Self::CODE.into(),

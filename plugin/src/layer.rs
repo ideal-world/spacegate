@@ -8,10 +8,10 @@ use spacegate_kernel::{
     SgBody,
 };
 
-use crate::instance::PluginInstanceId;
-pub struct InstanceRef {
-    id: PluginInstanceId,
-}
+// use crate::instance::PluginInstanceId;
+// pub struct InstanceRef {
+//     id: PluginInstanceId,
+// }
 
 #[derive(Clone)]
 pub struct PluginFunction {

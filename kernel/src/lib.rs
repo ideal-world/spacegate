@@ -14,7 +14,6 @@ pub mod utils;
 pub use body::SgBody;
 use extension::Reflect;
 pub use extractor::Extractor;
-use helper_layers::response_error::ErrorFormatter;
 pub use service::ArcHyperService;
 use std::{convert::Infallible, fmt};
 pub use tower_layer::Layer;
@@ -80,12 +79,6 @@ pub trait SgResponseExt {
     {
         let message = e.to_string();
         Self::with_code_message(StatusCode::BAD_GATEWAY, message)
-    }
-    fn from_error<E: std::error::Error, F: ErrorFormatter>(e: E, formatter: &F) -> Self
-    where
-        Self: Sized,
-    {
-        Self::with_code_message(StatusCode::INTERNAL_SERVER_ERROR, formatter.format(&e))
     }
 }
 

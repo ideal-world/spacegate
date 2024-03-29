@@ -84,10 +84,5 @@ struct Filter {
     pub remove: Vec<HeaderName>,
 }
 
-pub struct HeaderModifierLayer {
-    request: Arc<Filter>,
-    response: Arc<Filter>,
-}
-
 #[cfg(feature = "schema")]
 crate::schema!(HeaderModifierPlugin, SgFilterHeaderModifier);

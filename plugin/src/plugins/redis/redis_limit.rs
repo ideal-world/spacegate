@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use spacegate_ext_redis::{global_repo, redis::Script};
 use spacegate_kernel::{
     extension::{GatewayName, MatchedSgRouter},
-    helper_layers::function::{FnLayerMethod, Inner},
+    helper_layers::function::Inner,
     BoxError, SgBody,
 };
 
@@ -75,7 +75,6 @@ mod test {
     use super::*;
     use crate::Plugin;
     use hyper::header::AUTHORIZATION;
-    use hyper::service::HttpService;
     use serde_json::json;
     use spacegate_ext_redis::redis::AsyncCommands;
     use spacegate_kernel::{
