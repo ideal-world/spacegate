@@ -20,7 +20,7 @@ path = "src/lib.rs"
 ext-redis = ["spacegate-ext-redis", "spacegate-plugin/redis"]
 ext-axum = ["spacegate-ext-axum", "spacegate-plugin/axum"]
 cache = ["spacegate-plugin/cache", "deadpool-redis", "spacegate-ext-redis"]
-file = []
+fs = ["spacegate-config/fs"]
 k8s = [
   "kube",
   "k8s-openapi",

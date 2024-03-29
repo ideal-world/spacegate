@@ -40,7 +40,7 @@ pub mod server;
 #[cfg(feature = "ext-redis")]
 pub use spacegate_ext_redis;
 
-#[cfg(feature = "file")]
+#[cfg(feature = "fs")]
 pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
     use spacegate_config::service::{backend::fs::Fs, config_format::Json};
     let config = Fs::new(conf_path, Json::default());

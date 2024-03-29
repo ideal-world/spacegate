@@ -29,7 +29,7 @@ static-openssl=["openssl/vendored"]
 
 [dependencies]
 spacegate-shell = { path = "../../shell", features = [
-    "file",
+    "fs",
     "ext-axum",
     "plugin-all",
 ] }
