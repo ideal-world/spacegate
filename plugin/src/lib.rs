@@ -19,8 +19,8 @@ pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
 pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
 pub use spacegate_kernel::helper_layers::function::Inner;
 pub use spacegate_kernel::BoxError;
+use spacegate_kernel::SgBody;
 pub use spacegate_kernel::SgBoxLayer;
-use spacegate_kernel::{BoxResult, SgBody};
 pub mod error;
 pub mod model;
 pub mod mount;
@@ -186,10 +186,6 @@ pub trait PluginSchemaExt {
     fn schema() -> schemars::schema::RootSchema;
 }
 
-pub trait MakeSgLayer {
-    fn make_layer(&self) -> BoxResult<SgBoxLayer>;
-}
-
 type BoxMakePfMethod = Box<dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static>;
 type _BoxDestructFn = Box<dyn Fn(PluginInstance) -> Result<(), BoxError> + Send + Sync + 'static>;
 #[derive(Default, Clone)]
@@ -344,58 +340,6 @@ impl SgPluginRepository {
         // self.instances.map
     }
 }
-
-/// # Generate plugin definition
-/// ## Concept Note
-/// ### Plugin definition
-/// Plugin definitions are used to register
-///
-/// ## Parameter Description
-/// ### code
-/// Defines a unique code for a plugins, used to specify this code in
-/// the configuration to use this plug-in
-/// ### def
-/// The recommended naming convention is `{filter_type}Def`
-/// ### filter_type
-/// Actual struct of Filter
-// #[macro_export]
-// macro_rules! def_plugin {
-//     ($CODE:literal, $def:ident, $config:ty $(;$($rest: tt)*)?) => {
-//         pub const CODE: &str = $CODE;
-
-//         #[derive(Debug, Copy, Clone)]
-//         pub struct $def;
-
-//         impl $crate::Plugin for $def {
-//             const CODE: &'static str = CODE;
-//             fn create(config: $crate::PluginConfig) -> Result<Self, $crate::BoxError> {
-//                 let config: $config = $crate::serde_json::from_value(config.spec.clone())?;
-//                 Self::try_from(config)?;
-//             }
-//             $($crate::def_plugin!(@attr $($rest)*);)?
-//         }
-//     };
-//     // finished
-//     (@attr) => {};
-//     (@attr $(#[$meta:meta])* mono = $mono: literal; $($rest: tt)*) => {
-//         const MONO: bool = $mono;
-//         $crate::def_plugin!(@attr $($rest)*);
-//     };
-//     (@attr $(#[$meta:meta])* meta = $metadata: expr; $($rest: tt)*) => {
-//         fn meta() -> $crate::PluginMetaData {
-//             $metadata
-//         }
-//         $crate::def_plugin!(@attr $($rest)*);
-//     };
-//     // enable when schema feature is enabled
-//     (@attr $(#[$meta:meta])* schema; $($rest: tt)*) => {
-//         $(#[$meta])*
-//         fn schema_opt() -> Option<$crate::schemars::schema::RootSchema> {
-//             Some(<Self as $crate::PluginSchemaExt>::schema())
-//         }
-//         $crate::def_plugin!(@attr $($rest)*);
-//     };
-// }
 
 #[cfg(feature = "schema")]
 #[macro_export]
