@@ -17,21 +17,20 @@ name = "spacegate_config"
 path = "src/lib.rs"
 
 [features]
-default = ["full"]
-full = ["file", "redis", "k8s", "typegen", "service"]
-service = []
+default = []
+full = ["file", "redis", "k8s"]
 file = ["notify"]
 redis = ["dep:redis", "deadpool-redis", "lru"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars"]
+k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "spacegate-model/k8s"]
 typegen = ["ts-rs"]
 [dependencies]
 ts-rs = { version = "7.1", optional = true }
 serde_regex = { workspace = true }
 regex = { workspace = true }
+spacegate-model = { path = "../model" }
 tokio = { workspace = true, features = ["fs"] }
 serde.workspace = true
 serde_json.workspace = true
-
 tracing = { workspace = true }
 futures-util = { workspace = true }
 hyper.workspace = true

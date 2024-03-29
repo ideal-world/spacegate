@@ -7,8 +7,11 @@ use kube::api::ObjectMeta;
 
 use crate::{
     constants,
-    k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef, SgFilterTargetKind},
-    model::{helper_filter::SgSingeFilter, SgGateway, SgParameters},
+    ext::k8s::{
+        crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef, SgFilterTargetKind},
+        helper_filter::SgSingeFilter,
+    },
+    SgGateway, SgParameters,
 };
 
 impl SgGateway {
@@ -35,8 +38,8 @@ impl SgGateway {
                         port: l.port,
                         protocol: l.protocol.to_string(),
                         tls: match l.protocol {
-                            crate::model::SgProtocolConfig::Http => None,
-                            crate::model::SgProtocolConfig::Https { tls } => {
+                            crate::SgProtocolConfig::Http => None,
+                            crate::SgProtocolConfig::Https { tls } => {
                                 let current_time_utc = Utc::now().timestamp();
                                 let name = tls.key[..2].to_string() + &current_time_utc.to_string();
                                 secret = Some(Secret {
@@ -73,7 +76,7 @@ impl SgGateway {
         };
 
         let sgfilters: Vec<SgSingeFilter> = self
-            .filters
+            .plugins
             .into_iter()
             .map(|f| SgSingeFilter {
                 name: f.name,
@@ -97,7 +100,7 @@ impl SgGateway {
 }
 
 impl SgParameters {
-    pub(crate) fn into_kube_gateway(self) -> BTreeMap<String, String> {
+    pub fn into_kube_gateway(self) -> BTreeMap<String, String> {
         let mut ann = BTreeMap::new();
         if let Some(redis_url) = self.redis_url {
             ann.insert(crate::constants::GATEWAY_ANNOTATION_REDIS_URL.to_string(), redis_url);
@@ -117,7 +120,7 @@ impl SgParameters {
         ann
     }
 
-    pub(crate) fn from_kube_gateway(gateway: &Gateway) -> Self {
+    pub fn from_kube_gateway(gateway: &Gateway) -> Self {
         let gateway_annotations = gateway.metadata.annotations.clone();
         if let Some(gateway_annotations) = gateway_annotations {
             SgParameters {

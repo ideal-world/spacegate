@@ -12,7 +12,7 @@ use crate::{
         http_spaceroute::HttpSpaceroute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
     },
-    model::{gateway, http_route, SgGateway, SgHttpRoute, SgRouteFilter},
+    model::{gateway, http_route, SgGateway, SgHttpRoute, PluginConfig},
     service::backend::k8s::K8s,
     BoxError, BoxResult,
 };
@@ -163,7 +163,7 @@ impl K8s {
         Ok(SgHttpRoute {
             gateway_name: gateway_refs.first().map(|x| x.name.clone()).unwrap_or_default(),
             hostnames: httpspace_route.spec.hostnames.clone(),
-            filters,
+            plugins,
             rules: httpspace_route
                 .spec
                 .rules
@@ -178,13 +178,13 @@ impl K8s {
         self.kube_httpspaceroute_2_sg_route(http_route.into()).await
     }
 
-    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<SgRouteFilter>> {
+    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<PluginConfig>> {
         let kind = target.kind;
         let name = target.name;
         let namespace = target.namespace.unwrap_or(self.namespace.to_string());
 
         let filter_api: Api<SgFilter> = self.get_all_api();
-        let filter_objs: Vec<SgRouteFilter> = filter_api
+        let filter_objs: Vec<PluginConfig> = filter_api
             .list(&ListParams::default())
             .await
             .map_err(Box::new)?
@@ -197,7 +197,7 @@ impl K8s {
                 })
             })
             .flat_map(|filter_obj| {
-                filter_obj.spec.filters.into_iter().map(|filter| SgRouteFilter {
+                filter_obj.spec.filters.into_iter().map(|filter| PluginConfig {
                     code: filter.code,
                     name: filter.name,
                     spec: filter.config,

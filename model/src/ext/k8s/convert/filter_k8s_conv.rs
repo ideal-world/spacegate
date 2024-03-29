@@ -4,19 +4,20 @@ use k8s_gateway_api::{HttpHeader, HttpPathModifier, HttpRequestHeaderFilter, Htt
 
 use crate::{
     constants,
-    k8s_crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef},
-    model::{
+    ext::k8s::{
+        crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef},
+        helper_filter::SgSingeFilter,
+    },
+    plugin::{
         gatewayapi_support_filter::{
             SgFilterHeaderModifier, SgFilterHeaderModifierKind, SgFilterRedirect, SgFilterRewrite, SgHttpPathModifier, SgHttpPathModifierType, SG_FILTER_HEADER_MODIFIER_CODE,
             SG_FILTER_REDIRECT_CODE, SG_FILTER_REWRITE_CODE,
         },
-        helper_filter::SgSingeFilter,
-        SgRouteFilter,
-    },
-    BoxResult,
+        PluginConfig,
+    }, BoxResult, PluginInstanceId,
 };
 
-impl SgRouteFilter {
+impl PluginConfig {
     /// # to_singe_filter
     /// `to_single_filter` method and [SgRouteFilter::to_http_route_filter] method both convert from
     /// `SgRouteFilter`to the k8s model. The difference lies in that `to_single_filter` only includes
@@ -91,8 +92,8 @@ impl SgRouteFilter {
         }
     }
 
-    pub(crate) fn from_http_route_filter(route_filter: HttpRouteFilter) -> BoxResult<SgRouteFilter> {
-        let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> BoxResult<SgRouteFilter> {
+    pub(crate) fn from_http_route_filter(route_filter: HttpRouteFilter) -> BoxResult<PluginConfig> {
+        let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> BoxResult<PluginConfig> {
             let mut sg_sets = HashMap::new();
             if let Some(adds) = header_modifier.add {
                 for add in adds {
@@ -105,7 +106,7 @@ impl SgRouteFilter {
                 }
             }
 
-            Ok(SgRouteFilter {
+            Ok(PluginConfig {
                 code: SG_FILTER_HEADER_MODIFIER_CODE.to_string(),
                 name: None,
                 spec: serde_json::to_value(SgFilterHeaderModifier {
@@ -122,7 +123,7 @@ impl SgRouteFilter {
             k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
                 process_header_modifier(response_header_modifier, SgFilterHeaderModifierKind::Response)?
             }
-            k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => SgRouteFilter {
+            k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => PluginConfig {
                 code: SG_FILTER_REDIRECT_CODE.to_string(),
                 name: None,
                 spec: serde_json::to_value(SgFilterRedirect {
@@ -142,7 +143,7 @@ impl SgRouteFilter {
                     status_code: request_redirect.status_code,
                 })?,
             },
-            k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => SgRouteFilter {
+            k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => PluginConfig {
                 code: SG_FILTER_REWRITE_CODE.to_string(),
                 name: None,
                 spec: serde_json::to_value(SgFilterRewrite {
