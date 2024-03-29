@@ -70,7 +70,7 @@ pub struct SgBackendRef {
     /// Weight is not a percentage and the sum of weights does not need to equal 100.
     pub weight: u16,
     /// plugins define the filters that are applied to backend that match this hostnames.
-    /// 
+    ///
     /// # Notice!
     /// this field is ordered, the first plugin will be the outermost plugin.
     #[serde(alias = "filters")]

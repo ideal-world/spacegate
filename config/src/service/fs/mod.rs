@@ -10,9 +10,8 @@ use crate::service::config_format::ConfigFormat;
 pub const GATEWAY_SUFFIX: &str = "gateway";
 pub const ROUTES_SUFFIX: &str = "routes";
 
-
 /// # Filesystem Configuration Backend
-/// 
+///
 /// ## Structure
 /// ``` no_rust
 /// |- config.json
@@ -22,7 +21,7 @@ pub const ROUTES_SUFFIX: &str = "routes";
 /// |- gateway_name.routes/
 /// |  |- route_name_1.json
 /// |  |- route_name_2.json
-/// 
+///
 /// ```
 #[derive(Debug, Clone)]
 pub struct Fs<F> {
