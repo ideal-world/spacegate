@@ -2,7 +2,7 @@ use std::{fmt::Display, net::IpAddr};
 
 use serde::{Deserialize, Serialize};
 
-use super::filter::SgRouteFilter;
+use super::plugin::{PluginConfig, PluginInstanceId};
 
 /// Gateway represents an instance of a service-traffic handling infrastructure
 /// by binding Listeners to a set of IP addresses.
@@ -19,7 +19,8 @@ pub struct SgGateway {
     /// Listeners associated with this Gateway. Listeners define logical endpoints that are bound on this Gateway’s addresses.
     pub listeners: Vec<SgListener>,
     /// Filters define the filters that are applied to requests that match this gateway.
-    pub filters: Vec<SgRouteFilter>,
+    #[serde(alias = "filters")]
+    pub plugins: Vec<PluginInstanceId>,
 }
 
 /// Gateway parameter configuration.

@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 pub mod constants;
 #[cfg(feature = "k8s")]
 pub mod k8s_crd;
-#[cfg(feature = "service")]
 pub mod service;
 
 pub mod model;
@@ -23,7 +22,7 @@ pub struct ConfigItem {
 }
 
 impl ConfigItem {
-    pub fn collect_all_plugins(&self) -> Vec<crate::model::SgRouteFilter> {
+    pub fn collect_all_plugins(&self) -> Vec<crate::model::PluginConfig> {
         let mut plugins = Vec::new();
         plugins.extend(self.gateway.filters.iter().cloned());
         for route in self.routes.values() {

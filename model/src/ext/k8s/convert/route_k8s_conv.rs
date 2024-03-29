@@ -7,15 +7,15 @@ use kube::api::ObjectMeta;
 
 use crate::{
     constants,
-    k8s_crd::{
-        http_spaceroute::{self, BackendRef, HttpBackendRef, HttpRouteRule, HttpSpaceroute, HttpSpacerouteSpec},
-        sg_filter::K8sSgFilterSpecTargetRef,
+    ext::k8s::{
+        crd::{
+            http_spaceroute::{self, BackendRef, HttpBackendRef, HttpRouteRule, HttpSpaceroute, HttpSpacerouteSpec},
+            sg_filter::K8sSgFilterSpecTargetRef,
+        },
+        helper_filter::SgSingeFilter,
     },
-    model::{
-        gateway, helper_filter::SgSingeFilter, http_route, BackendHost, K8sServiceData, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch,
-        SgHttpRouteRule, SgRouteFilter,
-    },
-    BoxResult,
+    gateway, http_route, BackendHost, BoxResult, K8sServiceData, PluginConfig, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch,
+    SgHttpRouteRule,
 };
 
 impl SgHttpRoute {
@@ -37,7 +37,7 @@ impl SgHttpRoute {
             .iter()
             .flat_map(|r| {
                 let mut route_filters_vec = r
-                    .filters
+                    .plugins
                     .clone()
                     .into_iter()
                     .filter_map(|f| {
@@ -53,7 +53,7 @@ impl SgHttpRoute {
                     .backends
                     .iter()
                     .flat_map(|b| {
-                        b.filters
+                        b.plugins
                             .iter()
                             .filter_map(|b_f| {
                                 b_f.clone().to_singe_filter(K8sSgFilterSpecTargetRef {
@@ -73,14 +73,10 @@ impl SgHttpRoute {
 
         sgfilters.append(
             &mut self
-                .filters
+                .plugins
                 .into_iter()
                 .filter_map(|f| {
-                    f.to_singe_filter(K8sSgFilterSpecTargetRef {
-                        kind: self_kind.to_string(),
-                        name: name.to_string(),
-                        namespace: Some(namespace.to_string()),
-                    })
+                    todo!("convert")
                 })
                 .collect::<Vec<_>>(),
         );
@@ -120,7 +116,7 @@ impl SgHttpRouteRule {
     pub(crate) fn into_kube_httproute(self) -> HttpRouteRule {
         HttpRouteRule {
             matches: self.matches.map(|m_vec| m_vec.into_iter().flat_map(|m| m.into_kube_httproute()).collect::<Vec<_>>()),
-            filters: Some(self.filters.into_iter().filter_map(|f| f.to_http_route_filter()).collect::<Vec<_>>()),
+            filters: Some(self.plugins.into_iter().filter_map(|f| f.to_http_route_filter()).collect::<Vec<_>>()),
             backend_refs: Some(self.backends.into_iter().map(|b| b.into_kube_httproute()).collect::<Vec<_>>()),
             timeout_ms: self.timeout_ms,
         }
@@ -129,7 +125,7 @@ impl SgHttpRouteRule {
     pub(crate) fn from_kube_httproute(rule: http_spaceroute::HttpRouteRule) -> BoxResult<SgHttpRouteRule> {
         Ok(SgHttpRouteRule {
             matches: rule.matches.map(|m_vec| m_vec.into_iter().map(SgHttpRouteMatch::from_kube_httproute).collect::<Vec<_>>()),
-            filters: rule.filters.map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<BoxResult<Vec<_>>>()).transpose()?.unwrap_or_default(),
+            plugins: rule.filters.map(|f_vec| f_vec.into_iter().map(PluginConfig::from_http_route_filter).collect::<BoxResult<Vec<_>>>()).transpose()?.unwrap_or_default(),
             backends: rule
                 .backend_refs
                 .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<BoxResult<Vec<_>>>())
@@ -252,7 +248,7 @@ impl SgBackendRef {
                 timeout_ms: self.timeout_ms,
                 inner: backend_inner_ref,
             }),
-            filters: Some(self.filters.into_iter().filter_map(|f| f.to_http_route_filter()).collect()),
+            filters: Some(self.plugins.into_iter().filter_map(|f| f.to_http_route_filter()).collect()),
         }
     }
 
@@ -288,9 +284,9 @@ impl SgBackendRef {
                     timeout_ms: backend.timeout_ms,
                     protocol,
                     weight: backend.weight.unwrap_or(1),
-                    filters: http_backend
+                    plugins: http_backend
                         .filters
-                        .map(|f_vec| f_vec.into_iter().map(SgRouteFilter::from_http_route_filter).collect::<BoxResult<Vec<SgRouteFilter>>>())
+                        .map(|f_vec| f_vec.into_iter().map(PluginConfig::from_http_route_filter).collect::<BoxResult<Vec<PluginConfig>>>())
                         .transpose()?
                         .unwrap_or_default(),
                 })
