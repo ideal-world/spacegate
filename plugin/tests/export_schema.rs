@@ -1,4 +1,4 @@
-use spacegate_plugin::{plugins, Plugin, PluginSchemaExt};
+use spacegate_plugin::{ext::redis::plugins as redis_plugins, plugins, Plugin, PluginSchemaExt};
 use tardis::serde_json;
 
 fn export_plugin<P: PluginSchemaExt + Plugin>(dir: std::path::PathBuf) {
@@ -25,11 +25,11 @@ fn export_schema() {
         limit::RateLimitPlugin,
         maintenance::MaintenancePlugin,
         redirect::RedirectPlugin,
-        redis::{redis_count::RedisCountPlugin, redis_dynamic_route::RedisDynamicRoutePlugin, redis_limit::RedisLimitPlugin, redis_time_range::RedisTimeRangePlugin},
         // retry::RetryPlugin,
         rewrite::RewritePlugin,
         static_resource::StaticResourcePlugin,
     };
+    use redis_plugins::{redis_count::RedisCountPlugin, redis_dynamic_route::RedisDynamicRoutePlugin, redis_limit::RedisLimitPlugin, redis_time_range::RedisTimeRangePlugin};
     export_plugins!("schema":
         HeaderModifierPlugin
         InjectPlugin
