@@ -1,7 +1,7 @@
 pub use super::route_match::*;
 use serde::{Deserialize, Serialize};
 
-use super::{gateway::SgBackendProtocol, plugin::PluginConfig, PluginInstanceId};
+use super::{gateway::SgBackendProtocol, PluginInstanceId};
 
 /// HTTPRoute provides a way to route HTTP requests.
 ///
@@ -70,6 +70,9 @@ pub struct SgBackendRef {
     /// Weight is not a percentage and the sum of weights does not need to equal 100.
     pub weight: u16,
     /// plugins define the filters that are applied to backend that match this hostnames.
+    /// 
+    /// # Notice!
+    /// this field is ordered, the first plugin will be the outermost plugin.
     #[serde(alias = "filters")]
     pub plugins: Vec<PluginInstanceId>,
 }

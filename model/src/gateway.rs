@@ -2,7 +2,7 @@ use std::{fmt::Display, net::IpAddr};
 
 use serde::{Deserialize, Serialize};
 
-use super::plugin::{PluginConfig, PluginInstanceId};
+use super::plugin::PluginInstanceId;
 
 /// Gateway represents an instance of a service-traffic handling infrastructure
 /// by binding Listeners to a set of IP addresses.
