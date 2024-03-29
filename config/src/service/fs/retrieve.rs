@@ -1,20 +1,21 @@
 use std::ffi::OsStr;
 
+use spacegate_model::PluginInstanceMap;
 use tokio::fs;
 
-use crate::service::backend::fs::{Fs, GATEWAY_SUFFIX};
+use super::{Fs, GATEWAY_SUFFIX};
 use crate::service::config_format::ConfigFormat;
 use crate::BoxError;
 use crate::{model::gateway::SgGateway, model::http_route::SgHttpRoute};
 
-use super::Retrieve;
+use crate::service::Retrieve;
 
 impl<F> Retrieve for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
 {
     async fn retrieve_all_plugins(&self) -> Result<PluginInstanceMap, BoxError> {
-        let mut plugins = PluginInstanceMap::new();
+        let mut plugins = PluginInstanceMap::default();
         let mut entries = fs::read_dir(&self.plugins_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             let file_name = entry.path();

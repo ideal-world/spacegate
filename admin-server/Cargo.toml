@@ -28,7 +28,7 @@ default = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-spacegate-config = { path = "../config", features = ["full"] }
+spacegate-config = { path = "../config", features = [] }
 axum = "0.7.4"
 tower = { version = "0.4" }
 tokio = { workspace = true, features = ["full"] }
