@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use serde_json::json;
-use spacegate_config::model::{BackendHost, SgBackendRef, SgGateway, SgHttpPathMatch, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule, SgListener, SgRouteFilter};
+use spacegate_config::model::{BackendHost, SgBackendRef, SgGateway, SgHttpPathMatch, SgHttpRoute, SgHttpRouteMatch, SgHttpRouteRule, SgListener, PluginConfig};
 use spacegate_kernel::BoxError;
 use spacegate_plugin::{plugins::*, SgPluginRepository};
 use spacegate_shell::ctrl_c_cancel_token;
@@ -72,7 +72,7 @@ async fn test_webscoket() -> Result<(), BoxError> {
                         path: Some(SgHttpPathMatch::Prefix("/".into())),
                         ..Default::default()
                     }]),
-                    filters: vec![SgRouteFilter {
+                    filters: vec![PluginConfig {
                         code: "rewrite".to_string(),
                         name: None,
                         spec: TardisFuns::json.obj_to_json(&rewrite::SgFilterRewriteConfig {

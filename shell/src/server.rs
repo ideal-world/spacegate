@@ -7,7 +7,7 @@ use std::{
 use crate::config::{
     matches_convert::convert_config_to_kernel,
     plugin_filter_dto::{global_batch_mount_plugin, global_batch_update_plugin},
-    SgProtocolConfig, SgRouteFilter, SgTlsMode,
+    SgProtocolConfig, PluginConfig, SgTlsMode,
 };
 
 use lazy_static::lazy_static;
@@ -121,7 +121,7 @@ fn collect_http_route(
 /// Create a gateway service from plugins and http_routes
 pub(crate) fn create_service(
     gateway_name: &str,
-    plugins: Vec<SgRouteFilter>,
+    plugins: Vec<PluginConfig>,
     http_routes: BTreeMap<String, crate::SgHttpRoute>,
     reloader: Reloader<SgGatewayRoute>,
 ) -> Result<ArcHyperService, BoxError> {

@@ -1,7 +1,7 @@
 pub use super::route_match::*;
 use serde::{Deserialize, Serialize};
 
-use super::{filter::SgRouteFilter, gateway::SgBackendProtocol};
+use super::{gateway::SgBackendProtocol, plugin::PluginConfig, PluginInstanceId};
 
 /// HTTPRoute provides a way to route HTTP requests.
 ///
@@ -15,7 +15,8 @@ pub struct SgHttpRoute {
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
     /// Filters define the filters that are applied to requests that match this hostnames.
-    pub filters: Vec<SgRouteFilter>,
+    #[serde(alias = "filters")]
+    pub plugins: Vec<PluginInstanceId>,
     /// Rules are a list of HTTP matchers, filters and actions.
     pub rules: Vec<SgHttpRouteRule>,
     /// Rule priority, the rule of higher priority will be chosen.
@@ -27,7 +28,7 @@ impl Default for SgHttpRoute {
         Self {
             gateway_name: Default::default(),
             hostnames: Default::default(),
-            filters: Default::default(),
+            plugins: Default::default(),
             rules: Default::default(),
             priority: 1,
         }
@@ -42,7 +43,8 @@ pub struct SgHttpRouteRule {
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,
     /// Filters define the filters that are applied to requests that match this rule.
-    pub filters: Vec<SgRouteFilter>,
+    #[serde(alias = "filters")]
+    pub plugins: Vec<PluginInstanceId>,
     /// BackendRefs defines the backend(s) where matching requests should be sent.
     pub backends: Vec<SgBackendRef>,
     /// Timeout define the timeout for requests that match this rule.
@@ -67,8 +69,9 @@ pub struct SgBackendRef {
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
     /// Weight is not a percentage and the sum of weights does not need to equal 100.
     pub weight: u16,
-    /// Filters define the filters that are applied to backend that match this hostnames.
-    pub filters: Vec<SgRouteFilter>,
+    /// plugins define the filters that are applied to backend that match this hostnames.
+    #[serde(alias = "filters")]
+    pub plugins: Vec<PluginInstanceId>,
 }
 
 impl Default for SgBackendRef {
@@ -79,7 +82,7 @@ impl Default for SgBackendRef {
             timeout_ms: Default::default(),
             protocol: Default::default(),
             weight: 1,
-            filters: Default::default(),
+            plugins: Default::default(),
         }
     }
 }

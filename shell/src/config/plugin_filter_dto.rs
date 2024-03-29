@@ -1,10 +1,10 @@
-use spacegate_config::model::SgRouteFilter;
+use spacegate_config::model::PluginConfig;
 use spacegate_plugin::{
     mount::{MountPoint, MountPointIndex},
     PluginConfig, SgPluginRepository,
 };
 
-pub fn convert_filter(filter: SgRouteFilter) -> PluginConfig {
+pub fn convert_filter(filter: PluginConfig) -> PluginConfig {
     PluginConfig {
         code: filter.code.into(),
         spec: filter.spec,
@@ -12,11 +12,11 @@ pub fn convert_filter(filter: SgRouteFilter) -> PluginConfig {
     }
 }
 
-pub fn batch_convert_filter(filters: Vec<SgRouteFilter>) -> Vec<PluginConfig> {
+pub fn batch_convert_filter(filters: Vec<PluginConfig>) -> Vec<PluginConfig> {
     filters.into_iter().map(convert_filter).collect()
 }
 
-pub fn global_batch_update_plugin(filters: Vec<SgRouteFilter>) {
+pub fn global_batch_update_plugin(filters: Vec<PluginConfig>) {
     for filter in filters {
         match SgPluginRepository::global().create_or_update_instance(convert_filter(filter)) {
             Ok(_) => {}
@@ -27,11 +27,11 @@ pub fn global_batch_update_plugin(filters: Vec<SgRouteFilter>) {
     }
 }
 
-pub fn global_batch_mount_plugin<MP: MountPoint>(filters: Vec<SgRouteFilter>, mount_point: &mut MP, mount_index: MountPointIndex) {
+pub fn global_batch_mount_plugin<MP: MountPoint>(filters: Vec<PluginConfig>, mount_point: &mut MP, mount_index: MountPointIndex) {
     batch_mount_plugin(SgPluginRepository::global(), filters, mount_point, mount_index);
 }
 
-pub fn batch_mount_plugin<MP: MountPoint>(repo: &SgPluginRepository, filters: Vec<SgRouteFilter>, mount_point: &mut MP, mount_index: MountPointIndex) {
+pub fn batch_mount_plugin<MP: MountPoint>(repo: &SgPluginRepository, filters: Vec<PluginConfig>, mount_point: &mut MP, mount_index: MountPointIndex) {
     for filter in filters {
         let config = convert_filter(filter);
         if let Err(e) = repo.mount(mount_point, mount_index.clone(), config) {
