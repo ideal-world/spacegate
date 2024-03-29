@@ -8,7 +8,7 @@ use spacegate_ext_redis::{
 };
 use spacegate_kernel::{
     extension::{GatewayName, MatchedSgRouter},
-    helper_layers::function::{FnLayerMethod, Inner},
+    helper_layers::function::Inner,
     BoxError, SgBody,
 };
 use tracing::debug;
@@ -92,7 +92,6 @@ crate::schema!(RedisTimeRangePlugin, RedisTimeRangeConfig);
 mod test {
     use super::*;
     use hyper::header::AUTHORIZATION;
-    use hyper::service::HttpService;
     use serde_json::json;
     use spacegate_kernel::{
         layers::http_route::match_request::{SgHttpMethodMatch, SgHttpPathMatch, SgHttpRouteMatch},

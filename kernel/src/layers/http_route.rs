@@ -1,7 +1,6 @@
 pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
-mod predicate;
 use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use crate::{
