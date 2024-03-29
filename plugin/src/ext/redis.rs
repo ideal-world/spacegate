@@ -1,3 +1,5 @@
+pub mod plugins;
+
 use crate::instance::PluginInstanceId;
 
 impl PluginInstanceId {

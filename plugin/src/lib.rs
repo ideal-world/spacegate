@@ -82,7 +82,7 @@ pub struct PluginRepoSnapshot {
     pub mono: bool,
     pub code: Cow<'static, str>,
     pub meta: PluginMetaData,
-    pub instances: HashMap<PluginInstanceId, PluginInstanceSnapshot>,
+    pub instances: HashMap<PluginInstanceName, PluginInstanceSnapshot>,
 }
 
 impl PluginAttributes {
@@ -231,10 +231,10 @@ impl SgPluginRepository {
         self.register::<plugins::decompression::DecompressionPlugin>();
         #[cfg(feature = "redis")]
         {
-            self.register::<plugins::redis::redis_count::RedisCountPlugin>();
-            self.register::<plugins::redis::redis_limit::RedisLimitPlugin>();
-            self.register::<plugins::redis::redis_time_range::RedisTimeRangePlugin>();
-            self.register::<plugins::redis::redis_dynamic_route::RedisDynamicRoutePlugin>();
+            self.register::<ext::redis::plugins::redis_count::RedisCountPlugin>();
+            self.register::<ext::redis::plugins::redis_limit::RedisLimitPlugin>();
+            self.register::<ext::redis::plugins::redis_time_range::RedisTimeRangePlugin>();
+            self.register::<ext::redis::plugins::redis_dynamic_route::RedisDynamicRoutePlugin>();
         }
     }
 
@@ -325,7 +325,7 @@ impl SgPluginRepository {
             .iter()
             .map(|(code, attr)| {
                 let instances = self.instances.read().expect("SgPluginRepository register error");
-                let instances = instances.iter().filter_map(|(id, instance)| if &id.code == code { Some((id.clone(), instance.snapshot())) } else { None }).collect();
+                let instances = instances.iter().filter_map(|(id, instance)| if &id.code == code { Some((id.name.clone(), instance.snapshot())) } else { None }).collect();
                 (
                     code.clone(),
                     PluginRepoSnapshot {
