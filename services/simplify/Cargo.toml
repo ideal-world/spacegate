@@ -23,9 +23,9 @@ rpath = false
 strip = true
 
 [features]
-default=[]
+default = []
 # Used to statically link openssl at compile time
-static-openssl=["openssl/vendored"]
+static-openssl = ["openssl/vendored"]
 
 [dependencies]
 spacegate-shell = { path = "../../shell", features = [
@@ -33,10 +33,11 @@ spacegate-shell = { path = "../../shell", features = [
     "ext-axum",
     "plugin-all",
 ] }
-openssl = {version = "0.10"}
+openssl = { version = "0.10" }
 # tardis = { workspace = true, features = ["console-subscriber"] }
 # tardis = { workspace = true }
-tokio ={ version = "1", features = ["full"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tokio = { version = "1", features = ["full"] }
 [dev-dependencies]
 
 [package.metadata.docs.rs]
