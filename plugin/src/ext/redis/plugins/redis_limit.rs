@@ -29,8 +29,8 @@ impl Plugin for RedisLimitPlugin {
     const CODE: &'static str = "redis-limit";
 
     fn create(config: PluginConfig) -> Result<Self, BoxError> {
-        let id = config.none_mono_id();
-        let layer_config = serde_json::from_value::<RedisLimitConfig>(config.spec.clone())?;
+        let id = config.id;
+        let layer_config = serde_json::from_value::<RedisLimitConfig>(config.spec)?;
         Ok(Self {
             prefix: id.redis_prefix(),
             header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
@@ -101,7 +101,7 @@ mod test {
                     "header": AUTHORIZATION.as_str(),
                 }
             },
-            Some("test".into()),
+            spacegate_model::PluginInstanceName::named("test"),
         )
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());

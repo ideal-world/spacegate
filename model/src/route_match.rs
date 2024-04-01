@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 /// PathMatchType specifies the semantics of how HTTP paths should be compared.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", content = "value", rename_all = "PascalCase")]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub enum SgHttpPathMatch {
     /// Matches the URL path exactly and with case sensitivity.
     Exact(String),
@@ -15,7 +15,7 @@ pub enum SgHttpPathMatch {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub enum SgHttpHeaderMatch {
     /// Matches the HTTP header exactly and with case sensitivity.
     Exact { name: String, value: String },
@@ -25,7 +25,7 @@ pub enum SgHttpHeaderMatch {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub enum SgHttpQueryMatch {
     /// Matches the HTTP query parameter exactly and with case sensitivity.
     Exact { key: String, value: String },
@@ -34,7 +34,7 @@ pub enum SgHttpQueryMatch {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(transparent)]
 
 pub struct SgHttpMethodMatch(pub String);
@@ -42,7 +42,7 @@ pub struct SgHttpMethodMatch(pub String);
 /// HTTPRouteMatch defines the predicate used to match requests to a given action.
 /// Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct SgHttpRouteMatch {
     /// Path specifies a HTTP request path matcher.
     /// If this field is not specified, a default prefix match on the “/” path is provided.

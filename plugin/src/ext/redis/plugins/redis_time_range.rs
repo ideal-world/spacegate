@@ -52,8 +52,8 @@ impl Plugin for RedisTimeRangePlugin {
     const CODE: &'static str = "redis-time-range";
 
     fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
-        let instance_id = config.none_mono_id();
-        let layer_config = serde_json::from_value::<RedisTimeRangeConfig>(config.spec.clone())?;
+        let instance_id = config.id;
+        let layer_config = serde_json::from_value::<RedisTimeRangeConfig>(config.spec)?;
         Ok(RedisTimeRangePlugin {
             prefix: instance_id.redis_prefix(),
             header: HeaderName::from_bytes(layer_config.header.as_bytes())?,
@@ -117,7 +117,7 @@ mod test {
                     "header": AUTHORIZATION.as_str(),
                 }
             },
-            Some("test".into()),
+            spacegate_model::PluginInstanceName::named("test"),
         )
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());

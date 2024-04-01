@@ -18,15 +18,15 @@ path = "src/lib.rs"
 
 [features]
 cache = ["redis"]
-redis = ["spacegate-kernel/ext-redis", "spacegate-ext-redis"]
-axum = ["spacegate-ext-axum"]
+redis = ["spacegate-kernel/ext-redis", "spacegate-model/ext-redis", "spacegate-ext-redis"]
+axum = ["spacegate-ext-axum", "spacegate-model/ext-axum"]
 limit = ["cache"]
 header-modifier = []
 inject = []
 redirect = ["url"]
 retry = []
 rewrite = []
-maintenance = ["ipnet", "schemars/chrono"]
+maintenance = ["ipnet", "chrono/serde"]
 # decompression = ["tower-http/decompression-full"]
 status = ["hyper-util"]
 full = [
@@ -41,9 +41,10 @@ full = [
     # "decompression",
     "status",
 ]
-schema = ["schemars"]
+schema = ["schemars", "schemars/chrono"]
 
 [dependencies]
+spacegate-model = { path = "../model" }
 spacegate-kernel = { path = "../kernel" }
 tracing = { workspace = true }
 hyper = { workspace = true }

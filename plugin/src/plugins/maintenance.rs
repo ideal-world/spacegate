@@ -203,6 +203,7 @@ mod test {
     use spacegate_kernel::service::get_echo_service;
     use spacegate_kernel::BoxError;
     use spacegate_kernel::SgBody;
+    use spacegate_model::{PluginInstanceId, PluginInstanceName};
     use tardis::chrono::{Duration, Local};
     use tardis::serde_json;
     use tardis::tokio;
@@ -233,7 +234,7 @@ mod test {
                     "172.30.30.30"
                 ]
             }),
-            ..Default::default()
+            id: PluginInstanceId::new("maintenance", PluginInstanceName::named("test")),
         })
         .expect("invalid config");
         let inner = Inner::new(get_echo_service());

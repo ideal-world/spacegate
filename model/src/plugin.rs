@@ -13,7 +13,7 @@ use crate::BoxError;
 
 pub mod gatewayapi_support_filter;
 
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum PluginInstanceName {
@@ -27,7 +27,19 @@ pub enum PluginInstanceName {
     Mono {},
 }
 
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+impl PluginInstanceName {
+    pub fn named(name: impl Into<String>) -> Self {
+        PluginInstanceName::Named { name: name.into() }
+    }
+    pub fn mono() -> Self {
+        PluginInstanceName::Mono {}
+    }
+    pub fn anon(uid: u64) -> Self {
+        PluginInstanceName::Anon { uid }
+    }
+}
+
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct PluginInstanceId {
     pub code: Cow<'static, str>,
@@ -42,6 +54,9 @@ impl ToString for PluginInstanceId {
 }
 
 impl PluginInstanceId {
+    pub fn new(code: impl Into<Cow<'static, str>>, name: PluginInstanceName) -> Self {
+        PluginInstanceId { code: code.into(), name }
+    }
     pub fn parse_by_code(code: impl Into<Cow<'static, str>>, id: &str) -> Result<Self, BoxError> {
         let code = code.into();
         let name = id.strip_prefix(code.as_ref()).ok_or("unmatched code")?.trim_matches('-').parse()?;
@@ -87,7 +102,7 @@ impl FromStr for PluginInstanceName {
     }
 }
 
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct PluginConfig {
     #[serde(flatten)]
@@ -112,15 +127,23 @@ impl Hash for PluginConfig {
 }
 
 #[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
-
 pub struct PluginInstanceMap {
-    map: HashMap<PluginInstanceId, Value>,
+    // #[cfg_attr(feature = "typegen", ts(type = "Record<string, PluginConfig>"))]
+    plugins: HashMap<PluginInstanceId, Value>,
+}
+
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, rename = "PluginInstanceMap"))]
+pub(crate) struct PluginInstanceMapTs {
+    #[allow(dead_code)]
+    plugins: HashMap<String, PluginConfig>,
 }
 
 impl PluginInstanceMap {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(plugins: HashMap<PluginInstanceId, Value>) -> Self {
+        PluginInstanceMap { plugins }
+    }
+    pub fn into_inner(self) -> HashMap<PluginInstanceId, Value> {
+        self.plugins
     }
 }
 
@@ -128,13 +151,13 @@ impl Deref for PluginInstanceMap {
     type Target = HashMap<PluginInstanceId, Value>;
 
     fn deref(&self) -> &Self::Target {
-        &self.map
+        &self.plugins
     }
 }
 
 impl DerefMut for PluginInstanceMap {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.map
+        &mut self.plugins
     }
 }
 
@@ -143,7 +166,7 @@ impl Serialize for PluginInstanceMap {
     where
         S: serde::Serializer,
     {
-        let map = self.map.iter().map(|(k, v)| (k.to_string(), PluginConfig { id: k.clone(), spec: v.clone() })).collect::<HashMap<String, PluginConfig>>();
+        let map = self.plugins.iter().map(|(k, v)| (k.to_string(), PluginConfig { id: k.clone(), spec: v.clone() })).collect::<HashMap<String, PluginConfig>>();
         map.serialize(serializer)
     }
 }
@@ -164,14 +187,14 @@ impl<'de> Deserialize<'de> for PluginInstanceMap {
                 }
             })
             .collect();
-        Ok(PluginInstanceMap { map })
+        Ok(PluginInstanceMap { plugins: map })
     }
 }
 
 impl FromIterator<(PluginInstanceId, Value)> for PluginInstanceMap {
     fn from_iter<T: IntoIterator<Item = (PluginInstanceId, Value)>>(iter: T) -> Self {
         let map = iter.into_iter().collect();
-        PluginInstanceMap { map }
+        PluginInstanceMap { plugins: map }
     }
 }
 
