@@ -11,9 +11,7 @@ use serde::{Deserialize, Serialize};
 use spacegate_kernel::{helper_layers::function::FnLayer, BoxError, BoxResult, SgBoxLayer};
 use spacegate_model::PluginConfig;
 
-use crate::{
-    mount::{MountPoint, MountPointIndex},
-};
+use crate::mount::{MountPoint, MountPointIndex};
 
 // pub struct PluginInstanceRef {
 //     id: PluginInstanceId,
