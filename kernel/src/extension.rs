@@ -35,14 +35,14 @@ pub trait ExtensionPack: Sized {
         ext.insert::<Self>(self)
     }
 
-    fn get<'a>(&'a self, ext: &'a Extensions) -> Option<&Self>
+    fn get<'a>(ext: &'a Extensions) -> Option<&Self>
     where
         Self: Send + Sync + 'static,
     {
         ext.get::<Self>()
     }
 
-    fn get_mut<'a>(&'a self, ext: &'a mut Extensions) -> Option<&mut Self>
+    fn get_mut<'a>(ext: &'a mut Extensions) -> Option<&mut Self>
     where
         Self: Send + Sync + 'static,
     {
