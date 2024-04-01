@@ -54,12 +54,14 @@ where
     where
         M: FnOnce(&Config) -> T,
     {
-        let mut f_main_config = tokio::fs::OpenOptions::new().read(true).write(true).truncate(true).create(true).open(self.main_config_path()).await?;
+        let path = self.main_config_path();
+        let f_main_config = tokio::fs::OpenOptions::new().read(true).open(&path).await?;
         let mut g_buffer = self.buffer.lock().await;
         let mut prev_retrieve_time = self.prev_retrieve_time.write().await;
         let metadata = f_main_config.metadata().await?;
         let prev_modified_time = metadata.modified()?;
         if *prev_retrieve_time < prev_modified_time {
+            let mut f_main_config = tokio::fs::OpenOptions::new().read(true).write(true).truncate(true).create(true).open(&path).await?;
             f_main_config.read_to_end(&mut g_buffer).await?;
             let config: MainFileConfig<FsAsmPluginConfigMaybeUninitialized> = self.format.de(&g_buffer).unwrap_or_default();
             let new_config = config.initialize_uid();
