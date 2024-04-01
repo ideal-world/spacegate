@@ -30,7 +30,7 @@ impl Plugin for RedisDynamicRoutePlugin {
     fn create(config: PluginConfig) -> Result<Self, BoxError> {
         let layer_config = serde_json::from_value::<RedisDynamicRouteConfig>(config.spec.clone())?;
         Ok(Self {
-            prefix: config.none_mono_id().redis_prefix().into(),
+            prefix: config.id.redis_prefix().into(),
             header: HeaderName::from_str(&layer_config.header)?.into(),
         })
     }

@@ -11,7 +11,7 @@ use crate::config::{
 };
 
 use lazy_static::lazy_static;
-use spacegate_config::ConfigItem;
+use spacegate_config::{Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
     layers::gateway::{builder::default_gateway_route_fallback, create_http_router, SgGatewayRoute},
@@ -47,7 +47,7 @@ fn collect_http_route(
                 gateway: gateway_name.clone(),
                 route: route_name.clone(),
             };
-            let plugins = route.filters;
+            let plugins = route.plugins;
             let rules = route.rules;
             let rules = rules
                 .into_iter()
@@ -77,7 +77,7 @@ fn collect_http_route(
                             };
                             let host = backend.get_host();
                             let mut builder = spacegate_kernel::layers::http_route::SgHttpBackendLayer::builder();
-                            let plugins = backend.filters;
+                            let plugins = backend.plugins;
                             #[cfg(feature = "k8s")]
                             {
                                 use crate::extension::k8s_service::K8sService;
@@ -106,7 +106,7 @@ fn collect_http_route(
                         builder = builder.timeout(Duration::from_millis(timeout as u64));
                     }
                     let mut layer = builder.build()?;
-                    global_batch_mount_plugin(route_rule.filters, &mut layer, mount_index);
+                    global_batch_mount_plugin(route_rule.plugins, &mut layer, mount_index);
                     Result::<_, BoxError>::Ok(layer)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
@@ -121,7 +121,7 @@ fn collect_http_route(
 /// Create a gateway service from plugins and http_routes
 pub(crate) fn create_service(
     gateway_name: &str,
-    plugins: Vec<PluginConfig>,
+    plugins: Vec<PluginInstanceId>,
     http_routes: BTreeMap<String, crate::SgHttpRoute>,
     reloader: Reloader<SgGatewayRoute>,
 ) -> Result<ArcHyperService, BoxError> {
@@ -165,6 +165,34 @@ impl std::fmt::Debug for RunningSgGateway {
 
 pub static GLOBAL_STORE: OnceLock<Arc<Mutex<HashMap<String, RunningSgGateway>>>> = OnceLock::new();
 impl RunningSgGateway {
+    pub async fn global_init(config: Config, signal: CancellationToken) {
+        for (id, spec) in config.plugins.into_inner() {
+            if let Err(err) = SgPluginRepository::global().create_or_update_instance(PluginConfig { id: id.clone(), spec }) {
+                tracing::error!("[SG.Config] fail to init plugin [{id}]: {err}", id = id.to_string());
+            }
+        }
+        for (name, item) in config.gateways {
+            match RunningSgGateway::create(item, signal.clone()) {
+                Ok(inst) => RunningSgGateway::global_save(name, inst),
+                Err(e) => {
+                    tracing::error!("[SG.Config] fail to init gateway [{name}]: {e}")
+                }
+            }
+        }
+    }
+    pub async fn global_reset() {
+        let store = Self::global_store();
+        let mut store = store.lock().expect("poisoned lock");
+        let mut task = tokio::task::JoinSet::new();
+        for (_, s) in store.drain() {
+            task.spawn(s.shutdown());
+        }
+        while let Some(res) = task.join_next().await {
+            res.expect("tokio join error")
+        }
+        SgPluginRepository::global().clear_instances()
+    }
+
     pub fn global_store() -> Arc<Mutex<HashMap<String, RunningSgGateway>>> {
         GLOBAL_STORE.get_or_init(Default::default).clone()
     }
@@ -176,14 +204,12 @@ impl RunningSgGateway {
 
     pub fn global_remove(gateway_name: impl AsRef<str>) -> Option<RunningSgGateway> {
         let global_store = Self::global_store();
-        SgPluginRepository::global().clear_gateway_instances(gateway_name.as_ref());
         let mut global_store = global_store.lock().expect("poisoned lock");
         global_store.remove(gateway_name.as_ref())
     }
 
     pub async fn global_update(gateway_name: impl AsRef<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<(), BoxError> {
         let gateway_name = gateway_name.as_ref();
-        SgPluginRepository::global().clear_routes_instances(gateway_name);
         let service = create_router_service(gateway_name.to_string().into(), http_routes)?;
         let reloader = {
             let store = Self::global_store();
@@ -201,7 +227,6 @@ impl RunningSgGateway {
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config_item.gateway.name), skip_all, err)]
     pub fn create(config_item: ConfigItem, cancel_token: CancellationToken) -> Result<Self, BoxError> {
-        global_batch_update_plugin(config_item.collect_all_plugins());
         let ConfigItem { gateway, routes } = config_item;
         #[allow(unused_mut)]
         // let mut builder_ext = hyper::http::Extensions::new();
@@ -218,7 +243,7 @@ impl RunningSgGateway {
         }
         tracing::info!("[SG.Server] start gateway");
         let reloader = <Reloader<SgGatewayRoute>>::default();
-        let service = create_service(&gateway.name, gateway.filters, routes, reloader.clone())?;
+        let service = create_service(&gateway.name, gateway.plugins, routes, reloader.clone())?;
         if gateway.listeners.is_empty() {
             return Err("[SG.Server] Missing Listeners".into());
         }

@@ -3,12 +3,8 @@ use std::task::ready;
 use notify::{Event, Watcher};
 
 use super::Fs;
-use crate::service::{ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent};
-use crate::{
-    model::Config,
-    service::{config_format::ConfigFormat, Retrieve},
-    BoxError,
-};
+use crate::service::{ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve};
+use crate::{model::Config, service::config_format::ConfigFormat, BoxError};
 pub struct FsListener {
     // hold the watcher, prevent dropping
     _watcher: notify::RecommendedWatcher,
@@ -32,7 +28,7 @@ impl FsListener {
     where
         F: ConfigFormat + Clone + Send + 'static,
     {
-        use notify::event::{AccessKind, AccessMode, CreateKind, EventKind, RemoveKind};
+        use notify::event::{AccessKind, AccessMode, EventKind};
         let (evt_tx, evt_rx) = tokio::sync::mpsc::unbounded_channel();
         let mut watcher = {
             let fs = fs.clone();
@@ -48,48 +44,17 @@ impl FsListener {
                         // because we don't support rename or move or something else now
                         return;
                     };
-                    // 1. path is a gateway file
-                    let cfg_evt = if let Some(gateway_name) = fs.extract_gateway_name(target) {
-                        let cfg_evt_ty = match evt.kind {
-                            // 1.1 gateway added
-                            EventKind::Create(CreateKind::File) => ConfigEventType::Create,
-                            // 1.2. gateway modified
+                    if target == &fs.main_config_path() {
+                        match evt.kind {
                             EventKind::Access(AccessKind::Close(AccessMode::Write)) => ConfigEventType::Update,
-                            // 1.3. path is a gateway file and file is removed
-                            EventKind::Remove(RemoveKind::File) => ConfigEventType::Delete,
-                            // others, ignore
                             _ => {
                                 return;
                             }
                         };
-                        let cfg_ty = ConfigType::Gateway { name: gateway_name };
-                        (cfg_ty, cfg_evt_ty)
                     }
-                    // 2. path is a route file
-                    else if let Some((gateway_name, route_name)) = fs.extract_route_name(target) {
-                        let cfg_evt_ty = match evt.kind {
-                            // 2.1 route added
-                            EventKind::Create(CreateKind::File) => ConfigEventType::Create,
-                            // 2.2 route modified
-                            EventKind::Access(AccessKind::Close(AccessMode::Write)) => ConfigEventType::Update,
-                            // 2.3. path is a route file and file is removed
-                            EventKind::Remove(RemoveKind::File) => ConfigEventType::Delete,
-                            // others, ignore
-                            _ => {
-                                return;
-                            }
-                        };
-                        let cfg_ty = ConfigType::Route { gateway_name, name: route_name };
-                        (cfg_ty, cfg_evt_ty)
-                    }
-                    // 3. path is a route directory
-                    else if let Some(_gateway_name) = fs.extract_gateway_name_from_route_dir(target) {
-                        // ignore route directory event
-                        return;
-                    } else {
-                        return;
-                    };
-                    if evt_tx.send(cfg_evt).is_err() {}
+
+                    let cfg_ty = ConfigType::Global;
+                    let _result = evt_tx.send((cfg_ty, ConfigEventType::Update));
                 },
                 Default::default(),
             )?

@@ -9,10 +9,10 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::{helper_layers::function::FnLayer, BoxError, BoxResult, SgBoxLayer};
+use spacegate_model::PluginConfig;
 
 use crate::{
     mount::{MountPoint, MountPointIndex},
-    PluginConfig,
 };
 
 // pub struct PluginInstanceRef {
@@ -59,77 +59,13 @@ pub struct PluginInstanceHooks {
     pub after_create: Option<PluginInstanceHook>,
     pub before_mount: Option<PluginInstanceHook>,
     pub after_mount: Option<PluginInstanceHook>,
-    // pub before_drop: Option<PluginInstanceHook>,
+    pub before_destroy: Option<PluginInstanceHook>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInstanceSnapshot {
     pub config: PluginConfig,
     pub mount_points: HashSet<MountPointIndex>,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum PluginInstanceName {
-    // Anonymous Instance
-    Anon(u64),
-    // Named Instance
-    Named(String),
-    // Mono Instance
-    Mono,
-}
-
-impl PluginInstanceName {}
-
-impl Display for PluginInstanceName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PluginInstanceName::Anon(uid) => {
-                write!(f, "anon-{:04x}", uid)
-            }
-            PluginInstanceName::Named(name) => {
-                write!(f, "{}", name)
-            }
-            PluginInstanceName::Mono => {
-                write!(f, "*")
-            }
-        }
-    }
-}
-
-impl FromStr for PluginInstanceName {
-    type Err = Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "*" {
-            Ok(PluginInstanceName::Mono)
-        } else if let Some(anon_id) = s.strip_prefix("anon-").and_then(|uid| u64::from_str_radix(uid, 16).ok()) {
-            Ok(PluginInstanceName::Anon(anon_id))
-        } else {
-            Ok(PluginInstanceName::Named(s.to_string()))
-        }
-    }
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PluginInstanceId {
-    pub code: Cow<'static, str>,
-    pub name: PluginInstanceName,
-}
-
-impl Serialize for PluginInstanceName {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.to_string().as_str())
-    }
-}
-
-impl<'a> Deserialize<'a> for PluginInstanceName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'a>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Ok(PluginInstanceName::from_str(s.as_str()).expect("infallible"))
-    }
 }
 
 macro_rules! expose_hooks {
@@ -173,6 +109,6 @@ impl PluginInstance {
         after_create, set_after_create
         before_mount, set_before_create
         after_mount, set_after_mount
-        // before_drop
+        before_destroy, set_before_destroy
     }
 }

@@ -1,7 +1,10 @@
+use std::collections::VecDeque;
+
 use futures_util::{Stream, StreamExt};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
 use spacegate_kernel::BoxError;
 
+use spacegate_plugin::SgPluginRepository;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -49,31 +52,29 @@ where
             info!("Web server started.");
         }
         let (init_config, listener) = config.create_listener().await?;
-        for (name, item) in init_config.gateways {
-            match RunningSgGateway::create(item, shutdown_signal.clone()) {
-                Ok(inst) => RunningSgGateway::global_save(name, inst),
-                Err(e) => {
-                    tracing::error!("[SG.Config] fail to init gateway [{name}]: {e}")
-                }
-            }
-        }
+        RunningSgGateway::global_init(init_config, shutdown_signal.clone()).await;
         let mut listener = ListenerWrapper(listener);
         tracing::info!("[SG.Config] Entering listening");
+        let mut local_queue = VecDeque::new();
         loop {
-            let event = tokio::select! {
-                _ = shutdown_signal.cancelled() => {
-                    tracing::info!("[SG.Config] config listener {CONFIG_LISTENER_NAME} shutdown", CONFIG_LISTENER_NAME = C::CONFIG_LISTENER_NAME);
-                    // listener.shutdown();
-                    return Ok(());
-                }
-                event = listener.next() => {
-                    match event {
-                        Some(event) => event,
-                        None => {
-                            tracing::info!("[SG.Config] config event stream end");
-                            tracing::info!("[SG.Config] config listener {CONFIG_LISTENER_NAME} shutdown", CONFIG_LISTENER_NAME = C::CONFIG_LISTENER_NAME);
-                            // config.shutdown();
-                            return Ok(());
+            let event = if let Some(next) = local_queue.pop_front() {
+                next
+            } else {
+                tokio::select! {
+                    _ = shutdown_signal.cancelled() => {
+                        tracing::info!("[SG.Config] config listener {CONFIG_LISTENER_NAME} shutdown", CONFIG_LISTENER_NAME = C::CONFIG_LISTENER_NAME);
+                        // listener.shutdown();
+                        return Ok(());
+                    }
+                    event = listener.next() => {
+                        match event {
+                            Some(event) => event,
+                            None => {
+                                tracing::info!("[SG.Config] config event stream end");
+                                tracing::info!("[SG.Config] config listener {CONFIG_LISTENER_NAME} shutdown", CONFIG_LISTENER_NAME = C::CONFIG_LISTENER_NAME);
+                                // config.shutdown();
+                                return Ok(());
+                            }
                         }
                     }
                 }
@@ -110,6 +111,29 @@ where
                     if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
                         tracing::error!("[SG.Config] route {name} modified failed: {e}", name = name, e = e);
                     }
+                }
+                (ConfigType::Plugin { id }, ConfigEventType::Create | ConfigEventType::Update) => {
+                    let config = config.retrieve_plugin(&id).await?;
+                    if let Some(config) = config {
+                        if let Err(e) = SgPluginRepository::global().create_or_update_instance(config) {
+                            tracing::error!("[SG.Config] plugin {id:?} create failed: {e}", id = id, e = e);
+                        }
+                    } else {
+                        tracing::error!("[SG.Config] plugin {id:?} not found");
+                    }
+                }
+                (ConfigType::Plugin { id }, ConfigEventType::Delete) => match SgPluginRepository::global().remove_instance(&id) {
+                    Ok(_mount_points) => {
+                        // TODO: remove mount points
+                    }
+                    Err(e) => {
+                        tracing::error!("[SG.Config] file to remove plugin {id:?} : {e}", id = id, e = e);
+                    }
+                },
+                (ConfigType::Global, _) => {
+                    let config = config.retrieve_config().await?;
+                    RunningSgGateway::global_reset().await;
+                    RunningSgGateway::global_init(config, shutdown_signal.clone()).await;
                 }
             }
         }

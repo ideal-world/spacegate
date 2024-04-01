@@ -1,10 +1,12 @@
-pub mod backend;
+// pub mod backend;
 pub mod config_format;
 
 pub mod fs;
+pub mod memory;
 use std::{collections::BTreeMap, error::Error};
 
 use futures_util::Future;
+use serde_json::Value;
 use spacegate_model::*;
 
 pub trait Create: Sync + Send {
@@ -27,6 +29,7 @@ pub trait Create: Sync + Send {
             Ok(())
         }
     }
+    fn create_plugin(&self, id: &PluginInstanceId, value: Value) -> impl Future<Output = Result<(), BoxError>> + Send;
 }
 
 pub trait Update: Sync + Send {
@@ -50,6 +53,7 @@ pub trait Update: Sync + Send {
             Ok(())
         }
     }
+    fn update_plugin(&self, id: &PluginInstanceId, value: Value) -> impl Future<Output = Result<(), BoxError>> + Send;
 }
 
 pub trait Delete: Sync + Send {
@@ -76,6 +80,7 @@ pub trait Delete: Sync + Send {
             Ok(())
         }
     }
+    fn delete_plugin(&self, id: &PluginInstanceId) -> impl Future<Output = Result<(), BoxError>> + Send;
 }
 
 pub trait Retrieve: Sync + Send {
@@ -120,6 +125,7 @@ pub trait Retrieve: Sync + Send {
         }
     }
     fn retrieve_all_plugins(&self) -> impl Future<Output = Result<PluginInstanceMap, BoxError>> + Send;
+    fn retrieve_plugin(&self, id: &PluginInstanceId) -> impl Future<Output = Result<Option<PluginConfig>, BoxError>> + Send;
 }
 
 pub enum ConfigEventType {
@@ -129,8 +135,18 @@ pub enum ConfigEventType {
 }
 
 pub enum ConfigType {
-    Gateway { name: String },
-    Route { gateway_name: String, name: String },
+    Gateway {
+        name: String,
+    },
+    Route {
+        gateway_name: String,
+        name: String,
+    },
+    Plugin {
+        id: PluginInstanceId,
+    },
+    /// update global config, the shell would reload all
+    Global,
 }
 
 pub trait CreateListener {

@@ -5,18 +5,13 @@ use spacegate_ext_axum::{
     axum::{self, extract::Query, Router},
     GlobalAxumServer,
 };
+use spacegate_model::PluginInstanceId;
 
 use crate::{
-    instance::{PluginInstanceId, PluginInstanceSnapshot},
+    instance::{PluginInstanceSnapshot},
     PluginRepoSnapshot,
 };
 
-impl PluginInstanceId {
-    pub async fn route(&self, router: spacegate_ext_axum::axum::Router) {
-        let path = format!("/plugin/{code}/instance/{name}", code = self.code, name = self.name);
-        spacegate_ext_axum::GlobalAxumServer::default().modify_router(move |r| r.nest(&path, router)).await;
-    }
-}
 
 pub async fn register_plugin_routes() {
     let server = GlobalAxumServer::default();
