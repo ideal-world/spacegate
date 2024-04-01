@@ -27,7 +27,7 @@ impl FromBackend {
     }
 }
 
-pub trait ExtensionPack {
+pub trait ExtensionPack: Sized {
     fn insert(self, ext: &mut Extensions) -> Option<Self>
     where
         Self: Clone + Send + Sync + 'static,
@@ -35,23 +35,23 @@ pub trait ExtensionPack {
         ext.insert::<Self>(self)
     }
 
-    fn get(ext: &Extensions) -> Option<&Self>
+    fn get<'a>(&'a self, ext: &'a Extensions) -> Option<&Self>
     where
-        Self: Sized + Send + Sync + 'static,
+        Self: Send + Sync + 'static,
     {
         ext.get::<Self>()
     }
 
-    fn get_mut(ext: &mut Extensions) -> Option<&mut Self>
+    fn get_mut<'a>(&'a self, ext: &'a mut Extensions) -> Option<&mut Self>
     where
-        Self: Sized + Send + Sync + 'static,
+        Self: Send + Sync + 'static,
     {
         ext.get_mut::<Self>()
     }
 
     fn remove(ext: &mut Extensions) -> Option<Self>
     where
-        Self: Sized + Send + Sync + 'static,
+        Self: Send + Sync + 'static,
     {
         ext.remove::<Self>()
     }
