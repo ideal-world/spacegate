@@ -55,9 +55,12 @@ pub struct MainFileConfig<P = FsAsmPluginConfig> {
 
 impl<P> Default for MainFileConfig<P> {
     fn default() -> Self {
-        MainFileConfig { gateways: Default::default(), plugins: Default::default() }
+        MainFileConfig {
+            gateways: Default::default(),
+            plugins: Default::default(),
+        }
     }
-} 
+}
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]

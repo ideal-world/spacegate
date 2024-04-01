@@ -22,10 +22,7 @@ where
     }
 
     async fn retrieve_plugin(&self, id: &PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {
-        self.retrieve_cached(|cfg| {
-            cfg.plugins.get(id).cloned().map(|spec| PluginConfig { spec, id: id.clone() })
-        })
-        .await
+        self.retrieve_cached(|cfg| cfg.plugins.get(id).cloned().map(|spec| PluginConfig { spec, id: id.clone() })).await
     }
 
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> Result<Option<SgGateway>, BoxError> {

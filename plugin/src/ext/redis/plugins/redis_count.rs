@@ -121,7 +121,7 @@ mod test {
                     "header": AUTHORIZATION.as_str(),
                 }
             },
-            spacegate_model::PluginInstanceName::named("test")
+            spacegate_model::PluginInstanceName::named("test"),
         )
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());

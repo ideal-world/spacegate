@@ -7,11 +7,7 @@ use spacegate_ext_axum::{
 };
 use spacegate_model::PluginInstanceId;
 
-use crate::{
-    instance::{PluginInstanceSnapshot},
-    PluginRepoSnapshot,
-};
-
+use crate::{instance::PluginInstanceSnapshot, PluginRepoSnapshot};
 
 pub async fn register_plugin_routes() {
     let server = GlobalAxumServer::default();
