@@ -1,6 +1,7 @@
 use spacegate_shell::BoxError;
 
 fn main() -> Result<(), BoxError> {
+    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     let conf_path = std::env::args().nth(1).expect("The first parameter is missing: configuration path");
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().thread_name("spacegate").build().expect("fail to build runtime");
     rt.block_on(async move {

@@ -53,8 +53,7 @@ impl FsListener {
                         };
                     }
 
-                    let cfg_ty = ConfigType::Global;
-                    let _result = evt_tx.send((cfg_ty, ConfigEventType::Update));
+                    let _result = evt_tx.send((ConfigType::Global, ConfigEventType::Update));
                 },
                 Default::default(),
             )?
