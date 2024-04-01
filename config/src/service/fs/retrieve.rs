@@ -1,10 +1,13 @@
 use std::ffi::OsStr;
 
-use spacegate_model::PluginInstanceMap;
+use spacegate_model::{PluginConfig, PluginInstanceId, PluginInstanceMap};
 use tokio::fs;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::time::Instant;
 
 use super::{Fs, GATEWAY_SUFFIX};
 use crate::service::config_format::ConfigFormat;
+use crate::service::fs::model::{FsAsmPluginConfigMaybeUninitialized, MainFileConfig};
 use crate::BoxError;
 use crate::{model::gateway::SgGateway, model::http_route::SgHttpRoute};
 
@@ -15,63 +18,33 @@ where
     F: ConfigFormat + Send + Sync,
 {
     async fn retrieve_all_plugins(&self) -> Result<PluginInstanceMap, BoxError> {
-        let mut plugins = PluginInstanceMap::default();
-        let mut entries = fs::read_dir(&self.plugins_dir).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let file_name = entry.path();
-            if file_name.is_file() && file_name.extension() == Some(self.format.extension()) {
-                let plugin_file = fs::read(file_name).await?;
-                let plugin = self.format.de(&plugin_file)?;
-                plugins.insert(plugin.name.clone(), plugin);
-            }
-        }
-        Ok(plugins)
+        self.retrieve_cached(|cfg| cfg.plugins.clone()).await
     }
+
+    async fn retrieve_plugin(&self, id: &PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {
+        self.retrieve_cached(|cfg| {
+            cfg.plugins.get(id).cloned().map(|spec| PluginConfig { spec, id: id.clone() })
+        })
+        .await
+    }
+
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> Result<Option<SgGateway>, BoxError> {
-        let gateway_file_path = self.gateway_path(gateway_name);
-        if !gateway_file_path.exists() {
-            return Ok(None);
-        }
-        let gateway_file = fs::read(gateway_file_path).await?;
-        Ok(Some(self.format.de(&gateway_file)?))
+        self.retrieve_cached(|cfg| cfg.gateways.get(gateway_name).map(|item| item.gateway.clone())).await
     }
 
     async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<SgHttpRoute>, BoxError> {
-        let route_file_path = self.route_path(gateway_name, route_name);
-        if !route_file_path.exists() {
-            return Ok(None);
-        }
-        let route_file = fs::read(route_file_path).await?;
-        Ok(Some(self.format.de(&route_file)?))
+        self.retrieve_cached(|cfg| cfg.gateways.get(gateway_name).and_then(|item| item.routes.get(route_name)).cloned()).await
     }
 
     async fn retrieve_config_item_route_names(&self, name: &str) -> Result<Vec<String>, BoxError> {
-        let mut route_names = Vec::new();
-        let mut entries = fs::read_dir(self.routes_dir(name)).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let file_name = entry.path();
-            if file_name.is_file() && file_name.extension() == Some(self.format.extension()) {
-                if let Some(file_name) = file_name.file_stem().and_then(OsStr::to_str) {
-                    route_names.push(file_name.to_string());
-                }
-            }
-        }
-        Ok(route_names)
+        self.retrieve_cached(|cfg| cfg.gateways.get(name).map(|item| item.routes.keys().cloned().collect()).unwrap_or_default()).await
     }
 
     async fn retrieve_config_names(&self) -> Result<Vec<String>, BoxError> {
-        let mut gateway_names = Vec::new();
-        let mut entries = fs::read_dir(&self.dir).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            if !entry.path().is_file() {
-                continue;
-            }
-            if let Some(file_name) = entry.path().file_stem().and_then(OsStr::to_str) {
-                if let Some(file_name) = file_name.strip_suffix(GATEWAY_SUFFIX).and_then(|f| f.strip_suffix('.')) {
-                    gateway_names.push(file_name.to_owned());
-                }
-            }
-        }
-        Ok(gateway_names)
+        self.retrieve_cached(|cfg| cfg.gateways.keys().cloned().collect()).await
+    }
+
+    async fn retrieve_config(&self) -> Result<spacegate_model::Config, BoxError> {
+        self.retrieve_cached(Clone::clone).await
     }
 }

@@ -21,7 +21,7 @@ default = ["fs"]
 full = ["fs", "redis", "k8s"]
 fs = ["notify"]
 redis = ["dep:redis", "deadpool-redis", "lru"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "spacegate-model/k8s"]
+k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "spacegate-model/ext-k8s"]
 [dependencies]
 serde_regex = { workspace = true }
 regex = { workspace = true }

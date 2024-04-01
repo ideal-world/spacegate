@@ -8,11 +8,11 @@ use super::plugin::PluginInstanceId;
 /// by binding Listeners to a set of IP addresses.
 ///
 /// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1beta1.Gateway)
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
-pub struct SgGateway {
-    /// Name of the Gateway. Global Unique.
+/// Name of the Gateway. Global Unique.
+pub struct SgGateway<P = PluginInstanceId> {
     pub name: String,
     /// Some parameters necessary for the gateway.
     pub parameters: SgParameters,
@@ -20,12 +20,37 @@ pub struct SgGateway {
     pub listeners: Vec<SgListener>,
     /// Filters define the filters that are applied to requests that match this gateway.
     #[serde(alias = "filters")]
-    pub plugins: Vec<PluginInstanceId>,
+    pub plugins: Vec<P>,
+}
+
+impl<P> Default for SgGateway<P> {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            parameters: Default::default(),
+            listeners: Default::default(),
+            plugins: Default::default(),
+        }
+    }
+}
+
+impl<P> SgGateway<P> {
+    pub fn map_plugins<F, T>(self, f: F) -> SgGateway<T>
+    where
+        F: FnMut(P) -> T,
+    {
+        SgGateway {
+            name: self.name,
+            parameters: self.parameters,
+            listeners: self.listeners,
+            plugins: self.plugins.into_iter().map(f).collect(),
+        }
+    }
 }
 
 /// Gateway parameter configuration.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct SgParameters {
     /// Redis access Url, Url with permission information.
@@ -40,7 +65,7 @@ pub struct SgParameters {
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
@@ -57,7 +82,7 @@ pub struct SgListener {
 
 #[non_exhaustive]
 /// ProtocolType defines the application protocol accepted by a Listener.
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SgBackendProtocol {
@@ -82,7 +107,7 @@ impl Display for SgBackendProtocol {
 /// ProtocolType defines the application protocol accepted by a Listener.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "lowercase", tag = "type")]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub enum SgProtocolConfig {
     /// Accepts cleartext HTTP/1.1 sessions over TCP. Implementations MAY also support HTTP/2 over cleartext.
     /// If implementations support HTTP/2 over cleartext on “HTTP” listeners, that MUST be clearly documented by the implementation.
@@ -107,7 +132,7 @@ impl Display for SgProtocolConfig {
 
 /// GatewayTLSConfig describes a TLS configuration.
 #[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Clone)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct SgTlsConfig {
     pub mode: SgTlsMode,
     pub key: String,
@@ -115,7 +140,7 @@ pub struct SgTlsConfig {
 }
 
 #[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default, Eq, Copy)]
-#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, export_to = "../admin-client/src/model/"))]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub enum SgTlsMode {
     Terminate,
     #[default]

@@ -1,3 +1,4 @@
+use spacegate_model::ConfigItem;
 use tokio::{
     fs::{self, OpenOptions},
     io::{self, AsyncWriteExt},
@@ -17,20 +18,49 @@ impl<F> Create for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
 {
-    async fn create_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> Result<(), BoxError> {
-        let bin = self.format.ser::<SgGateway>(&gateway)?;
-        OpenOptions::new().truncate(false).create_new(true).write(true).open(self.gateway_path(gateway_name)).await?.write_all(&bin).await?;
-        let routes_dir_path = self.routes_dir(gateway_name);
-        if let Err(e) = fs::create_dir(&routes_dir_path).await {
-            if e.kind() != io::ErrorKind::AlreadyExists {
-                return Err(Box::new(e));
+    async fn create_plugin(&self, id: &spacegate_model::PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
+        self.modify_cached(|config| {
+            if config.plugins.get(id).is_some() {
+                return Err("plugin existed".into());
             }
-        }
-        Ok(())
+            config.plugins.insert(id.clone(), value);
+            Ok(())
+        })
+        .await
+    }
+    async fn create_config_item(&self, gateway_name: &str, item: ConfigItem) -> Result<(), BoxError> {
+        self.modify_cached(|config| {
+            if config.gateways.get(gateway_name).is_some() {
+                return Err("item existed".into());
+            }
+            config.gateways.insert(gateway_name.into(), item);
+            Ok(())
+        })
+        .await
+    }
+    async fn create_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> Result<(), BoxError> {
+        self.create_config_item(
+            gateway_name,
+            ConfigItem {
+                gateway,
+                routes: Default::default(),
+            },
+        )
+        .await
     }
     async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgHttpRoute) -> Result<(), BoxError> {
-        let bin = self.format.ser::<SgHttpRoute>(&route)?;
-        OpenOptions::new().truncate(false).create_new(true).write(true).open(self.route_path(gateway_name, route_name)).await?.write_all(&bin).await?;
-        Ok(())
+        self.modify_cached(|config| {
+            if let Some(item) = config.gateways.get_mut(gateway_name) {
+                if item.routes.get(gateway_name).is_some() {
+                    Err("route existed".into())
+                } else {
+                    item.routes.insert(route_name.to_string(), route);
+                    Ok(())
+                }
+            } else {
+                Err("gateway not exists".into())
+            }
+        })
+        .await
     }
 }

@@ -1,24 +1,12 @@
-use spacegate_config::model::PluginConfig;
+use spacegate_config::{model::PluginConfig, PluginInstanceId};
 use spacegate_plugin::{
     mount::{MountPoint, MountPointIndex},
-    PluginConfig, SgPluginRepository,
+    SgPluginRepository,
 };
 
-pub fn convert_filter(filter: PluginConfig) -> PluginConfig {
-    PluginConfig {
-        code: filter.code.into(),
-        spec: filter.spec,
-        name: filter.name,
-    }
-}
-
-pub fn batch_convert_filter(filters: Vec<PluginConfig>) -> Vec<PluginConfig> {
-    filters.into_iter().map(convert_filter).collect()
-}
-
-pub fn global_batch_update_plugin(filters: Vec<PluginConfig>) {
-    for filter in filters {
-        match SgPluginRepository::global().create_or_update_instance(convert_filter(filter)) {
+pub fn global_batch_update_plugin(plugins: Vec<PluginConfig>) {
+    for plugin in plugins {
+        match SgPluginRepository::global().create_or_update_instance(plugin) {
             Ok(_) => {}
             Err(e) => {
                 tracing::error!("fail to create or update plugin {e}")
@@ -27,14 +15,13 @@ pub fn global_batch_update_plugin(filters: Vec<PluginConfig>) {
     }
 }
 
-pub fn global_batch_mount_plugin<MP: MountPoint>(filters: Vec<PluginConfig>, mount_point: &mut MP, mount_index: MountPointIndex) {
-    batch_mount_plugin(SgPluginRepository::global(), filters, mount_point, mount_index);
+pub fn global_batch_mount_plugin<MP: MountPoint>(plugins: Vec<PluginInstanceId>, mount_point: &mut MP, mount_index: MountPointIndex) {
+    batch_mount_plugin(SgPluginRepository::global(), plugins, mount_point, mount_index);
 }
 
-pub fn batch_mount_plugin<MP: MountPoint>(repo: &SgPluginRepository, filters: Vec<PluginConfig>, mount_point: &mut MP, mount_index: MountPointIndex) {
-    for filter in filters {
-        let config = convert_filter(filter);
-        if let Err(e) = repo.mount(mount_point, mount_index.clone(), config) {
+pub fn batch_mount_plugin<MP: MountPoint>(repo: &SgPluginRepository, plugins: Vec<PluginInstanceId>, mount_point: &mut MP, mount_index: MountPointIndex) {
+    for plugin in plugins {
+        if let Err(e) = repo.mount(mount_point, mount_index.clone(), plugin) {
             tracing::error!("fail to mount plugin {e}")
         }
     }

@@ -23,12 +23,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let schemas = args.schemas.load_all()?;
     let app = match args.config {
         clap::ConfigBackend::File(path) => {
-            let backend = spacegate_config::service::backend::fs::Fs::new(path, config_format::Json::default());
+            let backend = spacegate_config::service::fs::Fs::new(path, config_format::Json::default());
             create_app(backend, schemas)
         }
-        clap::ConfigBackend::K8s(ns) => {
-            let backend = spacegate_config::service::backend::k8s::K8s::with_default_client(ns).await?;
-            create_app(backend, schemas)
+        clap::ConfigBackend::K8s(_ns) => {
+            // let backend = spacegate_config::service::backend::k8s::K8s::with_default_client(ns).await?;
+            // create_app(backend, schemas)
+            unimplemented!("k8s backend not implemented")
         }
     };
     let listener = tokio::net::TcpListener::bind(addr).await?;

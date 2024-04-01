@@ -23,7 +23,6 @@
 
 use config::SgHttpRoute;
 pub use hyper;
-use spacegate_config::service::backend::memory::Memory;
 use spacegate_config::service::{CreateListener, Retrieve};
 use spacegate_config::Config;
 pub use spacegate_kernel as kernel;
@@ -42,7 +41,7 @@ pub use spacegate_ext_redis;
 
 #[cfg(feature = "fs")]
 pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    use spacegate_config::service::{backend::fs::Fs, config_format::Json};
+    use spacegate_config::service::{config_format::Json, fs::Fs};
     let config = Fs::new(conf_path, Json::default());
     startup(config)
 }
@@ -62,6 +61,7 @@ pub async fn startup_cache(url: &str, _poll_interval_sec: u64) -> Result<JoinHan
 }
 
 pub fn startup_static(config: Config) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    use spacegate_config::service::memory::Memory;
     let config = Memory::new(config);
     startup(config)
 }

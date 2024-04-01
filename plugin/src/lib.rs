@@ -2,14 +2,14 @@
 use std::{
     any::Any,
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hasher},
     sync::{Arc, OnceLock, RwLock},
 };
 
 use futures_util::{future::BoxFuture, Future};
 use hyper::{Request, Response};
-use instance::{PluginInstance, PluginInstanceId, PluginInstanceName, PluginInstanceSnapshot};
+use instance::{PluginInstance, PluginInstanceSnapshot};
 use layer::{InnerBoxPf, PluginFunction};
 use mount::{MountPoint, MountPointIndex};
 use rand::random;
@@ -33,6 +33,7 @@ pub mod plugins;
 
 #[cfg(feature = "schema")]
 pub use schemars;
+use spacegate_model::{PluginConfig, PluginInstanceId, PluginInstanceName};
 pub trait Plugin: Any + Sized + Send + Sync {
     const CODE: &'static str;
     /// is this plugin mono instance
@@ -42,11 +43,10 @@ pub trait Plugin: Any + Sized + Send + Sync {
     }
     fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Result<Response<SgBody>, BoxError>> + Send;
     fn create(plugin_config: PluginConfig) -> Result<Self, BoxError>;
-    fn create_by_spec(spec: JsonValue, name: Option<String>) -> Result<Self, BoxError> {
+    fn create_by_spec(spec: JsonValue, name: PluginInstanceName) -> Result<Self, BoxError> {
         Self::create(PluginConfig {
-            code: Self::CODE.into(),
+            id: PluginInstanceId { code: Self::CODE.into(), name },
             spec,
-            name,
         })
     }
     fn register(repo: &SgPluginRepository) {
@@ -116,68 +116,6 @@ impl PluginAttributes {
     #[inline]
     pub(crate) fn make_pf(&self, config: PluginConfig) -> Result<InnerBoxPf, BoxError> {
         (self.make_pf)(config)
-    }
-    pub fn generate_id(&self, config: &PluginConfig) -> PluginInstanceId {
-        if self.mono {
-            PluginInstanceId {
-                code: self.code.clone(),
-                name: PluginInstanceName::Mono,
-            }
-        } else {
-            config.none_mono_id()
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct PluginConfig {
-    pub code: Cow<'static, str>,
-    pub spec: JsonValue,
-    pub name: Option<String>,
-}
-
-impl PluginConfig {
-    pub fn digest(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        hasher.write(self.code.as_bytes());
-        hasher.write(self.spec.to_string().as_bytes());
-        hasher.finish()
-    }
-    pub fn none_mono_instance_name(&self) -> PluginInstanceName {
-        let digest = self.digest();
-        if let Some(name) = self.name.as_ref() {
-            PluginInstanceName::Named(name.clone())
-        } else {
-            PluginInstanceName::Anon(digest)
-        }
-    }
-    pub fn none_mono_id(&self) -> PluginInstanceId {
-        PluginInstanceId {
-            code: self.code.clone(),
-            name: self.none_mono_instance_name(),
-        }
-    }
-    pub fn check_code<P: Plugin>(&self) -> bool {
-        self.code == P::CODE
-    }
-    pub fn new<P: Plugin>(value: impl Into<JsonValue>) -> Self {
-        Self {
-            code: P::CODE.into(),
-            spec: value.into(),
-            ..Default::default()
-        }
-    }
-    pub fn with_name(self, s: impl Into<String>) -> Self {
-        Self { name: Some(s.into()), ..self }
-    }
-    pub fn with_random_name(self) -> Self {
-        Self {
-            name: Some(format!("{:08x}", random::<u128>())),
-            ..self
-        }
-    }
-    pub fn no_name(self) -> Self {
-        Self { name: None, ..self }
     }
 }
 
@@ -252,28 +190,22 @@ impl SgPluginRepository {
         let _old_attr = map.insert(attr.code.clone(), attr);
     }
 
-    pub fn clear_routes_instances(&self, gateway: &str) {
+    pub fn clear_instances(&self) {
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
-        instances.retain(|_, instance| {
-            instance.mount_points.iter().any(|index| match index {
-                MountPointIndex::Gateway { .. } => false,
-                other => other.gateway() == gateway,
-            })
-        });
-    }
-
-    pub fn clear_gateway_instances(&self, gateway: &str) {
-        let mut instances = self.instances.write().expect("SgPluginRepository register error");
-        instances.retain(|_, instance| instance.mount_points.iter().any(|index| index.gateway() == gateway));
+        for (_, inst) in instances.drain() {
+            if let Err(e) = inst.before_destroy() {
+                tracing::error!("plugin {id:?} before_destroy error: {e}", id = inst.config.id, e = e);
+            }
+        }
     }
 
     pub fn create_or_update_instance(&self, config: PluginConfig) -> Result<(), BoxError> {
         let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
-        let code = config.code.clone();
-        let Some(attr) = attr_rg.get(&code) else {
+        let code = config.code();
+        let id = config.id.clone();
+        let Some(attr) = attr_rg.get(code) else {
             return Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into());
         };
-        let id = attr.generate_id(&config);
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.get_mut(&id) {
             let new_inner_pf = attr.make_pf(config)?;
@@ -293,13 +225,21 @@ impl SgPluginRepository {
         Ok(())
     }
 
-    pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, config: PluginConfig) -> Result<(), BoxError> {
+    pub fn remove_instance(&self, id: &PluginInstanceId) -> Result<HashSet<MountPointIndex>, BoxError> {
+        let mut instances = self.instances.write().expect("SgPluginRepository register error");
+        if let Some(instance) = instances.remove(id) {
+            instance.before_destroy()?;
+            Ok(instance.mount_points)
+        } else {
+            Err(format!("[Sg.Plugin] missing instance {id:?}").into())
+        }
+    }
+    pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, id: PluginInstanceId) -> Result<(), BoxError> {
         let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
-        let code = config.code.clone();
-        let Some(attr) = attr_rg.get(&code) else {
+        let code = id.code.as_ref();
+        let Some(attr) = attr_rg.get(code) else {
             return Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into());
         };
-        let id = attr.generate_id(&config);
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.get_mut(&id) {
             // todo!("check if config has changed");
