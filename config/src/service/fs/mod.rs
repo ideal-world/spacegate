@@ -3,7 +3,7 @@ use std::{
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::SystemTime,
 };
 pub mod model;
 use spacegate_model::{BoxResult, Config};
@@ -63,10 +63,8 @@ where
         if *prev_retrieve_time < prev_modified_time {
             g_buffer.clear();
             f_main_config.read_to_end(&mut g_buffer).await?;
-            dbg!(String::from_utf8_lossy(&g_buffer));
             let config: MainFileConfig<FsAsmPluginConfigMaybeUninitialized> = self.format.de(&g_buffer)?;
             let new_config = config.initialize_uid();
-            dbg!(&new_config);
             let b_new_config = self.format.ser(&new_config)?;
             drop(f_main_config);
             let mut f_main_config = tokio::fs::OpenOptions::new().write(true).truncate(true).open(&path).await?;
@@ -94,7 +92,6 @@ where
         let mut wg = if *prev_retrieve_time < prev_modified_time {
             g_buffer.clear();
             f_main_config.read_to_end(&mut g_buffer).await?;
-            dbg!(String::from_utf8_lossy(&g_buffer));
             let config: MainFileConfig<FsAsmPluginConfigMaybeUninitialized> = self.format.de(&g_buffer)?;
             let new_model_config = config.initialize_uid().into_model_config();
             let mut wg = self.cached.write().await;

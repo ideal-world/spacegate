@@ -1,7 +1,7 @@
 use spacegate_model::{Config, ConfigItem, SgGateway, SgHttpRoute};
 
 use crate::{
-    service::{config_format::ConfigFormat, Create, Update},
+    service::{config_format::ConfigFormat, Update},
     BoxError,
 };
 
@@ -13,7 +13,7 @@ where
 {
     async fn update_plugin(&self, id: &spacegate_model::PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
         self.modify_cached(|config| {
-            if let Some(prev_spec) = config.plugins.get_mut(&id) {
+            if let Some(prev_spec) = config.plugins.get_mut(id) {
                 *prev_spec = value;
                 Ok(())
             } else {
