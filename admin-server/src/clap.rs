@@ -30,6 +30,10 @@ pub struct Args {
     /// see [`ConfigBackend`]
     #[arg(short, long, default_value_t = ConfigBackend::File(PathBuf::from("./config")))]
     pub config: ConfigBackend,
+
+    /// the format of the config file
+    #[arg(short, long, default_value_t = ConfigFormat::Toml)]
+    pub format: ConfigFormat,
     /// the plugin schemas
     ///
     /// see [`Schemas`]
@@ -104,6 +108,33 @@ impl fmt::Display for ConfigBackend {
         match self {
             ConfigBackend::File(path) => write!(f, "file:{}", path.display()),
             ConfigBackend::K8s(ns) => write!(f, "k8s:{}", ns),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ConfigFormat {
+    Toml,
+    Json,
+}
+
+impl FromStr for ConfigFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "toml" => Ok(ConfigFormat::Toml),
+            "json" => Ok(ConfigFormat::Json),
+            _ => Err(format!("unknown format: {}", s)),
+        }
+    }
+}
+
+impl fmt::Display for ConfigFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigFormat::Toml => write!(f, "toml"),
+            ConfigFormat::Json => write!(f, "json"),
         }
     }
 }

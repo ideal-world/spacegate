@@ -10,8 +10,8 @@ use super::{gateway::SgBackendProtocol, PluginInstanceId};
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct SgHttpRoute<P = PluginInstanceId> {
-    /// Associated gateway name.
-    pub gateway_name: String,
+    /// Route name
+    pub route_name: String,
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
     /// Filters define the filters that are applied to requests that match this hostnames.
@@ -29,7 +29,7 @@ impl<P> SgHttpRoute<P> {
         F: FnMut(P) -> T,
     {
         SgHttpRoute {
-            gateway_name: self.gateway_name,
+            route_name: self.route_name,
             hostnames: self.hostnames,
             plugins: self.plugins.into_iter().map(&mut f).collect(),
             rules: self.rules.into_iter().map(|rule| rule.map_plugins(&mut f)).collect(),
@@ -41,7 +41,7 @@ impl<P> SgHttpRoute<P> {
 impl<P> Default for SgHttpRoute<P> {
     fn default() -> Self {
         Self {
-            gateway_name: Default::default(),
+            route_name: Default::default(),
             hostnames: Default::default(),
             plugins: Default::default(),
             rules: Default::default(),

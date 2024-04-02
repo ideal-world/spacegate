@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let schemas = args.schemas.load_all()?;
     let app = match args.config {
         clap::ConfigBackend::File(path) => {
-            let backend = spacegate_config::service::fs::Fs::new(path, config_format::Json::default());
+            let backend = spacegate_config::service::fs::Fs::new(path, config_format::Toml::default());
             create_app(backend, schemas)
         }
         clap::ConfigBackend::K8s(_ns) => {

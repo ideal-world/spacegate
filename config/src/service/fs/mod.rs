@@ -55,17 +55,21 @@ where
         M: FnOnce(&Config) -> T,
     {
         let path = self.main_config_path();
-        let f_main_config = tokio::fs::OpenOptions::new().read(true).open(&path).await?;
+        let mut f_main_config = tokio::fs::OpenOptions::new().read(true).open(&path).await?;
         let mut g_buffer = self.buffer.lock().await;
         let mut prev_retrieve_time = self.prev_retrieve_time.write().await;
         let metadata = f_main_config.metadata().await?;
         let prev_modified_time = metadata.modified()?;
         if *prev_retrieve_time < prev_modified_time {
-            let mut f_main_config = tokio::fs::OpenOptions::new().read(true).write(true).truncate(true).create(true).open(&path).await?;
+            g_buffer.clear();
             f_main_config.read_to_end(&mut g_buffer).await?;
-            let config: MainFileConfig<FsAsmPluginConfigMaybeUninitialized> = self.format.de(&g_buffer).unwrap_or_default();
+            dbg!(String::from_utf8_lossy(&g_buffer));
+            let config: MainFileConfig<FsAsmPluginConfigMaybeUninitialized> = self.format.de(&g_buffer)?;
             let new_config = config.initialize_uid();
+            dbg!(&new_config);
             let b_new_config = self.format.ser(&new_config)?;
+            drop(f_main_config);
+            let mut f_main_config = tokio::fs::OpenOptions::new().write(true).truncate(true).open(&path).await?;
             f_main_config.write_all(&b_new_config).await?;
             let mut new_model_config = new_config.into_model_config();
             let mut wg = self.cached.write().await;
@@ -81,14 +85,17 @@ where
     where
         M: FnOnce(&mut Config) -> BoxResult<()>,
     {
-        let mut f_main_config = tokio::fs::OpenOptions::new().read(true).write(true).truncate(true).create(true).open(self.main_config_path()).await?;
+        let path = self.main_config_path();
+        let mut f_main_config = tokio::fs::OpenOptions::new().read(true).open(&path).await?;
         let mut g_buffer = self.buffer.lock().await;
         let mut prev_retrieve_time = self.prev_retrieve_time.write().await;
         let metadata = f_main_config.metadata().await?;
         let prev_modified_time = metadata.modified()?;
         let mut wg = if *prev_retrieve_time < prev_modified_time {
+            g_buffer.clear();
             f_main_config.read_to_end(&mut g_buffer).await?;
-            let config: MainFileConfig<FsAsmPluginConfigMaybeUninitialized> = self.format.de(&g_buffer).unwrap_or_default();
+            dbg!(String::from_utf8_lossy(&g_buffer));
+            let config: MainFileConfig<FsAsmPluginConfigMaybeUninitialized> = self.format.de(&g_buffer)?;
             let new_model_config = config.initialize_uid().into_model_config();
             let mut wg = self.cached.write().await;
             *wg = new_model_config;
@@ -99,6 +106,8 @@ where
         (map)(&mut wg)?;
         let new_file_config: MainFileConfig = wg.clone().into();
         let b_new_config = self.format.ser(&new_file_config)?;
+        drop(f_main_config);
+        let mut f_main_config = tokio::fs::OpenOptions::new().write(true).truncate(true).open(&path).await?;
         f_main_config.write_all(&b_new_config).await?;
         *prev_retrieve_time = SystemTime::now();
         Ok(())

@@ -21,14 +21,21 @@ default = ["fs"]
 full = ["fs", "redis", "k8s"]
 fs = ["notify"]
 redis = ["dep:redis", "deadpool-redis", "lru"]
-k8s = ["kube", "k8s-openapi", "k8s-gateway-api", "schemars", "spacegate-model/ext-k8s"]
+k8s = [
+  "kube",
+  "k8s-openapi",
+  "k8s-gateway-api",
+  "schemars",
+  "spacegate-model/ext-k8s",
+]
 [dependencies]
 serde_regex = { workspace = true }
 regex = { workspace = true }
 spacegate-model = { path = "../model" }
 tokio = { workspace = true, features = ["fs"] }
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
+toml = { workspace = true, features = ["preserve_order"] }
 tracing = { workspace = true }
 futures-util = { workspace = true }
 hyper.workspace = true

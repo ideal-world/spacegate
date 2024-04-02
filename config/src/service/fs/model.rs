@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_model::{ConfigItem, PluginInstanceId, PluginInstanceMap, PluginInstanceName};
+use spacegate_model::{ConfigItem, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgHttpRoute};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -49,7 +49,8 @@ pub struct FsAnonPluginConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct MainFileConfig<P = FsAsmPluginConfig> {
-    pub gateways: BTreeMap<String, ConfigItem<P>>,
+    // for config usage, list is preferred over map
+    pub gateways: Vec<MainFileConfigItem<P>>,
     pub plugins: PluginConfigs,
 }
 
@@ -58,6 +59,51 @@ impl<P> Default for MainFileConfig<P> {
         MainFileConfig {
             gateways: Default::default(),
             plugins: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct MainFileConfigItem<P = FsAsmPluginConfig> {
+    #[serde(flatten)]
+    pub gateway: SgGateway<P>,
+    pub routes: Vec<SgHttpRoute<P>>,
+}
+impl<P> Default for MainFileConfigItem<P> {
+    fn default() -> Self {
+        MainFileConfigItem {
+            gateway: Default::default(),
+            routes: Default::default(),
+        }
+    }
+}
+impl<P> From<ConfigItem<P>> for MainFileConfigItem<P> {
+    fn from(value: ConfigItem<P>) -> Self {
+        MainFileConfigItem {
+            gateway: value.gateway,
+            routes: value.routes.into_values().collect(),
+        }
+    }
+}
+
+impl<P> From<MainFileConfigItem<P>> for ConfigItem<P> {
+    fn from(val: MainFileConfigItem<P>) -> Self {
+        ConfigItem {
+            gateway: val.gateway,
+            routes: val.routes.into_iter().map(|route| (route.route_name.clone(), route)).collect(),
+        }
+    }
+}
+
+impl<P> MainFileConfigItem<P> {
+    pub fn map_plugins<F, T>(self, mut f: F) -> MainFileConfigItem<T>
+    where
+        F: FnMut(P) -> T,
+    {
+        MainFileConfigItem {
+            gateway: self.gateway.map_plugins(&mut f),
+            routes: self.routes.into_iter().map(|route| route.map_plugins(&mut f)).collect(),
         }
     }
 }
@@ -87,7 +133,7 @@ impl MainFileConfig<FsAsmPluginConfigMaybeUninitialized> {
             FsAsmPluginConfigMaybeUninitialized::Named { name, code } => FsAsmPluginConfig::Named { name, code },
             FsAsmPluginConfigMaybeUninitialized::Mono { code } => FsAsmPluginConfig::Mono { code },
         };
-        let gateways = self.gateways.into_iter().map(|(name, item)| (name, item.map_plugins(&mut set_uid))).collect();
+        let gateways = self.gateways.into_iter().map(|item| item.map_plugins(&mut set_uid)).collect();
         MainFileConfig { gateways, plugins: self.plugins }
     }
 }
@@ -130,14 +176,9 @@ impl MainFileConfig<FsAsmPluginConfig> {
         let gateways = self
             .gateways
             .into_iter()
-            .map(|(name, item)| {
-                (
-                    name,
-                    ConfigItem {
-                        gateway: item.gateway.map_plugins(&mut collect_plugin),
-                        routes: item.routes.into_iter().map(|(route_name, route)| (route_name, route.map_plugins(&mut collect_plugin))).collect(),
-                    },
-                )
+            .map(|item| {
+                let config_item: ConfigItem = item.map_plugins(&mut collect_plugin).into();
+                (config_item.gateway.name.clone(), config_item)
             })
             .collect();
         spacegate_model::Config { gateways, plugins }
@@ -172,7 +213,7 @@ impl From<spacegate_model::Config> for MainFileConfig<FsAsmPluginConfig> {
             PluginInstanceName::Named { name } => FsAsmPluginConfig::Named { name, code: id.code.into() },
             PluginInstanceName::Mono {} => FsAsmPluginConfig::Mono { code: id.code.into() },
         };
-        let gateways = value.gateways.into_iter().map(|(gw_name, item)| (gw_name, item.map_plugins(&mut map))).collect();
+        let gateways = value.gateways.into_values().map(|item| <MainFileConfigItem<FsAsmPluginConfig>>::from(item.map_plugins(&mut map))).collect();
         MainFileConfig { gateways, plugins }
     }
 }
