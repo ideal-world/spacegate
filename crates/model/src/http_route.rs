@@ -15,7 +15,6 @@ pub struct SgHttpRoute<P = PluginInstanceId> {
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
     /// Filters define the filters that are applied to requests that match this hostnames.
-    
     pub plugins: Vec<P>,
     /// Rules are a list of HTTP matchers, filters and actions.
     pub rules: Vec<SgHttpRouteRule<P>>,
@@ -58,7 +57,6 @@ pub struct SgHttpRouteRule<P = PluginInstanceId> {
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,
     /// Filters define the filters that are applied to requests that match this rule.
-    
     pub plugins: Vec<P>,
     /// BackendRefs defines the backend(s) where matching requests should be sent.
     pub backends: Vec<SgBackendRef<P>>,
@@ -113,7 +111,6 @@ pub struct SgBackendRef<P = PluginInstanceId> {
     ///
     /// # Notice!
     /// this field is ordered, the first plugin will be the outermost plugin.
-    
     pub plugins: Vec<P>,
 }
 
