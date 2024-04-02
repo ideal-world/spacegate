@@ -1,4 +1,4 @@
-use std::{num::NonZeroU16, sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crate::BoxError;
 
@@ -8,6 +8,7 @@ use super::{match_request::SgHttpRouteMatch, SgHttpBackendLayer, SgHttpRoute, Sg
 
 #[derive(Debug)]
 pub struct SgHttpRouteLayerBuilder {
+    pub name: String,
     pub hostnames: Vec<String>,
     pub rules: Vec<SgHttpRouteRuleLayer>,
     pub plugins: Vec<SgBoxLayer>,
@@ -24,12 +25,17 @@ impl Default for SgHttpRouteLayerBuilder {
 impl SgHttpRouteLayerBuilder {
     pub fn new() -> Self {
         Self {
+            name: Default::default(),
             hostnames: Vec::new(),
             rules: Vec::new(),
             plugins: Vec::new(),
             priority: None,
             extensions: Default::default(),
         }
+    }
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
     }
     pub fn hostnames(mut self, hostnames: impl IntoIterator<Item = String>) -> Self {
         self.hostnames = hostnames.into_iter().collect();
@@ -64,10 +70,11 @@ impl SgHttpRouteLayerBuilder {
             self.hostnames = vec!["*".to_string()]
         }
         Ok(SgHttpRoute {
-            plugins: Arc::from(self.plugins),
-            hostnames: self.hostnames.into(),
-            rules: self.rules.into(),
+            plugins: self.plugins,
+            hostnames: self.hostnames,
+            rules: self.rules,
             priority: self.priority.unwrap_or(1),
+            name: self.name,
         })
     }
 }
@@ -125,12 +132,12 @@ impl SgHttpRouteRuleLayerBuilder {
         self
     }
     pub fn build(self) -> Result<SgHttpRouteRuleLayer, BoxError> {
-        let r#match = self.r#match.map(|ms| ms.into_iter().map(Arc::new).collect());
+        // let r#match = self.r#match.map(|ms| ms.into_iter().map(Arc::new).collect::<Vec>());
         Ok(SgHttpRouteRuleLayer {
-            r#match,
-            plugins: Arc::from(self.plugins),
+            r#match: self.r#match,
+            plugins: self.plugins,
             timeouts: self.timeouts,
-            backends: Arc::from_iter(self.backends),
+            backends: self.backends,
         })
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
@@ -142,7 +149,7 @@ impl SgHttpRouteRuleLayerBuilder {
 #[derive(Debug)]
 pub struct SgHttpBackendLayerBuilder {
     host: Option<String>,
-    port: Option<NonZeroU16>,
+    port: Option<u16>,
     protocol: Option<String>,
     pub plugins: Vec<SgBoxLayer>,
     timeout: Option<Duration>,
@@ -189,7 +196,7 @@ impl SgHttpBackendLayerBuilder {
         self
     }
     pub fn port(mut self, port: u16) -> Self {
-        self.port = NonZeroU16::new(port);
+        self.port = Some(port);
         self
     }
     pub fn protocol(mut self, protocol: String) -> Self {
@@ -205,7 +212,7 @@ impl SgHttpBackendLayerBuilder {
             host: self.host.map(Into::into),
             port: self.port,
             scheme: self.protocol.map(Into::into),
-            filters: Arc::from(self.plugins),
+            plugins: self.plugins,
             timeout: self.timeout,
             weight: self.weight,
         })

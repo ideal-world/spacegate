@@ -1,22 +1,18 @@
-use hyper::{Request, Response, StatusCode};
+use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::{helper_layers::filter::FilterRequest, SgResponseExt};
-use spacegate_kernel::{
-    helper_layers::filter::{Filter, FilterRequestLayer},
-    SgBoxLayer,
-};
+
 use url::Url;
 
 use spacegate_kernel::SgBody;
 
-use crate::{def_plugin, model::SgHttpPathModifier, MakeSgLayer};
+use crate::{model::SgHttpPathModifier, Plugin};
 
 /// RedirectFilter defines a filter that redirects a request.
 ///
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct RedirectFilter {
+pub struct RedirectPlugin {
     /// Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.
     pub scheme: Option<String>,
     /// Hostname is the hostname to be used in the value of the Location header in the response. When empty, the hostname in the Host header of the request is used.
@@ -29,19 +25,19 @@ pub struct RedirectFilter {
     pub status_code: Option<u16>,
 }
 
-impl RedirectFilter {
-    fn on_req(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
-        let mut url = Url::parse(&req.uri().to_string())
-            .map_err(|e| Response::<SgBody>::with_code_message(StatusCode::BAD_REQUEST, format!("[SG.Filter.Redirect] Url parsing error: {}", e)))?;
+impl Plugin for RedirectPlugin {
+    const CODE: &'static str = "redirect";
+
+    async fn call(&self, req: Request<SgBody>, inner: spacegate_kernel::helper_layers::function::Inner) -> Result<Response<SgBody>, spacegate_kernel::BoxError> {
+        let mut url = Url::parse(&req.uri().to_string())?;
         if let Some(hostname) = &self.hostname {
-            url.set_host(Some(hostname))
-                .map_err(|_| Response::<SgBody>::with_code_message(StatusCode::BAD_REQUEST, format!("[SG.Filter.Redirect] Host {hostname} parsing error")))?;
+            url.set_host(Some(hostname))?;
         }
         if let Some(scheme) = &self.scheme {
-            url.set_scheme(scheme).map_err(|_| Response::<SgBody>::with_code_message(StatusCode::BAD_REQUEST, format!("[SG.Filter.Redirect] Scheme {scheme} parsing error")))?;
+            url.set_scheme(scheme).map_err(|_| "fail to set schema")?;
         }
         if let Some(port) = self.port {
-            url.set_port(Some(port)).map_err(|_| Response::<SgBody>::with_code_message(StatusCode::BAD_REQUEST, format!("[SG.Filter.Redirect] Port {port} parsing error")))?;
+            url.set_port(Some(port)).map_err(|_| "fail to set port")?;
         }
         // todo!();
         // let matched_match_inst = req.context.get_rule_matched();
@@ -49,26 +45,14 @@ impl RedirectFilter {
         //     req.request.set_uri(new_url);
         // }
         // ctx.set_action(SgRouteFilterRequestAction::Redirect);
-        Ok(req)
+        Ok(inner.call(req).await)
+    }
+
+    fn create(config: crate::PluginConfig) -> Result<Self, spacegate_kernel::BoxError> {
+        Ok(serde_json::from_value(config.spec)?)
     }
 }
 
-impl Filter for RedirectFilter {
-    fn filter(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>> {
-        self.on_req(req)
-    }
-}
-
-pub type RedirectFilterLayer = FilterRequestLayer<RedirectFilter>;
-pub type Redirect<S> = FilterRequest<RedirectFilter, S>;
-
-impl MakeSgLayer for RedirectFilter {
-    fn make_layer(&self) -> Result<SgBoxLayer, spacegate_kernel::BoxError> {
-        let layer = FilterRequestLayer::new(self.clone());
-        Ok(SgBoxLayer::new(layer))
-    }
-}
-
-def_plugin!("redirect", RedirectPlugin, RedirectFilter);
+// def_plugin!("redirect", RedirectPlugin, RedirectFilter; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
-crate::schema!(RedirectPlugin, RedirectFilter);
+crate::schema!(RedirectPlugin, RedirectPlugin);

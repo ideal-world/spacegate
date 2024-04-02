@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 // pub mod config_by_local;
 // pub mod config_by_redis;
 pub use spacegate_config::model::*;
+use tracing::info;
 
 pub(crate) mod matches_convert;
 pub mod plugin_filter_dto;
@@ -29,10 +30,27 @@ where
 {
     use crate::server::RunningSgGateway;
     tokio::task::spawn_local(async move {
+        #[cfg(feature = "ext-axum")]
+        {
+            use spacegate_ext_axum::axum;
+            info!("Starting web server...");
+            let cancel_token = shutdown_signal.clone();
+            let server = spacegate_ext_axum::GlobalAxumServer::default();
+            server
+                .modify_router(|router| {
+                    router.fallback(axum::routing::any(axum::response::Html(axum::body::Bytes::from_static(include_bytes!(
+                        "./config/web-server-index.html"
+                    )))))
+                })
+                .await;
+            spacegate_plugin::ext::axum::register_plugin_routes().await;
+            server.set_cancellation(cancel_token).await;
+            server.start().await?;
+            info!("Web server started.");
+        }
         let (init_config, listener) = config.create_listener().await?;
         for (name, item) in init_config.gateways {
-            let (gateway, routes) = item.into_gateway_and_routes();
-            match RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {
+            match RunningSgGateway::create(item, shutdown_signal.clone()) {
                 Ok(inst) => RunningSgGateway::global_save(name, inst),
                 Err(e) => {
                     tracing::error!("[SG.Config] fail to init gateway [{name}]: {e}")
@@ -63,21 +81,19 @@ where
             match event {
                 (ConfigType::Gateway { name }, ConfigEventType::Create) => {
                     if let Some(config) = config.retrieve_config_item(&name).await? {
-                        let (gateway, routes) = config.into_gateway_and_routes();
                         tracing::info!("[SG.Config] gateway {name} created", name = name);
-                        if let Ok(gateway) = RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {
+                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.clone()) {
                             RunningSgGateway::global_save(name, gateway);
                         }
                     }
                 }
                 (ConfigType::Gateway { name }, ConfigEventType::Update) => {
                     if let Some(config) = config.retrieve_config_item(&name).await? {
-                        let (gateway, routes) = config.into_gateway_and_routes();
                         tracing::info!("[SG.Config] gateway {name} updated", name = name);
                         if let Some(inst) = RunningSgGateway::global_remove(&name) {
                             inst.shutdown().await;
                         }
-                        if let Ok(gateway) = RunningSgGateway::create(gateway, routes, shutdown_signal.clone()) {
+                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.clone()) {
                             RunningSgGateway::global_save(name, gateway);
                         }
                     }
@@ -89,7 +105,7 @@ where
                     }
                 }
                 (ConfigType::Route { gateway_name, name }, _) => {
-                    let routes = config.retrieve_config_item_all_routes(&gateway_name).await?.into_values().collect::<Vec<_>>();
+                    let routes = config.retrieve_config_item_all_routes(&gateway_name).await?;
                     tracing::info!("[SG.Config] route {name} modified", name = name);
                     if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
                         tracing::error!("[SG.Config] route {name} modified failed: {e}", name = name, e = e);

@@ -1,14 +1,13 @@
 pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
-mod predicate;
-use std::{convert::Infallible, num::NonZeroU16, sync::Arc, time::Duration};
+use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use crate::{
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
-    service::BoxHyperService,
-    utils::schema_port::port_to_schema,
+    service::ArcHyperService,
+    utils::{fold_sg_layers::sg_layers, schema_port::port_to_schema},
     SgBody, SgBoxLayer,
 };
 
@@ -29,11 +28,12 @@ use self::{
 
 *****************************************************************************************/
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SgHttpRoute {
-    pub hostnames: Arc<[String]>,
-    pub plugins: Arc<[SgBoxLayer]>,
-    pub rules: Arc<[SgHttpRouteRuleLayer]>,
+    pub name: String,
+    pub hostnames: Vec<String>,
+    pub plugins: Vec<SgBoxLayer>,
+    pub rules: Vec<SgHttpRouteRuleLayer>,
     pub priority: i16,
 }
 
@@ -54,12 +54,12 @@ pub struct SgHttpRouter {
 
 *****************************************************************************************/
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SgHttpRouteRuleLayer {
-    pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
-    pub plugins: Arc<[SgBoxLayer]>,
+    pub r#match: Option<Vec<SgHttpRouteMatch>>,
+    pub plugins: Vec<SgBoxLayer>,
     timeouts: Option<Duration>,
-    backends: Arc<[SgHttpBackendLayer]>,
+    backends: Vec<SgHttpBackendLayer>,
 }
 
 impl SgHttpRouteRuleLayer {
@@ -78,32 +78,30 @@ where
     fn layer(&self, inner: S) -> Self::Service {
         use crate::helper_layers::timeout::TimeoutLayer;
         let empty = self.backends.is_empty();
-        let filter_layer = self.plugins.iter().collect::<SgBoxLayer>();
+        let filter_layer = self.plugins.iter();
 
         let service = if empty {
-            filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(inner))
+            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(inner)))
         } else {
             let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
             let random_picker = random_pick::RandomPick::new(service_iter);
-            filter_layer.layer(TimeoutLayer::new(self.timeouts).layer(random_picker))
+            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(random_picker)))
         };
 
-        SgRouteRule {
-            r#match: self.r#match.clone(),
-            service,
-        }
+        let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
+        SgRouteRule { r#match, service }
     }
 }
 #[derive(Clone)]
 pub struct SgRouteRule {
     pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
-    pub service: BoxHyperService,
+    pub service: ArcHyperService,
 }
 
 impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
     type Response = Response<SgBody>;
     type Error = Infallible;
-    type Future = <BoxHyperService as hyper::service::Service<Request<SgBody>>>::Future;
+    type Future = <ArcHyperService as hyper::service::Service<Request<SgBody>>>::Future;
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter route rule");
@@ -122,12 +120,12 @@ impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
 
 *****************************************************************************************/
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SgHttpBackendLayer {
-    pub filters: Arc<[SgBoxLayer]>,
-    pub host: Option<Arc<str>>,
-    pub port: Option<NonZeroU16>,
-    pub scheme: Option<Arc<str>>,
+    pub plugins: Vec<SgBoxLayer>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub scheme: Option<String>,
     pub weight: u16,
     pub timeout: Option<Duration>,
 }
@@ -143,18 +141,18 @@ where
     S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
     <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
 {
-    type Service = SgHttpBackend<BoxHyperService>;
+    type Service = SgHttpBackend<ArcHyperService>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
-        let filtered = self.filters.iter().collect::<SgBoxLayer>().layer(timeout_layer.layer(inner));
+        let filtered = sg_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner)));
         SgHttpBackend {
             weight: self.weight,
-            host: self.host.clone(),
+            host: self.host.clone().map(Into::into),
             port: self.port,
-            scheme: self.scheme.clone(),
+            scheme: self.scheme.clone().map(Into::into),
             timeout: self.timeout,
-            inner_service: BoxHyperService::new(filtered),
+            inner_service: filtered,
         }
     }
 }
@@ -162,7 +160,7 @@ where
 #[derive(Clone)]
 pub struct SgHttpBackend<S> {
     pub host: Option<Arc<str>>,
-    pub port: Option<NonZeroU16>,
+    pub port: Option<u16>,
     pub scheme: Option<Arc<str>>,
     pub weight: u16,
     pub timeout: Option<Duration>,

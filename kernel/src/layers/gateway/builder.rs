@@ -1,6 +1,4 @@
-use std::sync::{Arc, OnceLock};
-
-use tokio_util::sync::CancellationToken;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     helper_layers::{
@@ -15,42 +13,43 @@ use super::{SgGatewayLayer, SgGatewayRoute};
 
 pub struct SgGatewayLayerBuilder {
     pub gateway_name: Arc<str>,
-    pub cancel_token: CancellationToken,
-    http_routers: Vec<SgHttpRoute>,
+    http_routers: HashMap<String, SgHttpRoute>,
     pub http_plugins: Vec<SgBoxLayer>,
     http_fallback: SgBoxLayer,
     http_route_reloader: Reloader<SgGatewayRoute>,
     pub extension: hyper::http::Extensions,
 }
 
-pub fn default_gateway_route_fallback() -> &'static SgBoxLayer {
-    static LAYER: OnceLock<SgBoxLayer> = OnceLock::new();
-    LAYER.get_or_init(|| {
-        SgBoxLayer::new(FilterRequestLayer::new(ResponseAnyway {
-            status: hyper::StatusCode::NOT_FOUND,
-            message: "[Sg.HttpRouteRule] no rule matched".to_string().into(),
-        }))
-    })
+pub fn default_gateway_route_fallback() -> SgBoxLayer {
+    // static LAYER: OnceLock<SgBoxLayer> = OnceLock::new();
+    // LAYER.get_or_init(|| {
+    // })
+    SgBoxLayer::new(FilterRequestLayer::new(ResponseAnyway {
+        status: hyper::StatusCode::NOT_FOUND,
+        message: "[Sg.HttpRouteRule] no rule matched".to_string().into(),
+    }))
 }
 
 impl SgGatewayLayerBuilder {
-    pub fn new(gateway_name: impl Into<Arc<str>>, cancel_token: CancellationToken) -> Self {
+    pub fn new(gateway_name: impl Into<Arc<str>>) -> Self {
         Self {
-            cancel_token,
             gateway_name: gateway_name.into(),
-            http_routers: Vec::new(),
+            http_routers: HashMap::new(),
             http_plugins: Vec::new(),
-            http_fallback: default_gateway_route_fallback().clone(),
+            http_fallback: default_gateway_route_fallback(),
             http_route_reloader: Default::default(),
             extension: hyper::http::Extensions::default(),
         }
     }
     pub fn http_router(mut self, route: SgHttpRoute) -> Self {
-        self.http_routers.push(route);
+        self.http_routers.insert(route.name.clone(), route);
         self
     }
-    pub fn http_routers(mut self, routes: impl IntoIterator<Item = SgHttpRoute>) -> Self {
-        self.http_routers.extend(routes);
+    pub fn http_routers(mut self, routes: impl IntoIterator<Item = (String, SgHttpRoute)>) -> Self {
+        for (name, mut route) in routes {
+            route.name = name.clone();
+            self.http_routers.insert(name, route);
+        }
         self
     }
     pub fn http_plugin(mut self, plugin: SgBoxLayer) -> Self {
@@ -76,8 +75,8 @@ impl SgGatewayLayerBuilder {
     pub fn build(self) -> SgGatewayLayer {
         SgGatewayLayer {
             gateway_name: self.gateway_name,
-            http_routes: self.http_routers.into(),
-            http_plugins: self.http_plugins.into(),
+            http_routes: self.http_routers,
+            http_plugins: self.http_plugins,
             http_fallback: self.http_fallback,
             http_route_reloader: self.http_route_reloader,
         }

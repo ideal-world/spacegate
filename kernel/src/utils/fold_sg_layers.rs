@@ -1,8 +1,10 @@
-use tower_layer::{Identity, Stack};
+use tower_layer::Layer;
 
-use crate::SgBoxLayer;
+use crate::{ArcHyperService, SgBoxLayer};
 
-/// fold a bunch of layers into a single layer, the front layers will be inner layers
-pub fn fold_sg_layers(layers: impl Iterator<Item = SgBoxLayer>) -> SgBoxLayer {
-    layers.fold(SgBoxLayer::new(Identity::default()), |inner, outer| SgBoxLayer::new(Stack::new(inner, outer)))
+pub fn sg_layers<'a>(layers: impl Iterator<Item = &'a SgBoxLayer>, mut inner: ArcHyperService) -> ArcHyperService {
+    for l in layers {
+        inner = l.layer(inner);
+    }
+    inner
 }

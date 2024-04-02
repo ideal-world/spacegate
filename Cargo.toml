@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "shell", "plugin", "config", "admin-server", "extension/*"]
+members = ["kernel", "shell", "plugin", "config", "admin-server", "extension/*", "services/simplify"]
 resolver = "2"
 
 [profile.release]
@@ -104,3 +104,6 @@ notify = { version = "6.1.1" }
 
 # redis
 deadpool-redis = { version = "0.14" }
+
+# web-server
+axum = "0.7.4"

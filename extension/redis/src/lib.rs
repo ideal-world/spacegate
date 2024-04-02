@@ -15,7 +15,7 @@ pub const CONF_CHANGE_TRIGGER: &str = "sg:conf:change:trigger:";
 
 #[derive(Clone)]
 pub struct RedisClient {
-    redis_conn_pool: Pool,
+    pub redis_conn_pool: Pool,
 }
 
 impl std::fmt::Debug for RedisClient {

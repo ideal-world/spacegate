@@ -23,8 +23,19 @@ pub struct ConfigItem {
 }
 
 impl ConfigItem {
-    pub fn into_gateway_and_routes(self) -> (SgGateway, Vec<SgHttpRoute>) {
-        (self.gateway, self.routes.into_values().collect())
+    pub fn collect_all_plugins(&self) -> Vec<crate::model::SgRouteFilter> {
+        let mut plugins = Vec::new();
+        plugins.extend(self.gateway.filters.iter().cloned());
+        for route in self.routes.values() {
+            plugins.extend(route.filters.iter().cloned());
+            for rule in route.rules.iter() {
+                plugins.extend(rule.filters.iter().cloned());
+                for backend in rule.backends.iter() {
+                    plugins.extend(backend.filters.iter().cloned());
+                }
+            }
+        }
+        plugins
     }
 }
 

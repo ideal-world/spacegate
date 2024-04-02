@@ -1,30 +1,28 @@
-use std::sync::Arc;
 use std::time::Duration;
 
+use crate::Plugin;
 use hyper::{header::HeaderName, Request};
 use hyper::{Method, Response, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::extension::Reflect;
-use spacegate_kernel::helper_layers::bidirection_filter::{Bdf, BdfLayer, BoxReqFut, BoxRespFut};
+use spacegate_kernel::helper_layers::function::Inner;
 use spacegate_kernel::service::http_client_service::get_client;
 use spacegate_kernel::BoxError;
-use spacegate_kernel::{SgBody, SgResponseExt};
-
-use crate::{def_plugin, MakeSgLayer};
+use spacegate_kernel::SgBody;
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct SgFilterInject {
+pub struct InjectPlugin {
     pub req_inject_url: Option<String>,
     pub req_timeout: Duration,
     pub resp_inject_url: Option<String>,
     pub resp_timeout: Duration,
 }
 
-impl Default for SgFilterInject {
+impl Default for InjectPlugin {
     fn default() -> Self {
-        SgFilterInject {
+        InjectPlugin {
             req_inject_url: None,
             req_timeout: DEFAULT_TIMEOUT,
             resp_inject_url: None,
@@ -39,7 +37,7 @@ struct InjectRealMethod(pub Method);
 struct InjectRealUrl(pub Uri);
 const SG_INJECT_REAL_METHOD: &str = "sg-inject-real-method";
 const SG_INJECT_REAL_URL: &str = "sg-inject-real-url";
-impl SgFilterInject {
+impl InjectPlugin {
     async fn req_filter(&self, mut req: Request<SgBody>) -> Result<Request<SgBody>, BoxError> {
         let real_method = req.method().clone();
         let real_uri = req.uri().clone();
@@ -92,48 +90,17 @@ impl SgFilterInject {
     }
 }
 
-impl Bdf for SgFilterInject {
-    type FutureReq = BoxReqFut;
-
-    type FutureResp = BoxRespFut;
-
-    fn on_req(self: Arc<Self>, req: Request<SgBody>) -> Self::FutureReq {
-        Box::pin(async move {
-            match self.req_filter(req).await {
-                Ok(req) => Ok(req),
-                Err(e) => Err(Response::<SgBody>::with_code_message(
-                    hyper::StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("[SG.Filter.Inject] {}", e),
-                )),
-            }
-        })
+impl Plugin for InjectPlugin {
+    const CODE: &'static str = "inject";
+    async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
+        let req = self.req_filter(req).await?;
+        let resp = inner.call(req).await;
+        self.resp_filter(resp).await
     }
-
-    fn on_resp(self: Arc<Self>, resp: Response<SgBody>) -> Self::FutureResp {
-        Box::pin(async move {
-            match self.resp_filter(resp).await {
-                Ok(resp) => resp,
-                Err(e) => Response::<SgBody>::with_code_message(hyper::StatusCode::INTERNAL_SERVER_ERROR, format!("[SG.Filter.Inject] {}", e)),
-            }
-        })
+    fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
+        Ok(serde_json::from_value(config.spec)?)
     }
 }
 
-impl MakeSgLayer for SgFilterInject {
-    fn make_layer(&self) -> Result<spacegate_kernel::SgBoxLayer, BoxError> {
-        let layer = BdfLayer::new(self.clone());
-        Ok(spacegate_kernel::SgBoxLayer::new(layer))
-    }
-}
-
-def_plugin!("inject", InjectPlugin, SgFilterInject);
 #[cfg(feature = "schema")]
-crate::schema!(
-    InjectPlugin,
-    SgFilterInject {
-        req_inject_url: Some("http://localhost:8080/inject".to_string()),
-        req_timeout: Duration::from_secs(5),
-        resp_inject_url: Some("http://localhost:8080/inject".to_string()),
-        resp_timeout: Duration::from_secs(5),
-    }
-);
+crate::schema!(InjectPlugin, InjectPlugin);

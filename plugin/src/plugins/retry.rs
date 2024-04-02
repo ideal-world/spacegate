@@ -10,7 +10,7 @@ use tower_layer::Layer;
 
 use spacegate_kernel::{SgBody, SgBoxLayer, SgResponseExt};
 
-use crate::{def_plugin, MakeSgLayer};
+use crate::def_plugin;
 #[derive(Debug, Clone)]
 pub struct RetryLayer<P> {
     policy_default: P,
@@ -273,18 +273,7 @@ where
     }
 }
 
-impl MakeSgLayer for SgPluginRetryConfig {
-    fn make_layer(&self) -> Result<spacegate_kernel::SgBoxLayer, spacegate_kernel::BoxError> {
-        let policy = RetryPolicy {
-            times: 0,
-            config: Arc::new(self.clone()),
-        };
-        let layer = RetryLayer::new(policy);
-        Ok(SgBoxLayer::new(layer))
-    }
-}
-
-def_plugin!("retry", RetryPlugin, SgPluginRetryConfig);
+def_plugin!("retry", RetryPlugin, SgPluginRetryConfig; #[cfg(feature = "schema")] schema;);
 #[cfg(feature = "schema")]
 crate::schema! {
     RetryPlugin,

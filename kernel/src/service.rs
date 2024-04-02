@@ -30,25 +30,25 @@ where
         Box::new(self.clone())
     }
 }
-pub struct BoxHyperService {
+pub struct ArcHyperService {
     pub boxed: Arc<
         dyn CloneHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible, Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>> + Send + Sync,
     >,
 }
 
-impl std::fmt::Debug for BoxHyperService {
+impl std::fmt::Debug for ArcHyperService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BoxHyperService").finish()
+        f.debug_struct("ArcHyperService").finish()
     }
 }
 
-impl Clone for BoxHyperService {
+impl Clone for ArcHyperService {
     fn clone(&self) -> Self {
         Self { boxed: self.boxed.clone() }
     }
 }
 
-impl BoxHyperService {
+impl ArcHyperService {
     pub fn new<T>(service: T) -> Self
     where
         T: Clone + CloneHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
@@ -59,7 +59,7 @@ impl BoxHyperService {
     }
 }
 
-impl hyper::service::Service<Request<SgBody>> for BoxHyperService {
+impl hyper::service::Service<Request<SgBody>> for ArcHyperService {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -78,11 +78,11 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgRe
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;
     let mut client = get_client();
-    let mut response = if let Some(upgrade) = req.headers().get(UPGRADE) {
+    let mut response = if req.headers().get(UPGRADE).is_some_and(|upgrade| upgrade.as_bytes().eq_ignore_ascii_case(b"websocket")) {
         // we only support websocket upgrade now
-        if !upgrade.as_bytes().eq_ignore_ascii_case(b"websocket") {
-            return Ok(Response::with_code_message(StatusCode::NOT_IMPLEMENTED, "[Sg.Websocket] unsupported upgrade protocol"));
-        }
+        // if !upgrade.as_bytes().eq_ignore_ascii_case(b"websocket") {
+        //     return Ok(Response::with_code_message(StatusCode::NOT_IMPLEMENTED, "[Sg.Websocket] unsupported upgrade protocol"));
+        // }
         // dump request
         let (part, body) = req.into_parts();
         let body = body.dump().await?;
@@ -129,10 +129,10 @@ pub async fn http_backend_service(req: Request<SgBody>) -> Result<Response<SgBod
     }
 }
 
-pub fn get_http_backend_service() -> BoxHyperService {
-    BoxHyperService::new(hyper::service::service_fn(http_backend_service))
+pub fn get_http_backend_service() -> ArcHyperService {
+    ArcHyperService::new(hyper::service::service_fn(http_backend_service))
 }
 
-pub fn get_echo_service() -> BoxHyperService {
-    BoxHyperService::new(hyper::service::service_fn(echo::echo))
+pub fn get_echo_service() -> ArcHyperService {
+    ArcHyperService::new(hyper::service::service_fn(echo::echo))
 }

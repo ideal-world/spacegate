@@ -1,14 +1,23 @@
-pub mod async_filter;
-pub mod bidirection_filter;
-pub mod check;
+/// Sync request filter.
 pub mod filter;
-pub mod function;
+
+/// Map service's future into another future.
 pub mod map_future;
+
+/// Map service's response.
 pub mod map_request;
-pub mod map_response;
+
+/// Create a function or closure layer.
+pub mod function;
+
+/// Random pick one inner service.
 pub mod random_pick;
+
+/// Service with a hot reloader.
 pub mod reload;
-pub mod response_error;
+
+/// Routing request to some inner service
 pub mod route;
-pub mod stat;
+
+/// Timeout layer based on tokio timer
 pub mod timeout;

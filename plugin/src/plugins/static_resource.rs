@@ -7,13 +7,9 @@ use hyper::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_kernel::{
-    extension::Reflect,
-    helper_layers::filter::{Filter, FilterRequestLayer},
-    SgBody,
-};
+use spacegate_kernel::{extension::Reflect, helper_layers::filter::Filter, BoxError, SgBody};
 
-use crate::{MakeSgLayer, Plugin, PluginError};
+use crate::{Plugin, PluginError};
 
 /// StaticResourceConfig
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,32 +56,44 @@ impl Filter for StaticResource {
     }
 }
 
-impl MakeSgLayer for StaticResourceConfig {
-    fn make_layer(&self) -> spacegate_kernel::BoxResult<spacegate_kernel::SgBoxLayer> {
-        let content_type = self.content_type.clone();
+pub struct StaticResourcePlugin {
+    pub code: StatusCode,
+    pub content_type: HeaderValue,
+    pub body: Bytes,
+}
+
+impl Plugin for StaticResourcePlugin {
+    const CODE: &'static str = "static-resource";
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        Some(<Self as crate::PluginSchemaExt>::schema())
+    }
+
+    async fn call(&self, req: hyper::Request<SgBody>, _inner: spacegate_kernel::helper_layers::function::Inner) -> Result<Response<SgBody>, BoxError> {
+        let mut resp = Response::builder()
+            .header(CONTENT_TYPE, self.content_type.clone())
+            .status(self.code)
+            .body(SgBody::full(self.body.clone()))
+            .map_err(PluginError::internal_error::<StaticResourcePlugin>)?;
+        if let Some(reflect) = req.into_parts().0.extensions.remove::<Reflect>() {
+            resp.extensions_mut().extend(reflect.into_inner());
+        }
+        Ok(resp)
+    }
+
+    fn create(config: crate::PluginConfig) -> Result<Self, spacegate_kernel::BoxError> {
+        let plugin_config: StaticResourceConfig = serde_json::from_value(config.spec)?;
+        let content_type = plugin_config.content_type.clone();
         let content_type = HeaderValue::from_maybe_shared(content_type)?;
-        let body = match &self.body {
+        let body = match &plugin_config.body {
             BodyEnum::Json(value) => Bytes::copy_from_slice(value.to_string().as_bytes()),
             BodyEnum::Text(text) => Bytes::copy_from_slice(text.as_bytes()),
             BodyEnum::File(path) => Bytes::copy_from_slice(&std::fs::read(path)?),
         };
-        let code = StatusCode::from_u16(self.code)?;
-        Ok(spacegate_kernel::SgBoxLayer::new(FilterRequestLayer::new(StaticResource { content_type, code, body })))
-    }
-}
-
-pub struct StaticResourcePlugin {}
-
-impl Plugin for StaticResourcePlugin {
-    type MakeLayer = StaticResourceConfig;
-
-    const CODE: &'static str = "static-resource";
-
-    fn create(_id: Option<String>, value: Value) -> Result<Self::MakeLayer, spacegate_kernel::BoxError> {
-        let config = serde_json::from_value(value)?;
-        Ok(config)
+        let code = StatusCode::from_u16(plugin_config.code)?;
+        Ok(Self { content_type, code, body })
     }
 }
 
 #[cfg(feature = "schema")]
-crate::schema!(StaticResourcePlugin);
+crate::schema!(StaticResourcePlugin, StaticResourceConfig);

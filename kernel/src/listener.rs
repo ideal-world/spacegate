@@ -1,5 +1,5 @@
 use futures_util::future::BoxFuture;
-use hyper::{body::Incoming, Request, Response, StatusCode};
+use hyper::{body::Incoming, Request, Response};
 use hyper_util::rt::{self, TokioIo};
 
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
@@ -98,7 +98,8 @@ where
         req.extensions_mut().insert(self.peer);
         // here we will clone underlying service,
         // so it's important that underlying service is cheap to clone.
-        // here, the service are likely to be a `BoxHyperService`, if underlying service is big, it will be expensive to clone.
+        // here, the service are likely to be a `ArcHyperService` so it's ok
+        // but if underlying service is big, it will be expensive to clone.
         // especially the router is big and the too many plugins are installed.
         // so we should avoid that
         let enter_time = EnterTime::new();
@@ -110,14 +111,7 @@ where
         req.extensions_mut().insert(PeerAddr(self.peer));
         req.extensions_mut().insert(enter_time);
         Box::pin(async move {
-            let mut resp = match service.call(req).await {
-                Ok(resp) => resp,
-                Err(e) => {
-                    tracing::error!("buffer service call error: {:?}", e);
-                    let error = e.to_string();
-                    return Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(SgBody::full(error)).expect("constructing invalid response"));
-                }
-            };
+            let mut resp = service.call(req).await.expect("infallible");
             with_length_or_chunked(&mut resp);
             tracing::trace!(time_used = ?enter_time.elapsed(), "request finished");
             Ok(resp)
