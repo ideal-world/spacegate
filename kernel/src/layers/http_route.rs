@@ -35,6 +35,8 @@ pub struct SgHttpRoute {
     pub plugins: Vec<SgBoxLayer>,
     pub rules: Vec<SgHttpRouteRuleLayer>,
     pub priority: i16,
+    pub ext: hyper::http::Extensions,
+
 }
 
 impl SgHttpRoute {
@@ -46,6 +48,7 @@ impl SgHttpRoute {
 pub struct SgHttpRouter {
     pub hostnames: Arc<[String]>,
     pub rules: Arc<[Option<Arc<[Arc<SgHttpRouteMatch>]>>]>,
+    pub ext: hyper::http::Extensions,
 }
 
 /****************************************************************************************
@@ -60,6 +63,7 @@ pub struct SgHttpRouteRuleLayer {
     pub plugins: Vec<SgBoxLayer>,
     timeouts: Option<Duration>,
     backends: Vec<SgHttpBackendLayer>,
+    pub ext: hyper::http::Extensions,
 }
 
 impl SgHttpRouteRuleLayer {
@@ -89,13 +93,18 @@ where
         };
 
         let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
-        SgRouteRule { r#match, service }
+        SgRouteRule {
+            r#match,
+            service,
+            ext: self.ext.clone(),
+        }
     }
 }
 #[derive(Clone)]
 pub struct SgRouteRule {
     pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
     pub service: ArcHyperService,
+    pub ext: hyper::http::Extensions,
 }
 
 impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
@@ -128,6 +137,7 @@ pub struct SgHttpBackendLayer {
     pub scheme: Option<String>,
     pub weight: u16,
     pub timeout: Option<Duration>,
+    pub ext: hyper::http::Extensions,
 }
 
 impl SgHttpBackendLayer {
@@ -153,6 +163,7 @@ where
             scheme: self.scheme.clone().map(Into::into),
             timeout: self.timeout,
             inner_service: filtered,
+            ext: self.ext.clone(),
         }
     }
 }
@@ -165,6 +176,7 @@ pub struct SgHttpBackend<S> {
     pub weight: u16,
     pub timeout: Option<Duration>,
     pub inner_service: S,
+    pub ext: hyper::http::Extensions,
 }
 
 impl<S> hyper::service::Service<Request<SgBody>> for SgHttpBackend<S>

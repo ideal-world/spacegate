@@ -3,7 +3,7 @@ use std::{
     any::Any,
     borrow::Cow,
     collections::{HashMap, HashSet},
-    hash::{DefaultHasher, Hasher},
+    fmt::Debug,
     sync::{Arc, OnceLock, RwLock},
 };
 
@@ -12,7 +12,6 @@ use hyper::{Request, Response};
 use instance::{PluginInstance, PluginInstanceSnapshot};
 use layer::{InnerBoxPf, PluginFunction};
 use mount::{MountPoint, MountPointIndex};
-use rand::random;
 use serde::{Deserialize, Serialize};
 pub use serde_json;
 pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
@@ -35,12 +34,21 @@ pub mod plugins;
 pub use schemars;
 use spacegate_model::{PluginConfig, PluginInstanceId, PluginInstanceName};
 pub trait Plugin: Any + Sized + Send + Sync {
+    /// plugin code, it should be unique repository-wise.
     const CODE: &'static str;
     /// is this plugin mono instance
     const MONO: bool = false;
     fn meta() -> PluginMetaData {
         PluginMetaData::default()
     }
+    /// This function will be called when the plugin is invoked.
+    ///
+    /// The error will be wrapped with a response with status code 500, and the error message will be response's body.
+    ///
+    /// If you want to return a custom response, wrap it with `Ok` and return it.
+    ///
+    /// If you want to return a error response with other status code, use `PluginError::new` to create a error response, and wrap
+    /// it with `Ok`.
     fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Result<Response<SgBody>, BoxError>> + Send;
     fn create(plugin_config: PluginConfig) -> Result<Self, BoxError>;
     fn create_by_spec(spec: JsonValue, name: PluginInstanceName) -> Result<Self, BoxError> {
@@ -49,10 +57,15 @@ pub trait Plugin: Any + Sized + Send + Sync {
             spec,
         })
     }
+    /// Register the plugin to the repository.
+    ///
+    /// You can also register axum server route here.
     fn register(repo: &SgPluginRepository) {
         repo.plugins.write().expect("SgPluginRepository register error").insert(Self::CODE.into(), PluginAttributes::from_trait::<Self>());
     }
+
     #[cfg(feature = "schema")]
+    /// Return the schema of the plugin config.
     fn schema_opt() -> Option<schemars::schema::RootSchema> {
         None
     }
@@ -75,6 +88,19 @@ pub struct PluginAttributes {
     #[cfg(feature = "schema")]
     pub schema: Option<schemars::schema::RootSchema>,
     pub make_pf: BoxMakePfMethod,
+}
+
+impl Debug for PluginAttributes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut formatter = f.debug_struct("PluginAttributes");
+        formatter.field("mono", &self.mono).field("code", &self.code).field("meta", &self.meta);
+        #[cfg(feature = "schema")]
+        {
+            formatter.field("schema", &self.schema.is_some());
+        }
+
+        formatter.finish()
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
@@ -125,7 +151,6 @@ pub trait PluginSchemaExt {
 }
 
 type BoxMakePfMethod = Box<dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static>;
-type _BoxDestructFn = Box<dyn Fn(PluginInstance) -> Result<(), BoxError> + Send + Sync + 'static>;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
     pub plugins: Arc<RwLock<HashMap<Cow<'static, str>, PluginAttributes>>>,
@@ -229,25 +254,26 @@ impl SgPluginRepository {
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.remove(id) {
             instance.before_destroy()?;
-            Ok(instance.mount_points)
+            Ok(instance.mount_points.into_iter().filter_map(|(index, tracer)| (!tracer.all_dropped()).then_some(index)).collect())
         } else {
             Err(format!("[Sg.Plugin] missing instance {id:?}").into())
         }
     }
+    
     pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, id: PluginInstanceId) -> Result<(), BoxError> {
         let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
         let code = id.code.as_ref();
-        let Some(attr) = attr_rg.get(code) else {
+        let Some(_attr) = attr_rg.get(code) else {
             return Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into());
         };
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.get_mut(&id) {
-            // todo!("check if config has changed");
+            instance.mount_points_gc();
             // before mount hook
             instance.before_mount()?;
             instance.mount_at(mount_point, mount_index)?;
-            instance.after_mount()?;
             // after mount hook
+            instance.after_mount()?;
             Ok(())
         } else {
             Err(format!("[Sg.Plugin] missing instance {id:?}").into())

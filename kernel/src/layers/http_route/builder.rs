@@ -75,6 +75,7 @@ impl SgHttpRouteLayerBuilder {
             rules: self.rules,
             priority: self.priority.unwrap_or(1),
             name: self.name,
+            ext: self.extensions,
         })
     }
 }
@@ -138,6 +139,7 @@ impl SgHttpRouteRuleLayerBuilder {
             plugins: self.plugins,
             timeouts: self.timeouts,
             backends: self.backends,
+            ext: self.extensions,
         })
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
@@ -215,6 +217,7 @@ impl SgHttpBackendLayerBuilder {
             plugins: self.plugins,
             timeout: self.timeout,
             weight: self.weight,
+            ext: self.extensions,
         })
     }
 }
