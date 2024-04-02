@@ -60,4 +60,3 @@ pub struct Config {
     #[cfg_attr(feature = "typegen", ts(as = "crate::plugin::PluginInstanceMapTs"))]
     pub plugins: PluginInstanceMap,
 }
-

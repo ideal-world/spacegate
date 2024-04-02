@@ -19,7 +19,6 @@ pub struct SgGateway<P = PluginInstanceId> {
     /// Listeners associated with this Gateway. Listeners define logical endpoints that are bound on this Gateway’s addresses.
     pub listeners: Vec<SgListener>,
     /// Filters define the filters that are applied to requests that match this gateway.
-    
     pub plugins: Vec<P>,
 }
 
