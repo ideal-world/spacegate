@@ -8,7 +8,7 @@ where
 {
     async fn delete_plugin(&self, id: &spacegate_model::PluginInstanceId) -> Result<(), BoxError> {
         self.modify_cached(|config| {
-            config.plugins.remove(&id);
+            config.plugins.remove(id);
             Ok(())
         })
         .await
