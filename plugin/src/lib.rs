@@ -259,7 +259,7 @@ impl SgPluginRepository {
             Err(format!("[Sg.Plugin] missing instance {id:?}").into())
         }
     }
-    
+
     pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, id: PluginInstanceId) -> Result<(), BoxError> {
         let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
         let code = id.code.as_ref();

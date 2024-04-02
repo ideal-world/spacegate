@@ -36,7 +36,6 @@ pub struct SgHttpRoute {
     pub rules: Vec<SgHttpRouteRuleLayer>,
     pub priority: i16,
     pub ext: hyper::http::Extensions,
-
 }
 
 impl SgHttpRoute {
