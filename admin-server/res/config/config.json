@@ -1,1 +1,30 @@
-{"gateways":{},"plugins":{"named":[],"mono":[]}}
+{
+    "gateways": [
+        {
+            "name": "New Gateway",
+            "parameters": {
+                "redis_url": null,
+                "log_level": null,
+                "lang": null,
+                "ignore_tls_verification": false
+            },
+            "listeners": [
+                {
+                    "name": "new listener",
+                    "ip": null,
+                    "port": 9091,
+                    "protocol": {
+                        "type": "http"
+                    },
+                    "hostname": null
+                }
+            ],
+            "plugins": [],
+            "routes": []
+        }
+    ],
+    "plugins": {
+        "named": [],
+        "mono": []
+    }
+}
