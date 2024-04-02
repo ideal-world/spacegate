@@ -9,7 +9,7 @@ use spacegate_kernel::{
     BoxError,
 };
 
-use crate::instance::PluginInstance;
+use crate::instance::{drop_trace, DropMarkerSet, DropTracer, PluginInstance};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum MountPointIndex {
@@ -94,33 +94,45 @@ pub enum MountPointIndexSerde<'a> {
 }
 
 pub trait MountPoint {
-    fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError>;
+    fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError>;
 }
 
 impl MountPoint for SgGatewayLayer {
-    fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
+    fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
+        let (tracer, marker) = drop_trace();
         self.http_plugins.push(instance.make());
-        Ok(())
+        let set = self.ext.get_or_insert_default::<DropMarkerSet>();
+        set.inner.insert(marker);
+        Ok(tracer)
     }
 }
 
 impl MountPoint for SgHttpRoute {
-    fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
+    fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
+        let (tracer, marker) = drop_trace();
         self.plugins.push(instance.make());
-        Ok(())
+        let set = self.ext.get_or_insert_default::<DropMarkerSet>();
+        set.inner.insert(marker);
+        Ok(tracer)
     }
 }
 
 impl MountPoint for SgHttpRouteRuleLayer {
-    fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
+    fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
+        let (tracer, marker) = drop_trace();
         self.plugins.push(instance.make());
-        Ok(())
+        let set = self.ext.get_or_insert_default::<DropMarkerSet>();
+        set.inner.insert(marker);
+        Ok(tracer)
     }
 }
 
 impl MountPoint for SgHttpBackendLayer {
-    fn mount(&mut self, instance: &mut PluginInstance) -> Result<(), BoxError> {
+    fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
+        let (tracer, marker) = drop_trace();
         self.plugins.push(instance.make());
-        Ok(())
+        let set = self.ext.get_or_insert_default::<DropMarkerSet>();
+        set.inner.insert(marker);
+        Ok(tracer)
     }
 }

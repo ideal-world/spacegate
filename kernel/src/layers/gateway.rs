@@ -36,6 +36,7 @@ pub struct SgGatewayLayer {
     pub http_plugins: Vec<SgBoxLayer>,
     pub http_fallback: SgBoxLayer,
     pub http_route_reloader: Reloader<SgGatewayRoute>,
+    pub ext: hyper::http::Extensions,
 }
 
 impl SgGatewayLayer {
@@ -158,6 +159,7 @@ where
         routers.push(SgHttpRouter {
             hostnames: route.hostnames.clone().into(),
             rules: rules_router.into_iter().map(|x| x.map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>())).collect(),
+            ext: route.ext.clone(),
         });
     }
 

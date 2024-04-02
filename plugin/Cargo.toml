@@ -67,7 +67,6 @@ ipnet = { workspace = true, optional = true }
 # time
 chrono = { workspace = true }
 
-rand = { version = "0" }
 url = { version = "2", optional = true }
 
 # cache

@@ -182,10 +182,12 @@ impl RunningSgGateway {
     }
     pub async fn global_reset() {
         let store = Self::global_store();
-        let mut store = store.lock().expect("poisoned lock");
         let mut task = tokio::task::JoinSet::new();
-        for (_, s) in store.drain() {
-            task.spawn(s.shutdown());
+        {
+            let mut g_store = store.lock().expect("poisoned lock");
+            for (_, s) in g_store.drain() {
+                task.spawn(s.shutdown());
+            }
         }
         while let Some(res) = task.join_next().await {
             res.expect("tokio join error")
