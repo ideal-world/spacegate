@@ -1,5 +1,13 @@
 [workspace]
-members = ["kernel", "shell", "plugin", "config", "admin-server", "extension/*", "services/simplify", "model"]
+members = [
+  "crates/extension/*",
+  "crates/services/simplify",
+  "crates/kernel",
+  "crates/plugin",
+  "crates/model",
+  "crates/config",
+  "crates/shell",
+]
 resolver = "2"
 
 [profile.release]
@@ -23,12 +31,21 @@ license = "MIT/Apache-2.0"
 rust-version = "1.64"
 
 [workspace.dependencies]
+spacegate-kernel = { path = "./crates/kernel" }
+spacegate-plugin = { path = "./crates/plugin" }
+spacegate-model = { path = "./crates/model" }
+spacegate-config = { path = "./crates/config" }
+spacegate-shell = { path = "./crates/shell" }
+spacegate-ext-axum = { path = "./crates/extension/axum" }
+spacegate-ext-redis = { path = "./crates/extension/redis" }
+
+
 # runtime
 tokio = { version = "1" }
 # Basic
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-toml = { version = "0.8", features = ["preserve_order"]}
+toml = { version = "0.8", features = ["preserve_order"] }
 lazy_static = { version = "1.4" }
 async-trait = { version = "0.1" }
 itertools = { version = "0" }
@@ -39,11 +56,6 @@ urlencoding = { version = "2" }
 
 # Time
 chrono = { version = "0.4" }
-
-# Tardis
-# tardis = { version = "=0.1.0-rc.8" }
-# tardis = { path = "../tardis/tardis" }
-tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "aa8931b" }
 
 # Http
 rustls = { version = "0.21.0" }
