@@ -17,7 +17,7 @@ pub struct SgGatewayLayerBuilder {
     pub http_plugins: Vec<SgBoxLayer>,
     http_fallback: SgBoxLayer,
     http_route_reloader: Reloader<SgGatewayRoute>,
-    pub extension: hyper::http::Extensions,
+    pub extensions: hyper::http::Extensions,
 }
 
 pub fn default_gateway_route_fallback() -> SgBoxLayer {
@@ -38,7 +38,7 @@ impl SgGatewayLayerBuilder {
             http_plugins: Vec::new(),
             http_fallback: default_gateway_route_fallback(),
             http_route_reloader: Default::default(),
-            extension: hyper::http::Extensions::default(),
+            extensions: hyper::http::Extensions::default(),
         }
     }
     pub fn http_router(mut self, route: SgHttpRoute) -> Self {
@@ -69,7 +69,7 @@ impl SgGatewayLayerBuilder {
         self
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
-        self.extension = extension;
+        self.extensions = extension;
         self
     }
     pub fn build(self) -> SgGatewayLayer {
@@ -79,6 +79,7 @@ impl SgGatewayLayerBuilder {
             http_plugins: self.http_plugins,
             http_fallback: self.http_fallback,
             http_route_reloader: self.http_route_reloader,
+            ext: self.extensions,
         }
     }
 }

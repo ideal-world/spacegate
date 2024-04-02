@@ -1,10 +1,10 @@
 use std::{
     any::{Any, TypeId},
-    borrow::Cow,
     collections::{HashMap, HashSet},
-    convert::Infallible,
-    fmt::Display,
-    str::FromStr,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Weak,
+    },
 };
 
 use serde::{Deserialize, Serialize};
@@ -13,17 +13,49 @@ use spacegate_model::PluginConfig;
 
 use crate::mount::{MountPoint, MountPointIndex};
 
-// pub struct PluginInstanceRef {
-//     id: PluginInstanceId,
-// }
-
 pub struct PluginInstance {
     // data
     pub config: PluginConfig,
-    pub mount_points: HashSet<MountPointIndex>,
+    pub mount_points: HashMap<MountPointIndex, DropTracer>,
     pub hooks: PluginInstanceHooks,
     pub resource: PluginInstanceResource,
     pub plugin_function: crate::layer::PluginFunction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DropMarker {
+    drop_signal: Arc<u64>,
+}
+
+#[derive(Debug, Clone, Default)]
+
+pub struct DropMarkerSet {
+    pub(crate) inner: HashSet<DropMarker>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DropTracer {
+    drop_signal: Weak<u64>,
+}
+
+impl DropTracer {
+    pub fn count(&self) -> usize {
+        self.drop_signal.strong_count()
+    }
+    pub fn all_dropped(&self) -> bool {
+        self.drop_signal.strong_count() == 0
+    }
+}
+
+pub(crate) fn drop_trace() -> (DropTracer, DropMarker) {
+    static COUNT: AtomicU64 = AtomicU64::new(0);
+    let drop_signal = Arc::new(COUNT.fetch_add(1, Ordering::SeqCst));
+    (
+        DropTracer {
+            drop_signal: Arc::downgrade(&drop_signal),
+        },
+        DropMarker { drop_signal: drop_signal.clone() },
+    )
 }
 
 pub type BoxMakeFn = Box<dyn Fn(&PluginInstance) -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static>;
@@ -83,14 +115,14 @@ macro_rules! expose_hooks {
 
 impl PluginInstance {
     pub(crate) fn mount_at<M: MountPoint>(&mut self, mount_point: &mut M, index: MountPointIndex) -> Result<(), BoxError> {
-        mount_point.mount(self)?;
-        self.mount_points.insert(index);
+        let tracer = mount_point.mount(self)?;
+        self.mount_points.insert(index, tracer);
         Ok(())
     }
     pub fn snapshot(&self) -> PluginInstanceSnapshot {
         PluginInstanceSnapshot {
             config: self.config.clone(),
-            mount_points: self.mount_points.clone(),
+            mount_points: self.mount_points.iter().filter_map(|(index, tracer)| if !tracer.all_dropped() { Some(index.clone()) } else { None }).collect(),
         }
     }
     pub(crate) fn call_hook(&self, hook: &Option<PluginInstanceHook>) -> BoxResult<()> {
@@ -102,6 +134,11 @@ impl PluginInstance {
     }
     pub fn make(&self) -> SgBoxLayer {
         SgBoxLayer::new(FnLayer::new(self.plugin_function.clone()))
+    }
+    // if we don't clean the mount_points, it may cause a slow memory leak
+    // we do it before new instance mounted
+    pub(crate) fn mount_points_gc(&mut self) {
+        self.mount_points.retain(|_, tracer| !tracer.all_dropped());
     }
     expose_hooks! {
         after_create, set_after_create
