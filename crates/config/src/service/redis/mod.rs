@@ -1,6 +1,16 @@
+use std::str::FromStr;
+
 use crate::{service::config_format::ConfigFormat, BoxResult};
-use deadpool_redis::{Connection, Pool};
+use deadpool_redis::{Connection, Manager, Pool};
+use redis::{FromRedisValue, RedisWrite, ToRedisArgs};
+use spacegate_model::BoxError;
+
+use super::{ConfigEventType, ConfigType};
 pub mod create;
+pub mod delete;
+pub mod listen;
+pub mod retrieve;
+pub mod update;
 
 /// `hash: {gateway name} -> {gateway config}`
 pub const CONF_GATEWAY_KEY: &str = "sg:conf:gateway";
@@ -12,22 +22,61 @@ pub const CONF_PLUGIN_KEY: &str = "sg:conf:plugin";
 /// changed obj: gateway/httproute
 /// method: create/update/delete
 /// changed route name: None or <route name>
-pub const CONF_CHANGE_TRIGGER: &str = "sg:conf:change:trigger:";
+pub const CONF_EVENT_CHANNEL: &str = "sg:conf:event";
 
-pub struct Redis<F> {
+pub struct Redis<F, P = String> {
     redis_conn_pool: Pool,
+    param: P,
     pub format: F,
 }
 
-impl<F> Redis<F>
+pub trait RedisParam: redis::IntoConnectionInfo + Send + Sync + Clone + Sized {}
+
+impl<T> RedisParam for T where T: redis::IntoConnectionInfo + Send + Sync + Clone + Sized {}
+
+impl<F, P> Redis<F, P>
 where
     F: ConfigFormat,
+    P: RedisParam,
 {
-    pub fn new(redis_conn_pool: Pool, format: F) -> Self {
-        Self { redis_conn_pool, format }
+    pub fn new(param: P, format: F) -> BoxResult<Self> {
+        let pool = Pool::builder(Manager::new(param.clone())?).build()?;
+        Ok(Self {
+            redis_conn_pool: pool,
+            format,
+            param,
+        })
     }
 
     pub async fn get_con(&self) -> BoxResult<Connection> {
         Ok(self.redis_conn_pool.get().await.map_err(Box::new)?)
+    }
+}
+
+struct RedisConfEvent(pub(crate) ConfigType, pub(crate) ConfigEventType);
+
+impl ToRedisArgs for RedisConfEvent {
+    fn write_redis_args<W: ?Sized + RedisWrite>(&self, out: &mut W) {
+        out.write_arg_fmt(format!("{}/{}", self.1.to_string(), self.0.to_string()));
+    }
+}
+
+impl FromRedisValue for RedisConfEvent {
+    fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
+        let s: String = redis::FromRedisValue::from_redis_value(v)?;
+        match s.parse() {
+            Ok(event) => Ok(event),
+            Err(e) => Err(std::io::Error::other(format!("fail to parse event {e}")).into()),
+        }
+    }
+}
+impl FromStr for RedisConfEvent {
+    type Err = BoxError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let Some((method, object)) = s.split_once('/') else {
+            return Err("Invalid format".into());
+        };
+        Ok(Self(ConfigType::from_str(object)?, ConfigEventType::from_str(method)?))
     }
 }

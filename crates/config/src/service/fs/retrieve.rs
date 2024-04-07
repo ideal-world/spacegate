@@ -1,4 +1,4 @@
-use spacegate_model::{PluginConfig, PluginInstanceId, PluginInstanceMap};
+use spacegate_model::{PluginConfig, PluginInstanceId};
 
 use super::Fs;
 use crate::service::config_format::ConfigFormat;
@@ -11,8 +11,8 @@ impl<F> Retrieve for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
 {
-    async fn retrieve_all_plugins(&self) -> Result<PluginInstanceMap, BoxError> {
-        self.retrieve_cached(|cfg| cfg.plugins.clone()).await
+    async fn retrieve_all_plugins(&self) -> Result<Vec<PluginConfig>, BoxError> {
+        self.retrieve_cached(|cfg| cfg.plugins.clone().into_config_vec()).await
     }
 
     async fn retrieve_plugin(&self, id: &PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {

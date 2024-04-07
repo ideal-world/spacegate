@@ -5,7 +5,7 @@ on:
     branches:
       - master
     paths:
-      - "admin-client/**"
+      - "sdk/admin-client/**"
       - ".github/workflows/publish_client.yml"
 
 jobs:
@@ -23,12 +23,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: cd admin-client && npm ci
+        run: cd sdk/admin-client && npm ci
 
       - name: Build
-        run: cd admin-client && npm run build
+        run: cd sdk/admin-client && npm run build
 
       - name: Publish
-        run: cd admin-client && npm publish
+        run: cd sdk/admin-client && npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

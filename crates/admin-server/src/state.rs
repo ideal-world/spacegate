@@ -1,5 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use axum::http::Uri;
+
 use crate::mw;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PluginCode(String);

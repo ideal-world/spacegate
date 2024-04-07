@@ -111,6 +111,9 @@ pub struct PluginConfig {
 }
 
 impl PluginConfig {
+    pub fn new(id: impl Into<PluginInstanceId>, spec: Value) -> Self {
+        Self { id: id.into(), spec }
+    }
     pub fn code(&self) -> &str {
         &self.id.code
     }
@@ -130,6 +133,16 @@ impl Hash for PluginConfig {
 pub struct PluginInstanceMap {
     // #[cfg_attr(feature = "typegen", ts(type = "Record<string, PluginConfig>"))]
     plugins: HashMap<PluginInstanceId, Value>,
+}
+
+impl PluginInstanceMap {
+    pub fn into_config_vec(self) -> Vec<PluginConfig> {
+        self.plugins.into_iter().map(|(k, v)| PluginConfig { id: k, spec: v }).collect()
+    }
+    pub fn from_config_vec(vec: Vec<PluginConfig>) -> Self {
+        let map = vec.into_iter().map(|v| (v.id.clone(), v.spec)).collect();
+        PluginInstanceMap { plugins: map }
+    }
 }
 
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, rename = "PluginInstanceMap"))]

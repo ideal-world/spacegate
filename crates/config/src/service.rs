@@ -5,7 +5,7 @@ pub mod fs;
 pub mod memory;
 #[cfg(feature = "redis")]
 pub mod redis;
-use std::{collections::BTreeMap, error::Error};
+use std::{collections::BTreeMap, error::Error, str::FromStr};
 
 use futures_util::Future;
 use serde_json::Value;
@@ -123,10 +123,13 @@ pub trait Retrieve: Sync + Send {
                 }
             }
             let plugins = self.retrieve_all_plugins().await?;
-            Ok(Config { gateways, plugins })
+            Ok(Config {
+                gateways,
+                plugins: PluginInstanceMap::from_config_vec(plugins),
+            })
         }
     }
-    fn retrieve_all_plugins(&self) -> impl Future<Output = Result<PluginInstanceMap, BoxError>> + Send;
+    fn retrieve_all_plugins(&self) -> impl Future<Output = Result<Vec<PluginConfig>, BoxError>> + Send;
     fn retrieve_plugin(&self, id: &PluginInstanceId) -> impl Future<Output = Result<Option<PluginConfig>, BoxError>> + Send;
 }
 
@@ -134,6 +137,28 @@ pub enum ConfigEventType {
     Create,
     Update,
     Delete,
+}
+
+impl FromStr for ConfigEventType {
+    type Err = BoxError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "create" => Ok(Self::Create),
+            "update" => Ok(Self::Update),
+            "delete" => Ok(Self::Delete),
+            _ => Err(format!("unknown ConfigEventType: {}", s).into()),
+        }
+    }
+}
+
+impl ToString for ConfigEventType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Create => "create".to_string(),
+            Self::Update => "update".to_string(),
+            Self::Delete => "delete".to_string(),
+        }
+    }
 }
 
 pub enum ConfigType {
@@ -149,6 +174,38 @@ pub enum ConfigType {
     },
     /// update global config, the shell would reload all
     Global,
+}
+
+impl ToString for ConfigType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Gateway { name } => format!("gateway/{}", name),
+            Self::Route { gateway_name, name } => format!("httproute/{}/{}", gateway_name, name),
+            Self::Plugin { id } => format!("plugin/{}/{}", id.code, id.name.to_string()),
+            Self::Global => "global".to_string(),
+        }
+    }
+}
+
+impl FromStr for ConfigType {
+    type Err = BoxError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let f = s.split('/').collect::<Vec<_>>();
+        match &f[..] {
+            ["gateway", gateway_name] => Ok(Self::Gateway { name: gateway_name.to_string() }),
+            ["httproute", gateway, route_name] => Ok(Self::Route {
+                gateway_name: gateway.to_string(),
+                name: route_name.to_string(),
+            }),
+            ["plugin", code, name] => {
+                let name = PluginInstanceName::from_str(name)?;
+                Ok(Self::Plugin {
+                    id: PluginInstanceId::new(code.to_string(), name),
+                })
+            }
+            _ => Err(format!("unknown ConfigType: {}", s).into()),
+        }
+    }
 }
 
 pub trait CreateListener {

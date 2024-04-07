@@ -19,7 +19,7 @@ path = "src/lib.rs"
 [features]
 ext-redis = ["spacegate-ext-redis", "spacegate-plugin/redis"]
 ext-axum = ["spacegate-ext-axum", "spacegate-plugin/axum"]
-cache = ["spacegate-plugin/cache", "deadpool-redis", "spacegate-ext-redis"]
+cache = ["spacegate-plugin/cache", "deadpool-redis", "spacegate-ext-redis", "spacegate-config/redis"]
 fs = ["spacegate-config/fs"]
 k8s = [
   "kube",

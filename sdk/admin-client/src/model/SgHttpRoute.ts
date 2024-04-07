@@ -4,9 +4,9 @@ import type { SgHttpRouteRule } from "./SgHttpRouteRule";
 
 export type SgHttpRoute<P = PluginInstanceId> = { 
 /**
- * Associated gateway name.
+ * Route name
  */
-gateway_name: string, 
+route_name: string, 
 /**
  * Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
  */
