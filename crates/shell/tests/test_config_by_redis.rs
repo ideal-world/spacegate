@@ -68,7 +68,7 @@ async fn test_config_by_redis() -> Result<(), BoxError> {
     std::thread::spawn(move || {
         let local_set = tokio::task::LocalSet::new();
         local_set.spawn_local(async move {
-            let join_handle = spacegate_shell::startup_cache(&moved_cache_url, 1).await.unwrap();
+            let join_handle = spacegate_shell::startup_redis(&moved_cache_url, 1).await.unwrap();
             join_handle.await.expect("join handle error")
         });
 

@@ -1,17 +1,15 @@
 use std::collections::HashMap;
 
-use redis::AsyncCommands as _;
-
+use super::{Redis, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY, CONF_PLUGIN_KEY};
 use crate::{
     model::{SgGateway, SgHttpRoute},
-    service::{
-        backend::redis::{Redis, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY},
-        config_format::ConfigFormat,
-    },
+    service::config_format::ConfigFormat,
     BoxResult,
 };
+use redis::AsyncCommands as _;
+use spacegate_model::{PluginConfig, PluginInstanceId};
 
-use super::Retrieve;
+use crate::service::Retrieve;
 
 impl<F> Retrieve for Redis<F>
 where
@@ -43,5 +41,20 @@ where
 
         let gateway_names = gateway_configs.into_iter().map(|g| g.name).collect();
         Ok(gateway_names)
+    }
+
+    async fn retrieve_all_plugins(&self) -> BoxResult<Vec<PluginConfig>> {
+        let plugin_configs: HashMap<String, String> = self.get_con().await?.hgetall(CONF_PLUGIN_KEY).await?;
+
+        let plugin_configs = plugin_configs
+            .into_values()
+            .map(|v| self.format.de(v.as_bytes()).map_err(|e| format!("[SG.Config] Plugin Config parse error {}", e).into()))
+            .collect::<BoxResult<Vec<PluginConfig>>>()?;
+        Ok(plugin_configs)
+    }
+
+    async fn retrieve_plugin(&self, id: &PluginInstanceId) -> BoxResult<Option<PluginConfig>> {
+        let plugin_config: Option<String> = self.get_con().await?.hget(CONF_PLUGIN_KEY, id.to_string()).await?;
+        plugin_config.map(|config| self.format.de::<PluginConfig>(config.as_bytes()).map_err(|e| format!("[SG.Config] Plugin Config parse error {}", e).into())).transpose()
     }
 }

@@ -47,16 +47,16 @@ pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<Join
 }
 #[cfg(feature = "k8s")]
 pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    use spacegate_config::service::backend::k8s::K8s;
-    let namespace = namespace.unwrap_or("default");
-    let config = K8s::new(namespace, kube::Client::try_default().await?);
-    startup(config)
+    // use spacegate_config::service::backend::k8s::K8s;
+    // let namespace = namespace.unwrap_or("default");
+    // let config = K8s::new(namespace, kube::Client::try_default().await?);
+    // startup(config)
+    unimplemented!()
 }
 #[cfg(feature = "cache")]
-pub async fn startup_cache(url: &str, _poll_interval_sec: u64) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
-    use spacegate_config::service::{backend::redis::Redis, config_format::Json};
-    use spacegate_ext_redis::RedisClient;
-    let config = Redis::new(RedisClient::new(url)?.redis_conn_pool, Json::default());
+pub async fn startup_redis<RedisParam>(url: impl Into<String>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+    use spacegate_config::service::{config_format::Json, redis::Redis};
+    let config = Redis::new(url.into(), Json::default())?;
     startup(config)
 }
 

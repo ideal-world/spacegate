@@ -1,9 +1,27 @@
 import axios, { AxiosResponse, AxiosInstance } from 'axios'
 import { Config, ConfigItem, SgGateway, SgHttpRoute } from '../model'
+import { PluginConfig } from '../model/PluginConfig'
+import { PluginInstanceName } from '../model/PluginInstanceName'
+import { PluginInstanceId } from '../model/PluginInstanceId'
 export * from 'axios'
 export const Client = {
     axiosInstance: axios as AxiosInstance,
     clientVersion: undefined as string | undefined,
+}
+
+function pluginInstanceIdAsQuery(id: PluginInstanceId): URLSearchParams {
+    let param = new URLSearchParams()
+    for (const q in Object.keys(id)) {
+        if (q === 'code' || q === 'uid' || q === 'name') {
+            let val = (id as Record<string, any>)[q];
+            if (typeof val === 'bigint') {
+                param.set(q, val.toString())
+            } else if (typeof val === 'string') {
+                param.set(q, val)
+            }
+        }
+    }
+    return param
 }
 
 export class ExceptionVersionConflict extends Error {
@@ -35,62 +53,68 @@ export function setClient(...args: Parameters<typeof axios.create>) {
 }
 
 
-export async function get_config_item_gateway(
+export async function getConfigItemGateway(
     gatewayName: string,
 ): Promise<AxiosResponse<SgGateway | null>> {
     return Client.axiosInstance.get(`/config/item/${gatewayName}/gateway`)
 }
 
-export async function get_config_item_route(
+export async function getConfigItemRoute(
     gateway_name: string,
     route_name: string,
 
 ): Promise<AxiosResponse<SgHttpRoute | null>> {
     return Client.axiosInstance.get(`/config/item/${gateway_name}/route/item/${route_name}`)
 }
-export async function get_config_item_route_names(
+export async function getConfigItemRouteNames(
     gatewayName: string,
 
 ): Promise<AxiosResponse<Array<string>>> {
     return Client.axiosInstance.get(`/config/item/${gatewayName}/route/names`)
 }
-export async function get_config_item_all_routes(
+export async function getConfigItemAllRoutes(
     gatewayName: string,
 
 ): Promise<AxiosResponse<Record<string, SgHttpRoute>>> {
     return Client.axiosInstance.get(`/config/item/${gatewayName}/route/all`)
 }
-export async function get_config_item(gatewayName: string,): Promise<AxiosResponse<ConfigItem | null>> {
+export async function getConfigItem(gatewayName: string,): Promise<AxiosResponse<ConfigItem | null>> {
     return Client.axiosInstance.get(`/config/item/${gatewayName}`)
 }
-export async function get_config_names(): Promise<AxiosResponse<Array<string>>> {
+export async function getConfigNames(): Promise<AxiosResponse<Array<string>>> {
     return Client.axiosInstance.get(`/config/names`)
 }
-export async function get_config(): Promise<AxiosResponse<Config>> {
+export async function getConfig(): Promise<AxiosResponse<Config>> {
     return Client.axiosInstance.get(`/config`)
 }
-
+export async function getConfigPluginAll(): Promise<AxiosResponse<Array<PluginConfig>>> {
+    return Client.axiosInstance.get(`/config/plugin-all`)
+}
+export async function getConfigPlugin(id: PluginInstanceId): Promise<AxiosResponse<PluginConfig | null>> {
+    const param = pluginInstanceIdAsQuery(id);
+    return Client.axiosInstance.get(`/config/plugin?${param}`)
+}
 /**********************************************
                        POST
 **********************************************/
-export async function post_config_item(
+export async function postConfigItem(
     gatewayName: string,
 
     config_item: ConfigItem,
 ): Promise<AxiosResponse> {
     return Client.axiosInstance.post(`/config/item/${gatewayName}`, config_item)
 }
-export async function post_config(config: Config): Promise<AxiosResponse> {
+export async function postConfig(config: Config): Promise<AxiosResponse> {
     return Client.axiosInstance.post(`/config`, config)
 }
-export async function post_config_item_gateway(
+export async function postConfigItemGateway(
     gatewayName: string,
 
     gateway: SgGateway,
 ): Promise<AxiosResponse> {
     return Client.axiosInstance.post(`/config/item/${gatewayName}/gateway`, gateway)
 }
-export async function post_config_item_route(
+export async function postConfigItemRoute(
     gateway_name: string,
     route_name: string,
 
@@ -98,11 +122,14 @@ export async function post_config_item_route(
 ): Promise<AxiosResponse> {
     return Client.axiosInstance.post(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }
-
+export async function postConfigPlugin(config: PluginConfig): Promise<AxiosResponse> {
+    const param = pluginInstanceIdAsQuery(config);
+    return Client.axiosInstance.post(`/config/plugin?${param}`, config.spec)
+}
 /**********************************************
                        PUT
 **********************************************/
-export async function put_config_item_gateway(
+export async function putConfigItemGateway(
     gatewayName: string,
 
     gateway: SgGateway,
@@ -110,7 +137,7 @@ export async function put_config_item_gateway(
     return Client.axiosInstance.put(`/config/item/${gatewayName}/gateway`, gateway)
 }
 
-export async function put_config_item_route(
+export async function putConfigItemRoute(
     gateway_name: string,
     route_name: string,
 
@@ -119,7 +146,7 @@ export async function put_config_item_route(
     return Client.axiosInstance.put(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }
 
-export async function put_config_item(
+export async function putConfigItem(
     gatewayName: string,
 
     config_item: ConfigItem,
@@ -127,19 +154,23 @@ export async function put_config_item(
     return Client.axiosInstance.put(`/config/item/${gatewayName}`, config_item)
 }
 
-export async function put_config(config: Config): Promise<AxiosResponse> {
+export async function putConfig(config: Config): Promise<AxiosResponse> {
     return Client.axiosInstance.put(`/config`, config)
 }
 
+export async function putConfigPlugin(config: PluginConfig): Promise<AxiosResponse> {
+    const param = pluginInstanceIdAsQuery(config);
+    return Client.axiosInstance.put(`/config/plugin?${param}`, config.spec)
+}
 /**********************************************
                        DELETE
 **********************************************/
 
-export async function delete_config_item_gateway(gatewayName: string,): Promise<AxiosResponse> {
+export async function deleteConfigItemGateway(gatewayName: string,): Promise<AxiosResponse> {
     return Client.axiosInstance.delete(`/config/item/${gatewayName}/gateway`)
 }
 
-export async function delete_config_item_route(
+export async function deleteConfigItemRoute(
     gateway_name: string,
     route_name: string,
 
@@ -147,15 +178,18 @@ export async function delete_config_item_route(
     return Client.axiosInstance.delete(`/config/item/${gateway_name}/route/item/${route_name}`)
 }
 
-export async function delete_config_item(gatewayName: string,): Promise<AxiosResponse> {
+export async function deleteConfigItem(gatewayName: string,): Promise<AxiosResponse> {
     return Client.axiosInstance.delete(`/config/item/${gatewayName}`)
 }
 
-export async function delete_config_item_all_routes(gatewayName: string,): Promise<AxiosResponse> {
+export async function deleteConfigItemAllRoutes(gatewayName: string,): Promise<AxiosResponse> {
     return Client.axiosInstance.delete(`/config/item/${gatewayName}/route/all`)
 }
 
-
+export async function deleteConfigPlugin(config: PluginConfig): Promise<AxiosResponse> {
+    const param = pluginInstanceIdAsQuery(config);
+    return Client.axiosInstance.delete(`/config/plugin?${param}`)
+}
 /**********************************************
                         plugin
 **********************************************/

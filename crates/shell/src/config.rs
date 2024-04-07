@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 
 use futures_util::{Stream, StreamExt};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
-use spacegate_kernel::BoxError;
 
 use spacegate_plugin::SgPluginRepository;
 use tokio::task::JoinHandle;

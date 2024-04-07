@@ -24,17 +24,17 @@ strip = true
 
 
 [features]
-default = []
+default = ["full"]
+full = ["backend-k8s", "backend-fs", "backend-redis"]
 backend-k8s = ["spacegate-shell/k8s"]
-backend-fs = []
-backend-redis = []
+backend-fs = ["spacegate-shell/fs"]
+backend-redis = ["spacegate-shell/cache"]
 
 # Used to statically link openssl at compile time
 static-openssl = ["openssl/vendored"]
 
 [dependencies]
 spacegate-shell = { path = "../../shell", features = [
-    "fs",
     "ext-axum",
     "plugin-all",
 ] }

@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use spacegate_model::PluginConfig;
+
 use crate::Config;
 
 use super::Retrieve;
@@ -33,8 +35,8 @@ impl Retrieve for Memory {
         Ok(self.config.gateways.keys().cloned().collect())
     }
 
-    async fn retrieve_all_plugins(&self) -> Result<spacegate_model::PluginInstanceMap, spacegate_model::BoxError> {
-        Ok(self.config.plugins.clone())
+    async fn retrieve_all_plugins(&self) -> Result<Vec<PluginConfig>, spacegate_model::BoxError> {
+        Ok(self.config.plugins.clone().into_config_vec())
     }
 
     async fn retrieve_plugin(&self, id: &spacegate_model::PluginInstanceId) -> Result<Option<spacegate_model::PluginConfig>, spacegate_model::BoxError> {

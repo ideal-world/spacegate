@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app.layer(tower_http::trace::TraceLayer::new_for_http()))
+    axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             let _ = tokio::signal::ctrl_c().await;
         })
