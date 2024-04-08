@@ -211,7 +211,6 @@ impl FromIterator<(PluginInstanceId, Value)> for PluginInstanceMap {
     }
 }
 
-
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct PluginMetaData {
     pub author: Option<Cow<'static, str>>,
