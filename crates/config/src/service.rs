@@ -2,12 +2,15 @@
 pub mod config_format;
 #[cfg(feature = "fs")]
 pub mod fs;
+#[cfg(feature = "k8s")]
+pub mod k8s;
 pub mod memory;
 #[cfg(feature = "redis")]
 pub mod redis;
 use std::{collections::BTreeMap, error::Error, str::FromStr};
 
 use futures_util::Future;
+use hyper::Uri;
 use serde_json::Value;
 use spacegate_model::*;
 
@@ -126,6 +129,7 @@ pub trait Retrieve: Sync + Send {
             Ok(Config {
                 gateways,
                 plugins: PluginInstanceMap::from_config_vec(plugins),
+                api_port: None,
             })
         }
     }

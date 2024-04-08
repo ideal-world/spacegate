@@ -2,7 +2,6 @@ use std::hash::{Hash, Hasher};
 
 use crate::constants;
 
-#[cfg(feature = "k8s")]
 #[derive(Clone)]
 pub struct SgSingeFilter {
     pub name: Option<String>,

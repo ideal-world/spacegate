@@ -14,3 +14,5 @@ pub const RAW_HTTP_ROUTE_KIND_SPACEROUTE: &str = "HTTPSpaceroute";
 pub const BANCKEND_KIND_SERVICE: &str = "Service";
 pub const BANCKEND_KIND_EXTERNAL_HTTP: &str = "ExternalHttp";
 pub const BANCKEND_KIND_EXTERNAL_HTTPS: &str = "ExternalHttps";
+
+pub const DEFAULT_API_PORT: u16 = 9876;

@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, net::SocketAddr};
 
 use futures_util::{Stream, StreamExt};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
@@ -32,6 +32,7 @@ where
 {
     use crate::server::RunningSgGateway;
     tokio::task::spawn_local(async move {
+        let (init_config, listener) = config.create_listener().await?;
         #[cfg(feature = "ext-axum")]
         {
             use spacegate_ext_axum::axum;
@@ -47,10 +48,12 @@ where
                 .await;
             spacegate_plugin::ext::axum::register_plugin_routes().await;
             server.set_cancellation(cancel_token).await;
+            if let Some(port) = init_config.api_port {
+                server.set_bind(SocketAddr::new(std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED), port)).await;
+            }
             server.start().await?;
             info!("Web server started.");
         }
-        let (init_config, listener) = config.create_listener().await?;
         RunningSgGateway::global_init(init_config, shutdown_signal.clone()).await;
         let mut listener = ListenerWrapper(listener);
         tracing::info!("[SG.Config] Entering listening");

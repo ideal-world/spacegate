@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_model::{ConfigItem, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgHttpRoute};
+use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgHttpRoute};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -52,6 +52,7 @@ pub struct MainFileConfig<P = FsAsmPluginConfig> {
     // for config usage, list is preferred over map
     pub gateways: Vec<MainFileConfigItem<P>>,
     pub plugins: PluginConfigs,
+    pub api_port: u16,
 }
 
 impl<P> Default for MainFileConfig<P> {
@@ -59,6 +60,7 @@ impl<P> Default for MainFileConfig<P> {
         MainFileConfig {
             gateways: Default::default(),
             plugins: Default::default(),
+            api_port: DEFAULT_API_PORT,
         }
     }
 }
@@ -134,7 +136,11 @@ impl MainFileConfig<FsAsmPluginConfigMaybeUninitialized> {
             FsAsmPluginConfigMaybeUninitialized::Mono { code } => FsAsmPluginConfig::Mono { code },
         };
         let gateways = self.gateways.into_iter().map(|item| item.map_plugins(&mut set_uid)).collect();
-        MainFileConfig { gateways, plugins: self.plugins }
+        MainFileConfig {
+            gateways,
+            plugins: self.plugins,
+            api_port: self.api_port,
+        }
     }
 }
 
@@ -181,7 +187,11 @@ impl MainFileConfig<FsAsmPluginConfig> {
                 (config_item.gateway.name.clone(), config_item)
             })
             .collect();
-        spacegate_model::Config { gateways, plugins }
+        spacegate_model::Config {
+            gateways,
+            plugins,
+            api_port: Some(self.api_port),
+        }
     }
 }
 
@@ -214,6 +224,10 @@ impl From<spacegate_model::Config> for MainFileConfig<FsAsmPluginConfig> {
             PluginInstanceName::Mono {} => FsAsmPluginConfig::Mono { code: id.code.into() },
         };
         let gateways = value.gateways.into_values().map(|item| <MainFileConfigItem<FsAsmPluginConfig>>::from(item.map_plugins(&mut map))).collect();
-        MainFileConfig { gateways, plugins }
+        MainFileConfig {
+            gateways,
+            plugins,
+            api_port: value.api_port.unwrap_or(DEFAULT_API_PORT),
+        }
     }
 }

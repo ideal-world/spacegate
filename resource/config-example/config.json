@@ -1,0 +1,8 @@
+{
+  "gateways": [],
+  "plugins": {
+    "named": [],
+    "mono": []
+  },
+  "api_port": 9876
+}

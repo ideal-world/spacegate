@@ -19,6 +19,7 @@ path = "src/lib.rs"
 [features]
 default = ["fs"]
 full = ["fs", "redis", "k8s"]
+axum = ["spacegate-model/ext-axum"]
 fs = ["notify"]
 redis = ["dep:redis", "deadpool-redis", "lru"]
 k8s = [
