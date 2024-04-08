@@ -174,7 +174,7 @@ where
 
 mod create;
 mod delete;
+mod discovery;
 mod listen;
 mod retrieve;
 mod update;
-mod discovery;
