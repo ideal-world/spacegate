@@ -4,8 +4,8 @@ use spacegate_config::service::*;
 use crate::{mw, state::AppState};
 
 pub mod config;
-pub mod plugin;
 pub mod instance;
+pub mod plugin;
 
 pub fn router<B>(state: AppState<B>) -> Router<()>
 where
