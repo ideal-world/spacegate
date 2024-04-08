@@ -63,7 +63,7 @@ impl SgBody {
         self.dump.is_some()
     }
     /// # Errors
-    /// fail to collect body chunks 
+    /// fail to collect body chunks
     pub async fn dump(self) -> Result<Self, BoxError> {
         let bytes = self.body.collect().await?.to_bytes();
         Ok(Self {
