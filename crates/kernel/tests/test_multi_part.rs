@@ -34,16 +34,7 @@ async fn gateway() {
     let gateway = gateway::SgGatewayLayer::builder("test_multi_part")
         .http_routers([(
             "test_upload".to_string(),
-            SgHttpRoute::builder()
-                .rule(
-                    SgHttpRouteRuleLayer::builder()
-                        .match_all()
-                        .backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build().expect("fail to build backend"))
-                        .build()
-                        .expect("fail to build rule"),
-                )
-                .build()
-                .expect("fail_to_build"),
+            SgHttpRoute::builder().rule(SgHttpRouteRuleLayer::builder().match_all().backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build()).build()).build(),
         )])
         .build();
     let addr = SocketAddr::from_str("[::]:9002").expect("invalid host");

@@ -1,5 +1,5 @@
 #![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
-
+#![warn(clippy::missing_errors_doc, clippy::indexing_slicing)]
 // pub mod config;
 pub mod body;
 pub mod extension;
@@ -118,6 +118,7 @@ impl SgBoxLayer {
 
         Self { boxed: Box::new(layer) }
     }
+    #[must_use]
     pub fn layer_boxed(&self, inner: ArcHyperService) -> ArcHyperService {
         self.boxed.layer(inner)
     }

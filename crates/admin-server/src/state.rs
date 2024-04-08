@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use axum::http::Uri;
+use tokio::sync::RwLock;
 
 use crate::mw;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,7 +22,7 @@ impl ToString for PluginCode {
 pub struct AppState<B> {
     pub backend: Arc<B>,
     pub version: mw::version_control::Version,
-    pub plugin_schemas: Arc<HashMap<PluginCode, serde_json::Value>>,
+    pub plugin_schemas: Arc<RwLock<HashMap<PluginCode, serde_json::Value>>>,
 }
 
 impl<B> Clone for AppState<B> {

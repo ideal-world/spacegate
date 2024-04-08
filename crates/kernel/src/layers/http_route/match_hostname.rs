@@ -68,6 +68,7 @@ impl<T> HostnameTree<T> {
             fallback: self.fallback.iter_mut(),
         }
     }
+    #[allow(clippy::indexing_slicing)]
     pub fn get(&self, host: &str) -> Option<&T> {
         // trim port
         let data = if host.starts_with('[') {
@@ -84,6 +85,7 @@ impl<T> HostnameTree<T> {
         };
         data.or(self.fallback.as_ref())
     }
+    #[allow(clippy::indexing_slicing)]
     pub fn get_mut(&mut self, host: &str) -> Option<&mut T> {
         // trim port
         let data = if host.starts_with('[') {

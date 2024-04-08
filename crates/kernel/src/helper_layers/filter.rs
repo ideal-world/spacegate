@@ -7,6 +7,8 @@ use hyper::{Request, Response};
 use tower_layer::Layer;
 
 pub trait Filter: Clone {
+    /// # Errors
+    /// an error will be responded immediately 
     fn filter(&self, req: Request<SgBody>) -> Result<Request<SgBody>, Response<SgBody>>;
 }
 

@@ -211,6 +211,22 @@ impl FromIterator<(PluginInstanceId, Value)> for PluginInstanceMap {
     }
 }
 
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct PluginMetaData {
+    pub author: Option<Cow<'static, str>>,
+    pub description: Option<Cow<'static, str>>,
+    pub version: Option<Cow<'static, str>>,
+    pub homepage: Option<Cow<'static, str>>,
+    pub repository: Option<Cow<'static, str>>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct PluginAttributes {
+    pub meta: PluginMetaData,
+    pub mono: bool,
+    pub code: Cow<'static, str>,
+}
 #[cfg(test)]
 mod test {
     use super::*;

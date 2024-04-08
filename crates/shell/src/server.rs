@@ -92,7 +92,7 @@ fn collect_http_route(
                             if let Some(protocol) = backend.protocol {
                                 builder = builder.protocol(protocol.to_string());
                             }
-                            let mut layer = builder.build()?;
+                            let mut layer = builder.build();
                             global_batch_mount_plugin(plugins, &mut layer, mount_index);
                             Result::<_, BoxError>::Ok(layer)
                         })
@@ -101,13 +101,13 @@ fn collect_http_route(
                     if let Some(timeout) = route_rule.timeout_ms {
                         builder = builder.timeout(Duration::from_millis(timeout as u64));
                     }
-                    let mut layer = builder.build()?;
+                    let mut layer = builder.build();
                     global_batch_mount_plugin(route_rule.plugins, &mut layer, mount_index);
                     Result::<_, BoxError>::Ok(layer)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let mut layer =
-                spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build()?;
+                spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
             global_batch_mount_plugin(plugins, &mut layer, mount_index);
             Ok((name, layer))
         })

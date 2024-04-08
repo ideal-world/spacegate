@@ -32,7 +32,7 @@ pub mod plugins;
 
 #[cfg(feature = "schema")]
 pub use schemars;
-use spacegate_model::{PluginConfig, PluginInstanceId, PluginInstanceName};
+use spacegate_model::{PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceName, PluginMetaData};
 pub trait Plugin: Any + Sized + Send + Sync {
     /// plugin code, it should be unique repository-wise.
     const CODE: &'static str;
@@ -61,7 +61,7 @@ pub trait Plugin: Any + Sized + Send + Sync {
     ///
     /// You can also register axum server route here.
     fn register(repo: &SgPluginRepository) {
-        repo.plugins.write().expect("SgPluginRepository register error").insert(Self::CODE.into(), PluginAttributes::from_trait::<Self>());
+        repo.plugins.write().expect("SgPluginRepository register error").insert(Self::CODE.into(), PluginDefinitionObject::from_trait::<Self>());
     }
 
     #[cfg(feature = "schema")]
@@ -71,17 +71,8 @@ pub trait Plugin: Any + Sized + Send + Sync {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
-pub struct PluginMetaData {
-    pub author: Option<Cow<'static, str>>,
-    pub description: Option<Cow<'static, str>>,
-    pub version: Option<Cow<'static, str>>,
-    pub homepage: Option<Cow<'static, str>>,
-    pub repository: Option<Cow<'static, str>>,
-}
-
 /// Plugin Attributes
-pub struct PluginAttributes {
+pub struct PluginDefinitionObject {
     pub mono: bool,
     pub code: Cow<'static, str>,
     pub meta: PluginMetaData,
@@ -90,7 +81,17 @@ pub struct PluginAttributes {
     pub make_pf: BoxMakePfMethod,
 }
 
-impl Debug for PluginAttributes {
+impl PluginDefinitionObject {
+    pub fn attr(&self) -> PluginAttributes {
+        PluginAttributes {
+            mono: self.mono,
+            code: self.code.clone(),
+            meta: self.meta.clone(),
+        }
+    }
+}
+
+impl Debug for PluginDefinitionObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = f.debug_struct("PluginAttributes");
         formatter.field("mono", &self.mono).field("code", &self.code).field("meta", &self.meta);
@@ -111,7 +112,7 @@ pub struct PluginRepoSnapshot {
     pub instances: HashMap<PluginInstanceName, PluginInstanceSnapshot>,
 }
 
-impl PluginAttributes {
+impl PluginDefinitionObject {
     pub fn from_trait<P: Plugin>() -> Self {
         let constructor = move |config: PluginConfig| {
             let plugin = Arc::new(P::create(config)?);
@@ -153,7 +154,7 @@ pub trait PluginSchemaExt {
 type BoxMakePfMethod = Box<dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static>;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
-    pub plugins: Arc<RwLock<HashMap<Cow<'static, str>, PluginAttributes>>>,
+    pub plugins: Arc<RwLock<HashMap<Cow<'static, str>, PluginDefinitionObject>>>,
     pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
 }
 
@@ -206,11 +207,11 @@ impl SgPluginRepository {
     }
 
     pub fn register<P: Plugin>(&self) {
-        self.register_custom(PluginAttributes::from_trait::<P>())
+        self.register_custom(PluginDefinitionObject::from_trait::<P>())
     }
 
-    pub fn register_custom<A: Into<PluginAttributes>>(&self, attr: A) {
-        let attr: PluginAttributes = attr.into();
+    pub fn register_custom<A: Into<PluginDefinitionObject>>(&self, attr: A) {
+        let attr: PluginDefinitionObject = attr.into();
         let mut map = self.plugins.write().expect("SgPluginRepository register error");
         let _old_attr = map.insert(attr.code.clone(), attr);
     }
@@ -283,6 +284,11 @@ impl SgPluginRepository {
     pub fn instance_snapshot(&self, id: PluginInstanceId) -> Option<PluginInstanceSnapshot> {
         let map = self.instances.read().expect("SgPluginRepository register error");
         map.get(&id).map(PluginInstance::snapshot)
+    }
+
+    pub fn plugin_list(&self) -> Vec<PluginAttributes> {
+        let map = self.plugins.read().expect("SgPluginRepository register error");
+        map.values().map(PluginDefinitionObject::attr).collect()
     }
 
     pub fn repo_snapshot(&self) -> HashMap<Cow<'static, str>, PluginRepoSnapshot> {

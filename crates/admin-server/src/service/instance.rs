@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use super::config;
-
 pub enum Instance {}
 
 pub struct K8sInstance {
