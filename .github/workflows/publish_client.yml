@@ -3,6 +3,7 @@ name: Publish Admin Client package
 on:
   push:
     branches:
+      - dev
       - master
     paths:
       - "sdk/admin-client/**"
