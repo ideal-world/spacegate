@@ -28,7 +28,11 @@ pub struct SgListen<S> {
 
 impl<S> std::fmt::Debug for SgListen<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SgListen").field("socket_addr", &self.socket_addr).field("tls_enabled", &self.tls_cfg.is_some()).field("listener_id", &self.listener_id).finish()
+        f.debug_struct("SgListen")
+            .field("socket_addr", &self.socket_addr)
+            .field("tls_enabled", &self.tls_cfg.is_some())
+            .field("listener_id", &self.listener_id)
+            .finish_non_exhaustive()
     }
 }
 
@@ -49,6 +53,7 @@ impl<S> SgListen<S> {
 
     /// Set the TLS config for this listener.
     /// see [rustls::ServerConfig](https://docs.rs/rustls/latest/rustls/server/struct.ServerConfig.html)
+    #[must_use]
     pub fn with_tls_config(mut self, tls_cfg: impl Into<Arc<rustls::ServerConfig>>) -> Self {
         self.tls_cfg = Some(tls_cfg.into());
         self
@@ -59,6 +64,7 @@ impl<S> SgListen<S> {
     /// The `buffer_size` should be lager than the maximal number of concurrent requests.
     ///
     /// However, a too large buffer size is unreasonable. Too many requests could wait for a long time for underlying service to process.
+    #[must_use]
     pub fn buffer_size(mut self, buffer_size: usize) -> Self {
         self.buffer_size = buffer_size;
         self
@@ -135,19 +141,16 @@ where
     ) -> Result<(), BoxError> {
         tracing::debug!("[Sg.Listen] Accepted connection");
         let service = HyperServiceAdapter::new(service, peer_addr);
-        match tls_cfg {
-            Some(tls_cfg) => {
-                let connector = tokio_rustls::TlsAcceptor::from(tls_cfg);
-                let accepted = connector.accept(stream).await?;
-                let io = TokioIo::new(accepted);
-                let conn = conn_builder.serve_connection_with_upgrades(io, service);
-                conn.await?;
-            }
-            None => {
-                let io = TokioIo::new(stream);
-                let conn = conn_builder.serve_connection_with_upgrades(io, service);
-                conn.await?;
-            }
+        if let Some(tls_cfg) = tls_cfg {
+            let connector = tokio_rustls::TlsAcceptor::from(tls_cfg);
+            let accepted = connector.accept(stream).await?;
+            let io = TokioIo::new(accepted);
+            let conn = conn_builder.serve_connection_with_upgrades(io, service);
+            conn.await?;
+        } else {
+            let io = TokioIo::new(stream);
+            let conn = conn_builder.serve_connection_with_upgrades(io, service);
+            conn.await?;
         }
         tracing::debug!("[Sg.Listen] Connection closed");
         Ok(())
@@ -160,7 +163,7 @@ where
         tracing::debug!("[Sg.Listen] start listening...");
         loop {
             tokio::select! {
-                _ = cancel_token.cancelled() => {
+                () = cancel_token.cancelled() => {
                     tracing::warn!("[Sg.Listen] cancelled");
                     return Ok(());
                 },

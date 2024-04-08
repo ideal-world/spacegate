@@ -3,7 +3,9 @@ use hyper::{header::HeaderValue, Request};
 
 use crate::{extension::PeerAddr, header::X_FORWARDED_FOR, SgBody};
 
-/// Add `x-forwarded-for` for request, based on [PeerAddr](`crate::extension::PeerAddr`)
+/// Add `x-forwarded-for` for request, based on [`PeerAddr`](`crate::extension::PeerAddr`)
+/// # Errors 
+/// missing peer addr ext
 pub fn x_forwarded_for(req: &mut Request<SgBody>) -> Result<(), BoxError> {
     let peer_ip = req.extensions().get::<PeerAddr>().ok_or(BoxError::from("missing peer addr ext"))?.0.ip();
     // add x-forward-for header

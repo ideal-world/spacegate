@@ -37,6 +37,7 @@ where
 
     fn call(&self, req: R) -> Self::Future {
         let index = self.picker.sample(&mut rand::thread_rng());
+        #[allow(clippy::indexing_slicing)]
         self.services[index].call(req)
     }
 }

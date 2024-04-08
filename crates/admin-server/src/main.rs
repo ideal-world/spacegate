@@ -44,12 +44,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// create app for an backend
 pub fn create_app<B>(backend: B, schemas: HashMap<PluginCode, Value>) -> Router<()>
 where
-    B: Create + Retrieve + Update + Delete + Send + Sync + 'static,
+    B: Discovery + Create + Retrieve + Update + Delete + Send + Sync + 'static,
 {
     let state = AppState {
         backend: Arc::new(backend),
         version: mw::version_control::Version::new(),
-        plugin_schemas: Arc::new(schemas),
+        plugin_schemas: Arc::new(schemas.into()),
     };
     service::router(state)
 }

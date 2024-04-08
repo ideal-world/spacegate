@@ -74,6 +74,10 @@ impl hyper::service::Service<Request<SgBody>> for ArcHyperService {
 /// This function could be a bottom layer of a http router, it will handle http and websocket request.
 ///
 /// This can handle both websocket connection and http request.
+/// 
+/// # Errors
+/// 1. Fail to collect body chunks
+/// 2. Fail to upgrade
 pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgResponse, BoxError> {
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;

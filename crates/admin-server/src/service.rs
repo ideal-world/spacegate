@@ -9,7 +9,7 @@ pub mod plugin;
 
 pub fn router<B>(state: AppState<B>) -> Router<()>
 where
-    B: Create + Retrieve + Update + Delete + Send + Sync + 'static,
+    B: Discovery + Create + Retrieve + Update + Delete + Send + Sync + 'static,
 {
     Router::new()
         .nest(

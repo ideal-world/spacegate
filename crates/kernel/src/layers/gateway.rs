@@ -63,8 +63,8 @@ pub struct SgGatewayRouter {
 
 impl Index<(usize, usize)> for SgGatewayRoutedServices {
     type Output = ArcHyperService;
-
     fn index(&self, index: (usize, usize)) -> &Self::Output {
+        #[allow(clippy::indexing_slicing)]
         &self.services.as_ref()[index.0][index.1]
     }
 }

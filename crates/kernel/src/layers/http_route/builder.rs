@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use crate::BoxError;
-
 use crate::SgBoxLayer;
 
 use super::{match_request::SgHttpRouteMatch, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer};
@@ -65,18 +63,18 @@ impl SgHttpRouteLayerBuilder {
         self.extensions = extensions;
         self
     }
-    pub fn build(mut self) -> Result<SgHttpRoute, BoxError> {
+    pub fn build(mut self) -> SgHttpRoute {
         if self.hostnames.iter().any(|host| host == "*") {
             self.hostnames = vec!["*".to_string()]
         }
-        Ok(SgHttpRoute {
+        SgHttpRoute {
             plugins: self.plugins,
             hostnames: self.hostnames,
             rules: self.rules,
             priority: self.priority.unwrap_or(1),
             name: self.name,
             ext: self.extensions,
-        })
+        }
     }
 }
 
@@ -132,15 +130,14 @@ impl SgHttpRouteRuleLayerBuilder {
         self.backends.extend(backend);
         self
     }
-    pub fn build(self) -> Result<SgHttpRouteRuleLayer, BoxError> {
-        // let r#match = self.r#match.map(|ms| ms.into_iter().map(Arc::new).collect::<Vec>());
-        Ok(SgHttpRouteRuleLayer {
+    pub fn build(self) -> SgHttpRouteRuleLayer {
+        SgHttpRouteRuleLayer {
             r#match: self.r#match,
             plugins: self.plugins,
             timeouts: self.timeouts,
             backends: self.backends,
             ext: self.extensions,
-        })
+        }
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
         self.extensions = extension;
@@ -209,8 +206,8 @@ impl SgHttpBackendLayerBuilder {
         self.extensions = extension;
         self
     }
-    pub fn build(self) -> Result<SgHttpBackendLayer, BoxError> {
-        Ok(SgHttpBackendLayer {
+    pub fn build(self) -> SgHttpBackendLayer {
+        SgHttpBackendLayer {
             host: self.host.map(Into::into),
             port: self.port,
             scheme: self.protocol.map(Into::into),
@@ -218,6 +215,6 @@ impl SgHttpBackendLayerBuilder {
             timeout: self.timeout,
             weight: self.weight,
             ext: self.extensions,
-        })
+        }
     }
 }

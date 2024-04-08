@@ -10,7 +10,6 @@ pub mod redis;
 use std::{collections::BTreeMap, error::Error, str::FromStr};
 
 use futures_util::Future;
-use hyper::Uri;
 use serde_json::Value;
 use spacegate_model::*;
 
@@ -215,6 +214,10 @@ impl FromStr for ConfigType {
 pub trait CreateListener {
     const CONFIG_LISTENER_NAME: &'static str;
     fn create_listener(&self) -> impl Future<Output = Result<(Config, Box<dyn Listen>), Box<dyn Error + Sync + Send + 'static>>> + Send;
+}
+
+pub trait Discovery {
+    fn api_url(&self) -> impl Future<Output = Result<Option<String>, BoxError>> + Send;
 }
 
 pub type ListenEvent = (ConfigType, ConfigEventType);
