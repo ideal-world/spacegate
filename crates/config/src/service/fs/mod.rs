@@ -177,3 +177,4 @@ mod delete;
 mod listen;
 mod retrieve;
 mod update;
+mod discovery;

@@ -52,11 +52,26 @@ impl<P: Debug> std::fmt::Debug for ConfigItem<P> {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct Config {
     pub gateways: BTreeMap<String, ConfigItem<PluginInstanceId>>,
     #[cfg_attr(feature = "typegen", ts(as = "crate::plugin::PluginInstanceMapTs"))]
     pub plugins: PluginInstanceMap,
+    pub api_port: Option<u16>,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            gateways: Default::default(),
+            plugins: Default::default(),
+            #[cfg(feature = "axum")]
+            api_port: Some(crate::constants::DEFAULT_API_PORT),
+            #[cfg(not(feature = "axum"))]
+            api_port: None,
+        }
+    }
 }
