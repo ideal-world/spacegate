@@ -110,6 +110,8 @@ where
         req.extensions_mut().insert(reflect);
         req.extensions_mut().insert(PeerAddr(self.peer));
         req.extensions_mut().insert(enter_time);
+        let raw_uri = req.uri().clone();
+        req.extensions_mut().insert(raw_uri);
         Box::pin(async move {
             let mut resp = service.call(req).await.expect("infallible");
             with_length_or_chunked(&mut resp);

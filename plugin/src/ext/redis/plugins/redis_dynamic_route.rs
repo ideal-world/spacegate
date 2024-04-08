@@ -10,7 +10,7 @@ use hyper::http;
 use hyper::{header::HeaderName, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_ext_redis::redis::AsyncCommands;
-use spacegate_kernel::{extension::MatchedSgRouter, BoxError, SgBody, SgRequestExt};
+use spacegate_kernel::{extension::MatchedSgRouter, layers::http_route::match_request::SgHttpPathMatch, BoxError, SgBody, SgRequestExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -53,11 +53,15 @@ impl Plugin for RedisDynamicRoutePlugin {
         let domain: String = conn.get(route_key).await.map_err(PluginError::internal_error::<RedisDynamicRoutePlugin>)?;
         let mut uri_parts = req.uri().clone().into_parts();
         let path = req.uri().path();
-        let Some(mut new_pq) = SgHttpPathModifier {
-            kind: SgHttpPathModifierType::ReplacePrefixMatch,
+        let modifier = SgHttpPathModifier {
+            kind: match path_match {
+                SgHttpPathMatch::Prefix(_) => SgHttpPathModifierType::ReplacePrefixMatch,
+                SgHttpPathMatch::Regular(_) => SgHttpPathModifierType::ReplaceRegex,
+                SgHttpPathMatch::Exact(_) => SgHttpPathModifierType::ReplaceFullPath,
+            },
             value: "/".to_string(),
-        }
-        .replace(path, path_match) else {
+        };
+        let Some(mut new_pq) = modifier.replace(path, path_match) else {
             return Err("gateway internal error: fail to rewrite path.".into());
         };
         if let Some(query) = req.uri().query().filter(|q| !q.is_empty()) {
