@@ -3,4 +3,4 @@ import type { ConfigItem } from "./ConfigItem";
 import type { PluginInstanceId } from "./PluginInstanceId";
 import type { PluginInstanceMap } from "./PluginInstanceMap";
 
-export type Config = { gateways: { [key: string]: ConfigItem<PluginInstanceId> }, plugins: PluginInstanceMap, };
+export type Config = { gateways: { [key: string]: ConfigItem<PluginInstanceId> }, plugins: PluginInstanceMap, api_port: number | null, };
