@@ -194,8 +194,16 @@ export async function deleteConfigPlugin(config: PluginConfig): Promise<AxiosRes
                         plugin
 **********************************************/
 
-export async function pluginList(): Promise<AxiosResponse<Array<PluginAttributes>>> {
+export async function pluginList(): Promise<AxiosResponse<Array<string>>> {
     return Client.axiosInstance.get(`/plugin/list`)
+}
+
+export async function pluginAttrAll(): Promise<AxiosResponse<Array<PluginAttributes>>> {
+    return Client.axiosInstance.get(`/plugin/attr-all`)
+}
+
+export async function pluginAttr(code: string): Promise<AxiosResponse<PluginAttributes | null>> {
+    return Client.axiosInstance.get(`/plugin/attr/${code}`)
 }
 
 export async function pluginSchema(code: string): Promise<AxiosResponse<unknown>> {
