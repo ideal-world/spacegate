@@ -212,6 +212,7 @@ impl FromIterator<(PluginInstanceId, Value)> for PluginInstanceMap {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct PluginMetaData {
     pub author: Option<Cow<'static, str>>,
     pub description: Option<Cow<'static, str>>,
@@ -221,6 +222,7 @@ pub struct PluginMetaData {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct PluginAttributes {
     pub meta: PluginMetaData,
     pub mono: bool,

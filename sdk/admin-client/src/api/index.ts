@@ -1,5 +1,5 @@
 import axios, { AxiosResponse, AxiosInstance } from 'axios'
-import { Config, ConfigItem, SgGateway, SgHttpRoute } from '../model'
+import { Config, ConfigItem, PluginAttributes, SgGateway, SgHttpRoute } from '../model'
 import { PluginConfig } from '../model/PluginConfig'
 import { PluginInstanceName } from '../model/PluginInstanceName'
 import { PluginInstanceId } from '../model/PluginInstanceId'
@@ -194,7 +194,7 @@ export async function deleteConfigPlugin(config: PluginConfig): Promise<AxiosRes
                         plugin
 **********************************************/
 
-export async function pluginList(): Promise<AxiosResponse<Array<string>>> {
+export async function pluginList(): Promise<AxiosResponse<Array<PluginAttributes>>> {
     return Client.axiosInstance.get(`/plugin/list`)
 }
 
