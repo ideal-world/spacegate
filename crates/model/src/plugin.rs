@@ -15,7 +15,7 @@ pub mod gatewayapi_support_filter;
 
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
-#[serde(tag="kind", rename_all="lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum PluginInstanceName {
     Anon {
         uid: u64,
