@@ -1,6 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
-
-use tokio::sync::RwLock;
+use std::sync::Arc;
 
 use crate::mw;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,7 +20,7 @@ impl ToString for PluginCode {
 pub struct AppState<B> {
     pub backend: Arc<B>,
     pub version: mw::version_control::Version,
-    pub plugin_schemas: Arc<RwLock<HashMap<PluginCode, serde_json::Value>>>,
+    // pub plugin_schemas: Arc<RwLock<HashMap<PluginCode, serde_json::Value>>>,
 }
 
 impl<B> Clone for AppState<B> {
@@ -30,7 +28,7 @@ impl<B> Clone for AppState<B> {
         Self {
             backend: self.backend.clone(),
             version: self.version.clone(),
-            plugin_schemas: self.plugin_schemas.clone(),
+            // plugin_schemas: self.plugin_schemas.clone(),
         }
     }
 }

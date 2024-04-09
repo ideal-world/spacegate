@@ -198,5 +198,5 @@ where
             "/plugin",
             get(get_config_plugin).delete(delete_config_plugin).put(put_config_plugin).post(post_config_plugin),
         )
-        .route("/all-plugin", get(get_config_all_plugin))
+        .route("/plugin-all", get(get_config_all_plugin))
 }

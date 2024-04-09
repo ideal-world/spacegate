@@ -12,7 +12,6 @@ local freq_limit = tonumber(redis.call('get', freq_limit_key));
 if current_count == 1 then
     redis.call('set', freq_ts_key, current_ts);
 end
-
 if current_count > freq_limit then
     local last_refresh_time = tonumber(redis.call('get', freq_ts_key));
     if last_refresh_time + 60 > current_ts then
