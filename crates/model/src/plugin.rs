@@ -15,7 +15,7 @@ pub mod gatewayapi_support_filter;
 
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
-#[serde(untagged)]
+#[serde(tag="kind", rename_all="lowercase")]
 pub enum PluginInstanceName {
     Anon {
         uid: u64,
@@ -24,7 +24,7 @@ pub enum PluginInstanceName {
         /// name should be unique within the plugin code, composed of alphanumeric characters and hyphens
         name: String,
     },
-    Mono {},
+    Mono,
 }
 
 impl PluginInstanceName {
@@ -69,7 +69,7 @@ impl ToString for PluginInstanceName {
         match &self {
             PluginInstanceName::Anon { uid } => format!("a-{:016x}", uid),
             PluginInstanceName::Named { name } => format!("n-{}", name),
-            PluginInstanceName::Mono {} => "m".to_string(),
+            PluginInstanceName::Mono => "m".to_string(),
         }
     }
 }
@@ -277,6 +277,7 @@ mod test {
         let config = json!(
             {
                 "code": "header-modifier",
+                "kind": "anon",
                 "uid": 0,
                 "spec": null
             }
@@ -288,7 +289,8 @@ mod test {
         let config = json!(
             {
                 "code": "header-modifier",
-                "spec": null
+                "spec": null,
+                "kind": "mono",
             }
         );
 
@@ -300,6 +302,7 @@ mod test {
             {
                 "code": "header-modifier",
                 "name": "my-header-modifier",
+                "kind": "named",
                 "spec": null
             }
         );
