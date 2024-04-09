@@ -8,13 +8,18 @@ end
 local current_count = tonumber(redis.call('incr', freq_key));
 local current_ts = tonumber(redis.call('time')[1]);
 local freq_limit = tonumber(redis.call('get', freq_limit_key));
-
+if freq_limit == nil then
+    return 1;
+end
 if current_count == 1 then
     redis.call('set', freq_ts_key, current_ts);
 end
 
 if current_count > freq_limit then
     local last_refresh_time = tonumber(redis.call('get', freq_ts_key));
+    if current_ts == nil or last_refresh_time == nil then
+        return 1;
+    end
     if last_refresh_time + 60 > current_ts then
         return 0;
     else
