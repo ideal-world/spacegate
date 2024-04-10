@@ -12,13 +12,11 @@ export const Client = {
 function pluginInstanceIdAsQuery(id: PluginInstanceId): URLSearchParams {
     let param = new URLSearchParams()
     for (const q of Object.keys(id)) {
-        if (q === 'code' || q === 'uid' || q === 'name') {
-            let val = (id as Record<string, any>)[q];
-            if (typeof val === 'bigint') {
-                param.set(q, val.toString())
-            } else if (typeof val === 'string') {
-                param.set(q, val)
-            }
+        let val = (id as Record<string, any>)[q];
+        if (typeof val === 'bigint') {
+            param.set(q, val.toString())
+        } else if (typeof val === 'string') {
+            param.set(q, val)
         }
     }
     return param
