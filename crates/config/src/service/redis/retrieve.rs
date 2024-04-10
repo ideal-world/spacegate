@@ -57,4 +57,15 @@ where
         let plugin_config: Option<String> = self.get_con().await?.hget(CONF_PLUGIN_KEY, id.to_string()).await?;
         plugin_config.map(|config| self.format.de::<PluginConfig>(config.as_bytes()).map_err(|e| format!("[SG.Config] Plugin Config parse error {}", e).into())).transpose()
     }
+
+    async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, spacegate_model::BoxError> {
+        let plugin_configs: HashMap<String, String> = self.get_con().await?.hgetall(CONF_PLUGIN_KEY).await?;
+
+        let plugin_configs = plugin_configs
+            .into_values()
+            .filter(|key| key.starts_with(code))
+            .filter_map(|v| self.format.de(v.as_bytes()).ok().filter(|c: &PluginConfig| c.id.code == code))
+            .collect::<Vec<PluginConfig>>();
+        Ok(plugin_configs)
+    }
 }

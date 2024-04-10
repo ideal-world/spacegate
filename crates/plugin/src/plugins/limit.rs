@@ -7,6 +7,7 @@ use hyper::{Request, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 
 use spacegate_kernel::{helper_layers::function::Inner, BoxError, SgBody, SgRequestExt, SgResponseExt};
+use spacegate_model::plugin_meta;
 
 use crate::Plugin;
 use spacegate_ext_redis::redis::Script;
@@ -83,6 +84,11 @@ pub struct RateLimitFilter {
 
 impl Plugin for RateLimitPlugin {
     const CODE: &'static str = "limit";
+    fn meta() -> spacegate_model::PluginMetaData {
+        crate::plugin_meta!(
+            description: "Request rate limit plugin."
+        )
+    }
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
         let id = &self.id;
         if let Some(max_request_number) = &self.max_request_number {

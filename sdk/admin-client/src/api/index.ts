@@ -94,6 +94,9 @@ export async function getConfigPlugin(id: PluginInstanceId): Promise<AxiosRespon
     const param = pluginInstanceIdAsQuery(id);
     return Client.axiosInstance.get(`/config/plugin?${param}`)
 }
+export async function getConfigPluginsByCode(code: string): Promise<AxiosResponse<Array<PluginConfig>>> {
+    return Client.axiosInstance.get(`/config/plugins/${code}`)
+}
 /**********************************************
                        POST
 **********************************************/

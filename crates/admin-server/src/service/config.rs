@@ -63,6 +63,13 @@ async fn get_config_plugin<B: Retrieve>(
 ) -> Result<Json<Option<PluginConfig>>, InternalError<BoxError>> {
     backend.retrieve_plugin(&id).await.map(Json).map_err(InternalError)
 }
+
+async fn get_config_plugins_by_code<B: Retrieve>(
+    Path(code): Path<String>,
+    State(AppState { backend, .. }): State<AppState<B>>,
+) -> Result<Json<Vec<PluginConfig>>, InternalError<BoxError>> {
+    backend.retrieve_plugins_by_code(&code).await.map(Json).map_err(InternalError)
+}
 /**********************************************
                        POST
 **********************************************/
@@ -199,4 +206,5 @@ where
             get(get_config_plugin).delete(delete_config_plugin).put(put_config_plugin).post(post_config_plugin),
         )
         .route("/plugin-all", get(get_config_all_plugin))
+        .route("/plugins/:code", get(get_config_plugins_by_code))
 }

@@ -214,11 +214,36 @@ impl FromIterator<(PluginInstanceId, Value)> for PluginInstanceMap {
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct PluginMetaData {
-    pub author: Option<Cow<'static, str>>,
+    pub authors: Option<Cow<'static, str>>,
     pub description: Option<Cow<'static, str>>,
     pub version: Option<Cow<'static, str>>,
     pub homepage: Option<Cow<'static, str>>,
     pub repository: Option<Cow<'static, str>>,
+}
+
+#[macro_export]
+macro_rules! plugin_meta {
+    () => {
+        {
+            $crate::PluginMetaData {
+                authors: Some(env!("CARGO_PKG_AUTHORS").into()),
+                version: Some(env!("CARGO_PKG_VERSION").into()),
+                description: Some(env!("CARGO_PKG_DESCRIPTION").into()),
+                homepage: Some(env!("CARGO_PKG_HOMEPAGE").into()),
+                repository: Some(env!("CARGO_PKG_REPOSITORY").into()),
+            }
+        }
+    };
+    ($($key:ident: $value:expr),*) => {
+        {
+            let mut meta = $crate::plugin_meta!();
+            $(
+                meta.$key = Some($value.into());
+            )*
+            meta
+        }
+    };
+
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]

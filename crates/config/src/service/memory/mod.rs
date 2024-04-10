@@ -45,6 +45,20 @@ impl Retrieve for Memory {
             id: id.clone(),
         }))
     }
+
+    async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, spacegate_model::BoxError> {
+        Ok(self
+            .config
+            .plugins
+            .iter()
+            .filter_map(|(id, spec)| {
+                (id.code == code).then_some(PluginConfig {
+                    spec: spec.clone(),
+                    id: id.clone(),
+                })
+            })
+            .collect())
+    }
 }
 
 use super::{CreateListener, Listen};
