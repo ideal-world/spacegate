@@ -29,10 +29,9 @@ pub use error::PluginError;
 pub mod ext;
 pub mod layer;
 pub mod plugins;
-
 #[cfg(feature = "schema")]
 pub use schemars;
-use spacegate_model::{PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceName, PluginMetaData};
+pub use spacegate_model::{plugin_meta, PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, PluginMetaData};
 pub trait Plugin: Any + Sized + Send + Sync {
     /// plugin code, it should be unique repository-wise.
     const CODE: &'static str;

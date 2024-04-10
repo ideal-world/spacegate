@@ -38,4 +38,19 @@ where
     async fn retrieve_config(&self) -> Result<spacegate_model::Config, BoxError> {
         self.retrieve_cached(Clone::clone).await
     }
+
+    async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, BoxError> {
+        self.retrieve_cached(|cfg| {
+            cfg.plugins
+                .iter()
+                .filter_map(|(id, spec)| {
+                    (id.code == code).then_some(PluginConfig {
+                        spec: spec.clone(),
+                        id: id.clone(),
+                    })
+                })
+                .collect()
+        })
+        .await
+    }
 }
