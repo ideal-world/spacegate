@@ -18,7 +18,6 @@
 //! Note: Trace-level logs will print the contents of both the request and response bodies,
 //! potentially causing significant performance overhead. It is recommended to use debug level
 //! logs at most.
-
 #![warn(clippy::unwrap_used)]
 
 use config::SgHttpRoute;

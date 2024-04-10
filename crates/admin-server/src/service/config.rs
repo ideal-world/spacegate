@@ -3,11 +3,12 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use spacegate_config::{
     model::{SgGateway, SgHttpRoute},
     service::*,
-    BoxError, Config, ConfigItem, PluginConfig, PluginInstanceId,
+    BoxError, Config, ConfigItem, PluginConfig, PluginInstanceId, PluginInstanceName,
 };
 use std::collections::BTreeMap;
 
@@ -16,6 +17,34 @@ use crate::{
     state::{self, AppState},
     Backend,
 };
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum PluginInstanceIdQuery {
+    Anon {
+        code: String,
+        uid: String,
+    },
+    Named {
+        code: String,
+        /// name should be unique within the plugin code, composed of alphanumeric characters and hyphens
+        name: String,
+    },
+    Mono {
+        code: String,
+    },
+}
+
+impl TryInto<PluginInstanceId> for PluginInstanceIdQuery {
+    type Error = BoxError;
+
+    fn try_into(self) -> Result<PluginInstanceId, Self::Error> {
+        match self {
+            PluginInstanceIdQuery::Anon { code, uid } => Ok(PluginInstanceId::new(code, PluginInstanceName::Anon { uid: uid.parse()? })),
+            PluginInstanceIdQuery::Named { code, name } => Ok(PluginInstanceId::new(code, PluginInstanceName::Named { name })),
+            PluginInstanceIdQuery::Mono { code } => Ok(PluginInstanceId::new(code, PluginInstanceName::Mono {})),
+        }
+    }
+}
 
 /**********************************************
                        GET
@@ -58,10 +87,10 @@ async fn get_config_all_plugin<B: Retrieve>(State(AppState { backend, .. }): Sta
     backend.retrieve_all_plugins().await.map(Json).map_err(InternalError)
 }
 async fn get_config_plugin<B: Retrieve>(
-    Query(id): Query<PluginInstanceId>,
+    Query(id): Query<PluginInstanceIdQuery>,
     State(AppState { backend, .. }): State<AppState<B>>,
 ) -> Result<Json<Option<PluginConfig>>, InternalError<BoxError>> {
-    backend.retrieve_plugin(&id).await.map(Json).map_err(InternalError)
+    backend.retrieve_plugin(&id.try_into().map_err(InternalError)?).await.map(Json).map_err(InternalError)
 }
 
 async fn get_config_plugins_by_code<B: Retrieve>(
@@ -98,11 +127,11 @@ async fn post_config_item_route<B: Create>(
     backend.create_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 async fn post_config_plugin<B: Create>(
-    Query(id): Query<PluginInstanceId>,
+    Query(id): Query<PluginInstanceIdQuery>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.create_plugin(&id, spec).await.map_err(InternalError)
+    backend.create_plugin(&id.try_into().map_err(InternalError)?, spec).await.map_err(InternalError)
 }
 /**********************************************
                        PUT
@@ -136,11 +165,11 @@ async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B
 }
 
 async fn put_config_plugin<B: Update>(
-    Query(id): Query<PluginInstanceId>,
+    Query(id): Query<PluginInstanceIdQuery>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_plugin(&id, spec).await.map_err(InternalError)
+    backend.update_plugin(&id.try_into().map_err(InternalError)?, spec).await.map_err(InternalError)
 }
 /**********************************************
                        DELETE
@@ -171,8 +200,8 @@ where
     backend.delete_config_item_all_routes(&name).await.map_err(InternalError)
 }
 
-async fn delete_config_plugin<B: Delete>(Query(id): Query<PluginInstanceId>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
-    backend.delete_plugin(&id).await.map_err(InternalError)
+async fn delete_config_plugin<B: Delete>(Query(id): Query<PluginInstanceIdQuery>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
+    backend.delete_plugin(&id.try_into().map_err(InternalError)?).await.map_err(InternalError)
 }
 
 // router

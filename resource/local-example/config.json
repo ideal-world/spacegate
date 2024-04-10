@@ -1,7 +1,18 @@
 {
   "gateways": [],
   "plugins": {
-    "named": [],
+    "named": [
+      {
+        "name": "new-instance-2",
+        "code": "limit",
+        "spec": {}
+      },
+      {
+        "name": "new-instance",
+        "code": "limit",
+        "spec": {}
+      }
+    ],
     "mono": []
   },
   "api_port": 9876
