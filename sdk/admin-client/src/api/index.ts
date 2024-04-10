@@ -11,7 +11,7 @@ export const Client = {
 
 function pluginInstanceIdAsQuery(id: PluginInstanceId): URLSearchParams {
     let param = new URLSearchParams()
-    for (const q in Object.keys(id)) {
+    for (const q of Object.keys(id)) {
         if (q === 'code' || q === 'uid' || q === 'name') {
             let val = (id as Record<string, any>)[q];
             if (typeof val === 'bigint') {
