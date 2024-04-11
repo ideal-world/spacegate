@@ -13,21 +13,71 @@
         {
           "name": "new-instance-2",
           "code": "limit"
+        },
+        {
+          "name": "rewrite-test",
+          "code": "rewrite"
+        },
+        {
+          "name": "test-header-modifier",
+          "code": "header-modifier"
         }
       ],
-      "routes": []
+      "routes": [
+        {
+          "route_name": "wadswfsaas",
+          "hostnames": null,
+          "plugins": [],
+          "rules": [
+            {
+              "matches": null,
+              "plugins": [
+                {
+                  "name": "rewrite-test",
+                  "code": "rewrite"
+                },
+                {
+                  "name": "test-header-modifier",
+                  "code": "header-modifier"
+                }
+              ],
+              "backends": [],
+              "timeout_ms": null
+            }
+          ],
+          "priority": 1
+        }
+      ]
     }
   ],
   "plugins": {
     "named": [
+      {
+        "name": "test-header-modifier",
+        "code": "header-modifier",
+        "spec": {
+          "kind": "Request",
+          "remove": [
+            "1"
+          ],
+          "sets": {
+            "server": "sg"
+          }
+        }
+      },
+      {
+        "name": "new-instance",
+        "code": "limit",
+        "spec": {}
+      },
       {
         "name": "new-instance-2",
         "code": "limit",
         "spec": {}
       },
       {
-        "name": "new-instance",
-        "code": "limit",
+        "name": "rewrite-test",
+        "code": "rewrite",
         "spec": {}
       }
     ],
