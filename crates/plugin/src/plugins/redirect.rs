@@ -51,6 +51,12 @@ impl Plugin for RedirectPlugin {
     fn create(config: crate::PluginConfig) -> Result<Self, spacegate_kernel::BoxError> {
         Ok(serde_json::from_value(config.spec)?)
     }
+
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        use crate::PluginSchemaExt;
+        Some(Self::schema())
+    }
 }
 
 // def_plugin!("redirect", RedirectPlugin, RedirectFilter; #[cfg(feature = "schema")] schema;);

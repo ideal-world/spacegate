@@ -7,7 +7,6 @@ use hyper::{Request, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 
 use spacegate_kernel::{helper_layers::function::Inner, BoxError, SgBody, SgRequestExt, SgResponseExt};
-use spacegate_model::plugin_meta;
 
 use crate::Plugin;
 use spacegate_ext_redis::redis::Script;
@@ -115,6 +114,11 @@ impl Plugin for RateLimitPlugin {
     }
     fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
         Ok(serde_json::from_value(config.spec)?)
+    }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        use crate::PluginSchemaExt;
+        Some(Self::schema())
     }
 }
 

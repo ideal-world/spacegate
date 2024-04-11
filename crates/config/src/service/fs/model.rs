@@ -10,7 +10,7 @@ use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, PluginInstanceId,
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum FsAsmPluginConfig {
-    Anon { uid: u64, code: String, spec: Value },
+    Anon { uid: String, code: String, spec: Value },
     Named { name: String, code: String },
     Mono { code: String },
 }
@@ -18,7 +18,7 @@ pub enum FsAsmPluginConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub(crate) enum FsAsmPluginConfigMaybeUninitialized {
-    Anon { uid: Option<u64>, code: String, spec: Value },
+    Anon { uid: Option<String>, code: String, spec: Value },
     Named { name: String, code: String },
     Mono { code: String },
 }
@@ -123,12 +123,12 @@ impl MainFileConfig<FsAsmPluginConfigMaybeUninitialized> {
         let mut set_uid = move |p: FsAsmPluginConfigMaybeUninitialized| match p {
             FsAsmPluginConfigMaybeUninitialized::Anon { uid, code, spec } => {
                 let uid = if let Some(uid) = uid {
-                    hasher.write(&uid.to_be_bytes());
+                    hasher.write(uid.as_bytes());
                     uid
                 } else {
                     hasher.write(code.as_bytes());
                     hasher.write(spec.to_string().as_bytes());
-                    hasher.finish()
+                    format!("{:016x}", hasher.finish())
                 };
                 FsAsmPluginConfig::Anon { uid, code, spec }
             }

@@ -1,5 +1,23 @@
 {
-  "gateways": [],
+  "gateways": [
+    {
+      "name": "New Gateway",
+      "parameters": {
+        "redis_url": null,
+        "log_level": null,
+        "lang": null,
+        "ignore_tls_verification": false
+      },
+      "listeners": [],
+      "plugins": [
+        {
+          "name": "new-instance-2",
+          "code": "limit"
+        }
+      ],
+      "routes": []
+    }
+  ],
   "plugins": {
     "named": [
       {

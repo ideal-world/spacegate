@@ -88,6 +88,8 @@ impl InjectPlugin {
             Ok(resp)
         }
     }
+
+
 }
 
 impl Plugin for InjectPlugin {
@@ -99,6 +101,11 @@ impl Plugin for InjectPlugin {
     }
     fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
         Ok(serde_json::from_value(config.spec)?)
+    }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        use crate::PluginSchemaExt;
+        Some(Self::schema())
     }
 }
 

@@ -121,7 +121,7 @@ impl PluginDefinitionObject {
                     match plugin.call(req, inner).await {
                         Ok(resp) => resp,
                         Err(e) => {
-                            tracing::error!("plugin error: {e}");
+                            tracing::error!("{code} plugin error: {e}", code = P::CODE);
                             PluginError::internal_error::<P>(e).into()
                         }
                     }

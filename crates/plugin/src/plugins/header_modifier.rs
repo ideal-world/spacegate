@@ -76,6 +76,11 @@ impl Plugin for HeaderModifierPlugin {
         }
         Ok(resp)
     }
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        use crate::PluginSchemaExt;
+        Some(Self::schema())
+    }
 }
 
 #[derive(Clone, Default, Debug)]
