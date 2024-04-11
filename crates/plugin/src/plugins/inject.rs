@@ -88,8 +88,6 @@ impl InjectPlugin {
             Ok(resp)
         }
     }
-
-
 }
 
 impl Plugin for InjectPlugin {

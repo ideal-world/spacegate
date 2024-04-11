@@ -93,7 +93,6 @@ impl Plugin for StaticResourcePlugin {
         let code = StatusCode::from_u16(plugin_config.code)?;
         Ok(Self { content_type, code, body })
     }
-
 }
 
 #[cfg(feature = "schema")]
