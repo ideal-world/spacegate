@@ -18,7 +18,7 @@ pub mod gatewayapi_support_filter;
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum PluginInstanceName {
     Anon {
-        uid: u64,
+        uid: String,
     },
     Named {
         /// name should be unique within the plugin code, composed of alphanumeric characters and hyphens
@@ -34,8 +34,8 @@ impl PluginInstanceName {
     pub fn mono() -> Self {
         PluginInstanceName::Mono {}
     }
-    pub fn anon(uid: u64) -> Self {
-        PluginInstanceName::Anon { uid }
+    pub fn anon(uid: impl ToString) -> Self {
+        PluginInstanceName::Anon { uid: uid.to_string() }
     }
 }
 
@@ -67,7 +67,7 @@ impl PluginInstanceId {
 impl ToString for PluginInstanceName {
     fn to_string(&self) -> String {
         match &self {
-            PluginInstanceName::Anon { uid } => format!("a-{:016x}", uid),
+            PluginInstanceName::Anon { uid } => format!("a-{}", uid),
             PluginInstanceName::Named { name } => format!("n-{}", name),
             PluginInstanceName::Mono => "m".to_string(),
         }
@@ -85,9 +85,7 @@ impl FromStr for PluginInstanceName {
         match parts.next() {
             Some("a") => {
                 let uid = parts.next().ok_or("missing uid")?;
-                Ok(PluginInstanceName::Anon {
-                    uid: u64::from_str_radix(uid, 16)?,
-                })
+                Ok(PluginInstanceName::Anon { uid: uid.to_string() })
             }
             Some("n") => {
                 let name = parts.next().ok_or("missing name")?;
@@ -262,12 +260,12 @@ mod test {
         let mut map = PluginInstanceMap::default();
         let id_1 = PluginInstanceId {
             code: "header-modifier".into(),
-            name: PluginInstanceName::Anon { uid: 0 },
+            name: PluginInstanceName::anon(0),
         };
         map.insert(id_1.clone(), json!(null));
         let id_2 = PluginInstanceId {
             code: "header-modifier".into(),
-            name: PluginInstanceName::Anon { uid: 1 },
+            name: PluginInstanceName::anon(1),
         };
         map.insert(id_2.clone(), json!(null));
 
@@ -280,15 +278,15 @@ mod test {
 
     #[test]
     fn test_parse_id() {
-        assert_eq!("a-0000000000000001".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Anon { uid: 1 });
+        assert_eq!("a-0000000000000001".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::anon(0));
         assert_eq!("n-my-plugin".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Named { name: "my-plugin".into() });
         assert_eq!("g".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Mono {});
-        assert_ne!("a-0000000000000001".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Anon { uid: 2 });
+        assert_ne!("a-0000000000000001".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::anon(2));
         assert_ne!(
             "n-my-plugin".parse::<PluginInstanceName>().unwrap(),
             PluginInstanceName::Named { name: "my-plugin2".into() }
         );
-        assert_ne!("g".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Anon { uid: 1 });
+        assert_ne!("g".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::anon(1));
         assert!("".parse::<PluginInstanceName>().is_err());
         // assert!("a-".parse::<PluginInstanceName>().is_err());
         assert!("n-".parse::<PluginInstanceName>().is_err());
@@ -309,7 +307,7 @@ mod test {
         );
         let cfg = PluginConfig::deserialize(config).unwrap();
         assert_eq!(cfg.id.code, "header-modifier");
-        assert_eq!(cfg.id.name, PluginInstanceName::Anon { uid: 0 });
+        assert_eq!(cfg.id.name, PluginInstanceName::anon(0));
 
         let config = json!(
             {

@@ -77,6 +77,11 @@ impl Default for MaintenancePluginConfig {
 
 impl Plugin for MaintenancePlugin {
     const CODE: &'static str = "maintenance";
+    fn meta() -> spacegate_model::PluginMetaData {
+        crate::plugin_meta!(
+            description: "Maintenance page plugin."
+        )
+    }
     fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
         let plugin_config: MaintenancePluginConfig = serde_json::from_value(config.spec)?;
         let exclude_ip_range = plugin_config

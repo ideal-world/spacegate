@@ -30,6 +30,11 @@ pub struct RewritePlugin {
 
 impl Plugin for RewritePlugin {
     const CODE: &'static str = "rewrite";
+    fn meta() -> spacegate_model::PluginMetaData {
+        crate::plugin_meta!(
+            description: "Rewrite path and host plugin."
+        )
+    }
     async fn call(&self, mut req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
         if let Some(hostname) = &self.hostname {
             tracing::debug!("[Sg.Plugin.Rewrite] rewrite host {:?}", hostname);
@@ -68,6 +73,12 @@ impl Plugin for RewritePlugin {
             hostname,
             path: plugin_config.path.clone(),
         })
+    }
+
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        use crate::PluginSchemaExt;
+        Some(Self::schema())
     }
 }
 
