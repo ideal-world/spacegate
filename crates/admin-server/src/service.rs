@@ -16,6 +16,9 @@ where
             "/config",
             config::router::<B>().layer(middleware::from_fn_with_state(state.clone(), mw::version_control::version_control)),
         )
-        .nest("/plugin", plugin::router::<B>().layer(middleware::from_fn_with_state(state.clone(), mw::version_control::version_control)))
+        .nest(
+            "/plugin",
+            plugin::router::<B>().layer(middleware::from_fn_with_state(state.clone(), mw::version_control::version_control)),
+        )
         .with_state(state)
 }
