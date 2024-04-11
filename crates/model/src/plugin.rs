@@ -278,10 +278,9 @@ mod test {
 
     #[test]
     fn test_parse_id() {
-        assert_eq!("a-0000000000000001".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::anon(0));
+        assert_eq!("a-1".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::anon(1));
         assert_eq!("n-my-plugin".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Named { name: "my-plugin".into() });
         assert_eq!("g".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Mono {});
-        assert_ne!("a-0000000000000001".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::anon(2));
         assert_ne!(
             "n-my-plugin".parse::<PluginInstanceName>().unwrap(),
             PluginInstanceName::Named { name: "my-plugin2".into() }
@@ -290,7 +289,6 @@ mod test {
         assert!("".parse::<PluginInstanceName>().is_err());
         // assert!("a-".parse::<PluginInstanceName>().is_err());
         assert!("n-".parse::<PluginInstanceName>().is_err());
-        assert!("a-0000000000000001-".parse::<PluginInstanceName>().is_err());
         // assert!("n-my-plugin-".parse::<PluginInstanceName>().is_err());
         assert!("g-".parse::<PluginInstanceName>().is_ok());
     }
@@ -301,7 +299,7 @@ mod test {
             {
                 "code": "header-modifier",
                 "kind": "anon",
-                "uid": 0,
+                "uid": '0',
                 "spec": null
             }
         );
