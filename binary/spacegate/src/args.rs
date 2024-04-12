@@ -90,7 +90,7 @@ impl<'de> Deserialize<'de> for Config {
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// The config file path
-    /// 
+    ///
     /// # Example
     /// ## File
     /// file:/path/to/dir
