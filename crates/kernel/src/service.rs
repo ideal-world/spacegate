@@ -110,7 +110,7 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgRe
             let upgrade_as_server = s?;
             let upgrade_as_client = c?;
             // start a websocket forward
-            ws_client_service::service(upgrade_as_server, upgrade_as_client).await?;
+            ws_client_service::tcp_transfer(upgrade_as_server, upgrade_as_client).await?;
             <Result<(), BoxError>>::Ok(())
         });
         tracing::trace!(elapsed = ?resp.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend websocket forward");

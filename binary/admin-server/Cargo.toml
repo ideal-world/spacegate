@@ -1,5 +1,5 @@
 [package]
-name = "spacegate-simplify"
+name = "spacegate-admin-server"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -22,27 +22,24 @@ panic = "abort"
 rpath = false
 strip = true
 
-
 [features]
-default = ["full"]
-full = ["backend-k8s", "backend-fs", "backend-redis"]
-backend-k8s = ["spacegate-shell/k8s"]
-backend-fs = ["spacegate-shell/fs"]
-backend-redis = ["spacegate-shell/cache"]
+default = []
 
-# Used to statically link openssl at compile time
-static-openssl = ["openssl/vendored"]
 
 [dependencies]
-spacegate-shell = { path = "../../shell", features = [
-    "ext-axum",
-    "plugin-all",
-] }
-openssl = { version = "0.10" }
-# tardis = { workspace = true, features = ["console-subscriber"] }
-# tardis = { workspace = true }
+clap = { version = "4.5", features = ["derive", "env"] }
+spacegate-config = { workspace = true, features = [
+    "fs",
+], no-default-features = true }
+axum = { workspace = true }
+tower = { version = "0.4" }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-tokio = { version = "1", features = ["full"] }
+tower-http = { version = "*", features = ["trace"] }
+serde_json = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
 [dev-dependencies]
 
 [package.metadata.docs.rs]
