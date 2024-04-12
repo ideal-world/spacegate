@@ -4,8 +4,6 @@ use hyper::body::{Body, Bytes};
 
 use crate::utils::never;
 
-// pub mod dump;
-
 /// # Clone
 /// Always clone after ensure the body is dumped
 #[derive(Debug)]

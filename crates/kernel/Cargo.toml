@@ -46,7 +46,6 @@ tokio-util = { workspace = true }
 
 # future
 futures-util = { workspace = true }
-tokio-tungstenite = { workspace = true }
 
 # Tls
 hyper-rustls = { workspace = true }
@@ -63,6 +62,7 @@ spacegate-ext-redis = { path = "../extension/redis", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
-axum = { workspace = true, features = ["multipart"]}
+axum = { workspace = true, features = ["multipart"] }
 md5 = { version = "0.7.0" }
-reqwest = { version = "0.12", features = ["multipart", "stream"]}
+reqwest = { version = "0.12", features = ["multipart", "stream"] }
+tokio-tungstenite = { workspace = true }

@@ -144,6 +144,7 @@ impl PluginInstanceMap {
 }
 
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export, rename = "PluginInstanceMap"))]
+#[allow(dead_code)]
 pub(crate) struct PluginInstanceMapTs {
     #[allow(dead_code)]
     plugins: HashMap<String, PluginConfig>,

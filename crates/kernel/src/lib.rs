@@ -34,7 +34,7 @@ pub trait SgRequestExt {
     fn reflect(&self) -> &Reflect;
     #[cfg(feature = "ext-redis")]
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
-    fn extract_marker<M: Extractor>(&self) -> Option<M>;
+    fn extract<M: Extractor>(&self) -> Option<M>;
 }
 
 impl SgRequestExt for SgRequest {
@@ -62,11 +62,13 @@ impl SgRequestExt for SgRequest {
     }
 
     #[cfg(feature = "ext-redis")]
+    /// Get a redis client by the [`extension::GatewayName`], which would exist once the request had entered some gateway.
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient> {
         self.extensions().get::<extension::GatewayName>().and_then(|gateway_name| spacegate_ext_redis::RedisClientRepo::global().get(gateway_name))
     }
 
-    fn extract_marker<M: Extractor>(&self) -> Option<M> {
+    /// Extract a value from the request.
+    fn extract<M: Extractor>(&self) -> Option<M> {
         M::extract(self)
     }
 }
@@ -96,12 +98,6 @@ pub type ReqOrResp = Result<Request<SgBody>, Response<SgBody>>;
 pub struct SgBoxLayer {
     boxed: Box<dyn Layer<ArcHyperService, Service = ArcHyperService> + Send + Sync + 'static>,
 }
-
-// impl<'a> FromIterator<&'a SgBoxLayer> for SgBoxLayer {
-//     fn from_iter<T: IntoIterator<Item = &'a SgBoxLayer>>(iter: T) -> Self {
-//         fold_sg_layers(iter.into_iter().cloned())
-//     }
-// }
 
 impl SgBoxLayer {
     /// Create a new [`BoxLayer`].

@@ -18,16 +18,29 @@
 //! Note: Trace-level logs will print the contents of both the request and response bodies,
 //! potentially causing significant performance overhead. It is recommended to use debug level
 //! logs at most.
+//!
+//!
+//! ## startup
+//! ### static config
+//! see [`startup_static`]
+//! ### by config file
+//! see [`startup_file`]
+//! ### by k8s resource
+//! see [`startup_k8s`]
+//! ### by redis
+//! see [`startup_redis`]
+//!
 #![warn(clippy::unwrap_used)]
 
 use config::SgHttpRoute;
 pub use hyper;
+pub use spacegate_config::model;
+pub use spacegate_config::model::{BoxError, BoxResult};
 use spacegate_config::service::{CreateListener, Retrieve};
 use spacegate_config::Config;
 pub use spacegate_kernel as kernel;
-pub use spacegate_kernel::{BoxError, SgBody, SgBoxLayer, SgRequestExt, SgResponseExt};
 pub use spacegate_plugin as plugin;
-use tokio::{signal, task::JoinHandle};
+use tokio::signal;
 use tracing::{info, instrument};
 
 pub mod config;
@@ -39,13 +52,18 @@ pub mod server;
 pub use spacegate_ext_redis;
 
 #[cfg(feature = "fs")]
-pub async fn startup_file(conf_path: impl AsRef<std::path::Path>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+/// # Startup the gateway by config file
+/// The `conf_dir` is the path of the configuration dir.
+pub async fn startup_file(conf_dir: impl AsRef<std::path::Path>) -> Result<(), BoxError> {
     use spacegate_config::service::{config_format::Json, fs::Fs};
-    let config = Fs::new(conf_path, Json::default());
-    startup(config)
+    let config = Fs::new(conf_dir, Json::default());
+    startup(config).await
 }
 #[cfg(feature = "k8s")]
-pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+/// # Startup the gateway by k8s resource
+/// The `namespace` is the k8s namespace.
+/// If the `namespace` is None, it will use the default namespace.
+pub async fn startup_k8s(namespace: Option<&str>) -> Result<(), BoxError> {
     // use spacegate_config::service::backend::k8s::K8s;
     // let namespace = namespace.unwrap_or("default");
     // let config = K8s::new(namespace, kube::Client::try_default().await?);
@@ -53,26 +71,35 @@ pub async fn startup_k8s(namespace: Option<&str>) -> Result<JoinHandle<Result<()
     unimplemented!()
 }
 #[cfg(feature = "cache")]
-pub async fn startup_redis<RedisParam>(url: impl Into<String>) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+/// # Startup the gateway by redis
+/// The `url` is the redis url, and the json format will be used.
+pub async fn startup_redis(url: impl Into<String>) -> Result<(), BoxError> {
     use spacegate_config::service::{config_format::Json, redis::Redis};
     let config = Redis::new(url.into(), Json::default())?;
-    startup(config)
+    startup(config).await
 }
 
-pub fn startup_static(config: Config) -> Result<JoinHandle<Result<(), BoxError>>, BoxError> {
+/// # Startup the gateway by static config
+/// The `config` is the static config.
+pub async fn startup_static(config: Config) -> Result<(), BoxError> {
     use spacegate_config::service::memory::Memory;
     let config = Memory::new(config);
-    startup(config)
+    startup(config).await
 }
 
+/// # Startup the gateway
+/// The `config` could be any type that implements [`spacegate_config::service::CreateListener`] and [`spacegate_config::service::Retrieve`] trait.
+///
+/// ## Errors
+/// If the config is invalid, it will return a BoxError.
 #[instrument(fields(listener = (L::CONFIG_LISTENER_NAME)), skip(config))]
-pub fn startup<L>(config: L) -> Result<JoinHandle<Result<(), BoxError>>, BoxError>
+pub async fn startup<L>(config: L) -> Result<(), BoxError>
 where
     L: CreateListener + Retrieve + 'static,
 {
     info!("Spacegate Meta Info: {:?}", Meta::new());
     info!("Starting gateway...");
-    Ok(config::init_with_config(config, ctrl_c_cancel_token()))
+    config::startup_with_shutdown_signal(config, ctrl_c_cancel_token()).await
 }
 
 #[derive(Debug, Clone, Copy)]

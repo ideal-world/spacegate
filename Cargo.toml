@@ -1,13 +1,13 @@
 [workspace]
 members = [
+  "binary/spacegate",
+  "binary/admin-server",
   "crates/extension/*",
-  "crates/services/simplify",
   "crates/kernel",
   "crates/plugin",
   "crates/model",
   "crates/config",
   "crates/shell",
-  "crates/admin-server",
 ]
 resolver = "2"
 

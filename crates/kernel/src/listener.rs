@@ -21,7 +21,6 @@ pub struct SgListen<S> {
     pub socket_addr: SocketAddr,
     pub service: S,
     pub tls_cfg: Option<Arc<rustls::ServerConfig>>,
-    pub buffer_size: usize,
     pub cancel_token: CancellationToken,
     pub listener_id: String,
 }
@@ -38,14 +37,12 @@ impl<S> std::fmt::Debug for SgListen<S> {
 
 impl<S> SgListen<S> {
     /// we only have 65535 ports for a console, so it's a safe size
-    pub const DEFAULT_BUFFER_SIZE: usize = 0x10000;
     pub fn new(socket_addr: SocketAddr, service: S, cancel_token: CancellationToken, id: impl Into<String>) -> Self {
         Self {
             conn_builder: hyper_util::server::conn::auto::Builder::new(rt::TokioExecutor::new()),
             socket_addr,
             service,
             tls_cfg: None,
-            buffer_size: Self::DEFAULT_BUFFER_SIZE,
             cancel_token,
             listener_id: id.into(),
         }
@@ -56,17 +53,6 @@ impl<S> SgListen<S> {
     #[must_use]
     pub fn with_tls_config(mut self, tls_cfg: impl Into<Arc<rustls::ServerConfig>>) -> Self {
         self.tls_cfg = Some(tls_cfg.into());
-        self
-    }
-
-    /// # Choosing a buffer size
-    ///
-    /// The `buffer_size` should be lager than the maximal number of concurrent requests.
-    ///
-    /// However, a too large buffer size is unreasonable. Too many requests could wait for a long time for underlying service to process.
-    #[must_use]
-    pub fn buffer_size(mut self, buffer_size: usize) -> Self {
-        self.buffer_size = buffer_size;
         self
     }
 }

@@ -20,25 +20,20 @@ const DEFAULT_PORT: u16 = 80;
 #[command(version, about, long_about = None)]
 pub struct Args {
     ///
-    #[arg(short, long, default_value_t = DEFAULT_PORT)]
+    #[arg(short, long, env, default_value_t = DEFAULT_PORT)]
     pub port: u16,
     ///
-    #[arg(short='H', long, default_value_t = DEFAULT_HOST)]
+    #[arg(short='H', env, long, default_value_t = DEFAULT_HOST)]
     pub host: IpAddr,
     /// the config backend you choose
 
     /// see [`ConfigBackend`]
-    #[arg(short, long, default_value_t = ConfigBackend::File(PathBuf::from("./config")))]
+    #[arg(short, long, env, default_value_t = ConfigBackend::File(PathBuf::from("./config")))]
     pub config: ConfigBackend,
 
     /// the format of the config file
-    #[arg(short, long, default_value_t = ConfigFormat::Toml)]
+    #[arg(short, long, env, default_value_t = ConfigFormat::Toml)]
     pub format: ConfigFormat,
-    /// the plugin schemas
-    ///
-    /// see [`Schemas`]
-    #[arg(short, long, default_value_t = Schemas(PathBuf::from("./schema")))]
-    pub schemas: Schemas,
 }
 
 #[derive(Debug, Clone)]
