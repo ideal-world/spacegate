@@ -88,14 +88,6 @@ testcontainers-modules = { workspace = true, features = ["redis"] }
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-[[test]]
-name = "test_config_by_redis"
-required-features = ["cache"]
-
-[[test]]
-name = "test_websocket"
-required-features = ["plugin-rewrite"]
-
 # [[bench]]
 # name = "cache_sliding_window_benchmark"
 # required-features = ["cache"]
