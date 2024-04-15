@@ -72,7 +72,7 @@ impl Router for SgGatewayRouter {
     type Index = (usize, usize);
     #[instrument(skip_all, fields(uri = req.uri().to_string(), method = req.method().as_str(), host = ?req.headers().get(HOST) ))]
     fn route(&self, req: &mut Request<SgBody>) -> Option<Self::Index> {
-        let host = req.headers().get(HOST).and_then(|x| x.to_str().ok())?;
+        let host = req.uri().host().or(req.headers().get(HOST).and_then(|x| x.to_str().ok()))?;
         let indices = self.hostname_tree.get(host)?;
         for (route_index, _p) in indices {
             for (idx1, matches) in self.routers.as_ref().index(*route_index).rules.iter().enumerate() {
@@ -93,6 +93,8 @@ impl Router for SgGatewayRouter {
                 }
             }
         }
+        tracing::trace!("no rule matched");
+
         None
     }
 }

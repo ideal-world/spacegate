@@ -18,14 +18,18 @@ path = "src/lib.rs"
 
 [features]
 ext-redis = ["spacegate-ext-redis", "spacegate-plugin/redis"]
-ext-axum = ["spacegate-ext-axum", "spacegate-plugin/axum", "spacegate-config/axum"]
-cache = ["spacegate-plugin/cache", "deadpool-redis", "spacegate-ext-redis", "spacegate-config/redis"]
+ext-axum = [
+  "spacegate-ext-axum",
+  "spacegate-plugin/axum",
+  "spacegate-config/axum",
+]
+cache = [
+  "spacegate-plugin/cache",
+  "spacegate-ext-redis",
+  "spacegate-config/redis",
+]
 fs = ["spacegate-config/fs"]
 k8s = [
-  "kube",
-  "k8s-openapi",
-  "k8s-gateway-api",
-  "schemars",
   "cache",
   "spacegate-plugin/rewrite",
   "spacegate-plugin/header-modifier",
@@ -45,39 +49,19 @@ plugin-status = ["spacegate-plugin/status"]
 
 
 [dependencies]
-spacegate-kernel = { path = "../kernel", features = ["reload"] }
-spacegate-plugin = { path = "../plugin", features = ["schema"] }
-spacegate-config = { path = "../config" }
-spacegate-ext-redis = { path = "../extension/redis", optional = true }
-spacegate-ext-axum = { path = "../extension/axum", optional = true }
-
-serde.workspace = true
-serde_json.workspace = true
-lazy_static.workspace = true
-async-trait.workspace = true
-itertools.workspace = true
-urlencoding.workspace = true
-async-compression.workspace = true
+spacegate-kernel = { workspace = true, features = ["reload"] }
+spacegate-plugin = { workspace = true, features = ["schema"] }
+spacegate-config = { workspace = true }
+spacegate-ext-redis = { workspace = true, optional = true }
+spacegate-ext-axum = { workspace = true, optional = true }
+regex = { workspace = true }
+futures-util.workspace = true
 tracing.workspace = true
 tokio.workspace = true
-futures-util.workspace = true
 hyper.workspace = true
-hyper-rustls.workspace = true
 rustls-pemfile.workspace = true
 tokio-rustls.workspace = true
-ipnet = { workspace = true, features = ["serde"] }
-
-bytes = { workspace = true }
-
-kube = { workspace = true, optional = true }
-k8s-openapi = { workspace = true, optional = true }
-k8s-gateway-api = { workspace = true, optional = true }
-schemars = { workspace = true, optional = true }
-async-stream = "0.3.5"
-tokio-util = { version = "0.7.8", features = ["io"] }
-
-deadpool-redis = { workspace = true, optional = true }
-regex = { workspace = true }
+tokio-util = { workspace = true, features = ["io"] }
 
 [dev-dependencies]
 reqwest = { workspace = true }

@@ -45,6 +45,7 @@ where
     type Response = Response<SgBody>;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
     fn call(&self, mut req: Request<SgBody>) -> Self::Future {
+        tracing::trace!("enter route {req:?}");
         let fut: Self::Future = if let Some(index) = self.router.route(&mut req) {
             req.extensions_mut().insert(Matched {
                 index: index.clone(),
@@ -52,7 +53,6 @@ where
             });
             let fut = self.services.index(index).call(req);
             Box::pin(async move {
-                tracing::trace!("enter route");
                 let result = fut.await;
                 tracing::trace!("leave route");
                 result
@@ -60,7 +60,6 @@ where
         } else {
             let fut = self.fallback.call(req);
             Box::pin(async move {
-                tracing::trace!("enter route");
                 let result = fut.await;
                 tracing::trace!("leave route");
                 result
