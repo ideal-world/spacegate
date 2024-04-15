@@ -49,10 +49,17 @@ impl ServerCertVerifier for NoCertificateVerification {
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
         vec![
-            SignatureScheme::RSA_PKCS1_SHA1,
             SignatureScheme::RSA_PKCS1_SHA256,
             SignatureScheme::RSA_PKCS1_SHA384,
             SignatureScheme::RSA_PKCS1_SHA512,
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            SignatureScheme::ECDSA_NISTP521_SHA512,
+            SignatureScheme::ED25519,
+            SignatureScheme::ED448,
         ]
     }
 }
@@ -133,7 +140,7 @@ impl Default for SgHttpClient {
 impl SgHttpClient {
     pub fn new(tls_config: rustls::ClientConfig) -> Self {
         SgHttpClient {
-            inner: Client::builder(TokioExecutor::new()).build(HttpsConnectorBuilder::new().with_tls_config(tls_config).https_or_http().enable_http1().build()),
+            inner: Client::builder(TokioExecutor::new()).build(HttpsConnectorBuilder::new().with_tls_config(tls_config).https_or_http().enable_http1().enable_http2().build()),
         }
     }
     pub fn new_dangerous() -> Self {

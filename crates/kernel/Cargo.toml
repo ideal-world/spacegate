@@ -48,7 +48,7 @@ tokio-util = { workspace = true }
 futures-util = { workspace = true }
 
 # Tls
-hyper-rustls = { workspace = true }
+hyper-rustls = { workspace = true, features = ["http1", "http2"] }
 rustls-pemfile = { workspace = true }
 tokio-rustls = { workspace = true }
 
@@ -63,6 +63,13 @@ spacegate-ext-redis = { path = "../extension/redis", optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
 axum = { workspace = true, features = ["multipart"] }
+axum-server = { version = "0.6", features = ["tls-rustls"] }
 md5 = { version = "0.7.0" }
 reqwest = { version = "0.12", features = ["multipart", "stream"] }
 tokio-tungstenite = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[[test]]
+name = "test_h2"
+path = "tests/test_h2.rs"
+required-features = ["axum/http2"]

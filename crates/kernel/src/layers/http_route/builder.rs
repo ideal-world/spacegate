@@ -102,6 +102,13 @@ impl SgHttpRouteRuleLayerBuilder {
             extensions: Default::default(),
         }
     }
+    pub fn match_item(mut self, item: impl Into<SgHttpRouteMatch>) -> Self {
+        match self.r#match {
+            Some(ref mut matches) => matches.push(item.into()),
+            None => self.r#match = Some(vec![item.into()]),
+        }
+        self
+    }
     pub fn matches(mut self, matches: impl IntoIterator<Item = SgHttpRouteMatch>) -> Self {
         self.r#match = Some(matches.into_iter().collect());
         self
@@ -198,8 +205,8 @@ impl SgHttpBackendLayerBuilder {
         self.port = Some(port);
         self
     }
-    pub fn protocol(mut self, protocol: String) -> Self {
-        self.protocol = Some(protocol);
+    pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
         self
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {

@@ -14,6 +14,18 @@ pub enum SgHttpPathMatch {
     Regular(Regex),
 }
 
+impl SgHttpPathMatch {
+    pub fn prefix<S: Into<String>>(s: S) -> Self {
+        Self::Prefix(s.into())
+    }
+    pub fn exact<S: Into<String>>(s: S) -> Self {
+        Self::Exact(s.into())
+    }
+    pub fn regular(re: Regex) -> Self {
+        Self::Regular(re)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum SgHttpHeaderMatchPolicy {
     /// Matches the HTTP header exactly and with case sensitivity.
@@ -80,6 +92,50 @@ impl MatchRequest for SgHttpQueryMatch {
             }
         } else {
             false
+        }
+    }
+}
+
+impl From<SgHttpPathMatch> for SgHttpRouteMatch {
+    fn from(val: SgHttpPathMatch) -> Self {
+        SgHttpRouteMatch {
+            path: Some(val),
+            header: None,
+            query: None,
+            method: None,
+        }
+    }
+}
+
+impl From<SgHttpHeaderMatch> for SgHttpRouteMatch {
+    fn from(value: SgHttpHeaderMatch) -> Self {
+        SgHttpRouteMatch {
+            path: None,
+            header: Some(vec![value]),
+            query: None,
+            method: None,
+        }
+    }
+}
+
+impl From<SgHttpQueryMatch> for SgHttpRouteMatch {
+    fn from(value: SgHttpQueryMatch) -> Self {
+        SgHttpRouteMatch {
+            path: None,
+            header: None,
+            query: Some(vec![value]),
+            method: None,
+        }
+    }
+}
+
+impl From<SgHttpMethodMatch> for SgHttpRouteMatch {
+    fn from(value: SgHttpMethodMatch) -> Self {
+        SgHttpRouteMatch {
+            path: None,
+            header: None,
+            query: None,
+            method: Some(vec![value]),
         }
     }
 }

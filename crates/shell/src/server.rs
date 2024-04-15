@@ -6,7 +6,6 @@ use std::{
 
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
 
-use lazy_static::lazy_static;
 use spacegate_config::{Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
@@ -25,11 +24,6 @@ use tracing::{debug, error, info, instrument, warn};
 
 use tokio_rustls::rustls::{self, pki_types::PrivateKeyDer};
 use tokio_util::sync::CancellationToken;
-
-lazy_static! {
-    static ref SHUTDOWN_TX: Arc<Mutex<HashMap<String, Sender<()>>>> = <_>::default();
-    static ref START_JOIN_HANDLE: Arc<Mutex<HashMap<String, JoinHandle<()>>>> = <_>::default();
-}
 
 fn collect_http_route(
     gateway_name: Arc<str>,

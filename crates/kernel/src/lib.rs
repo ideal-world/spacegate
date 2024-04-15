@@ -80,6 +80,8 @@ pub trait SgResponseExt {
         Self: Sized,
     {
         let message = e.to_string();
+        let src = e.source();
+        let message = if let Some(src) = src { format!("{}:\n {}", message, src) } else { message };
         Self::with_code_message(StatusCode::BAD_GATEWAY, message)
     }
 }
@@ -100,7 +102,7 @@ pub struct SgBoxLayer {
 }
 
 impl SgBoxLayer {
-    /// Create a new [`BoxLayer`].
+    /// Create a new [`SgBoxLayer`].
     pub fn new<L>(inner_layer: L) -> Self
     where
         L: Layer<ArcHyperService> + Send + Sync + 'static,

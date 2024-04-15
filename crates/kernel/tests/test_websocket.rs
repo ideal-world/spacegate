@@ -1,12 +1,7 @@
 use futures_util::{SinkExt, StreamExt};
-use tokio_tungstenite;
 
 use std::{net::SocketAddr, str::FromStr, time::Duration};
 
-use reqwest::{
-    multipart::{Form, Part},
-    Body,
-};
 use spacegate_kernel::{
     layers::{
         gateway,
