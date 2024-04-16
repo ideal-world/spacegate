@@ -3,9 +3,11 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     helper_layers::{
         filter::{response_anyway::ResponseAnyway, FilterRequestLayer},
+        function::FnLayer,
         reload::Reloader,
     },
     layers::http_route::SgHttpRoute,
+    utils::Snowflake,
     SgBoxLayer,
 };
 
@@ -13,11 +15,12 @@ use super::{SgGatewayLayer, SgGatewayRoute};
 
 pub struct SgGatewayLayerBuilder {
     pub gateway_name: Arc<str>,
-    http_routers: HashMap<String, SgHttpRoute>,
+    pub http_routers: HashMap<String, SgHttpRoute>,
     pub http_plugins: Vec<SgBoxLayer>,
-    http_fallback: SgBoxLayer,
-    http_route_reloader: Reloader<SgGatewayRoute>,
+    pub http_fallback: SgBoxLayer,
+    pub http_route_reloader: Reloader<SgGatewayRoute>,
     pub extensions: hyper::http::Extensions,
+    pub x_request_id: bool,
 }
 
 pub fn default_gateway_route_fallback() -> SgBoxLayer {
@@ -39,7 +42,12 @@ impl SgGatewayLayerBuilder {
             http_fallback: default_gateway_route_fallback(),
             http_route_reloader: Default::default(),
             extensions: hyper::http::Extensions::default(),
+            x_request_id: true,
         }
+    }
+    pub fn x_request_id(mut self, enable: bool) -> Self {
+        self.x_request_id = enable;
+        self
     }
     pub fn http_router(mut self, route: SgHttpRoute) -> Self {
         self.http_routers.insert(route.name.clone(), route);
@@ -73,10 +81,15 @@ impl SgGatewayLayerBuilder {
         self
     }
     pub fn build(self) -> SgGatewayLayer {
+        let mut plugins = vec![];
+        if self.x_request_id {
+            plugins.push(SgBoxLayer::new(FnLayer::new_closure(crate::utils::x_request_id::<Snowflake>)));
+        }
+        plugins.extend(self.http_plugins);
         SgGatewayLayer {
             gateway_name: self.gateway_name,
             http_routes: self.http_routers,
-            http_plugins: self.http_plugins,
+            http_plugins: plugins,
             http_fallback: self.http_fallback,
             http_route_reloader: self.http_route_reloader,
             ext: self.extensions,

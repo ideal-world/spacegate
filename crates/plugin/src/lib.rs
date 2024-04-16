@@ -173,7 +173,7 @@ impl SgPluginRepository {
     }
 
     pub fn register_prelude(&self) {
-        // self.register::<plugins::static_resource::StaticResourcePlugin>();
+        self.register::<plugins::static_resource::StaticResourcePlugin>();
         #[cfg(feature = "limit")]
         self.register::<plugins::limit::RateLimitPlugin>();
         #[cfg(feature = "redirect")]
