@@ -35,10 +35,7 @@ async fn gateway() {
             "test_upload".to_string(),
             SgHttpRoute::builder()
                 .rule(
-                    SgHttpRouteRuleLayer::builder()
-                        .match_item(HttpPathMatchRewrite::prefix("/tls"))
-                        .backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build())
-                        .build(),
+                    SgHttpRouteRuleLayer::builder().match_item(HttpPathMatchRewrite::prefix("/tls")).backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build()).build(),
                 )
                 .rule(
                     SgHttpRouteRuleLayer::builder()
@@ -69,7 +66,8 @@ async fn gateway() {
         gateway.layer(get_http_backend_service()),
         cancel.child_token(),
         "listener",
-    ).with_tls_config(tls_config);
+    )
+    .with_tls_config(tls_config);
     let task = tokio::spawn(async move {
         http_listener.listen().await.expect("fail to listen");
     });
