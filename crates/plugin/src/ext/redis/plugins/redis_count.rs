@@ -36,7 +36,7 @@ async fn redis_call(mut conn: Connection, count_key: String) -> Result<bool, Red
         conn.incr(&count_cumulative_key, 1).await?;
     }
     let count_cumulative: u32 = conn.get(&count_cumulative_key).await?;
-    let count: u32 = conn.get(&count_key).await?;
+    let count: u32 = conn.get(&count_key).await.unwrap_or(u32::MAX);
     Ok(count_cumulative <= count)
 }
 

@@ -65,9 +65,14 @@ impl Plugin for RedisDynamicRoutePlugin {
             new_pq.push_str(query);
         }
         domain.split_once("://");
-        uri_parts.authority = Some(http::uri::Authority::from_maybe_shared(domain).map_err(PluginError::internal_error::<RedisDynamicRoutePlugin>)?);
-        uri_parts.path_and_query = Some(http::uri::PathAndQuery::from_maybe_shared(new_pq).map_err(PluginError::internal_error::<RedisDynamicRoutePlugin>)?);
-        *req.uri_mut() = Uri::from_parts(uri_parts).map_err(PluginError::internal_error::<RedisDynamicRoutePlugin>)?;
+        if let Some((scheme_str, host_str)) = domain.split_once("://") {
+            uri_parts.scheme = Some(http::uri::Scheme::from_str(scheme_str)?);
+            uri_parts.authority = Some(http::uri::Authority::from_str(host_str)?);
+        } else {
+            return Err(format!("bad route domain {}", domain).into());
+        }
+        uri_parts.path_and_query = Some(http::uri::PathAndQuery::from_maybe_shared(new_pq)?);
+        *req.uri_mut() = Uri::from_parts(uri_parts)?;
         Ok(inner.call(req).await)
     }
     #[cfg(feature = "schema")]

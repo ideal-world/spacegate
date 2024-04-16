@@ -260,7 +260,7 @@ impl RunningSgGateway {
         let gateway_name: Arc<str> = Arc::from(gateway.name.to_string());
         let mut listens: Vec<SgListen<ArcHyperService>> = Vec::new();
         for listener in &gateway.listeners {
-            let ip = listener.ip.unwrap_or(std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED));
+            let ip = listener.ip.unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
             let addr = SocketAddr::new(ip, listener.port);
 
             let gateway_name = gateway_name.clone();
