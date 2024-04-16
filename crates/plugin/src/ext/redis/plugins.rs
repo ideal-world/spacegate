@@ -1,6 +1,6 @@
 use hyper::{header::HeaderName, Request};
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::{extension::MatchedSgRouter, layers::http_route::match_request::SgHttpPathMatch, SgBody};
+use spacegate_kernel::{extension::MatchedSgRouter, layers::http_route::match_request::HttpPathMatchRewrite, SgBody};
 
 pub mod redis_count;
 pub mod redis_dynamic_route;
@@ -14,9 +14,9 @@ fn redis_format_key(req: &Request<SgBody>, matched: &MatchedSgRouter, header: &H
         .path
         .as_ref()
         .map(|p| match p {
-            SgHttpPathMatch::Exact(path) => path,
-            SgHttpPathMatch::Prefix(path) => path,
-            SgHttpPathMatch::Regular(regex) => regex.as_str(),
+            HttpPathMatchRewrite::Exact(path, _) => path,
+            HttpPathMatchRewrite::Prefix(path, _) => path,
+            HttpPathMatchRewrite::RegExp(regex, _) => regex.as_str(),
         })
         .unwrap_or("*");
     let header = req.headers().get(header).and_then(|v| v.to_str().ok())?;
