@@ -7,7 +7,7 @@ use hyper::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_kernel::{extension::Reflect, helper_layers::filter::Filter, BoxError, SgBody};
+use spacegate_kernel::{extension::Reflect, BoxError, SgBody};
 
 use crate::{Plugin, PluginError};
 
@@ -40,20 +40,6 @@ pub struct StaticResource {
     pub code: StatusCode,
     pub content_type: HeaderValue,
     pub body: Bytes,
-}
-
-impl Filter for StaticResource {
-    fn filter(&self, req: hyper::Request<spacegate_kernel::SgBody>) -> Result<hyper::Request<spacegate_kernel::SgBody>, hyper::Response<spacegate_kernel::SgBody>> {
-        let mut resp = Response::builder()
-            .header(CONTENT_TYPE, self.content_type.clone())
-            .status(self.code)
-            .body(SgBody::full(self.body.clone()))
-            .map_err(PluginError::internal_error::<StaticResourcePlugin>)?;
-        if let Some(reflect) = req.into_parts().0.extensions.remove::<Reflect>() {
-            resp.extensions_mut().extend(reflect.into_inner());
-        }
-        Err(resp)
-    }
 }
 
 pub struct StaticResourcePlugin {

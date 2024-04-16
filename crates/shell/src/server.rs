@@ -141,7 +141,6 @@ pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMa
 pub struct RunningSgGateway {
     pub gateway_name: Arc<str>,
     token: CancellationToken,
-    // _guard: tokio_util::sync::DropGuard,
     handle: tokio::task::JoinHandle<()>,
     pub reloader: Reloader<SgGatewayRoute>,
     shutdown_timeout: Duration,
@@ -161,7 +160,7 @@ impl RunningSgGateway {
             }
         }
         for (name, item) in config.gateways {
-            match RunningSgGateway::create(item, signal.clone()) {
+            match RunningSgGateway::create(item, signal.child_token()) {
                 Ok(inst) => RunningSgGateway::global_save(name, inst),
                 Err(e) => {
                     tracing::error!("[SG.Config] fail to init gateway [{name}]: {e}")
@@ -236,7 +235,7 @@ impl RunningSgGateway {
         let reloader = <Reloader<SgGatewayRoute>>::default();
         let service = create_service(&gateway.name, gateway.plugins, routes, reloader.clone())?;
         if gateway.listeners.is_empty() {
-            return Err("[SG.Server] Missing Listeners".into());
+            error!("[SG.Server] Missing Listeners");
         }
         if let Some(_log_level) = gateway.parameters.log_level.clone() {
             // not supported yet
@@ -305,24 +304,26 @@ impl RunningSgGateway {
             listens.push(listen)
         }
 
-        let local_set = tokio::task::LocalSet::new();
-        for listen in listens {
-            local_set.spawn_local(async move {
-                let id = listen.listener_id.clone();
-                if let Err(e) = listen.listen().await {
-                    tracing::error!("[Sg.Server] listen error: {e}")
-                }
-                tracing::info!("[Sg.Server] listener[{id}] quit listening")
-            });
-        }
-
         // let cancel_guard = cancel_token.clone().drop_guard();
         let cancel_task = cancel_token.clone().cancelled_owned();
         let handle = {
             let gateway_name = gateway_name.clone();
-            tokio::task::spawn_local(async move {
+            tokio::task::spawn(async move {
+                let mut join_set = tokio::task::JoinSet::new();
+                for listen in listens {
+                    join_set.spawn(async move {
+                        let id = listen.listener_id.clone();
+                        if let Err(e) = listen.listen().await {
+                            tracing::error!("[Sg.Server] listen error: {e}")
+                        }
+                        tracing::info!("[Sg.Server] listener[{id}] quit listening")
+                    });
+                }
                 tracing::info!(gateway = gateway_name.as_ref(), "[Sg.Server] start all listeners");
-                local_set.run_until(cancel_task).await;
+                cancel_task.await;
+                while let Some(result) = join_set.join_next().await {
+                    if let Err(_e) = result {}
+                }
                 tracing::info!(gateway = gateway_name.as_ref(), "[Sg.Server] cancelled");
             })
         };
@@ -330,7 +331,6 @@ impl RunningSgGateway {
         Ok(RunningSgGateway {
             gateway_name: gateway_name.clone(),
             token: cancel_token,
-            // _guard: cancel_guard,
             handle,
             shutdown_timeout: Duration::from_secs(10),
             reloader,

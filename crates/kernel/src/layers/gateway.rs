@@ -43,8 +43,6 @@ impl SgGatewayLayer {
     /// Create a new gateway layer.
     /// # Arguments
     /// * `gateway_name` - The gateway name, this may be used by plugins.
-    /// * `cancel_token` - A cancel token hints wether the gateway server is still alive.
-    ///
     pub fn builder(gateway_name: impl Into<Arc<str>>) -> builder::SgGatewayLayerBuilder {
         builder::SgGatewayLayerBuilder::new(gateway_name)
     }
