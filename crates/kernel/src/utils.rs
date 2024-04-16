@@ -8,4 +8,4 @@ pub use x_forwarded_for::x_forwarded_for;
 mod with_length_or_chunked;
 pub use with_length_or_chunked::with_length_or_chunked;
 mod x_request_id;
-pub use x_request_id::{x_request_id, XRequestIdAlgo, Snowflake};
+pub use x_request_id::{x_request_id, Snowflake, XRequestIdAlgo};
