@@ -19,7 +19,7 @@ use tower_layer::Layer;
 
 use self::{
     builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
-    match_request::SgHttpRouteMatch,
+    match_request::HttpRouteMatch,
 };
 
 /****************************************************************************************
@@ -46,7 +46,7 @@ impl SgHttpRoute {
 #[derive(Debug, Clone)]
 pub struct SgHttpRouter {
     pub hostnames: Arc<[String]>,
-    pub rules: Arc<[Option<Arc<[Arc<SgHttpRouteMatch>]>>]>,
+    pub rules: Arc<[Option<Arc<[Arc<HttpRouteMatch>]>>]>,
     pub ext: hyper::http::Extensions,
 }
 
@@ -58,7 +58,7 @@ pub struct SgHttpRouter {
 
 #[derive(Debug)]
 pub struct SgHttpRouteRuleLayer {
-    pub r#match: Option<Vec<SgHttpRouteMatch>>,
+    pub r#match: Option<Vec<HttpRouteMatch>>,
     pub plugins: Vec<SgBoxLayer>,
     timeouts: Option<Duration>,
     backends: Vec<SgHttpBackendLayer>,
@@ -101,7 +101,7 @@ where
 }
 #[derive(Clone)]
 pub struct SgRouteRule {
-    pub r#match: Option<Arc<[Arc<SgHttpRouteMatch>]>>,
+    pub r#match: Option<Arc<[Arc<HttpRouteMatch>]>>,
     pub service: ArcHyperService,
     pub ext: hyper::http::Extensions,
 }

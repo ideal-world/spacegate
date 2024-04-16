@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
 use tokio::time::timeout;
-use tokio::{self, sync::watch::Sender, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 
 use tokio_rustls::rustls::{self, pki_types::PrivateKeyDer};

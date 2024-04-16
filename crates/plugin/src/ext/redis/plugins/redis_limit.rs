@@ -78,7 +78,7 @@ mod test {
     use serde_json::json;
     use spacegate_ext_redis::redis::AsyncCommands;
     use spacegate_kernel::{
-        layers::http_route::match_request::{SgHttpPathMatch, SgHttpRouteMatch},
+        layers::http_route::match_request::{HttpPathMatchRewrite, HttpRouteMatch},
         service::get_echo_service,
     };
     use std::time::Duration;
@@ -116,8 +116,8 @@ mod test {
                     .method("GET")
                     .extension(GatewayName::new(GW_NAME))
                     .extension(MatchedSgRouter(
-                        SgHttpRouteMatch {
-                            path: Some(SgHttpPathMatch::Prefix("op-res".to_string())),
+                        HttpRouteMatch {
+                            path: Some(HttpPathMatchRewrite::prefix("op-res")),
                             ..Default::default()
                         }
                         .into(),

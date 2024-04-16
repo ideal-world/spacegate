@@ -94,7 +94,7 @@ mod test {
     use hyper::header::AUTHORIZATION;
     use serde_json::json;
     use spacegate_kernel::{
-        layers::http_route::match_request::{SgHttpMethodMatch, SgHttpPathMatch, SgHttpRouteMatch},
+        layers::http_route::match_request::{HttpMethodMatch, HttpPathMatchRewrite, HttpRouteMatch},
         service::get_echo_service,
     };
     use testcontainers_modules::redis::REDIS_PORT;
@@ -138,8 +138,8 @@ mod test {
                 .method("GET")
                 .extension(GatewayName::new(GW_NAME))
                 .extension(MatchedSgRouter(
-                    SgHttpRouteMatch {
-                        path: Some(SgHttpPathMatch::Prefix("op-res".to_string())),
+                    HttpRouteMatch {
+                        path: Some(HttpPathMatchRewrite::prefix("op-res")),
                         ..Default::default()
                     }
                     .into(),
@@ -159,8 +159,8 @@ mod test {
                 .method("GET")
                 .extension(GatewayName::new(GW_NAME))
                 .extension(MatchedSgRouter(
-                    SgHttpRouteMatch {
-                        path: Some(SgHttpPathMatch::Prefix("op-res".to_string())),
+                    HttpRouteMatch {
+                        path: Some(HttpPathMatchRewrite::prefix("op-res")),
                         ..Default::default()
                     }
                     .into(),
@@ -179,8 +179,8 @@ mod test {
                 .method("POST")
                 .extension(GatewayName::new(GW_NAME))
                 .extension(MatchedSgRouter(
-                    SgHttpRouteMatch {
-                        path: Some(SgHttpPathMatch::Prefix("op-res".to_string())),
+                    HttpRouteMatch {
+                        path: Some(HttpPathMatchRewrite::prefix("op-res")),
                         ..Default::default()
                     }
                     .into(),
@@ -198,9 +198,9 @@ mod test {
                 .method("DELETE")
                 .extension(GatewayName::new(GW_NAME))
                 .extension(MatchedSgRouter(
-                    SgHttpRouteMatch {
-                        path: Some(SgHttpPathMatch::Prefix("op-res".to_string())),
-                        method: Some(vec![SgHttpMethodMatch("DELETE".into())]),
+                    HttpRouteMatch {
+                        path: Some(HttpPathMatchRewrite::prefix("op-res")),
+                        method: Some(vec![HttpMethodMatch("DELETE".into())]),
                         ..Default::default()
                     }
                     .into(),

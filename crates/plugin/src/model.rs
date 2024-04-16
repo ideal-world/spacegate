@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::layers::http_route::match_request::SgHttpPathMatch;
+use spacegate_kernel::layers::http_route::match_request::HttpPathMatchRewrite;
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -24,7 +24,7 @@ pub enum SgHttpPathModifierType {
 }
 
 impl SgHttpPathModifier {
-    pub fn replace(&self, path: &str, path_match: &SgHttpPathMatch) -> Option<String> {
+    pub fn replace(&self, path: &str, path_match: &HttpPathMatchRewrite) -> Option<String> {
         let value = &self.value;
         match (self.kind, path_match) {
             (SgHttpPathModifierType::ReplaceFullPath, _) => {
@@ -34,7 +34,7 @@ impl SgHttpPathModifier {
                     None
                 }
             }
-            (SgHttpPathModifierType::ReplacePrefixMatch, SgHttpPathMatch::Prefix(prefix)) => {
+            (SgHttpPathModifierType::ReplacePrefixMatch, HttpPathMatchRewrite::Prefix(prefix, _)) => {
                 fn not_empty(s: &&str) -> bool {
                     !s.is_empty()
                 }
@@ -74,7 +74,7 @@ impl SgHttpPathModifier {
                     }
                 }
             }
-            (SgHttpPathModifierType::ReplaceRegex, SgHttpPathMatch::Regular(re)) => Some(re.replace(path, value).to_string()),
+            (SgHttpPathModifierType::ReplaceRegex, HttpPathMatchRewrite::RegExp(re, _)) => Some(re.replace(path, value).to_string()),
             _ => None,
         }
     }
@@ -86,7 +86,7 @@ fn test_prefix_replace() {
         kind: SgHttpPathModifierType::ReplacePrefixMatch,
         value: "/iam".into(),
     };
-    let replace = SgHttpPathMatch::Prefix("api/iam".into());
+    let replace = HttpPathMatchRewrite::prefix("api/iam");
     assert_eq!(Some("/iam/get_name"), modifier.replace("api/iam/get_name", &replace).as_deref());
     assert_eq!(Some("/iam/get_name/example.js"), modifier.replace("api/iam/get_name/example.js", &replace).as_deref());
     assert_eq!(Some("/iam/get_name/"), modifier.replace("api/iam/get_name/", &replace).as_deref());
@@ -98,7 +98,7 @@ fn test_regex_replace() {
         kind: SgHttpPathModifierType::ReplaceRegex,
         value: "/path/$1/subpath$2".into(),
     };
-    let replace = SgHttpPathMatch::Regular(regex::Regex::new(r"/api/(\w*)/subpath($|/.*)").expect("invalid regex"));
+    let replace = HttpPathMatchRewrite::regex(regex::Regex::new(r"/api/(\w*)/subpath($|/.*)").expect("invalid regex"));
     assert_eq!(Some("/path/iam/subpath/get_name"), modifier.replace("/api/iam/subpath/get_name", &replace).as_deref());
     assert_eq!(Some("/path/iam/subpath/"), modifier.replace("/api/iam/subpath/", &replace).as_deref());
     assert_eq!(Some("/path/iam/subpath"), modifier.replace("/api/iam/subpath", &replace).as_deref());

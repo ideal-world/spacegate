@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::SgBoxLayer;
 
-use super::{match_request::SgHttpRouteMatch, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer};
+use super::{match_request::HttpRouteMatch, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer};
 
 #[derive(Debug)]
 pub struct SgHttpRouteLayerBuilder {
@@ -80,7 +80,7 @@ impl SgHttpRouteLayerBuilder {
 
 #[derive(Debug)]
 pub struct SgHttpRouteRuleLayerBuilder {
-    r#match: Option<Vec<SgHttpRouteMatch>>,
+    r#match: Option<Vec<HttpRouteMatch>>,
     pub plugins: Vec<SgBoxLayer>,
     timeouts: Option<Duration>,
     backends: Vec<SgHttpBackendLayer>,
@@ -102,14 +102,14 @@ impl SgHttpRouteRuleLayerBuilder {
             extensions: Default::default(),
         }
     }
-    pub fn match_item(mut self, item: impl Into<SgHttpRouteMatch>) -> Self {
+    pub fn match_item(mut self, item: impl Into<HttpRouteMatch>) -> Self {
         match self.r#match {
             Some(ref mut matches) => matches.push(item.into()),
             None => self.r#match = Some(vec![item.into()]),
         }
         self
     }
-    pub fn matches(mut self, matches: impl IntoIterator<Item = SgHttpRouteMatch>) -> Self {
+    pub fn matches(mut self, matches: impl IntoIterator<Item = HttpRouteMatch>) -> Self {
         self.r#match = Some(matches.into_iter().collect());
         self
     }

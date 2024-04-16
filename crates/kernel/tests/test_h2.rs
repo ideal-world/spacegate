@@ -10,7 +10,7 @@ use hyper::{client, Request};
 use spacegate_kernel::{
     layers::{
         gateway,
-        http_route::{match_request::SgHttpPathMatch, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
+        http_route::{match_request::HttpPathMatchRewrite, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
     },
     listener::SgListen,
     service::{get_http_backend_service, http_backend_service},
@@ -57,6 +57,7 @@ async fn gateway() {
 const CERT: &[u8] = include_bytes!("test_https/.cert");
 const KEY: &[u8] = include_bytes!("test_https/.key");
 fn tls_config() -> ServerConfig {
+
     ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(
@@ -73,7 +74,7 @@ async fn axum_server() {
     }
     let config = axum_server::tls_rustls::RustlsConfig::from_pem(CERT.to_vec(), KEY.to_vec()).await.expect("fail to build");
     axum_server::bind_rustls(SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 9003, 0, 0)), config)
-        .serve(Router::new().route("/echo", axum::routing::get(echo)).into_make_service())
+        .serve(Router::new().route("/echo", axum::routing::post(echo)).into_make_service())
         .await
         .expect("fail to serve");
 }

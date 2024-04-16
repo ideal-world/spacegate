@@ -83,6 +83,10 @@ impl Router for SgGatewayRouter {
                         if m.match_request(req) {
                             req.extensions_mut().insert(MatchedSgRouter(m.clone()));
                             tracing::trace!("matches {m:?} [{route_index},{idx1}:{_p}]");
+                            if let Err(e) = m.rewrite(req) {
+                                tracing::warn!("rewrite failed: {e:?}");
+                                return None;
+                            }
                             return Some(index);
                         }
                     }
