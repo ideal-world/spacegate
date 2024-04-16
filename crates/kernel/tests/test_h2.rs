@@ -57,7 +57,6 @@ async fn gateway() {
 const CERT: &[u8] = include_bytes!("test_https/.cert");
 const KEY: &[u8] = include_bytes!("test_https/.key");
 fn tls_config() -> ServerConfig {
-
     ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(
