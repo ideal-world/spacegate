@@ -53,7 +53,7 @@ k8s-gateway-api = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 lazy_static.workspace = true
 
-notify = { workspace = true, default-features = false, features = [
+notify = { workspace = true, features = [
   "macos_kqueue",
 ], optional = true }
 

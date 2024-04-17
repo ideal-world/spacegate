@@ -12,20 +12,13 @@ license.workspace = true
 edition.workspace = true
 readme = "../../README.md"
 
-[profile.release]
-codegen-units = 1
-debug = false
-debug-assertions = false
-lto = "fat"
-opt-level = 3
-panic = "abort"
-rpath = false
-strip = true
-
 
 [features]
 default = ["fs"]
 full = ["k8s", "fs", "redis", "axum"]
+build-k8s = ["k8s", "redis", "axum"]
+build-local = ["fs", "redis", "axum"]
+build-simple = ["fs"]
 k8s = ["spacegate-shell/k8s"]
 fs = ["spacegate-shell/fs"]
 redis = ["spacegate-shell/cache"]
