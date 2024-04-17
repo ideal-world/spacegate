@@ -167,7 +167,7 @@ pub enum BackendHost {
     Host { host: String },
     // #[cfg(feature = "k8s")]
     K8sService(K8sServiceData),
-    File { path: String } ,
+    File { path: String },
 }
 
 impl ToString for BackendHost {
