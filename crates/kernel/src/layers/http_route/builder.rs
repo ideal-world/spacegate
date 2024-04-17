@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::SgBoxLayer;
+use crate::{service::FILE_SCHEMA, SgBoxLayer};
 
 use super::{match_request::HttpRouteMatch, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer};
 
@@ -156,7 +156,7 @@ impl SgHttpRouteRuleLayerBuilder {
 pub struct SgHttpBackendLayerBuilder {
     host: Option<String>,
     port: Option<u16>,
-    protocol: Option<String>,
+    schema: Option<String>,
     pub plugins: Vec<SgBoxLayer>,
     timeout: Option<Duration>,
     weight: u16,
@@ -168,7 +168,7 @@ impl Default for SgHttpBackendLayerBuilder {
         Self {
             host: None,
             port: None,
-            protocol: None,
+            schema: None,
             plugins: Vec::new(),
             timeout: None,
             weight: 1,
@@ -205,8 +205,12 @@ impl SgHttpBackendLayerBuilder {
         self.port = Some(port);
         self
     }
-    pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
-        self.protocol = Some(protocol.into());
+    pub fn schema(mut self, schema: impl Into<String>) -> Self {
+        self.schema = Some(schema.into());
+        self
+    }
+    pub fn file(mut self) -> Self {
+        self.schema = Some(FILE_SCHEMA.into());
         self
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
@@ -217,7 +221,7 @@ impl SgHttpBackendLayerBuilder {
         SgHttpBackendLayer {
             host: self.host.map(Into::into),
             port: self.port,
-            scheme: self.protocol.map(Into::into),
+            scheme: self.schema.map(Into::into),
             plugins: self.plugins,
             timeout: self.timeout,
             weight: self.weight,

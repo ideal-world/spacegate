@@ -40,6 +40,8 @@ tracing = { workspace = true }
 tokio = { workspace = true, features = ["net", "time", "macros"] }
 tokio-util = { workspace = true }
 
+# time
+chrono = { workspace = true }
 
 # future
 futures-util = { workspace = true }

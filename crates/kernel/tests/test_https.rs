@@ -40,7 +40,7 @@ async fn gateway() {
                 .rule(
                     SgHttpRouteRuleLayer::builder()
                         .match_item(HttpPathMatchRewrite::prefix("/baidu"))
-                        .backend(SgHttpBackendLayer::builder().protocol("https").host("www.baidu.com").port(443).build())
+                        .backend(SgHttpBackendLayer::builder().schema("https").host("www.baidu.com").port(443).build())
                         .build(),
                 )
                 .build(),
