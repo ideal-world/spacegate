@@ -17,9 +17,6 @@ pub mod rewrite;
 // #[cfg(feature = "status")]
 // pub mod status;
 
-#[cfg(feature = "redis")]
-pub mod redis;
-
 pub mod static_resource;
 
 // pub mod ffi;

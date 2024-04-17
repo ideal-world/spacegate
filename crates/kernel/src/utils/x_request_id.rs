@@ -1,4 +1,7 @@
-use std::sync::atomic::AtomicU64;
+use std::{
+    hash::Hasher,
+    sync::{atomic::AtomicU64, OnceLock},
+};
 
 use hyper::{http::HeaderValue, Request, Response};
 
@@ -39,11 +42,31 @@ impl XRequestIdAlgo for Snowflake {
     }
 }
 
-pub fn machine_id() -> u64 {
-    #[cfg(feature = "k8s")]
-    {}
-    #[cfg(not(feature = "k8s"))]
-    {
-        0
-    }
+fn machine_id() -> u64 {
+    static MACHINE_ID: OnceLock<u64> = OnceLock::new();
+    *MACHINE_ID.get_or_init(|| {
+        let mid = std::env::var("MACHINE_ID");
+        let mut hasher = std::hash::DefaultHasher::new();
+        if let Ok(mid) = mid {
+            if let Ok(mid) = mid.parse::<u64>() {
+                mid
+            } else {
+                hasher.write(mid.as_bytes());
+                hasher.finish()
+            }
+        } else {
+            #[cfg(target_os = "linux")]
+            {
+                // let's try to read system mid
+                let mid = std::fs::read_to_string("/var/lib/dbus/machine-id").expect("fail to read machine id").parse::<u128>().expect("fail to parse machine id");
+                hasher.write(&mid.to_be_bytes());
+                hasher.finish()
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                // let's generate random one
+                let mid = rand::random::<u64>();
+            }
+        }
+    })
 }
