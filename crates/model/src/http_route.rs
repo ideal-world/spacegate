@@ -167,6 +167,7 @@ pub enum BackendHost {
     Host { host: String },
     // #[cfg(feature = "k8s")]
     K8sService(K8sServiceData),
+    File { path: String } ,
 }
 
 impl ToString for BackendHost {
@@ -175,6 +176,7 @@ impl ToString for BackendHost {
             Self::Host { host } => host.clone(),
             // #[cfg(feature = "k8s")]
             Self::K8sService(k8s_service) => k8s_service.to_string(),
+            Self::File { path } => path.clone(),
         }
     }
 }

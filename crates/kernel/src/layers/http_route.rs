@@ -211,9 +211,14 @@ where
                 if let Some(path_and_query) = uri.path_and_query() {
                     builder = builder.path_and_query(path_and_query.clone());
                 }
-                if let Ok(uri) = builder.build() {
-                    tracing::trace!("[Sg.Backend] new uri: {uri}");
-                    *req.uri_mut() = uri;
+                match builder.build() {
+                    Ok(uri) => {
+                        tracing::trace!("[Sg.Backend] new uri: {uri}");
+                        *req.uri_mut() = uri;
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to build uri: {}", e);
+                    }
                 }
                 req
             }),

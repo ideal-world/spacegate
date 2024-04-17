@@ -6,7 +6,7 @@ use std::{
 
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
 
-use spacegate_config::{Config, ConfigItem, PluginInstanceId};
+use spacegate_config::{BackendHost, Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
     layers::gateway::{builder::default_gateway_route_fallback, create_http_router, SgGatewayRoute},
@@ -75,6 +75,7 @@ fn collect_http_route(
                                 use spacegate_kernel::SgBoxLayer;
                                 if let BackendHost::K8sService(data) = backend.host {
                                     let namespace_ext = K8sService(data.into());
+                                    // need to add to front
                                     builder = builder.plugin(SgBoxLayer::new(MapRequestLayer::new(add_extension(namespace_ext, true))))
                                 }
                             }
@@ -82,8 +83,10 @@ fn collect_http_route(
                             if let Some(timeout) = backend.timeout_ms.map(|timeout| Duration::from_millis(timeout as u64)) {
                                 builder = builder.timeout(timeout)
                             }
-                            if let Some(protocol) = backend.protocol {
-                                builder = builder.protocol(protocol.to_string());
+                            if let BackendHost::File { .. } = backend.host {
+                                builder = builder.file()
+                            } else if let Some(protocol) = backend.protocol {
+                                builder = builder.schema(protocol.to_string());
                             }
                             let mut layer = builder.build();
                             global_batch_mount_plugin(plugins, &mut layer, mount_index);

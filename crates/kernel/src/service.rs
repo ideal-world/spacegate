@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::path::Path;
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
@@ -16,8 +17,9 @@ use crate::SgResponseExt;
 
 pub mod echo;
 pub mod http_client_service;
-
+pub mod static_file_service;
 pub mod ws_client_service;
+pub(crate) const FILE_SCHEMA: &str = "file";
 pub trait CloneHyperService<R>: hyper::service::Service<R> {
     fn clone_box(&self) -> Box<dyn CloneHyperService<R, Response = Self::Response, Error = Self::Error, Future = Self::Future> + Send + Sync>;
 }
@@ -81,6 +83,9 @@ impl hyper::service::Service<Request<SgBody>> for ArcHyperService {
 pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgResponse, BoxError> {
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;
+    if req.uri().scheme_str() == Some(FILE_SCHEMA) {
+        return Ok(static_file_service::static_file_service(req, Path::new("./")).await);
+    }
     let mut client = get_client();
     let mut response = if req.headers().get(UPGRADE).is_some_and(|upgrade| upgrade.as_bytes().eq_ignore_ascii_case(b"websocket")) {
         // we only support websocket upgrade now

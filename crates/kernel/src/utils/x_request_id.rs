@@ -7,19 +7,23 @@ use hyper::{http::HeaderValue, Request, Response};
 
 use crate::{helper_layers::function::Inner, SgBody};
 
-#[derive(Debug, Clone)]
-pub struct RequestId(HeaderValue);
-
 pub trait XRequestIdAlgo {
     fn generate() -> HeaderValue;
 }
-
-/// Add a `x-request-id` header to the request.
+pub const X_REQUEST_ID_HEADER_NAME: &str = "x-request-id";
+/// Add a `x-request-id` header to the request and then response.
+///
+/// If the request already has a `x-request-id` header, it will be used.
 pub async fn x_request_id<A: XRequestIdAlgo>(mut request: Request<SgBody>, inner: Inner) -> Response<SgBody> {
-    let id = A::generate();
-    request.headers_mut().insert("x-request-id", id.clone());
+    let id = if let Some(id) = request.headers().get(X_REQUEST_ID_HEADER_NAME) {
+        id.clone()
+    } else {
+        let id = A::generate();
+        request.headers_mut().insert(X_REQUEST_ID_HEADER_NAME, id.clone());
+        id
+    };
     let mut resp = inner.call(request).await;
-    resp.headers_mut().insert("x-request-id", id);
+    resp.headers_mut().insert(X_REQUEST_ID_HEADER_NAME, id);
     resp
 }
 /// # Reference
@@ -58,8 +62,8 @@ fn machine_id() -> u64 {
             #[cfg(target_os = "linux")]
             {
                 // let's try to read system mid
-                let mid = std::fs::read_to_string("/var/lib/dbus/machine-id").expect("fail to read machine id").parse::<u128>().expect("fail to parse machine id");
-                hasher.write(&mid.to_be_bytes());
+                let mid = std::fs::read_to_string("/var/lib/dbus/machine-id").expect("fail to read machine id");
+                hasher.write(mid.as_bytes());
                 hasher.finish()
             }
             #[cfg(not(target_os = "linux"))]

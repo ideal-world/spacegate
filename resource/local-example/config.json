@@ -27,6 +27,43 @@
       ],
       "routes": [
         {
+          "route_name": "static",
+          "hostnames": null,
+          "plugins": [],
+          "rules": [
+            {
+              "matches": [
+                {
+                  "path": {
+                    "kind": "Prefix",
+                    "value": "/",
+                    "replace": null
+                  },
+                  "header": null,
+                  "query": null,
+                  "method": null
+                }
+              ],
+              "plugins": [],
+              "backends": [
+                {
+                  "host": {
+                    "kind": "File",
+                    "path": ""
+                  },
+                  "port": 80,
+                  "timeout_ms": null,
+                  "protocol": null,
+                  "weight": 1,
+                  "plugins": []
+                }
+              ],
+              "timeout_ms": null
+            }
+          ],
+          "priority": 0
+        },
+        {
           "route_name": "my_route",
           "hostnames": null,
           "plugins": [
