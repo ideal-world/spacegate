@@ -21,10 +21,7 @@ path = "src/lib.rs"
 reload = []
 ext-redis = ["spacegate-ext-redis"]
 
-
 [dependencies]
-
-
 # http
 hyper = { workspace = true }
 http-body-util = { workspace = true }

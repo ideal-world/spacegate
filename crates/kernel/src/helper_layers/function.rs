@@ -28,6 +28,16 @@ where
     pub f: F,
 }
 
+impl<F, Fut> Closure<F, Fut>
+where
+    F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
+    Fut: Future<Output = Response<SgBody>> + Send + 'static,
+{
+    const fn new(f: F) -> Self {
+        Self { f }
+    }
+}
+
 impl<F, Fut> From<F> for Closure<F, Fut>
 where
     F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
@@ -64,7 +74,7 @@ pub struct FnLayer<M> {
 }
 
 impl<M> FnLayer<M> {
-    pub fn new(method: M) -> Self {
+    pub const fn new(method: M) -> Self {
         Self { method }
     }
 }
@@ -74,8 +84,8 @@ where
     F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
     Fut: Future<Output = Response<SgBody>> + Send + 'static,
 {
-    pub fn new_closure(f: F) -> Self {
-        Self::new(f.into())
+    pub const fn new_closure(f: F) -> Self {
+        Self::new(Closure::new(f))
     }
 }
 
