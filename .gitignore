@@ -28,3 +28,7 @@ util/gh-pages/lints.json
 # dev script
 devsh/*
 .uuid
+
+# node
+**/node_modules
+**/dist
