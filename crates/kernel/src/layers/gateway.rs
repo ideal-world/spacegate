@@ -11,7 +11,7 @@ use crate::{
     },
     service::ArcHyperService,
     utils::fold_box_layers::fold_layers,
-    SgBody, BoxLayer,
+    BoxLayer, SgBody,
 };
 
 use hyper::{header::HOST, Request};

@@ -32,9 +32,7 @@ async fn gateway() {
         .http_routers([(
             "test_upload".to_string(),
             HttpRoute::builder()
-                .rule(
-                    HttpRouteRule::builder().match_item(HttpPathMatchRewrite::prefix("/tls")).backend(HttpBackend::builder().host("[::]").port(9003).build()).build(),
-                )
+                .rule(HttpRouteRule::builder().match_item(HttpPathMatchRewrite::prefix("/tls")).backend(HttpBackend::builder().host("[::]").port(9003).build()).build())
                 .rule(
                     HttpRouteRule::builder()
                         .match_item(HttpPathMatchRewrite::prefix("/baidu"))

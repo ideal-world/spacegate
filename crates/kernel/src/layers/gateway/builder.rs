@@ -3,13 +3,10 @@ use std::{collections::HashMap, sync::Arc};
 use hyper::{service::service_fn, Response};
 
 use crate::{
-    helper_layers::{
-        function::FnLayer,
-        reload::Reloader,
-    },
+    helper_layers::{function::FnLayer, reload::Reloader},
     layers::http_route::HttpRoute,
     utils::Snowflake,
-    ArcHyperService, SgBody, BoxLayer,
+    ArcHyperService, BoxLayer, SgBody,
 };
 
 use super::{SgGatewayLayer, SgGatewayRoute};
