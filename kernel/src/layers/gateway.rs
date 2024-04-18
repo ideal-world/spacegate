@@ -163,7 +163,7 @@ where
 
     // sort the indices by priority
     // we put the highest priority at the front of the vector
-    hostname_tree.iter_mut().for_each(|indices| indices.sort_unstable_by_key(|(_, p)| i16::MAX - *p));
+    hostname_tree.iter_mut().for_each(|indices| indices.sort_unstable_by_key(|(_, p)| -*p));
     debug!("hostname_tree: {hostname_tree:?}");
     Route::new(
         SgGatewayRoutedServices { services: services.into() },
