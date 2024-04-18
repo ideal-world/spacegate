@@ -144,7 +144,7 @@ where
     type Service = SgHttpBackend<ArcHyperService>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
+        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout.or(Some(Duration::from_secs(5))));
         let filtered = sg_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner)));
         SgHttpBackend {
             weight: self.weight,
