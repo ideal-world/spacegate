@@ -254,17 +254,12 @@ impl SgPluginRepository {
 
     pub fn clear_routes_instances(&self, gateway: &str) {
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
-        instances.retain(|_, instance| {
-            instance.mount_points.iter().any(|index| match index {
-                MountPointIndex::Gateway { .. } => false,
-                other => other.gateway() == gateway,
-            })
-        });
+        instances.clear();
     }
 
     pub fn clear_gateway_instances(&self, gateway: &str) {
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
-        instances.retain(|_, instance| instance.mount_points.iter().any(|index| index.gateway() == gateway));
+        instances.clear();
     }
 
     pub fn create_or_update_instance(&self, config: PluginConfig) -> Result<(), BoxError> {

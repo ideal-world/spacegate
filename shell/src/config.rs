@@ -109,7 +109,7 @@ where
                 }
                 (ConfigType::Route { gateway_name, name }, _) => {
                     // This would be solved when dev branch is merged, so just let it crash.
-                    exit(0);
+                    // exit(0);
                     let routes = config.retrieve_config_item_all_routes(&gateway_name).await?;
                     tracing::info!("[SG.Config] route {name} modified", name = name);
                     if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
