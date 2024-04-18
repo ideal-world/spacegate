@@ -7,45 +7,16 @@ use crate::BoxError;
 
 use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
 pub async fn service(as_server: Upgraded, as_client: Upgraded) -> Result<(), BoxError> {
-    let (mut as_server_tx, mut as_server_rx) = WebSocketStream::from_raw_socket(TokioIo::new(as_server), Role::Server, None).await.split();
-    let (mut as_client_tx, mut as_client_rx) = WebSocketStream::from_raw_socket(TokioIo::new(as_client), Role::Client, None).await.split();
+    let mut server_conn = TokioIo::new(as_server);
+    let mut client_conn = TokioIo::new(as_client);
     tokio::task::spawn(async move {
-        while let Some(message) = as_server_rx.next().await {
-            match message {
-                Ok(message) => {
-                    tracing::trace!(role = "server", "[SG.Websocket] Gateway recieve message {message}");
-                    match as_client_tx.send(message).await {
-                        Ok(_) => {}
-                        Err(error) => {
-                            tracing::warn!(role = "server", "[SG.Websocket] Client send message error: {error}");
-                            return;
-                        }
-                    }
-                }
-                Err(error) => {
-                    tracing::warn!(role = "server", "[SG.Websocket] Gateway receive message error: {error}");
-                    return;
-                }
+        let result = tokio::io::copy_bidirectional(&mut server_conn, &mut client_conn).await;
+        match result {
+            Ok((server_to_client, client_to_server)) => {
+                tracing::debug!("[SG.Upgraded] connection closed, server to client bytes: {server_to_client}, client to server bytes: {client_to_server}");
             }
-        }
-    });
-    tokio::task::spawn(async move {
-        while let Some(message) = as_client_rx.next().await {
-            match message {
-                Ok(message) => {
-                    tracing::trace!(role = "client", "[SG.Websocket] Gateway recieve message {message}");
-                    match as_server_tx.send(message).await {
-                        Ok(_) => {}
-                        Err(error) => {
-                            tracing::warn!(role = "client", "[SG.Websocket] Gateway send message error: {error}");
-                            return;
-                        }
-                    }
-                }
-                Err(error) => {
-                    tracing::warn!(role = "client", "[SG.Websocket] Client receive message error: {error}");
-                    return;
-                }
+            Err(error) => {
+                tracing::warn!("[SG.Upgraded] connection close error: {error}");
             }
         }
     });
