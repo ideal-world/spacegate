@@ -1,4 +1,4 @@
-use std::{fs::Metadata, os::unix::fs::MetadataExt, path::Path};
+use std::{fs::Metadata, os::unix::fs::MetadataExt, path::{Path, PathBuf}};
 
 use chrono::{DateTime, Utc};
 use hyper::{
@@ -6,6 +6,7 @@ use hyper::{
     HeaderMap, Response, StatusCode,
 };
 use tokio::io::AsyncReadExt;
+use tracing::{instrument, trace};
 
 use crate::{extension::Reflect, SgBody, SgRequest, SgResponse};
 
@@ -38,14 +39,24 @@ pub fn cache_policy(metadata: &Metadata) -> bool {
     size < (1 << 20)
 }
 
-///
+#[instrument()]
 pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgResponse {
     // request.headers().get()
     let mut response = Response::builder().body(SgBody::empty()).expect("failed to build response");
     if let Some(reflect) = request.extensions_mut().remove::<Reflect>() {
         *response.extensions_mut() = reflect.into_inner();
     }
-    let path = dir.join(request.uri().path()).canonicalize().unwrap_or(dir.to_path_buf());
+    let Ok(dir) = dir.canonicalize() else {
+        *response.status_mut() = StatusCode::FORBIDDEN;
+        return response;
+    };
+
+    let Ok(path) = dir.canonicalize().join(request.uri().path().trim_start_matches('/')).canonicalize() else {
+        *response.status_mut() = StatusCode::FORBIDDEN;
+        return response;
+    };
+
+    trace!("static file path: {:?}", path);
     if !path.starts_with(dir) {
         *response.status_mut() = StatusCode::FORBIDDEN;
         return response;

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use spacegate_kernel::{
     layers::{
         gateway::SgGatewayLayer,
-        http_route::{SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
+        http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },
     BoxError,
 };
@@ -107,7 +107,7 @@ impl MountPoint for SgGatewayLayer {
     }
 }
 
-impl MountPoint for SgHttpRoute {
+impl MountPoint for HttpRoute {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
         let (tracer, marker) = drop_trace();
         self.plugins.push(instance.make());
@@ -117,7 +117,7 @@ impl MountPoint for SgHttpRoute {
     }
 }
 
-impl MountPoint for SgHttpRouteRuleLayer {
+impl MountPoint for HttpRouteRule {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
         let (tracer, marker) = drop_trace();
         self.plugins.push(instance.make());
@@ -127,7 +127,7 @@ impl MountPoint for SgHttpRouteRuleLayer {
     }
 }
 
-impl MountPoint for SgHttpBackendLayer {
+impl MountPoint for HttpBackend {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
         let (tracer, marker) = drop_trace();
         self.plugins.push(instance.make());

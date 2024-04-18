@@ -11,8 +11,7 @@ use spacegate_kernel::{
     helper_layers::reload::Reloader,
     layers::gateway::{builder::default_gateway_route_fallback, create_http_router, SgGatewayRoute},
     listener::SgListen,
-    service::get_http_backend_service,
-    ArcHyperService, BoxError, Layer,
+    ArcHyperService, BoxError,
 };
 use spacegate_plugin::{mount::MountPointIndex, SgPluginRepository};
 use std::sync::Arc;
@@ -27,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 fn collect_http_route(
     gateway_name: Arc<str>,
     http_routes: impl IntoIterator<Item = (String, crate::SgHttpRoute)>,
-) -> Result<HashMap<String, spacegate_kernel::layers::http_route::SgHttpRoute>, BoxError> {
+) -> Result<HashMap<String, spacegate_kernel::layers::http_route::HttpRoute>, BoxError> {
     http_routes
         .into_iter()
         .map(|(name, route)| {
@@ -47,7 +46,7 @@ fn collect_http_route(
                         gateway: gateway_name.clone(),
                         route: route_name.clone(),
                     };
-                    let mut builder = spacegate_kernel::layers::http_route::SgHttpRouteRuleLayer::builder();
+                    let mut builder = spacegate_kernel::layers::http_route::HttpRouteRule::builder();
                     builder = if let Some(matches) = route_rule.matches {
                         builder.matches(matches.into_iter().map(convert_config_to_kernel).collect::<Result<Vec<_>, _>>()?)
                     } else {
@@ -65,14 +64,14 @@ fn collect_http_route(
                                 route: route_name.clone(),
                             };
                             let host = backend.get_host();
-                            let mut builder = spacegate_kernel::layers::http_route::SgHttpBackendLayer::builder();
+                            let mut builder = spacegate_kernel::layers::http_route::HttpBackend::builder();
                             let plugins = backend.plugins;
                             #[cfg(feature = "k8s")]
                             {
                                 use crate::extension::k8s_service::K8sService;
                                 use spacegate_config::model::BackendHost;
                                 use spacegate_kernel::helper_layers::map_request::{add_extension::add_extension, MapRequestLayer};
-                                use spacegate_kernel::SgBoxLayer;
+                                use spacegate_kernel::BoxLayer;
                                 if let BackendHost::K8sService(data) = backend.host {
                                     let namespace_ext = K8sService(data.into());
                                     // need to add to front
@@ -83,12 +82,13 @@ fn collect_http_route(
                             if let Some(timeout) = backend.timeout_ms.map(|timeout| Duration::from_millis(timeout as u64)) {
                                 builder = builder.timeout(timeout)
                             }
-                            if let BackendHost::File { .. } = backend.host {
-                                builder = builder.file()
+                            let mut layer = if let BackendHost::File { path } = backend.host {
+                                builder.file().path(path).build()
                             } else if let Some(protocol) = backend.protocol {
-                                builder = builder.schema(protocol.to_string());
-                            }
-                            let mut layer = builder.build();
+                                builder.schema(protocol.to_string()).build()
+                            } else {
+                                builder.build()
+                            };
                             global_batch_mount_plugin(plugins, &mut layer, mount_index);
                             Result::<_, BoxError>::Ok(layer)
                         })
@@ -103,7 +103,7 @@ fn collect_http_route(
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let mut layer =
-                spacegate_kernel::layers::http_route::SgHttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
+                spacegate_kernel::layers::http_route::HttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
             global_batch_mount_plugin(plugins, &mut layer, mount_index);
             Ok((name, layer))
         })
@@ -121,15 +121,14 @@ pub(crate) fn create_service(
     let routes = collect_http_route(gateway_name.clone(), http_routes)?;
     let mut layer = spacegate_kernel::layers::gateway::SgGatewayLayer::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
     global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
-    let backend_service = get_http_backend_service();
-    let service = ArcHyperService::new(layer.layer(backend_service));
+    let service = ArcHyperService::new(layer.as_service());
     Ok(service)
 }
 
 /// create a new sg gateway route, which can be sent to reloader
 pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<SgGatewayRoute, BoxError> {
     let routes = collect_http_route(gateway_name, http_routes.clone())?;
-    let service = create_http_router(routes.values(), &default_gateway_route_fallback(), get_http_backend_service());
+    let service = create_http_router(routes.values(), default_gateway_route_fallback());
     Ok(service)
 }
 

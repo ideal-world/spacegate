@@ -19,7 +19,7 @@ pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterR
 pub use spacegate_kernel::helper_layers::function::Inner;
 pub use spacegate_kernel::BoxError;
 use spacegate_kernel::SgBody;
-pub use spacegate_kernel::SgBoxLayer;
+pub use spacegate_kernel::BoxLayer;
 pub mod error;
 pub mod model;
 pub mod mount;

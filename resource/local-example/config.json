@@ -49,7 +49,7 @@
                 {
                   "host": {
                     "kind": "File",
-                    "path": ""
+                    "path": "./"
                   },
                   "port": 80,
                   "timeout_ms": null,

@@ -3,14 +3,12 @@ use std::{net::SocketAddr, str::FromStr, time::Duration};
 use spacegate_kernel::{
     layers::{
         gateway,
-        http_route::{match_request::HttpPathMatchRewrite, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
+        http_route::{match_request::HttpPathMatchRewrite, HttpBackend, HttpRoute, HttpRouteRule},
     },
     listener::SgListen,
-    service::get_http_backend_service,
 };
 use tokio_rustls::rustls::ServerConfig;
 use tokio_util::sync::CancellationToken;
-use tower_layer::Layer;
 #[tokio::test]
 async fn test_https() {
     tokio::spawn(gateway());
@@ -33,14 +31,14 @@ async fn gateway() {
     let gateway = gateway::SgGatewayLayer::builder("test_multi_part")
         .http_routers([(
             "test_upload".to_string(),
-            SgHttpRoute::builder()
+            HttpRoute::builder()
                 .rule(
-                    SgHttpRouteRuleLayer::builder().match_item(HttpPathMatchRewrite::prefix("/tls")).backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build()).build(),
+                    HttpRouteRule::builder().match_item(HttpPathMatchRewrite::prefix("/tls")).backend(HttpBackend::builder().host("[::]").port(9003).build()).build(),
                 )
                 .rule(
-                    SgHttpRouteRuleLayer::builder()
+                    HttpRouteRule::builder()
                         .match_item(HttpPathMatchRewrite::prefix("/baidu"))
-                        .backend(SgHttpBackendLayer::builder().schema("https").host("www.baidu.com").port(443).build())
+                        .backend(HttpBackend::builder().schema("https").host("www.baidu.com").port(443).build())
                         .build(),
                 )
                 .build(),
@@ -57,13 +55,13 @@ async fn gateway() {
         .expect("fail to build tls config");
     let http_listener = SgListen::new(
         SocketAddr::from_str("[::]:9080").expect("invalid host"),
-        gateway.layer(get_http_backend_service()),
+        gateway.as_service(),
         cancel.child_token(),
         "listener",
     );
     let https_listener = SgListen::new(
         SocketAddr::from_str("[::]:9443").expect("invalid host"),
-        gateway.layer(get_http_backend_service()),
+        gateway.as_service(),
         cancel.child_token(),
         "listener",
     )

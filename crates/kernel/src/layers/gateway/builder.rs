@@ -1,35 +1,35 @@
 use std::{collections::HashMap, sync::Arc};
 
+use hyper::{service::service_fn, Response};
+
 use crate::{
     helper_layers::{
-        filter::{response_anyway::ResponseAnyway, FilterRequestLayer},
         function::FnLayer,
         reload::Reloader,
     },
-    layers::http_route::SgHttpRoute,
+    layers::http_route::HttpRoute,
     utils::Snowflake,
-    SgBoxLayer,
+    ArcHyperService, SgBody, BoxLayer,
 };
 
 use super::{SgGatewayLayer, SgGatewayRoute};
 
 pub struct SgGatewayLayerBuilder {
     pub gateway_name: Arc<str>,
-    pub http_routers: HashMap<String, SgHttpRoute>,
-    pub http_plugins: Vec<SgBoxLayer>,
-    pub http_fallback: SgBoxLayer,
+    pub http_routers: HashMap<String, HttpRoute>,
+    pub http_plugins: Vec<BoxLayer>,
+    pub http_fallback: ArcHyperService,
     pub http_route_reloader: Reloader<SgGatewayRoute>,
     pub extensions: hyper::http::Extensions,
     pub x_request_id: bool,
 }
 
-pub fn default_gateway_route_fallback() -> SgBoxLayer {
+pub fn default_gateway_route_fallback() -> ArcHyperService {
     // static LAYER: OnceLock<SgBoxLayer> = OnceLock::new();
     // LAYER.get_or_init(|| {
     // })
-    SgBoxLayer::new(FilterRequestLayer::new(ResponseAnyway {
-        status: hyper::StatusCode::NOT_FOUND,
-        message: "[Sg.HttpRouteRule] no rule matched".to_string().into(),
+    ArcHyperService::new(service_fn(|_| async {
+        Ok(Response::builder().status(hyper::StatusCode::NOT_FOUND).body(SgBody::full("[Sg.HttpRouteRule] no rule matched")).expect("bad response"))
     }))
 }
 
@@ -49,26 +49,26 @@ impl SgGatewayLayerBuilder {
         self.x_request_id = enable;
         self
     }
-    pub fn http_router(mut self, route: SgHttpRoute) -> Self {
+    pub fn http_router(mut self, route: HttpRoute) -> Self {
         self.http_routers.insert(route.name.clone(), route);
         self
     }
-    pub fn http_routers(mut self, routes: impl IntoIterator<Item = (String, SgHttpRoute)>) -> Self {
+    pub fn http_routers(mut self, routes: impl IntoIterator<Item = (String, HttpRoute)>) -> Self {
         for (name, mut route) in routes {
             route.name = name.clone();
             self.http_routers.insert(name, route);
         }
         self
     }
-    pub fn http_plugin(mut self, plugin: SgBoxLayer) -> Self {
+    pub fn http_plugin(mut self, plugin: BoxLayer) -> Self {
         self.http_plugins.push(plugin);
         self
     }
-    pub fn http_plugins(mut self, plugins: impl IntoIterator<Item = SgBoxLayer>) -> Self {
+    pub fn http_plugins(mut self, plugins: impl IntoIterator<Item = BoxLayer>) -> Self {
         self.http_plugins.extend(plugins);
         self
     }
-    pub fn http_fallback(mut self, fallback: SgBoxLayer) -> Self {
+    pub fn http_fallback(mut self, fallback: ArcHyperService) -> Self {
         self.http_fallback = fallback;
         self
     }
@@ -83,7 +83,7 @@ impl SgGatewayLayerBuilder {
     pub fn build(self) -> SgGatewayLayer {
         let mut plugins = vec![];
         if self.x_request_id {
-            plugins.push(SgBoxLayer::new(FnLayer::new_closure(crate::utils::x_request_id::<Snowflake>)));
+            plugins.push(BoxLayer::new(FnLayer::new_closure(crate::utils::x_request_id::<Snowflake>)));
         }
         plugins.extend(self.http_plugins);
         SgGatewayLayer {

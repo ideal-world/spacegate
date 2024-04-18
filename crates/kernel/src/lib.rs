@@ -97,11 +97,11 @@ impl SgResponseExt for Response<SgBody> {
 
 pub type ReqOrResp = Result<Request<SgBody>, Response<SgBody>>;
 
-pub struct SgBoxLayer {
+pub struct BoxLayer {
     boxed: Box<dyn Layer<ArcHyperService, Service = ArcHyperService> + Send + Sync + 'static>,
 }
 
-impl SgBoxLayer {
+impl BoxLayer {
     /// Create a new [`SgBoxLayer`].
     pub fn new<L>(inner_layer: L) -> Self
     where
@@ -122,7 +122,7 @@ impl SgBoxLayer {
     }
 }
 
-impl<S> Layer<S> for SgBoxLayer
+impl<S> Layer<S> for BoxLayer
 where
     S: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
     <S as hyper::service::Service<hyper::Request<SgBody>>>::Future: std::marker::Send,
@@ -134,7 +134,7 @@ where
     }
 }
 
-impl fmt::Debug for SgBoxLayer {
+impl fmt::Debug for BoxLayer {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("BoxLayer").finish()
     }

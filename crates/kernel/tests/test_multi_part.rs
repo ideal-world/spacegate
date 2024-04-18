@@ -7,15 +7,13 @@ use reqwest::{
 use spacegate_kernel::{
     layers::{
         gateway,
-        http_route::{SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
+        http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },
     listener::SgListen,
-    service::get_http_backend_service,
 };
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 use tokio_util::sync::CancellationToken;
-use tower_layer::Layer;
 #[tokio::test]
 async fn test_multi_part() {
     tokio::spawn(gateway());
@@ -34,11 +32,11 @@ async fn gateway() {
     let gateway = gateway::SgGatewayLayer::builder("test_multi_part")
         .http_routers([(
             "test_upload".to_string(),
-            SgHttpRoute::builder().rule(SgHttpRouteRuleLayer::builder().match_all().backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build()).build()).build(),
+            HttpRoute::builder().rule(HttpRouteRule::builder().match_all().backend(HttpBackend::builder().host("[::]").port(9003).build()).build()).build(),
         )])
         .build();
     let addr = SocketAddr::from_str("[::]:9002").expect("invalid host");
-    let listener = SgListen::new(addr, gateway.layer(get_http_backend_service()), cancel, "listener");
+    let listener = SgListen::new(addr, gateway.as_service(), cancel, "listener");
     listener.listen().await.expect("fail to listen");
 }
 

@@ -165,14 +165,14 @@ mod test {
             resp
         }
     }
-    use crate::SgBoxLayer;
+    use crate::BoxLayer;
 
     use super::*;
     #[test]
     fn test_fn_layer() {
         let status_message = Arc::new(<HashMap<StatusCode, String>>::default());
-        let boxed_layer = SgBoxLayer::new(FnLayer::new(MyPlugin::default()));
-        let boxed_layer2 = SgBoxLayer::new(FnLayer::new_closure(move |req, inner| {
+        let boxed_layer = BoxLayer::new(FnLayer::new(MyPlugin::default()));
+        let boxed_layer2 = BoxLayer::new(FnLayer::new_closure(move |req, inner| {
             let host = req.headers().get("host");
             if let Some(Ok(host)) = host.map(HeaderValue::to_str) {
                 println!("{host}");
