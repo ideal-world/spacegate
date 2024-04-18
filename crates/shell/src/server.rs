@@ -289,7 +289,7 @@ impl RunningSgGateway {
                         if let Some(key) = key {
                             info!("[SG.Server] using cert key {key:?}");
                             let mut tls_server_cfg = rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(certs, key)?;
-                            tls_server_cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+                            tls_server_cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
                             tls_cfg.replace(tls_server_cfg);
                         } else {
                             error!("[SG.Server] Can not found a valid Tls private key");
