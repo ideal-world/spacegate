@@ -163,7 +163,6 @@ pub struct HttpBackendBuilder<B: BackendKindBuilder = HttpBackendKindBuilder> {
     pub extensions: hyper::http::Extensions,
 }
 
-
 #[derive(Debug, Default, Clone)]
 pub struct HttpBackendKindBuilder {
     pub host: Option<String>,
@@ -211,18 +210,26 @@ impl HttpBackendBuilder<FileBackendKindBuilder> {
     }
 }
 
-
 impl HttpBackendBuilder<HttpBackendKindBuilder> {
     pub fn host(mut self, host: impl Into<String>) -> Self {
-        self.backend = HttpBackendKindBuilder { host: Some(host.into()), ..Default::default() };
+        self.backend = HttpBackendKindBuilder {
+            host: Some(host.into()),
+            ..Default::default()
+        };
         self
     }
     pub fn port(mut self, port: u16) -> Self {
-        self.backend = HttpBackendKindBuilder { port: Some(port), ..Default::default() };
+        self.backend = HttpBackendKindBuilder {
+            port: Some(port),
+            ..Default::default()
+        };
         self
     }
     pub fn schema(mut self, schema: impl Into<String>) -> Self {
-        self.backend = HttpBackendKindBuilder { schema: Some(schema.into()), ..Default::default() };
+        self.backend = HttpBackendKindBuilder {
+            schema: Some(schema.into()),
+            ..Default::default()
+        };
         self
     }
 }

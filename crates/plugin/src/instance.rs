@@ -8,7 +8,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::{helper_layers::function::FnLayer, BoxError, BoxResult, BoxLayer};
+use spacegate_kernel::{helper_layers::function::FnLayer, BoxError, BoxLayer, BoxResult};
 use spacegate_model::PluginConfig;
 
 use crate::mount::{MountPoint, MountPointIndex};

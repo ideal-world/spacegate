@@ -1,4 +1,8 @@
-use std::{fs::Metadata, os::unix::fs::MetadataExt, path::{Path, PathBuf}};
+use std::{
+    fs::Metadata,
+    os::unix::fs::MetadataExt,
+    path::{Path, PathBuf},
+};
 
 use chrono::{DateTime, Utc};
 use hyper::{

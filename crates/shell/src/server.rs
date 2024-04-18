@@ -102,8 +102,7 @@ fn collect_http_route(
                     Result::<_, BoxError>::Ok(layer)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut layer =
-                spacegate_kernel::layers::http_route::HttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
+            let mut layer = spacegate_kernel::layers::http_route::HttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
             global_batch_mount_plugin(plugins, &mut layer, mount_index);
             Ok((name, layer))
         })
