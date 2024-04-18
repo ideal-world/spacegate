@@ -5,6 +5,7 @@ use futures_util::{Stream, StreamExt};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
 use spacegate_kernel::BoxError;
 
+use spacegate_plugin::SgPluginRepository;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -13,6 +14,8 @@ use tokio_util::sync::CancellationToken;
 // pub mod config_by_redis;
 pub use spacegate_config::model::*;
 use tracing::info;
+
+use crate::config::plugin_filter_dto::global_batch_update_plugin;
 
 pub(crate) mod matches_convert;
 pub mod plugin_filter_dto;
@@ -111,9 +114,13 @@ where
                     // This would be solved when dev branch is merged, so just let it crash.
                     // exit(0);
                     let routes = config.retrieve_config_item_all_routes(&gateway_name).await?;
-                    tracing::info!("[SG.Config] route {name} modified", name = name);
-                    if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
-                        tracing::error!("[SG.Config] route {name} modified failed: {e}", name = name, e = e);
+                    if let Ok(Some(item)) = config.retrieve_config_item(&gateway_name).await {
+                        SgPluginRepository::global().clear_routes_instances(&gateway_name);
+                        tracing::info!("[SG.Config] route {name} modified", name = name);
+                        global_batch_update_plugin(item.collect_all_plugins());
+                        if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
+                            tracing::error!("[SG.Config] route {name} modified failed: {e}", name = name, e = e);
+                        }
                     }
                 }
             }
