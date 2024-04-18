@@ -125,8 +125,8 @@ impl Retrieve for K8s {
 
     async fn retrieve_all_plugins(&self) -> Result<Vec<PluginConfig>, BoxError> {
       let filter_api: Api<SgFilter> = self.get_namespace_api();
-
-      let result = filter_api.list(&ListParams::default()).await?.iter().map(|gateway| gateway.name_any()).collect();
+      
+      let result = filter_api.list(&ListParams::default()).await?.iter().map(|gateway| gateway.to_pluginconfig()).collect();
 
       Ok(result)
     }
