@@ -1,26 +1,26 @@
-use std::time::Duration;
+use std::{fmt::Debug, path::PathBuf, time::Duration};
 
-use crate::{service::FILE_SCHEMA, SgBoxLayer};
+use crate::BoxLayer;
 
-use super::{match_request::HttpRouteMatch, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer};
+use super::{match_request::HttpRouteMatch, Backend, HttpBackend, HttpRoute, HttpRouteRule};
 
 #[derive(Debug)]
-pub struct SgHttpRouteLayerBuilder {
+pub struct HttpRouteBuilder {
     pub name: String,
     pub hostnames: Vec<String>,
-    pub rules: Vec<SgHttpRouteRuleLayer>,
-    pub plugins: Vec<SgBoxLayer>,
+    pub rules: Vec<HttpRouteRule>,
+    pub plugins: Vec<BoxLayer>,
     pub priority: Option<i16>,
     pub extensions: hyper::http::Extensions,
 }
 
-impl Default for SgHttpRouteLayerBuilder {
+impl Default for HttpRouteBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SgHttpRouteLayerBuilder {
+impl HttpRouteBuilder {
     pub fn new() -> Self {
         Self {
             name: Default::default(),
@@ -39,19 +39,19 @@ impl SgHttpRouteLayerBuilder {
         self.hostnames = hostnames.into_iter().collect();
         self
     }
-    pub fn rule(mut self, rule: SgHttpRouteRuleLayer) -> Self {
+    pub fn rule(mut self, rule: HttpRouteRule) -> Self {
         self.rules.push(rule);
         self
     }
-    pub fn rules(mut self, rules: impl IntoIterator<Item = SgHttpRouteRuleLayer>) -> Self {
+    pub fn rules(mut self, rules: impl IntoIterator<Item = HttpRouteRule>) -> Self {
         self.rules.extend(rules);
         self
     }
-    pub fn plugin(mut self, plugin: SgBoxLayer) -> Self {
+    pub fn plugin(mut self, plugin: BoxLayer) -> Self {
         self.plugins.push(plugin);
         self
     }
-    pub fn plugins(mut self, plugins: impl IntoIterator<Item = SgBoxLayer>) -> Self {
+    pub fn plugins(mut self, plugins: impl IntoIterator<Item = BoxLayer>) -> Self {
         self.plugins.extend(plugins);
         self
     }
@@ -63,11 +63,11 @@ impl SgHttpRouteLayerBuilder {
         self.extensions = extensions;
         self
     }
-    pub fn build(mut self) -> SgHttpRoute {
+    pub fn build(mut self) -> HttpRoute {
         if self.hostnames.iter().any(|host| host == "*") {
             self.hostnames = vec!["*".to_string()]
         }
-        SgHttpRoute {
+        HttpRoute {
             plugins: self.plugins,
             hostnames: self.hostnames,
             rules: self.rules,
@@ -79,20 +79,20 @@ impl SgHttpRouteLayerBuilder {
 }
 
 #[derive(Debug)]
-pub struct SgHttpRouteRuleLayerBuilder {
+pub struct HttpRouteRuleBuilder {
     r#match: Option<Vec<HttpRouteMatch>>,
-    pub plugins: Vec<SgBoxLayer>,
+    pub plugins: Vec<BoxLayer>,
     timeouts: Option<Duration>,
-    backends: Vec<SgHttpBackendLayer>,
+    backends: Vec<HttpBackend>,
     pub extensions: hyper::http::Extensions,
 }
-impl Default for SgHttpRouteRuleLayerBuilder {
+impl Default for HttpRouteRuleBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SgHttpRouteRuleLayerBuilder {
+impl HttpRouteRuleBuilder {
     pub fn new() -> Self {
         Self {
             r#match: None,
@@ -117,11 +117,11 @@ impl SgHttpRouteRuleLayerBuilder {
         self.r#match = None;
         self
     }
-    pub fn plugin(mut self, plugin: SgBoxLayer) -> Self {
+    pub fn plugin(mut self, plugin: BoxLayer) -> Self {
         self.plugins.push(plugin);
         self
     }
-    pub fn plugins(mut self, plugins: impl IntoIterator<Item = SgBoxLayer>) -> Self {
+    pub fn plugins(mut self, plugins: impl IntoIterator<Item = BoxLayer>) -> Self {
         self.plugins.extend(plugins);
         self
     }
@@ -129,16 +129,16 @@ impl SgHttpRouteRuleLayerBuilder {
         self.timeouts = Some(timeout);
         self
     }
-    pub fn backend(mut self, backend: SgHttpBackendLayer) -> Self {
+    pub fn backend(mut self, backend: HttpBackend) -> Self {
         self.backends.push(backend);
         self
     }
-    pub fn backends(mut self, backend: impl IntoIterator<Item = SgHttpBackendLayer>) -> Self {
+    pub fn backends(mut self, backend: impl IntoIterator<Item = HttpBackend>) -> Self {
         self.backends.extend(backend);
         self
     }
-    pub fn build(self) -> SgHttpRouteRuleLayer {
-        SgHttpRouteRuleLayer {
+    pub fn build(self) -> HttpRouteRule {
+        HttpRouteRule {
             r#match: self.r#match,
             plugins: self.plugins,
             timeouts: self.timeouts,
@@ -151,24 +151,51 @@ impl SgHttpRouteRuleLayerBuilder {
         self
     }
 }
-
+pub trait BackendKindBuilder: Default + Debug {
+    fn build(self) -> Backend;
+}
 #[derive(Debug)]
-pub struct SgHttpBackendLayerBuilder {
-    host: Option<String>,
-    port: Option<u16>,
-    schema: Option<String>,
-    pub plugins: Vec<SgBoxLayer>,
+pub struct HttpBackendBuilder<B: BackendKindBuilder = HttpBackendKindBuilder> {
+    backend: B,
+    pub plugins: Vec<BoxLayer>,
     timeout: Option<Duration>,
     weight: u16,
     pub extensions: hyper::http::Extensions,
 }
 
-impl Default for SgHttpBackendLayerBuilder {
+
+#[derive(Debug, Default, Clone)]
+pub struct HttpBackendKindBuilder {
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub schema: Option<String>,
+}
+
+impl BackendKindBuilder for HttpBackendKindBuilder {
+    fn build(self) -> Backend {
+        Backend::Http {
+            host: self.host,
+            port: self.port,
+            schema: self.schema,
+        }
+    }
+}
+#[derive(Debug, Default, Clone)]
+
+pub struct FileBackendKindBuilder {
+    path: PathBuf,
+}
+
+impl BackendKindBuilder for FileBackendKindBuilder {
+    fn build(self) -> Backend {
+        Backend::File { path: self.path }
+    }
+}
+
+impl<B: BackendKindBuilder> Default for HttpBackendBuilder<B> {
     fn default() -> Self {
         Self {
-            host: None,
-            port: None,
-            schema: None,
+            backend: B::default(),
             plugins: Vec::new(),
             timeout: None,
             weight: 1,
@@ -177,15 +204,38 @@ impl Default for SgHttpBackendLayerBuilder {
     }
 }
 
-impl SgHttpBackendLayerBuilder {
+impl HttpBackendBuilder<FileBackendKindBuilder> {
+    pub fn path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.backend = FileBackendKindBuilder { path: path.into() };
+        self
+    }
+}
+
+
+impl HttpBackendBuilder<HttpBackendKindBuilder> {
+    pub fn host(mut self, host: impl Into<String>) -> Self {
+        self.backend = HttpBackendKindBuilder { host: Some(host.into()), ..Default::default() };
+        self
+    }
+    pub fn port(mut self, port: u16) -> Self {
+        self.backend = HttpBackendKindBuilder { port: Some(port), ..Default::default() };
+        self
+    }
+    pub fn schema(mut self, schema: impl Into<String>) -> Self {
+        self.backend = HttpBackendKindBuilder { schema: Some(schema.into()), ..Default::default() };
+        self
+    }
+}
+
+impl<B: BackendKindBuilder> HttpBackendBuilder<B> {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn plugin(mut self, plugin: SgBoxLayer) -> Self {
+    pub fn plugin(mut self, plugin: BoxLayer) -> Self {
         self.plugins.push(plugin);
         self
     }
-    pub fn plugins(mut self, plugins: impl IntoIterator<Item = SgBoxLayer>) -> Self {
+    pub fn plugins(mut self, plugins: impl IntoIterator<Item = BoxLayer>) -> Self {
         self.plugins.extend(plugins);
         self
     }
@@ -197,31 +247,31 @@ impl SgHttpBackendLayerBuilder {
         self.weight = weight;
         self
     }
-    pub fn host(mut self, host: impl Into<String>) -> Self {
-        self.host = Some(host.into());
-        self
+    pub fn http(self) -> HttpBackendBuilder<HttpBackendKindBuilder> {
+        HttpBackendBuilder {
+            backend: HttpBackendKindBuilder::default(),
+            plugins: self.plugins,
+            timeout: self.timeout,
+            weight: self.weight,
+            extensions: self.extensions,
+        }
     }
-    pub fn port(mut self, port: u16) -> Self {
-        self.port = Some(port);
-        self
-    }
-    pub fn schema(mut self, schema: impl Into<String>) -> Self {
-        self.schema = Some(schema.into());
-        self
-    }
-    pub fn file(mut self) -> Self {
-        self.schema = Some(FILE_SCHEMA.into());
-        self
+    pub fn file(self) -> HttpBackendBuilder<FileBackendKindBuilder> {
+        HttpBackendBuilder {
+            backend: FileBackendKindBuilder::default(),
+            plugins: self.plugins,
+            timeout: self.timeout,
+            weight: self.weight,
+            extensions: self.extensions,
+        }
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {
         self.extensions = extension;
         self
     }
-    pub fn build(self) -> SgHttpBackendLayer {
-        SgHttpBackendLayer {
-            host: self.host.map(Into::into),
-            port: self.port,
-            scheme: self.schema.map(Into::into),
+    pub fn build(self) -> HttpBackend {
+        HttpBackend {
+            backend: self.backend.build(),
             plugins: self.plugins,
             timeout: self.timeout,
             weight: self.weight,
