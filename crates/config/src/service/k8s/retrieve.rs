@@ -4,18 +4,16 @@ use http_route::SgHttpRouteRule;
 use k8s_gateway_api::{Gateway, HttpRoute, Listener};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
+use spacegate_model::ext::k8s::crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter};
 
-use super::Retrieve;
 use crate::{
     constants::{self, GATEWAY_CLASS_NAME},
-    k8s_crd::{
-        http_spaceroute::HttpSpaceroute,
-        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
-    },
     model::{gateway, http_route, PluginConfig, SgGateway, SgHttpRoute},
-    service::backend::k8s::K8s,
+    service::Retrieve,
     BoxError, BoxResult,
 };
+
+use super::K8s;
 
 impl Retrieve for K8s {
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> BoxResult<Option<SgGateway>> {
@@ -124,12 +122,48 @@ impl Retrieve for K8s {
 
         Ok(result)
     }
+
+    async fn retrieve_all_plugins(&self) -> Result<Vec<PluginConfig>, BoxError> {
+      let filter_api: Api<SgFilter> = self.get_namespace_api();
+
+      let result = filter_api.list(&ListParams::default()).await?.iter().map(|gateway| gateway.name_any()).collect();
+
+      Ok(result)
+    }
+
+    async fn retrieve_plugin(&self, id: &spacegate_model::PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {
+        let filter_api: Api<SgFilter> = self.get_namespace_api();
+
+        match id.name {
+            spacegate_model::PluginInstanceName::Anon { uid } => Ok(None),
+            spacegate_model::PluginInstanceName::Named { name } => {
+                let result = if let Some(gateway_obj) = filter_api.get_opt(&name).await?.and_then(|gateway_obj| {
+                    if gateway_obj.spec. == GATEWAY_CLASS_NAME {
+                        Some(gateway_obj)
+                    } else {
+                        None
+                    }
+                }) {
+                    Some()
+                } else {
+                    None
+                }
+                Ok(result)
+            }
+            spacegate_model::PluginInstanceName::Mono => Ok(None),
+        }
+
+    }
+
+    async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, BoxError> {
+        todo!()
+    }
 }
 
 impl K8s {
     async fn kube_gateway_2_sg_gateway(&self, gateway_obj: Gateway) -> BoxResult<SgGateway> {
         let gateway_name = gateway_obj.name_any();
-        let filters = self
+        let plugins = self
             .retrieve_config_item_filters(K8sSgFilterSpecTargetRef {
                 kind: SgFilterTargetKind::Gateway.into(),
                 name: gateway_name.clone(),
@@ -140,7 +174,7 @@ impl K8s {
             name: gateway_name,
             parameters: SgParameters::from_kube_gateway(&gateway_obj),
             listeners: self.retrieve_config_item_listeners(&gateway_obj.spec.listeners).await?,
-            filters,
+            plugins,
         };
         Ok(result)
     }
@@ -161,7 +195,6 @@ impl K8s {
             })
             .await?;
         Ok(SgHttpRoute {
-            gateway_name: gateway_refs.first().map(|x| x.name.clone()).unwrap_or_default(),
             hostnames: httpspace_route.spec.hostnames.clone(),
             plugins,
             rules: httpspace_route
@@ -171,6 +204,7 @@ impl K8s {
                 .transpose()?
                 .unwrap_or_default(),
             priority,
+            route_name: httpspace_route.name_any(),
         })
     }
 
@@ -196,13 +230,7 @@ impl K8s {
                         && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
                 })
             })
-            .flat_map(|filter_obj| {
-                filter_obj.spec.filters.into_iter().map(|filter| PluginConfig {
-                    code: filter.code,
-                    name: filter.name,
-                    spec: filter.config,
-                })
-            })
+            .flat_map(|filter_obj| filter_obj.spec.filters.into_iter().map(|filter| PluginConfig { spec: filter.config, id: todo!() }))
             .collect();
 
         if !filter_objs.is_empty() {

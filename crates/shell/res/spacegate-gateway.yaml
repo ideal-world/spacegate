@@ -59,6 +59,9 @@ spec:
                       namespace:
                         type: string
                         minLength: 1
+                      parentRef:
+                        type: string
+                        minLength: 1
                     required:
                       - kind
                       - name

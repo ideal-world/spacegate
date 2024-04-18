@@ -1,18 +1,26 @@
 use k8s_gateway_api::Gateway;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::PostParams, Api};
-
-use crate::{
-    k8s_crd::{http_spaceroute, sg_filter::SgFilter},
-    service::backend::k8s::K8s,
-    BoxResult,
+use spacegate_model::{
+    ext::k8s::crd::{http_spaceroute, sg_filter::SgFilter},
+    BoxError, PluginInstanceId,
 };
 
-use super::Create;
+use crate::{service::Create, BoxResult};
+
+use super::{
+    convert::{
+        filter_k8s_conv::PluginIdConv as _,
+        gateway_k8s_conv::{GatewayConv as _, SgGatewayConv as _},
+        route_k8s_conv::SgHttpRouteConv as _,
+        ToTarget as _,
+    },
+    K8s,
+};
 
 impl Create for K8s {
     async fn create_config_item_gateway(&self, _gateway_name: &str, gateway: crate::model::SgGateway) -> BoxResult<()> {
-        let (gateway, secret, filters) = gateway.to_kube_gateway(&self.namespace);
+        let (gateway, secret, plugin_ids) = gateway.to_kube_gateway(&self.namespace);
 
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         gateway_api.create(&PostParams::default(), &gateway).await?;
@@ -22,20 +30,26 @@ impl Create for K8s {
             secret_api.create(&PostParams::default(), &secret).await?;
         }
 
-        for filter in filters {
-            let filter_api: Api<SgFilter> = self.get_namespace_api();
-            filter_api.create(&PostParams::default(), &filter.into()).await?;
+        for plugin_id in plugin_ids {
+            plugin_id.add_filter_target(gateway.to_target_ref(), self);
         }
+
         Ok(())
     }
 
-    async fn create_config_item_route(&self, _gateway_name: &str, route_name: &str, route: crate::model::SgHttpRoute) -> BoxResult<()> {
-        let (http_spaceroute, filters) = route.to_kube_httproute_spaceroute_filters(route_name, &self.namespace);
+    async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgHttpRoute) -> BoxResult<()> {
+        let http_spaceroute = route.to_kube_httproute_spaceroute_filters(gateway_name, route_name, &self.namespace);
 
         let http_spaceroute_api: Api<http_spaceroute::HttpSpaceroute> = self.get_namespace_api();
         http_spaceroute_api.create(&PostParams::default(), &http_spaceroute).await?;
 
-        for filter in filters {
+        Ok(())
+    }
+
+    async fn create_plugin(&self, id: &PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
+        let filter = id.to_singe_filter(value, None, &self.namespace);
+
+        if let Some(filter) = filter {
             let filter_api: Api<SgFilter> = self.get_namespace_api();
             filter_api.create(&PostParams::default(), &filter.into()).await?;
         }

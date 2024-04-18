@@ -31,9 +31,15 @@ pub struct K8sSgFilterSpecTargetRef {
     /// - gateway
     /// - httproute
     /// - httpspaceroute
+    /// - HttpspacerouteRule
+    /// - HttpspacerouteBackend
     pub kind: String,
     pub name: String,
+    /// if namespace is None, use SgFilter's namespace
     pub namespace: Option<String>,
+    /// if kind is `HttpspacerouteRule` or `HttpspacerouteBackend`, parent_ref must be set, otherwise target_ref will be ignored
+    /// value should be `Httpspaceroute`'s name
+    pub parent_ref: Option<String>,
 }
 
 impl PartialEq for K8sSgFilterSpecTargetRef {
@@ -46,6 +52,8 @@ pub enum SgFilterTargetKind {
     Gateway,
     Httproute,
     Httpspaceroute,
+    HttpspacerouteRule,
+    HttpspacerouteBackend,
 }
 
 impl From<SgFilterTargetKind> for String {
@@ -54,6 +62,8 @@ impl From<SgFilterTargetKind> for String {
             SgFilterTargetKind::Gateway => "Gateway".to_string(),
             SgFilterTargetKind::Httproute => "HTTPRoute".to_string(),
             SgFilterTargetKind::Httpspaceroute => "HTTPSpaceroute".to_string(),
+            SgFilterTargetKind::HttpspacerouteRule => "HTTPSpacerouteRule".to_string(),
+            SgFilterTargetKind::HttpspacerouteBackend => "HTTPSpacerouteBackend".to_string(),
         }
     }
 }

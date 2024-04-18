@@ -2,6 +2,13 @@ use std::sync::Arc;
 
 use k8s_openapi::NamespaceResourceScope;
 
+pub mod convert;
+// pub mod create;
+// pub mod delete;
+// pub mod listen;
+pub mod retrieve;
+// pub mod update;
+
 pub struct K8s {
     pub namespace: Arc<str>,
     client: kube::Client,
