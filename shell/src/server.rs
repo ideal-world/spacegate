@@ -19,7 +19,7 @@ use spacegate_kernel::{
     service::get_http_backend_service,
     ArcHyperService, BoxError, Layer,
 };
-use spacegate_plugin::{mount::MountPointIndex, SgPluginRepository};
+use spacegate_plugin::mount::MountPointIndex;
 use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
@@ -176,14 +176,12 @@ impl RunningSgGateway {
 
     pub fn global_remove(gateway_name: impl AsRef<str>) -> Option<RunningSgGateway> {
         let global_store = Self::global_store();
-        SgPluginRepository::global().clear_gateway_instances(gateway_name.as_ref());
         let mut global_store = global_store.lock().expect("poisoned lock");
         global_store.remove(gateway_name.as_ref())
     }
 
     pub async fn global_update(gateway_name: impl AsRef<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<(), BoxError> {
         let gateway_name = gateway_name.as_ref();
-        SgPluginRepository::global().clear_routes_instances(gateway_name);
         let service = create_router_service(gateway_name.to_string().into(), http_routes)?;
         let reloader = {
             let store = Self::global_store();

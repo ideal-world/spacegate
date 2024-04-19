@@ -1,5 +1,4 @@
 use core::panic;
-use std::process::exit;
 
 use futures_util::{Stream, StreamExt};
 use spacegate_config::service::{ConfigEventType, ConfigType, CreateListener, Listen, Retrieve};
@@ -13,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 // pub mod config_by_local;
 // pub mod config_by_redis;
 pub use spacegate_config::model::*;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::plugin_filter_dto::global_batch_update_plugin;
 
@@ -40,7 +39,7 @@ where
         {
             use spacegate_ext_axum::axum;
             info!("Starting web server...");
-            let cancel_token = shutdown_signal.clone();
+            let cancel_token = shutdown_signal.child_token();
             let server = spacegate_ext_axum::GlobalAxumServer::default();
             server
                 .modify_router(|router| {
@@ -56,7 +55,7 @@ where
         }
         let (init_config, listener) = config.create_listener().await?;
         for (name, item) in init_config.gateways {
-            match RunningSgGateway::create(item, shutdown_signal.clone()) {
+            match RunningSgGateway::create(item, shutdown_signal.child_token()) {
                 Ok(inst) => RunningSgGateway::global_save(name, inst),
                 Err(e) => {
                     tracing::error!("[SG.Config] fail to init gateway [{name}]: {e}")
@@ -86,9 +85,11 @@ where
             };
             match event {
                 (ConfigType::Gateway { name }, ConfigEventType::Create) => {
-                    if let Some(config) = config.retrieve_config_item(&name).await? {
+                    if let Ok(Some(config)) = config.retrieve_config_item(&name).await.inspect_err(|e| {
+                        error!("fail to retrieve gateway {name}: {e}");
+                    }) {
                         tracing::info!("[SG.Config] gateway {name} created", name = name);
-                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.clone()) {
+                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.child_token()) {
                             RunningSgGateway::global_save(name, gateway);
                         }
                     }
@@ -99,7 +100,7 @@ where
                         if let Some(inst) = RunningSgGateway::global_remove(&name) {
                             inst.shutdown().await;
                         }
-                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.clone()) {
+                        if let Ok(gateway) = RunningSgGateway::create(config, shutdown_signal.child_token()) {
                             RunningSgGateway::global_save(name, gateway);
                         }
                     }
@@ -113,7 +114,11 @@ where
                 (ConfigType::Route { gateway_name, name }, _) => {
                     // This would be solved when dev branch is merged, so just let it crash.
                     // exit(0);
-                    let routes = config.retrieve_config_item_all_routes(&gateway_name).await?;
+                    let Ok(routes) = config.retrieve_config_item_all_routes(&gateway_name).await.inspect_err(|e| {
+                        error!("fail to retrieve routes {gateway_name}/{name}: {e}");
+                    }) else {
+                        continue;
+                    };
                     if let Ok(Some(item)) = config.retrieve_config_item(&gateway_name).await {
                         SgPluginRepository::global().clear_routes_instances(&gateway_name);
                         tracing::info!("[SG.Config] route {name} modified", name = name);

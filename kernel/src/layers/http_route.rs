@@ -2,7 +2,7 @@ pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
 use std::{convert::Infallible, sync::Arc, time::Duration};
-
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 use crate::{
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
@@ -81,11 +81,14 @@ where
         let filter_layer = self.plugins.iter();
 
         let service = if empty {
-            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(inner)))
+            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts.unwrap_or(DEFAULT_TIMEOUT)).layer(inner)))
         } else {
             let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
             let random_picker = random_pick::RandomPick::new(service_iter);
-            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(random_picker)))
+            sg_layers(
+                filter_layer,
+                ArcHyperService::new(TimeoutLayer::new(self.timeouts.unwrap_or(DEFAULT_TIMEOUT)).layer(random_picker)),
+            )
         };
 
         let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
@@ -144,7 +147,7 @@ where
     type Service = SgHttpBackend<ArcHyperService>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout.or(Some(Duration::from_secs(5))));
+        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout.unwrap_or(DEFAULT_TIMEOUT));
         let filtered = sg_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner)));
         SgHttpBackend {
             weight: self.weight,
