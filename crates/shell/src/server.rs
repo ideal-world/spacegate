@@ -9,7 +9,7 @@ use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto
 use spacegate_config::{BackendHost, Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
-    layers::gateway::{builder::default_gateway_route_fallback, create_http_router, SgGatewayRoute},
+    layers::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
     listener::SgListen,
     ArcHyperService, BoxError,
 };
@@ -114,18 +114,18 @@ pub(crate) fn create_service(
     gateway_name: &str,
     plugins: Vec<PluginInstanceId>,
     http_routes: BTreeMap<String, crate::SgHttpRoute>,
-    reloader: Reloader<SgGatewayRoute>,
+    reloader: Reloader<HttpRouterService>,
 ) -> Result<ArcHyperService, BoxError> {
     let gateway_name: Arc<str> = gateway_name.into();
     let routes = collect_http_route(gateway_name.clone(), http_routes)?;
-    let mut layer = spacegate_kernel::layers::gateway::SgGatewayLayer::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
+    let mut layer = spacegate_kernel::layers::gateway::Gateway::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
     global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
     let service = ArcHyperService::new(layer.as_service());
     Ok(service)
 }
 
 /// create a new sg gateway route, which can be sent to reloader
-pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<SgGatewayRoute, BoxError> {
+pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<HttpRouterService, BoxError> {
     let routes = collect_http_route(gateway_name, http_routes.clone())?;
     let service = create_http_router(routes.values(), default_gateway_route_fallback());
     Ok(service)
@@ -143,7 +143,7 @@ pub struct RunningSgGateway {
     pub gateway_name: Arc<str>,
     token: CancellationToken,
     handle: tokio::task::JoinHandle<()>,
-    pub reloader: Reloader<SgGatewayRoute>,
+    pub reloader: Reloader<HttpRouterService>,
     shutdown_timeout: Duration,
 }
 impl std::fmt::Debug for RunningSgGateway {
@@ -233,7 +233,7 @@ impl RunningSgGateway {
             }
         }
         tracing::info!("[SG.Server] start gateway");
-        let reloader = <Reloader<SgGatewayRoute>>::default();
+        let reloader = <Reloader<HttpRouterService>>::default();
         let service = create_service(&gateway.name, gateway.plugins, routes, reloader.clone())?;
         if gateway.listeners.is_empty() {
             error!("[SG.Server] Missing Listeners");

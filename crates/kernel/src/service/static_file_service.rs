@@ -1,8 +1,4 @@
-use std::{
-    fs::Metadata,
-    os::unix::fs::MetadataExt,
-    path::{Path, PathBuf},
-};
+use std::{fs::Metadata, os::unix::fs::MetadataExt, path::Path};
 
 use chrono::{DateTime, Utc};
 use hyper::{
@@ -55,7 +51,7 @@ pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgRespon
         return response;
     };
 
-    let Ok(path) = dir.canonicalize().join(request.uri().path().trim_start_matches('/')).canonicalize() else {
+    let Ok(path) = dir.join(request.uri().path().trim_start_matches('/')).canonicalize() else {
         *response.status_mut() = StatusCode::FORBIDDEN;
         return response;
     };

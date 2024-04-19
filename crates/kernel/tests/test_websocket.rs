@@ -30,7 +30,7 @@ async fn test_ws() {
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::SgGatewayLayer::builder("test_websocket")
+    let gateway = gateway::Gateway::builder("test_websocket")
         .http_routers([(
             "ws".to_string(),
             HttpRoute::builder().rule(HttpRouteRule::builder().match_all().backend(HttpBackend::builder().host("[::]").port(9002).build()).build()).build(),
