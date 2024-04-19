@@ -7,7 +7,7 @@ use crate::{
     helper_layers::{
         map_request::{add_extension::add_extension, MapRequestLayer},
         reload::Reloader,
-        route::{RouterService, Router},
+        route::{Router, RouterService},
     },
     service::ArcHyperService,
     utils::fold_box_layers::fold_layers,
