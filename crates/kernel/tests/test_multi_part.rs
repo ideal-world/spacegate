@@ -29,7 +29,7 @@ async fn test_multi_part() {
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::SgGatewayLayer::builder("test_multi_part")
+    let gateway = gateway::Gateway::builder("test_multi_part")
         .http_routers([(
             "test_upload".to_string(),
             HttpRoute::builder().rule(HttpRouteRule::builder().match_all().backend(HttpBackend::builder().host("[::]").port(9003).build()).build()).build(),

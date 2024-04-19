@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::{
     layers::{
-        gateway::SgGatewayLayer,
+        gateway::Gateway,
         http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },
     BoxError,
@@ -97,7 +97,7 @@ pub trait MountPoint {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError>;
 }
 
-impl MountPoint for SgGatewayLayer {
+impl MountPoint for Gateway {
     fn mount(&mut self, instance: &mut PluginInstance) -> Result<DropTracer, BoxError> {
         let (tracer, marker) = drop_trace();
         self.http_plugins.push(instance.make());

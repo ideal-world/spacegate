@@ -12,7 +12,7 @@ pub trait Router: Clone {
 }
 
 #[derive(Debug, Clone)]
-pub struct Route<S, R, F>
+pub struct RouterService<S, R, F>
 where
     R: Router,
 {
@@ -21,7 +21,7 @@ where
     router: R,
 }
 
-impl<S, R, F> Route<S, R, F>
+impl<S, R, F> RouterService<S, R, F>
 where
     R: Router,
     S: Index<R::Index>,
@@ -31,7 +31,7 @@ where
     }
 }
 
-impl<S, R, F> hyper::service::Service<Request<SgBody>> for Route<S, R, F>
+impl<S, R, F> hyper::service::Service<Request<SgBody>> for RouterService<S, R, F>
 where
     R: Router + Send + Sync + 'static,
     R::Index: Send + Sync + 'static + Clone,

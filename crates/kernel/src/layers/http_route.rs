@@ -2,7 +2,7 @@ pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
 use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
-
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 use crate::{
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
@@ -74,16 +74,13 @@ impl HttpRouteRule {
         use crate::helper_layers::timeout::TimeoutLayer;
         let empty = self.backends.is_empty();
         let filter_layer = self.plugins.iter();
-
+        let time_out = self.timeouts.unwrap_or(DEFAULT_TIMEOUT);
         let service = if empty {
-            fold_layers(
-                filter_layer,
-                ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(HttpBackendService::http_default())),
-            )
+            fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(HttpBackendService::http_default())))
         } else {
             let service_iter = self.backends.iter().map(|l| (l.weight, l.into_service()));
             let random_picker = random_pick::RandomPick::new(service_iter);
-            fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(random_picker)))
+            fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(random_picker)))
         };
 
         let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
@@ -144,7 +141,7 @@ impl HttpBackend {
             timeout: self.timeout,
             ext: self.ext.clone(),
         };
-        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
+        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout.unwrap_or(DEFAULT_TIMEOUT));
         let filtered = fold_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner_service)));
         filtered
     }

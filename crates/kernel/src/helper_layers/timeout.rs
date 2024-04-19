@@ -1,17 +1,14 @@
-use std::{
-    convert::Infallible,
-    time::{Duration, Instant},
-};
-
-use futures_util::Future;
-use hyper::{Request, Response};
-use tower_layer::Layer;
+use std::{convert::Infallible, time::Duration};
 
 use crate::SgBody;
+use futures_util::Future;
+use hyper::{Request, Response};
+use tokio::time::Sleep;
+use tower_layer::Layer;
 #[derive(Clone)]
 pub struct TimeoutLayer {
-    /// timeout duration, none value means no timeout
-    pub timeout: Option<Duration>,
+    /// timeout duration
+    pub timeout: Duration,
     pub timeout_response: hyper::body::Bytes,
 }
 
@@ -30,24 +27,24 @@ impl<S> Layer<S> for TimeoutLayer {
 #[derive(Clone)]
 pub struct Timeout<S> {
     inner: S,
-    timeout: Option<Duration>,
+    timeout: Duration,
     timeout_response: hyper::body::Bytes,
 }
 
 impl TimeoutLayer {
-    pub fn new(timeout: Option<Duration>) -> Self {
+    pub fn new(timeout: Duration) -> Self {
         Self {
             timeout,
             timeout_response: hyper::body::Bytes::default(),
         }
     }
-    pub fn set_timeout(&mut self, timeout: Option<Duration>) {
+    pub fn set_timeout(&mut self, timeout: Duration) {
         self.timeout = timeout;
     }
 }
 
 impl<S> Timeout<S> {
-    pub fn new(timeout: Option<Duration>, timeout_response: hyper::body::Bytes, inner: S) -> Self {
+    pub fn new(timeout: Duration, timeout_response: hyper::body::Bytes, inner: S) -> Self {
         Self { inner, timeout, timeout_response }
     }
 }
@@ -66,7 +63,7 @@ where
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         TimeoutFuture {
             inner: self.inner.call(req),
-            timeout_at: self.timeout.map(|d| Instant::now() + d),
+            timeout: tokio::time::sleep(self.timeout),
             timeout_response: self.timeout_response.clone(),
         }
     }
@@ -76,7 +73,8 @@ pin_project_lite::pin_project! {
     pub struct TimeoutFuture<F> {
         #[pin]
         inner: F,
-        timeout_at: Option<Instant>,
+        #[pin]
+        timeout: Sleep,
         timeout_response: hyper::body::Bytes,
     }
 }
@@ -89,11 +87,9 @@ where
 
     fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
         let this = self.project();
-        if let Some(timeout_at) = this.timeout_at {
-            if Instant::now() >= *timeout_at {
-                let response = Response::builder().status(hyper::StatusCode::GATEWAY_TIMEOUT).body(SgBody::full(this.timeout_response.clone())).expect("invalid response");
-                return std::task::Poll::Ready(Ok(response));
-            }
+        if this.timeout.poll(cx).is_ready() {
+            let response = Response::builder().status(hyper::StatusCode::GATEWAY_TIMEOUT).body(SgBody::full(this.timeout_response.clone())).expect("invalid response");
+            return std::task::Poll::Ready(Ok(response));
         }
         this.inner.poll(cx)
     }

@@ -28,7 +28,7 @@ async fn test_https() {
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::SgGatewayLayer::builder("test_multi_part")
+    let gateway = gateway::Gateway::builder("test_multi_part")
         .http_routers([(
             "test_upload".to_string(),
             HttpRoute::builder()

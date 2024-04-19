@@ -73,19 +73,19 @@ fn get_rustls_config_dangerous() -> rustls::ClientConfig {
     config
 }
 
-pub fn get_client() -> SgHttpClient {
+pub fn get_client() -> HttpClient {
     ClientRepo::global().get_default()
 }
 
 pub struct ClientRepo {
-    default: SgHttpClient,
-    repo: Mutex<HashMap<String, SgHttpClient>>,
+    default: HttpClient,
+    repo: Mutex<HashMap<String, HttpClient>>,
 }
 
 impl Default for ClientRepo {
     fn default() -> Self {
         let config = get_rustls_config_dangerous();
-        let default = SgHttpClient::new(config);
+        let default = HttpClient::new(config);
         Self {
             default,
             repo: Default::default(),
@@ -95,19 +95,19 @@ impl Default for ClientRepo {
 
 static mut GLOBAL: OnceLock<ClientRepo> = OnceLock::new();
 impl ClientRepo {
-    pub fn get(&self, code: &str) -> Option<SgHttpClient> {
+    pub fn get(&self, code: &str) -> Option<HttpClient> {
         self.repo.lock().expect("failed to lock client repo").get(code).cloned()
     }
-    pub fn get_or_default(&self, code: &str) -> SgHttpClient {
+    pub fn get_or_default(&self, code: &str) -> HttpClient {
         self.get(code).unwrap_or_else(|| self.default.clone())
     }
-    pub fn get_default(&self) -> SgHttpClient {
+    pub fn get_default(&self) -> HttpClient {
         self.default.clone()
     }
-    pub fn register(&self, code: &str, client: SgHttpClient) {
+    pub fn register(&self, code: &str, client: HttpClient) {
         self.repo.lock().expect("failed to lock client repo").insert(code.to_string(), client);
     }
-    pub fn set_default(&mut self, client: SgHttpClient) {
+    pub fn set_default(&mut self, client: HttpClient) {
         self.default = client;
     }
     pub fn global() -> &'static Self {
@@ -116,7 +116,7 @@ impl ClientRepo {
 
     /// # Safety
     /// This function is not thread safe, it should be called before any other thread is spawned.
-    pub unsafe fn set_global_default(client: SgHttpClient) {
+    pub unsafe fn set_global_default(client: HttpClient) {
         GLOBAL.get_or_init(Default::default);
         GLOBAL.get_mut().expect("global not set").set_default(client);
     }
@@ -127,19 +127,19 @@ pub struct SgHttpClientConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct SgHttpClient {
+pub struct HttpClient {
     inner: Client<HttpsConnector<HttpConnector>, SgBody>,
 }
 
-impl Default for SgHttpClient {
+impl Default for HttpClient {
     fn default() -> Self {
         Self::new(rustls::ClientConfig::builder().with_native_roots().expect("failed to init rustls config").with_no_client_auth())
     }
 }
 
-impl SgHttpClient {
+impl HttpClient {
     pub fn new(tls_config: rustls::ClientConfig) -> Self {
-        SgHttpClient {
+        HttpClient {
             inner: Client::builder(TokioExecutor::new()).build(HttpsConnectorBuilder::new().with_tls_config(tls_config).https_or_http().enable_http1().enable_http2().build()),
         }
     }

@@ -9,14 +9,14 @@ use crate::{
     ArcHyperService, BoxLayer, SgBody,
 };
 
-use super::{SgGatewayLayer, SgGatewayRoute};
+use super::{Gateway, HttpRouterService};
 
-pub struct SgGatewayLayerBuilder {
+pub struct GatewayBuilder {
     pub gateway_name: Arc<str>,
     pub http_routers: HashMap<String, HttpRoute>,
     pub http_plugins: Vec<BoxLayer>,
     pub http_fallback: ArcHyperService,
-    pub http_route_reloader: Reloader<SgGatewayRoute>,
+    pub http_route_reloader: Reloader<HttpRouterService>,
     pub extensions: hyper::http::Extensions,
     pub x_request_id: bool,
 }
@@ -30,7 +30,7 @@ pub fn default_gateway_route_fallback() -> ArcHyperService {
     }))
 }
 
-impl SgGatewayLayerBuilder {
+impl GatewayBuilder {
     pub fn new(gateway_name: impl Into<Arc<str>>) -> Self {
         Self {
             gateway_name: gateway_name.into(),
@@ -69,7 +69,7 @@ impl SgGatewayLayerBuilder {
         self.http_fallback = fallback;
         self
     }
-    pub fn http_route_reloader(mut self, reloader: Reloader<SgGatewayRoute>) -> Self {
+    pub fn http_route_reloader(mut self, reloader: Reloader<HttpRouterService>) -> Self {
         self.http_route_reloader = reloader;
         self
     }
@@ -77,13 +77,13 @@ impl SgGatewayLayerBuilder {
         self.extensions = extension;
         self
     }
-    pub fn build(self) -> SgGatewayLayer {
+    pub fn build(self) -> Gateway {
         let mut plugins = vec![];
         if self.x_request_id {
             plugins.push(BoxLayer::new(FnLayer::new_closure(crate::utils::x_request_id::<Snowflake>)));
         }
         plugins.extend(self.http_plugins);
-        SgGatewayLayer {
+        Gateway {
             gateway_name: self.gateway_name,
             http_routes: self.http_routers,
             http_plugins: plugins,
