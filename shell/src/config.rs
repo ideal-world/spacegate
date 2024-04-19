@@ -120,8 +120,8 @@ where
                         continue;
                     };
                     if let Ok(Some(item)) = config.retrieve_config_item(&gateway_name).await {
-                        SgPluginRepository::global().clear_routes_instances(&gateway_name);
                         tracing::info!("[SG.Config] route {name} modified", name = name);
+                        SgPluginRepository::global().clear_routes_instances(&gateway_name);
                         global_batch_update_plugin(item.collect_all_plugins());
                         if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
                             tracing::error!("[SG.Config] route {name} modified failed: {e}", name = name, e = e);
