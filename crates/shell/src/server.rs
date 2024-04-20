@@ -9,7 +9,7 @@ use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto
 use spacegate_config::{BackendHost, Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
-    layers::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
+    service::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
     listener::SgListen,
     ArcHyperService, BoxError,
 };
@@ -26,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 fn collect_http_route(
     gateway_name: Arc<str>,
     http_routes: impl IntoIterator<Item = (String, crate::SgHttpRoute)>,
-) -> Result<HashMap<String, spacegate_kernel::layers::http_route::HttpRoute>, BoxError> {
+) -> Result<HashMap<String, spacegate_kernel::service::http_route::HttpRoute>, BoxError> {
     http_routes
         .into_iter()
         .map(|(name, route)| {
@@ -46,7 +46,7 @@ fn collect_http_route(
                         gateway: gateway_name.clone(),
                         route: route_name.clone(),
                     };
-                    let mut builder = spacegate_kernel::layers::http_route::HttpRouteRule::builder();
+                    let mut builder = spacegate_kernel::service::http_route::HttpRouteRule::builder();
                     builder = if let Some(matches) = route_rule.matches {
                         builder.matches(matches.into_iter().map(convert_config_to_kernel).collect::<Result<Vec<_>, _>>()?)
                     } else {
@@ -64,7 +64,7 @@ fn collect_http_route(
                                 route: route_name.clone(),
                             };
                             let host = backend.get_host();
-                            let mut builder = spacegate_kernel::layers::http_route::HttpBackend::builder();
+                            let mut builder = spacegate_kernel::service::http_route::HttpBackend::builder();
                             let plugins = backend.plugins;
                             #[cfg(feature = "k8s")]
                             {
@@ -102,7 +102,7 @@ fn collect_http_route(
                     Result::<_, BoxError>::Ok(layer)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut layer = spacegate_kernel::layers::http_route::HttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
+            let mut layer = spacegate_kernel::service::http_route::HttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
             global_batch_mount_plugin(plugins, &mut layer, mount_index);
             Ok((name, layer))
         })
@@ -118,7 +118,7 @@ pub(crate) fn create_service(
 ) -> Result<ArcHyperService, BoxError> {
     let gateway_name: Arc<str> = gateway_name.into();
     let routes = collect_http_route(gateway_name.clone(), http_routes)?;
-    let mut layer = spacegate_kernel::layers::gateway::Gateway::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
+    let mut layer = spacegate_kernel::service::gateway::Gateway::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
     global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
     let service = ArcHyperService::new(layer.as_service());
     Ok(service)

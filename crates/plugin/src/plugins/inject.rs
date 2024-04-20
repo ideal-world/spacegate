@@ -6,7 +6,7 @@ use hyper::{Method, Response, Uri};
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::extension::Reflect;
 use spacegate_kernel::helper_layers::function::Inner;
-use spacegate_kernel::service::http_client_service::get_client;
+use spacegate_kernel::backend_service::http_client_service::get_client;
 use spacegate_kernel::BoxError;
 use spacegate_kernel::SgBody;
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);

@@ -1,8 +1,8 @@
 use crate::BoxError;
 use hyper::{header::HeaderValue, Request};
 
-use crate::{extension::PeerAddr, header::X_FORWARDED_FOR, SgBody};
-
+use crate::{extension::PeerAddr, SgBody};
+const X_FORWARDED_FOR: &str = "x-forwarded-for";
 /// Add `x-forwarded-for` for request, based on [`PeerAddr`](`crate::extension::PeerAddr`)
 /// # Errors
 /// missing peer addr ext

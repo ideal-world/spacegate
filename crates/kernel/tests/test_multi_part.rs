@@ -5,7 +5,7 @@ use reqwest::{
     Body,
 };
 use spacegate_kernel::{
-    layers::{
+    service::{
         gateway,
         http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },

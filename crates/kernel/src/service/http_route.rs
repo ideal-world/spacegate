@@ -6,15 +6,13 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 use crate::{
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
-    service::{http_backend_service, static_file_service::static_file_service, ArcHyperService},
+    backend_service::{http_backend_service, static_file_service::static_file_service, ArcHyperService},
     utils::{fold_box_layers::fold_layers, schema_port::port_to_schema},
     BoxLayer, SgBody,
 };
 
 use futures_util::future::BoxFuture;
 use hyper::{Request, Response};
-
-// use tower_http::timeout::{Timeout, TimeoutLayer};
 
 use tower_layer::Layer;
 
@@ -70,7 +68,7 @@ impl HttpRouteRule {
     pub fn builder() -> HttpRouteRuleBuilder {
         HttpRouteRuleBuilder::new()
     }
-    pub fn into_service(&self) -> HttpRouteRuleService {
+    pub fn as_service(&self) -> HttpRouteRuleService {
         use crate::helper_layers::timeout::TimeoutLayer;
         let empty = self.backends.is_empty();
         let filter_layer = self.plugins.iter();
@@ -78,7 +76,7 @@ impl HttpRouteRule {
         let service = if empty {
             fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(HttpBackendService::http_default())))
         } else {
-            let service_iter = self.backends.iter().map(|l| (l.weight, l.into_service()));
+            let service_iter = self.backends.iter().map(|l| (l.weight, l.as_service()));
             let random_picker = random_pick::RandomPick::new(service_iter);
             fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(random_picker)))
         };
@@ -134,7 +132,7 @@ impl HttpBackend {
     pub fn builder() -> HttpBackendBuilder {
         HttpBackendBuilder::new()
     }
-    pub fn into_service(&self) -> ArcHyperService {
+    pub fn as_service(&self) -> ArcHyperService {
         let inner_service = HttpBackendService {
             weight: self.weight,
             backend: self.backend.clone().into(),
