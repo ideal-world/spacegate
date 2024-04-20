@@ -12,7 +12,7 @@ pub fn with_length_or_chunked(resp: &mut Response<SgBody>) {
                 HeaderValue::from_str(len.to_string().as_str()).expect("digits should be valid header char"),
             );
         }
-    } else {
+    } else if !is_chunked {
         resp.headers_mut().append(hyper::header::TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
     }
 }
