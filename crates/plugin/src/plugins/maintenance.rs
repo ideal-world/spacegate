@@ -203,9 +203,9 @@ mod test {
     use hyper::StatusCode;
     use hyper::{Method, Request, Version};
     use serde_json::json;
+    use spacegate_kernel::backend_service::get_echo_service;
     use spacegate_kernel::extension::PeerAddr;
     use spacegate_kernel::helper_layers::function::Inner;
-    use spacegate_kernel::backend_service::get_echo_service;
     use spacegate_kernel::BoxError;
     use spacegate_kernel::SgBody;
     use spacegate_model::{PluginInstanceId, PluginInstanceName};

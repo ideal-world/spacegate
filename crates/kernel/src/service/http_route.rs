@@ -4,9 +4,9 @@ pub mod match_request;
 use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 use crate::{
+    backend_service::{http_backend_service, static_file_service::static_file_service, ArcHyperService},
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
-    backend_service::{http_backend_service, static_file_service::static_file_service, ArcHyperService},
     utils::{fold_box_layers::fold_layers, schema_port::port_to_schema},
     BoxLayer, SgBody,
 };

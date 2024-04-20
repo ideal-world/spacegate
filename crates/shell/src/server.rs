@@ -9,8 +9,8 @@ use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto
 use spacegate_config::{BackendHost, Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
-    service::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
     listener::SgListen,
+    service::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
     ArcHyperService, BoxError,
 };
 use spacegate_plugin::{mount::MountPointIndex, SgPluginRepository};
@@ -102,7 +102,8 @@ fn collect_http_route(
                     Result::<_, BoxError>::Ok(layer)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut layer = spacegate_kernel::service::http_route::HttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
+            let mut layer =
+                spacegate_kernel::service::http_route::HttpRoute::builder().hostnames(route.hostnames.unwrap_or_default()).rules(rules).priority(route.priority).build();
             global_batch_mount_plugin(plugins, &mut layer, mount_index);
             Ok((name, layer))
         })

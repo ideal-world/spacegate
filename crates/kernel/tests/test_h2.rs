@@ -8,12 +8,12 @@ use std::{
 use axum_server::tls_rustls::RustlsConfig;
 use hyper::{client, Request};
 use spacegate_kernel::{
+    backend_service::{get_http_backend_service, http_backend_service},
+    listener::SgListen,
     service::{
         gateway,
         http_route::{match_request::HttpPathMatchRewrite, HttpBackend, HttpRoute, HttpRouteRule},
     },
-    listener::SgListen,
-    backend_service::{get_http_backend_service, http_backend_service},
     SgBody,
 };
 use tokio_rustls::rustls::ServerConfig;

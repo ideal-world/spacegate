@@ -1,19 +1,19 @@
 #![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
 #![warn(clippy::missing_errors_doc, clippy::indexing_slicing)]
 // pub mod config;
+pub mod backend_service;
 pub mod body;
 pub mod extension;
 pub mod extractor;
 pub mod helper_layers;
-pub mod service;
 pub mod listener;
-pub mod backend_service;
+pub mod service;
 pub mod utils;
 
+pub use backend_service::ArcHyperService;
 pub use body::SgBody;
 use extension::Reflect;
 pub use extractor::Extractor;
-pub use backend_service::ArcHyperService;
 use std::{convert::Infallible, fmt};
 pub use tower_layer::Layer;
 

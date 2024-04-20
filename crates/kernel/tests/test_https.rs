@@ -1,11 +1,11 @@
 use std::{net::SocketAddr, str::FromStr, time::Duration};
 
 use spacegate_kernel::{
+    listener::SgListen,
     service::{
         gateway,
         http_route::{match_request::HttpPathMatchRewrite, HttpBackend, HttpRoute, HttpRouteRule},
     },
-    listener::SgListen,
 };
 use tokio_rustls::rustls::ServerConfig;
 use tokio_util::sync::CancellationToken;

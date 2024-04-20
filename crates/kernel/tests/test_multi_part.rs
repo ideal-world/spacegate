@@ -5,11 +5,11 @@ use reqwest::{
     Body,
 };
 use spacegate_kernel::{
+    listener::SgListen,
     service::{
         gateway,
         http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },
-    listener::SgListen,
 };
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
