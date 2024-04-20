@@ -78,8 +78,8 @@ mod test {
     use serde_json::json;
     use spacegate_ext_redis::redis::AsyncCommands;
     use spacegate_kernel::{
-        service::http_route::match_request::{HttpPathMatchRewrite, HttpRouteMatch},
         backend_service::get_echo_service,
+        service::http_route::match_request::{HttpPathMatchRewrite, HttpRouteMatch},
     };
     use std::time::Duration;
     use testcontainers_modules::redis::REDIS_PORT;
