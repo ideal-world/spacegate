@@ -4,7 +4,7 @@ use hyper::{service::service_fn, Response};
 
 use crate::{
     helper_layers::{function::FnLayer, reload::Reloader},
-    layers::http_route::HttpRoute,
+    service::http_route::HttpRoute,
     utils::Snowflake,
     ArcHyperService, BoxLayer, SgBody,
 };
@@ -21,12 +21,10 @@ pub struct GatewayBuilder {
     pub x_request_id: bool,
 }
 
+/// return empty 404 not found
 pub fn default_gateway_route_fallback() -> ArcHyperService {
-    // static LAYER: OnceLock<SgBoxLayer> = OnceLock::new();
-    // LAYER.get_or_init(|| {
-    // })
     ArcHyperService::new(service_fn(|_| async {
-        Ok(Response::builder().status(hyper::StatusCode::NOT_FOUND).body(SgBody::full("[Sg.HttpRouteRule] no rule matched")).expect("bad response"))
+        Ok(Response::builder().status(hyper::StatusCode::NOT_FOUND).body(SgBody::empty()).expect("bad response"))
     }))
 }
 

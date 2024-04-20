@@ -9,7 +9,7 @@ use crate::{
         reload::Reloader,
         route::{Router, RouterService},
     },
-    service::ArcHyperService,
+    backend_service::ArcHyperService,
     utils::fold_box_layers::fold_layers,
     BoxLayer, SgBody,
 };
@@ -127,7 +127,7 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
         let mut rules_services = Vec::with_capacity(route.rules.len());
         let mut rules_router = Vec::with_capacity(route.rules.len());
         for rule in route.rules.iter() {
-            let rule_service = fold_layers(route.plugins.iter(), ArcHyperService::new(rule.into_service()));
+            let rule_service = fold_layers(route.plugins.iter(), ArcHyperService::new(rule.as_service()));
             rules_services.push(rule_service);
             rules_router.push(rule.r#match.clone());
         }

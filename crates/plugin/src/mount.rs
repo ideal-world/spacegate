@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::{
-    layers::{
+    service::{
         gateway::Gateway,
         http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },

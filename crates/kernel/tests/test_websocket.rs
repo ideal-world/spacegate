@@ -3,7 +3,7 @@ use futures_util::{SinkExt, StreamExt};
 use std::{net::SocketAddr, str::FromStr, time::Duration};
 
 use spacegate_kernel::{
-    layers::{
+    service::{
         gateway,
         http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },

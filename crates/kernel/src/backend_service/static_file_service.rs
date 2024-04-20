@@ -41,7 +41,6 @@ pub fn cache_policy(metadata: &Metadata) -> bool {
 
 #[instrument()]
 pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgResponse {
-    // request.headers().get()
     let mut response = Response::builder().body(SgBody::empty()).expect("failed to build response");
     if let Some(reflect) = request.extensions_mut().remove::<Reflect>() {
         *response.extensions_mut() = reflect.into_inner();
