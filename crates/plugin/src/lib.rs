@@ -60,7 +60,7 @@ pub trait Plugin: Any + Sized + Send + Sync {
     /// Register the plugin to the repository.
     ///
     /// You can also register axum server route here.
-    fn register(repo: &SgPluginRepository) {
+    fn register(repo: &PluginRepository) {
         repo.plugins.write().expect("SgPluginRepository register error").insert(Self::CODE.into(), PluginDefinitionObject::from_trait::<Self>());
     }
 
@@ -154,16 +154,16 @@ pub trait PluginSchemaExt {
 
 type MakePfMethod = dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static;
 #[derive(Default, Clone)]
-pub struct SgPluginRepository {
+pub struct PluginRepository {
     pub plugins: Arc<RwLock<HashMap<String, PluginDefinitionObject>>>,
     pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
 }
 
-impl SgPluginRepository {
+impl PluginRepository {
     pub fn global() -> &'static Self {
-        static INIT: OnceLock<SgPluginRepository> = OnceLock::new();
+        static INIT: OnceLock<PluginRepository> = OnceLock::new();
         INIT.get_or_init(|| {
-            let repo = SgPluginRepository::new();
+            let repo = PluginRepository::new();
             repo.register_prelude();
             repo
         })
