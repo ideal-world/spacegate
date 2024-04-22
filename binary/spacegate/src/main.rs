@@ -19,7 +19,7 @@ fn main() -> Result<(), BoxError> {
             };
             if path.is_file() && is_dylib {
                 println!("loading plugin lib: {:?}", path);
-                let res = unsafe { spacegate_shell::plugin::SgPluginRepository::global().register_lib(&path) };
+                let res = unsafe { spacegate_shell::plugin::PluginRepository::global().register_dylib(&path) };
                 if let Err(e) = res {
                     eprintln!("fail to load plugin: {:?}", e);
                 }

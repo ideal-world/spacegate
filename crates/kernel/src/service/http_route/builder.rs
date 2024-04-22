@@ -205,10 +205,7 @@ impl<B: BackendKindBuilder> Default for HttpBackendBuilder<B> {
 
 impl HttpBackendBuilder<FileBackendKindBuilder> {
     pub fn path(mut self, path: impl Into<PathBuf>) -> Self {
-        self.backend = FileBackendKindBuilder {
-            path: path.into(),
-            ..self.backend
-        };
+        self.backend = FileBackendKindBuilder { path: path.into() };
         self
     }
 }

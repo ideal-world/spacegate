@@ -1,3 +1,9 @@
+//! # Using a dynamic library as plugins
+//!
+//!
+//!
+//!
+
 use std::ffi::OsStr;
 
 use spacegate_kernel::BoxResult;
@@ -22,7 +28,7 @@ macro_rules! dynamic_lib {
         $Type:ty
     ),*) => {
         #[no_mangle]
-        pub extern "Rust" fn register(repo: &$crate::SgPluginRepository) {
+        pub extern "Rust" fn register(repo: &$crate::PluginRepository) {
             $(
                 $(#[$m])*
                 repo.register::<$Type>();
@@ -30,11 +36,12 @@ macro_rules! dynamic_lib {
         }
     };
 }
-impl crate::SgPluginRepository {
+impl crate::PluginRepository {
     ///
     /// # Usage
     /// The library must implement a function named `register` with the following signature:
     /// ```rust no_run
+    /// #[no_mangle]
     /// pub extern "Rust" fn register(repo: &SgPluginRepository) {
     ///     ...
     /// }
@@ -48,9 +55,9 @@ impl crate::SgPluginRepository {
     ///
     /// # Errors
     /// Target is not a valid dynamic library or the library does not implement the `register` function.
-    pub unsafe fn register_lib<P: AsRef<OsStr>>(&self, path: P) -> BoxResult<()> {
+    pub unsafe fn register_dylib<P: AsRef<OsStr>>(&self, path: P) -> BoxResult<()> {
         let lib = libloading::Library::new(path)?;
-        let register: libloading::Symbol<unsafe extern "Rust" fn(&crate::SgPluginRepository)> = lib.get(b"register")?;
+        let register: libloading::Symbol<unsafe extern "Rust" fn(&crate::PluginRepository)> = lib.get(b"register")?;
         register(self);
         let lib = Box::new(lib);
         Box::leak(lib);
