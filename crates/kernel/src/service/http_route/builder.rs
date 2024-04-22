@@ -205,7 +205,10 @@ impl<B: BackendKindBuilder> Default for HttpBackendBuilder<B> {
 
 impl HttpBackendBuilder<FileBackendKindBuilder> {
     pub fn path(mut self, path: impl Into<PathBuf>) -> Self {
-        self.backend = FileBackendKindBuilder { path: path.into() };
+        self.backend = FileBackendKindBuilder {
+            path: path.into(),
+            ..self.backend
+        };
         self
     }
 }
@@ -214,21 +217,18 @@ impl HttpBackendBuilder<HttpBackendKindBuilder> {
     pub fn host(mut self, host: impl Into<String>) -> Self {
         self.backend = HttpBackendKindBuilder {
             host: Some(host.into()),
-            ..Default::default()
+            ..self.backend
         };
         self
     }
     pub fn port(mut self, port: u16) -> Self {
-        self.backend = HttpBackendKindBuilder {
-            port: Some(port),
-            ..Default::default()
-        };
+        self.backend = HttpBackendKindBuilder { port: Some(port), ..self.backend };
         self
     }
     pub fn schema(mut self, schema: impl Into<String>) -> Self {
         self.backend = HttpBackendKindBuilder {
             schema: Some(schema.into()),
-            ..Default::default()
+            ..self.backend
         };
         self
     }

@@ -13,7 +13,7 @@ use tardis::tardis_static;
 #[cfg(not(feature = "cache"))]
 use tardis::tokio::sync::RwLock;
 #[cfg(feature = "cache")]
-use spacegate_ext_redis::{redis::AsyncCommands};
+use spacegate_ext_redis::redis::AsyncCommands;
 #[cfg(feature = "cache")]
 use tardis::TardisFuns;
 #[cfg(not(feature = "cache"))]
