@@ -11,7 +11,6 @@ fn main() -> Result<(), BoxError> {
             let entry = entry?;
             let path = entry.path();
             if path.is_file() {
-
                 println!("load plugin: {:?}", path);
                 println!("{:?}", repo as *const spacegate_shell::plugin::SgPluginRepository);
                 let res = unsafe { spacegate_shell::plugin::SgPluginRepository::global().register_lib(&path) };
