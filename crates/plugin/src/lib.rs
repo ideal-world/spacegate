@@ -15,23 +15,25 @@ use mount::{MountPoint, MountPointIndex};
 use serde::{Deserialize, Serialize};
 pub use serde_json;
 pub use serde_json::{Error as SerdeJsonError, Value as JsonValue};
-pub use spacegate_kernel::helper_layers::filter::{Filter, FilterRequest, FilterRequestLayer};
 pub use spacegate_kernel::helper_layers::function::Inner;
 pub use spacegate_kernel::BoxError;
 pub use spacegate_kernel::BoxLayer;
-use spacegate_kernel::SgBody;
+pub use spacegate_kernel::{SgBody, SgRequest, SgRequestExt, SgResponse, SgResponseExt};
 pub mod error;
 pub mod model;
 pub mod mount;
 // pub mod plugins;
 pub mod instance;
 pub use error::PluginError;
+#[cfg(feature = "dylib")]
+pub mod dynamic;
 pub mod ext;
 pub mod layer;
 pub mod plugins;
 #[cfg(feature = "schema")]
 pub use schemars;
 pub use spacegate_model::{plugin_meta, PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, PluginMetaData};
+use tracing::info;
 pub trait Plugin: Any + Sized + Send + Sync {
     /// plugin code, it should be unique repository-wise.
     const CODE: &'static str;
@@ -48,7 +50,7 @@ pub trait Plugin: Any + Sized + Send + Sync {
     ///
     /// If you want to return a error response with other status code, use `PluginError::new` to create a error response, and wrap
     /// it with `Ok`.
-    fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Result<Response<SgBody>, BoxError>> + Send;
+    fn call(&self, req: SgRequest, inner: Inner) -> impl Future<Output = Result<SgResponse, BoxError>> + Send;
     fn create(plugin_config: PluginConfig) -> Result<Self, BoxError>;
     fn create_by_spec(spec: JsonValue, name: PluginInstanceName) -> Result<Self, BoxError> {
         Self::create(PluginConfig {
@@ -130,13 +132,15 @@ impl PluginDefinitionObject {
             };
             Ok(Box::new(function) as InnerBoxPf)
         };
+        let make_pf = Box::new(constructor);
+        let make_pf = Box::leak(make_pf);
         Self {
             code: P::CODE.into(),
             #[cfg(feature = "schema")]
             schema: P::schema_opt(),
             mono: P::MONO,
             meta: P::meta(),
-            make_pf: Box::new(constructor),
+            make_pf,
         }
     }
     #[inline]
@@ -150,10 +154,10 @@ pub trait PluginSchemaExt {
     fn schema() -> schemars::schema::RootSchema;
 }
 
-type BoxMakePfMethod = Box<dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static>;
+type BoxMakePfMethod = &'static (dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static);
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
-    pub plugins: Arc<RwLock<HashMap<Cow<'static, str>, PluginDefinitionObject>>>,
+    pub plugins: Arc<RwLock<HashMap<String, PluginDefinitionObject>>>,
     pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
 }
 
@@ -212,7 +216,7 @@ impl SgPluginRepository {
     pub fn register_custom<A: Into<PluginDefinitionObject>>(&self, attr: A) {
         let attr: PluginDefinitionObject = attr.into();
         let mut map = self.plugins.write().expect("SgPluginRepository register error");
-        let _old_attr = map.insert(attr.code.clone(), attr);
+        let _old_attr = map.insert(attr.code.to_string(), attr);
     }
 
     pub fn clear_instances(&self) {
@@ -229,6 +233,7 @@ impl SgPluginRepository {
         let code = config.code();
         let id = config.id.clone();
         let Some(attr) = attr_rg.get(code) else {
+            dbg!(attr_rg);
             return Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into());
         };
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
@@ -290,7 +295,7 @@ impl SgPluginRepository {
         map.values().map(PluginDefinitionObject::attr).collect()
     }
 
-    pub fn repo_snapshot(&self) -> HashMap<Cow<'static, str>, PluginRepoSnapshot> {
+    pub fn repo_snapshot(&self) -> HashMap<String, PluginRepoSnapshot> {
         let plugins = self.plugins.read().expect("SgPluginRepository register error");
         plugins
             .iter()
@@ -300,7 +305,7 @@ impl SgPluginRepository {
                 (
                     code.clone(),
                     PluginRepoSnapshot {
-                        code: code.clone(),
+                        code: code.clone().into(),
                         mono: attr.mono,
                         meta: attr.meta.clone(),
                         instances,

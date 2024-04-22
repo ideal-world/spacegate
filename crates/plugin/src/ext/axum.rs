@@ -28,7 +28,7 @@ pub async fn register_plugin_routes() {
         .await
 }
 
-pub async fn repo_snapshot() -> axum::Json<HashMap<Cow<'static, str>, PluginRepoSnapshot>> {
+pub async fn repo_snapshot() -> axum::Json<HashMap<String, PluginRepoSnapshot>> {
     axum::Json(crate::SgPluginRepository::global().repo_snapshot())
 }
 
@@ -48,7 +48,6 @@ pub struct PluginCode {
 
 #[cfg(feature = "schema")]
 pub async fn plugin_schema(Query(PluginCode { code }): Query<PluginCode>) -> axum::Json<Option<schemars::schema::RootSchema>> {
-    let code: Cow<'static, str> = code.into();
     let schema = crate::SgPluginRepository::global().plugins.read().expect("poisoned").get(&code).and_then(|p| p.schema.clone());
     axum::Json(schema)
 }

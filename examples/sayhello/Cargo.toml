@@ -1,0 +1,23 @@
+[package]
+name = "sayhello"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "sayhello"
+path = "src/lib.rs"
+crate-type = ["dylib"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+spacegate-plugin = { workspace = true, features = ["dylib"] }
+hyper = { workspace = true }

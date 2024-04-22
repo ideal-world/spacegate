@@ -46,7 +46,7 @@ plugin-rewrite = ["spacegate-plugin/rewrite"]
 plugin-maintenance = ["spacegate-plugin/maintenance"]
 # plugin-decompression = ["spacegate-plugin/decompression"]
 plugin-status = ["spacegate-plugin/status"]
-
+plugin-dylib = ["spacegate-plugin/dylib"]
 
 [dependencies]
 spacegate-kernel = { workspace = true, features = ["reload"] }

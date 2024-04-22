@@ -23,6 +23,10 @@
         {
           "name": "add-server-header",
           "code": "header-modifier"
+        },
+        {
+          "name": "say-hello",
+          "code": "sayhello"
         }
       ],
       "routes": [
@@ -146,6 +150,11 @@
           },
           "content_type": "text/html"
         }
+      },
+      {
+        "name": "say-hello",
+        "code": "sayhello",
+        "spec": null
       }
     ],
     "mono": []
