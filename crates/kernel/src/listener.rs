@@ -116,30 +116,34 @@ where
     S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
-    #[instrument(skip(stream, service, tls_cfg, conn_builder, cancel_token))]
+    #[instrument(skip(stream, service, tls_cfg, conn_builder))]
     async fn accept(
         conn_builder: hyper_util::server::conn::auto::Builder<rt::TokioExecutor>,
         stream: TcpStream,
         peer_addr: SocketAddr,
         tls_cfg: Option<Arc<rustls::ServerConfig>>,
-        #[allow(unused_variables)] cancel_token: CancellationToken,
         service: S,
-    ) -> Result<(), BoxError> {
+    ) {
         tracing::debug!("[Sg.Listen] Accepted connection");
         let service = HyperServiceAdapter::new(service, peer_addr);
-        if let Some(tls_cfg) = tls_cfg {
+        let conn_result = if let Some(tls_cfg) = tls_cfg {
             let connector = tokio_rustls::TlsAcceptor::from(tls_cfg);
-            let accepted = connector.accept(stream).await?;
+            let Ok(accepted) = connector.accept(stream).await.inspect_err(|e| tracing::warn!("[Sg.Listen] Tls connect error: {:?}", e)) else {
+                return;
+            };
             let io = TokioIo::new(accepted);
             let conn = conn_builder.serve_connection_with_upgrades(io, service);
-            conn.await?;
+            conn.await
         } else {
             let io = TokioIo::new(stream);
             let conn = conn_builder.serve_connection_with_upgrades(io, service);
-            conn.await?;
+            conn.await
+        };
+        if let Err(e) = conn_result {
+            tracing::warn!("[Sg.Listen] Connection closed with error {e}")
+        } else {
+            tracing::debug!("[Sg.Listen] Connection closed");
         }
-        tracing::debug!("[Sg.Listen] Connection closed");
-        Ok(())
     }
     #[instrument()]
     pub async fn listen(self) -> Result<(), BoxError> {
@@ -148,28 +152,22 @@ where
         let cancel_token = self.cancel_token;
         tracing::debug!("[Sg.Listen] start listening...");
         loop {
-            tokio::select! {
+            let accepted = tokio::select! {
                 () = cancel_token.cancelled() => {
                     tracing::warn!("[Sg.Listen] cancelled");
                     return Ok(());
                 },
-                accepted = listener.accept() => {
-                    match accepted {
-                        Ok((stream, peer_addr)) => {
-                            let tls_cfg = self.tls_cfg.clone();
-                            let service = self.service.clone();
-                            let builder = self.conn_builder.clone();
-                            let cancel_token = cancel_token.clone();
-                            tokio::spawn(async move {
-                                if let Err(e) = Self::accept(builder, stream, peer_addr, tls_cfg, cancel_token, service).await {
-                                    tracing::warn!("[Sg.Listen] Accept stream error: {:?}", e);
-                                }
-                            });
-                        },
-                        Err(e) => {
-                            tracing::warn!("[Sg.Listen] Accept tcp connection error: {:?}", e);
-                        }
-                    }
+                accepted = listener.accept() => accepted
+            };
+            match accepted {
+                Ok((stream, peer_addr)) => {
+                    let tls_cfg = self.tls_cfg.clone();
+                    let service = self.service.clone();
+                    let builder = self.conn_builder.clone();
+                    tokio::spawn(Self::accept(builder, stream, peer_addr, tls_cfg, service));
+                }
+                Err(e) => {
+                    tracing::warn!("[Sg.Listen] Accept tcp connection error: {:?}", e);
                 }
             }
         }

@@ -1,24 +1,23 @@
 pub mod builder;
 pub mod match_hostname;
 pub mod match_request;
-use std::{convert::Infallible, sync::Arc, time::Duration};
-
+use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 use crate::{
+    backend_service::{http_backend_service, static_file_service::static_file_service, ArcHyperService},
     extension::{BackendHost, Reflect},
     helper_layers::random_pick,
-    service::ArcHyperService,
-    utils::{fold_sg_layers::sg_layers, schema_port::port_to_schema},
-    SgBody, SgBoxLayer,
+    utils::{fold_box_layers::fold_layers, schema_port::port_to_schema},
+    BoxLayer, SgBody,
 };
 
+use futures_util::future::BoxFuture;
 use hyper::{Request, Response};
-
-// use tower_http::timeout::{Timeout, TimeoutLayer};
 
 use tower_layer::Layer;
 
 use self::{
-    builder::{SgHttpBackendLayerBuilder, SgHttpRouteLayerBuilder, SgHttpRouteRuleLayerBuilder},
+    builder::{HttpBackendBuilder, HttpRouteBuilder, HttpRouteRuleBuilder},
     match_request::HttpRouteMatch,
 };
 
@@ -29,22 +28,22 @@ use self::{
 *****************************************************************************************/
 
 #[derive(Debug)]
-pub struct SgHttpRoute {
+pub struct HttpRoute {
     pub name: String,
     pub hostnames: Vec<String>,
-    pub plugins: Vec<SgBoxLayer>,
-    pub rules: Vec<SgHttpRouteRuleLayer>,
+    pub plugins: Vec<BoxLayer>,
+    pub rules: Vec<HttpRouteRule>,
     pub priority: i16,
     pub ext: hyper::http::Extensions,
 }
 
-impl SgHttpRoute {
-    pub fn builder() -> SgHttpRouteLayerBuilder {
-        SgHttpRouteLayerBuilder::new()
+impl HttpRoute {
+    pub fn builder() -> HttpRouteBuilder {
+        HttpRouteBuilder::new()
     }
 }
 #[derive(Debug, Clone)]
-pub struct SgHttpRouter {
+pub struct HttpRouter {
     pub hostnames: Arc<[String]>,
     pub rules: Arc<[Option<Arc<[Arc<HttpRouteMatch>]>>]>,
     pub ext: hyper::http::Extensions,
@@ -57,56 +56,48 @@ pub struct SgHttpRouter {
 *****************************************************************************************/
 
 #[derive(Debug)]
-pub struct SgHttpRouteRuleLayer {
+pub struct HttpRouteRule {
     pub r#match: Option<Vec<HttpRouteMatch>>,
-    pub plugins: Vec<SgBoxLayer>,
+    pub plugins: Vec<BoxLayer>,
     timeouts: Option<Duration>,
-    backends: Vec<SgHttpBackendLayer>,
+    backends: Vec<HttpBackend>,
     pub ext: hyper::http::Extensions,
 }
 
-impl SgHttpRouteRuleLayer {
-    pub fn builder() -> SgHttpRouteRuleLayerBuilder {
-        SgHttpRouteRuleLayerBuilder::new()
+impl HttpRouteRule {
+    pub fn builder() -> HttpRouteRuleBuilder {
+        HttpRouteRuleBuilder::new()
     }
-}
-
-impl<S> Layer<S> for SgHttpRouteRuleLayer
-where
-    S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
-    <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
-{
-    type Service = SgRouteRule;
-
-    fn layer(&self, inner: S) -> Self::Service {
+    pub fn as_service(&self) -> HttpRouteRuleService {
         use crate::helper_layers::timeout::TimeoutLayer;
         let empty = self.backends.is_empty();
         let filter_layer = self.plugins.iter();
-
+        let time_out = self.timeouts.unwrap_or(DEFAULT_TIMEOUT);
         let service = if empty {
-            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(inner)))
+            fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(HttpBackendService::http_default())))
         } else {
-            let service_iter = self.backends.iter().map(|l| (l.weight, l.layer(inner.clone())));
+            let service_iter = self.backends.iter().map(|l| (l.weight, l.as_service()));
             let random_picker = random_pick::RandomPick::new(service_iter);
-            sg_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(self.timeouts).layer(random_picker)))
+            fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(random_picker)))
         };
 
         let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
-        SgRouteRule {
+        HttpRouteRuleService {
             r#match,
             service,
             ext: self.ext.clone(),
         }
     }
 }
+
 #[derive(Clone)]
-pub struct SgRouteRule {
+pub struct HttpRouteRuleService {
     pub r#match: Option<Arc<[Arc<HttpRouteMatch>]>>,
     pub service: ArcHyperService,
     pub ext: hyper::http::Extensions,
 }
 
-impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
+impl hyper::service::Service<Request<SgBody>> for HttpRouteRuleService {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = <ArcHyperService as hyper::service::Service<Request<SgBody>>>::Future;
@@ -129,68 +120,73 @@ impl hyper::service::Service<Request<SgBody>> for SgRouteRule {
 *****************************************************************************************/
 
 #[derive(Debug)]
-pub struct SgHttpBackendLayer {
-    pub plugins: Vec<SgBoxLayer>,
-    pub host: Option<String>,
-    pub port: Option<u16>,
-    pub scheme: Option<String>,
+pub struct HttpBackend {
+    pub plugins: Vec<BoxLayer>,
+    pub backend: Backend,
     pub weight: u16,
     pub timeout: Option<Duration>,
     pub ext: hyper::http::Extensions,
 }
 
-impl SgHttpBackendLayer {
-    pub fn builder() -> SgHttpBackendLayerBuilder {
-        SgHttpBackendLayerBuilder::new()
+impl HttpBackend {
+    pub fn builder() -> HttpBackendBuilder {
+        HttpBackendBuilder::new()
+    }
+    pub fn as_service(&self) -> ArcHyperService {
+        let inner_service = HttpBackendService {
+            weight: self.weight,
+            backend: self.backend.clone().into(),
+            timeout: self.timeout,
+            ext: self.ext.clone(),
+        };
+        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout.unwrap_or(DEFAULT_TIMEOUT));
+        let filtered = fold_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner_service)));
+        filtered
     }
 }
 
-impl<S> Layer<S> for SgHttpBackendLayer
-where
-    S: Clone + hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Send + Sync + 'static,
-    <S as hyper::service::Service<Request<SgBody>>>::Future: std::marker::Send,
-{
-    type Service = SgHttpBackend<ArcHyperService>;
+#[derive(Clone, Debug)]
+pub enum Backend {
+    Http { host: Option<String>, port: Option<u16>, schema: Option<String> },
+    File { path: PathBuf },
+}
 
-    fn layer(&self, inner: S) -> Self::Service {
-        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout);
-        let filtered = sg_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner)));
-        SgHttpBackend {
-            weight: self.weight,
-            host: self.host.clone().map(Into::into),
-            port: self.port,
-            scheme: self.scheme.clone().map(Into::into),
-            timeout: self.timeout,
-            inner_service: filtered,
-            ext: self.ext.clone(),
+#[derive(Clone)]
+pub struct HttpBackendService {
+    pub backend: Arc<Backend>,
+    pub weight: u16,
+    pub timeout: Option<Duration>,
+    pub ext: hyper::http::Extensions,
+}
+
+impl HttpBackendService {
+    pub fn http_default() -> Self {
+        Self {
+            backend: Arc::new(Backend::Http {
+                host: None,
+                port: None,
+                schema: None,
+            }),
+            weight: 1,
+            timeout: None,
+            ext: hyper::http::Extensions::new(),
         }
     }
 }
 
-#[derive(Clone)]
-pub struct SgHttpBackend<S> {
-    pub host: Option<Arc<str>>,
-    pub port: Option<u16>,
-    pub scheme: Option<Arc<str>>,
-    pub weight: u16,
-    pub timeout: Option<Duration>,
-    pub inner_service: S,
-    pub ext: hyper::http::Extensions,
-}
-
-impl<S> hyper::service::Service<Request<SgBody>> for SgHttpBackend<S>
-where
-    S: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + 'static,
-    <S as hyper::service::Service<Request<SgBody>>>::Future: Send + 'static,
-{
+impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
     type Response = Response<SgBody>;
     type Error = Infallible;
-    type Future = S::Future;
+    type Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>;
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
-        let map_request = match (self.host.clone(), self.port, self.scheme.clone()) {
-            (None, None, None) => None,
-            (host, port, schema) => Some(move |mut req: Request<SgBody>| {
+        let map_request = match self.backend.as_ref() {
+            Backend::Http {
+                host: None,
+                port: None,
+                schema: None,
+            } => None,
+            Backend::Http { host, port, schema } => Some(move |mut req: Request<SgBody>| {
                 if let Some(ref host) = host {
                     if let Some(reflect) = req.extensions_mut().get_mut::<Reflect>() {
                         reflect.insert(BackendHost::new(host.clone()));
@@ -222,9 +218,16 @@ where
                 }
                 req
             }),
+            Backend::File { .. } => None,
         };
-        tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter backend");
         let req = if let Some(map_request) = map_request { map_request(req) } else { req };
-        self.inner_service.call(req)
+        let backend = self.backend.clone();
+        tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter backend {backend:?}");
+        Box::pin(async move {
+            match backend.as_ref() {
+                Backend::Http { .. } => http_backend_service(req).await,
+                Backend::File { path } => Ok(static_file_service(req, path).await),
+            }
+        })
     }
 }

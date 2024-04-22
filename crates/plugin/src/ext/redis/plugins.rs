@@ -1,6 +1,6 @@
 use hyper::{header::HeaderName, Request};
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::{extension::MatchedSgRouter, layers::http_route::match_request::HttpPathMatchRewrite, SgBody};
+use spacegate_kernel::{extension::MatchedSgRouter, service::http_route::match_request::HttpPathMatchRewrite, SgBody};
 
 pub mod redis_count;
 pub mod redis_dynamic_route;

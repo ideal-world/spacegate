@@ -94,8 +94,8 @@ mod test {
     use hyper::header::AUTHORIZATION;
     use serde_json::json;
     use spacegate_kernel::{
-        layers::http_route::match_request::{HttpMethodMatch, HttpPathMatchRewrite, HttpRouteMatch},
-        service::get_echo_service,
+        backend_service::get_echo_service,
+        service::http_route::match_request::{HttpMethodMatch, HttpPathMatchRewrite, HttpRouteMatch},
     };
     use testcontainers_modules::redis::REDIS_PORT;
 

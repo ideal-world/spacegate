@@ -8,12 +8,12 @@ use std::{
 use axum_server::tls_rustls::RustlsConfig;
 use hyper::{client, Request};
 use spacegate_kernel::{
-    layers::{
-        gateway,
-        http_route::{match_request::HttpPathMatchRewrite, SgHttpBackendLayer, SgHttpRoute, SgHttpRouteRuleLayer},
-    },
+    backend_service::{get_http_backend_service, http_backend_service},
     listener::SgListen,
-    service::{get_http_backend_service, http_backend_service},
+    service::{
+        gateway,
+        http_route::{match_request::HttpPathMatchRewrite, HttpBackend, HttpRoute, HttpRouteRule},
+    },
     SgBody,
 };
 use tokio_rustls::rustls::ServerConfig;
@@ -42,15 +42,15 @@ async fn test_h2() {
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::SgGatewayLayer::builder("test_h2")
+    let gateway = gateway::Gateway::builder("test_h2")
         .http_routers([(
             "test_h2".to_string(),
-            SgHttpRoute::builder().rule(SgHttpRouteRuleLayer::builder().match_all().backend(SgHttpBackendLayer::builder().host("[::]").port(9003).build()).build()).build(),
+            HttpRoute::builder().rule(HttpRouteRule::builder().match_all().backend(HttpBackend::builder().host("[::]").port(9003).build()).build()).build(),
         )])
         .build();
     let addr = SocketAddr::from_str("[::]:9002").expect("invalid host");
 
-    let listener = SgListen::new(addr, gateway.layer(get_http_backend_service()), cancel, "listener").with_tls_config(tls_config());
+    let listener = SgListen::new(addr, gateway.as_service(), cancel, "listener").with_tls_config(tls_config());
     listener.listen().await.expect("fail to listen");
 }
 

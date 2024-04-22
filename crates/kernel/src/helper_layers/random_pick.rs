@@ -35,9 +35,13 @@ where
     type Error = S::Error;
     type Future = S::Future;
 
+    #[allow(clippy::indexing_slicing)]
     fn call(&self, req: R) -> Self::Future {
-        let index = self.picker.sample(&mut rand::thread_rng());
-        #[allow(clippy::indexing_slicing)]
-        self.services[index].call(req)
+        if self.services.len() == 1 {
+            self.services[0].call(req)
+        } else {
+            let index = self.picker.sample(&mut rand::thread_rng());
+            self.services[index].call(req)
+        }
     }
 }

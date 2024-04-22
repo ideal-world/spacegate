@@ -8,7 +8,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::{helper_layers::function::FnLayer, BoxError, BoxResult, SgBoxLayer};
+use spacegate_kernel::{helper_layers::function::FnLayer, BoxError, BoxLayer, BoxResult};
 use spacegate_model::PluginConfig;
 
 use crate::mount::{MountPoint, MountPointIndex};
@@ -58,7 +58,7 @@ pub(crate) fn drop_trace() -> (DropTracer, DropMarker) {
     )
 }
 
-pub type BoxMakeFn = Box<dyn Fn(&PluginInstance) -> Result<SgBoxLayer, BoxError> + Sync + Send + 'static>;
+pub type BoxMakeFn = Box<dyn Fn(&PluginInstance) -> Result<BoxLayer, BoxError> + Sync + Send + 'static>;
 type PluginInstanceHook = Box<dyn Fn(&PluginInstance) -> Result<(), BoxError> + Send + Sync + 'static>;
 
 #[derive(Default)]
@@ -132,8 +132,8 @@ impl PluginInstance {
             Ok(())
         }
     }
-    pub fn make(&self) -> SgBoxLayer {
-        SgBoxLayer::new(FnLayer::new(self.plugin_function.clone()))
+    pub fn make(&self) -> BoxLayer {
+        BoxLayer::new(FnLayer::new(self.plugin_function.clone()))
     }
     // if we don't clean the mount_points, it may cause a slow memory leak
     // we do it before new instance mounted

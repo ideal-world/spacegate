@@ -3,7 +3,7 @@ use std::str::FromStr;
 use hyper::header::{HeaderName, HeaderValue};
 use regex::Regex;
 use spacegate_config::model as config;
-use spacegate_kernel::{layers::http_route::match_request as kernel, BoxError};
+use spacegate_kernel::{service::http_route::match_request as kernel, BoxError};
 
 /// convert [`config::SgHttpRouteMatch`] into [`kernel::SgHttpRouteMatch`]
 pub(crate) fn convert_config_to_kernel(config_match: config::SgHttpRouteMatch) -> Result<kernel::HttpRouteMatch, BoxError> {

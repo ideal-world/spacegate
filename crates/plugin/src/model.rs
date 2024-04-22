@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use spacegate_kernel::layers::http_route::match_request::HttpPathMatchRewrite;
+use spacegate_kernel::service::http_route::match_request::HttpPathMatchRewrite;
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
