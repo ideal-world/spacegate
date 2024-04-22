@@ -33,7 +33,6 @@ pub mod plugins;
 #[cfg(feature = "schema")]
 pub use schemars;
 pub use spacegate_model::{plugin_meta, PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, PluginMetaData};
-use tracing::info;
 pub trait Plugin: Any + Sized + Send + Sync {
     /// plugin code, it should be unique repository-wise.
     const CODE: &'static str;
@@ -79,7 +78,7 @@ pub struct PluginDefinitionObject {
     pub meta: PluginMetaData,
     #[cfg(feature = "schema")]
     pub schema: Option<schemars::schema::RootSchema>,
-    pub make_pf: BoxMakePfMethod,
+    pub make_pf: Box<MakePfMethod>,
 }
 
 impl PluginDefinitionObject {
@@ -133,7 +132,6 @@ impl PluginDefinitionObject {
             Ok(Box::new(function) as InnerBoxPf)
         };
         let make_pf = Box::new(constructor);
-        let make_pf = Box::leak(make_pf);
         Self {
             code: P::CODE.into(),
             #[cfg(feature = "schema")]
@@ -154,16 +152,11 @@ pub trait PluginSchemaExt {
     fn schema() -> schemars::schema::RootSchema;
 }
 
-type BoxMakePfMethod = &'static (dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static);
+type MakePfMethod = dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static;
 #[derive(Default, Clone)]
 pub struct SgPluginRepository {
     pub plugins: Arc<RwLock<HashMap<String, PluginDefinitionObject>>>,
     pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
-}
-
-pub struct PluginInstanceRef {
-    pub id: PluginInstanceId,
-    pub digest: u64,
 }
 
 impl SgPluginRepository {
@@ -233,7 +226,6 @@ impl SgPluginRepository {
         let code = config.code();
         let id = config.id.clone();
         let Some(attr) = attr_rg.get(code) else {
-            dbg!(attr_rg);
             return Err(format!("[Sg.Plugin] unregistered sg plugin type {code}").into());
         };
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
