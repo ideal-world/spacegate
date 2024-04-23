@@ -8,15 +8,8 @@ use spacegate_kernel::{
     SgBody,
 };
 
-// use crate::instance::PluginInstanceId;
-// pub struct InstanceRef {
-//     id: PluginInstanceId,
-// }
-
 #[derive(Clone)]
 pub struct PluginFunction {
-    // refer: Arc<InstanceRef>,
-    // f: ArcSwap<dyn Fn(Request<SgBody>, Inner) -> BoxFuture<'static, Response<SgBody>> + Send + Sync + 'static>,
     f: Arc<ArcSwap<InnerBoxPf>>,
 }
 
@@ -26,15 +19,6 @@ impl PluginFunction {
         Self {
             f: Arc::new(ArcSwap::from_pointee(f)),
         }
-    }
-}
-
-impl Drop for PluginFunction {
-    fn drop(&mut self) {
-        // if Arc::strong_count(&self.refer) == 1 {
-        // try to drop the plugin instance
-        // SgPluginRepository::global().instances.
-        // }
     }
 }
 

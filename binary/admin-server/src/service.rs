@@ -3,6 +3,7 @@ use spacegate_config::service::*;
 
 use crate::{mw, state::AppState};
 
+pub mod auth;
 pub mod config;
 pub mod instance;
 pub mod plugin;
@@ -20,5 +21,6 @@ where
             "/plugin",
             plugin::router::<B>().layer(middleware::from_fn_with_state(state.clone(), mw::version_control::version_control)),
         )
+        .nest("/auth", auth::router::<B>())
         .with_state(state)
 }

@@ -100,6 +100,7 @@ pub struct Args {
     /// redis:redis://some-redis-url
     #[arg(short, long, env)]
     pub config: Config,
+    /// The dynamic lib plugins dir
     #[arg(short, long, env)]
     pub plugins: Option<PathBuf>,
 }

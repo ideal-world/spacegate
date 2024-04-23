@@ -18,10 +18,12 @@ default = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
+base64 = "0.13"
 spacegate-config = { workspace = true, features = [
     "fs",
 ] }
 axum = { workspace = true }
+axum-extra = { version = "*", features = ["cookie"] }
 tower = { version = "0.4" }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
@@ -30,6 +32,9 @@ tower-http = { version = "*", features = ["trace"] }
 serde_json = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
+jsonwebtoken = "9"
+digest = "0.10.7"
+sha2 = "0.10.8"
 [dev-dependencies]
 
 [package.metadata.docs.rs]

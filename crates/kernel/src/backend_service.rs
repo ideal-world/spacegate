@@ -1,5 +1,4 @@
 use std::convert::Infallible;
-use std::path::Path;
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
@@ -19,22 +18,12 @@ pub mod echo;
 pub mod http_client_service;
 pub mod static_file_service;
 pub mod ws_client_service;
-pub(crate) const FILE_SCHEMA: &str = "file";
-pub trait CloneHyperService<R>: hyper::service::Service<R> {
-    fn clone_box(&self) -> Box<dyn CloneHyperService<R, Response = Self::Response, Error = Self::Error, Future = Self::Future> + Send + Sync>;
-}
+pub trait SharedHyperService<R>: hyper::service::Service<R> {}
 
-impl<R, T> CloneHyperService<R> for T
-where
-    T: hyper::service::Service<R> + Send + Sync + Clone + 'static,
-{
-    fn clone_box(&self) -> Box<dyn CloneHyperService<R, Response = T::Response, Error = T::Error, Future = T::Future> + Send + Sync> {
-        Box::new(self.clone())
-    }
-}
+impl<R, T> SharedHyperService<R> for T where T: hyper::service::Service<R> + Send + Sync + 'static {}
 pub struct ArcHyperService {
-    pub boxed: Arc<
-        dyn CloneHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible, Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>> + Send + Sync,
+    pub shared: Arc<
+        dyn SharedHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible, Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>> + Send + Sync,
     >,
 }
 
@@ -46,18 +35,18 @@ impl std::fmt::Debug for ArcHyperService {
 
 impl Clone for ArcHyperService {
     fn clone(&self) -> Self {
-        Self { boxed: self.boxed.clone() }
+        Self { shared: self.shared.clone() }
     }
 }
 
 impl ArcHyperService {
     pub fn new<T>(service: T) -> Self
     where
-        T: Clone + CloneHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
+        T: SharedHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
         T::Future: Future<Output = Result<Response<SgBody>, Infallible>> + 'static + Send,
     {
         let map_fut = MapFuture::new(service, |fut| Box::pin(fut) as _);
-        Self { boxed: Arc::new(map_fut) }
+        Self { shared: Arc::new(map_fut) }
     }
 }
 
@@ -67,7 +56,7 @@ impl hyper::service::Service<Request<SgBody>> for ArcHyperService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn call(&self, req: Request<SgBody>) -> Self::Future {
-        Box::pin(self.boxed.call(req))
+        Box::pin(self.shared.call(req))
     }
 }
 
@@ -83,9 +72,6 @@ impl hyper::service::Service<Request<SgBody>> for ArcHyperService {
 pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgResponse, BoxError> {
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;
-    if req.uri().scheme_str() == Some(FILE_SCHEMA) {
-        return Ok(static_file_service::static_file_service(req, Path::new("./")).await);
-    }
     let mut client = get_client();
     let mut response = if req.headers().get(UPGRADE).is_some_and(|upgrade| upgrade.as_bytes().eq_ignore_ascii_case(b"websocket")) {
         // dump request

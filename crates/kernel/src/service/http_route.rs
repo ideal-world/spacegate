@@ -4,9 +4,9 @@ pub mod match_request;
 use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 use crate::{
-    backend_service::{http_backend_service, static_file_service::static_file_service, ArcHyperService},
+    backend_service::{get_http_backend_service, http_backend_service, static_file_service::static_file_service, ArcHyperService},
     extension::{BackendHost, Reflect},
-    helper_layers::random_pick,
+    helper_layers::balancer::{self, Balancer},
     utils::{fold_box_layers::fold_layers, schema_port::port_to_schema},
     BoxLayer, SgBody,
 };
@@ -15,6 +15,7 @@ use futures_util::future::BoxFuture;
 use hyper::{Request, Response};
 
 use tower_layer::Layer;
+use tracing::instrument;
 
 use self::{
     builder::{HttpBackendBuilder, HttpRouteBuilder, HttpRouteRuleBuilder},
@@ -61,7 +62,15 @@ pub struct HttpRouteRule {
     pub plugins: Vec<BoxLayer>,
     timeouts: Option<Duration>,
     backends: Vec<HttpBackend>,
+    balance_policy: BalancePolicyEnum,
     pub ext: hyper::http::Extensions,
+}
+
+#[derive(Debug, Default)]
+pub enum BalancePolicyEnum {
+    Random,
+    #[default]
+    IpHash,
 }
 
 impl HttpRouteRule {
@@ -70,44 +79,38 @@ impl HttpRouteRule {
     }
     pub fn as_service(&self) -> HttpRouteRuleService {
         use crate::helper_layers::timeout::TimeoutLayer;
-        let empty = self.backends.is_empty();
         let filter_layer = self.plugins.iter();
         let time_out = self.timeouts.unwrap_or(DEFAULT_TIMEOUT);
-        let service = if empty {
-            fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(HttpBackendService::http_default())))
-        } else {
-            let service_iter = self.backends.iter().map(|l| (l.weight, l.as_service()));
-            let random_picker = random_pick::RandomPick::new(service_iter);
-            fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(random_picker)))
+        let fallback = get_http_backend_service();
+        let service_iter = self.backends.iter().map(HttpBackend::as_service).collect::<Vec<_>>();
+        let balanced = match self.balance_policy {
+            BalancePolicyEnum::Random => {
+                let weights = self.backends.iter().map(|x| x.weight);
+                ArcHyperService::new(Balancer::new(balancer::Random::new(weights), service_iter, fallback))
+            }
+            BalancePolicyEnum::IpHash => ArcHyperService::new(Balancer::new(balancer::IpHash::default(), service_iter, fallback)),
         };
-
-        let r#match = self.r#match.clone().map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>());
-        HttpRouteRuleService {
-            r#match,
-            service,
-            ext: self.ext.clone(),
-        }
+        let service = fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(balanced)));
+        HttpRouteRuleService { service }
     }
 }
 
 #[derive(Clone)]
 pub struct HttpRouteRuleService {
-    pub r#match: Option<Arc<[Arc<HttpRouteMatch>]>>,
     pub service: ArcHyperService,
-    pub ext: hyper::http::Extensions,
 }
 
 impl hyper::service::Service<Request<SgBody>> for HttpRouteRuleService {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = <ArcHyperService as hyper::service::Service<Request<SgBody>>>::Future;
-
+    #[instrument("route_rule", skip_all, http.uri = req.uri(), http.method = req.method())]
     fn call(&self, req: Request<SgBody>) -> Self::Future {
-        tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter route rule");
+        tracing::trace!("enter");
         let fut = self.service.call(req);
         Box::pin(async move {
             let result = fut.await;
-            tracing::trace!("finished route rule");
+            tracing::trace!("finished");
             result
         })
     }
@@ -118,7 +121,6 @@ impl hyper::service::Service<Request<SgBody>> for HttpRouteRuleService {
                                         Backend
 
 *****************************************************************************************/
-
 #[derive(Debug)]
 pub struct HttpBackend {
     pub plugins: Vec<BoxLayer>,
@@ -179,6 +181,7 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>;
 
+    #[instrument("backend", skip_all, http.uri = req.uri(), http.method = req.method())]
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         let map_request = match self.backend.as_ref() {
             Backend::Http {
