@@ -2,7 +2,7 @@ use std::{fmt::Debug, path::PathBuf, time::Duration};
 
 use crate::BoxLayer;
 
-use super::{match_request::HttpRouteMatch, Backend, HttpBackend, HttpRoute, HttpRouteRule};
+use super::{match_request::HttpRouteMatch, Backend, BalancePolicyEnum, HttpBackend, HttpRoute, HttpRouteRule};
 
 #[derive(Debug)]
 pub struct HttpRouteBuilder {
@@ -85,6 +85,7 @@ pub struct HttpRouteRuleBuilder {
     timeouts: Option<Duration>,
     backends: Vec<HttpBackend>,
     pub extensions: hyper::http::Extensions,
+    pub balance_policy: BalancePolicyEnum,
 }
 impl Default for HttpRouteRuleBuilder {
     fn default() -> Self {
@@ -100,6 +101,7 @@ impl HttpRouteRuleBuilder {
             timeouts: None,
             backends: Vec::new(),
             extensions: Default::default(),
+            balance_policy: BalancePolicyEnum::default(),
         }
     }
     pub fn match_item(mut self, item: impl Into<HttpRouteMatch>) -> Self {
@@ -137,6 +139,10 @@ impl HttpRouteRuleBuilder {
         self.backends.extend(backend);
         self
     }
+    pub fn balance_policy(mut self, policy: BalancePolicyEnum) -> Self {
+        self.balance_policy = policy;
+        self
+    }
     pub fn build(self) -> HttpRouteRule {
         HttpRouteRule {
             r#match: self.r#match,
@@ -144,6 +150,7 @@ impl HttpRouteRuleBuilder {
             timeouts: self.timeouts,
             backends: self.backends,
             ext: self.extensions,
+            balance_policy: self.balance_policy,
         }
     }
     pub fn ext(mut self, extension: hyper::http::Extensions) -> Self {

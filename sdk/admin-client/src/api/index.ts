@@ -210,3 +210,13 @@ export async function pluginAttr(code: string): Promise<AxiosResponse<PluginAttr
 export async function pluginSchema(code: string): Promise<AxiosResponse<unknown>> {
     return Client.axiosInstance.get(`/plugin/schema/${code}`)
 }
+
+/**********************************************
+                        auth
+**********************************************/
+
+export async function authLogin(ak: string, sk: string): Promise<AxiosResponse> {
+    return Client.axiosInstance.post(`/auth/login`, {
+        ak, sk
+    })
+}

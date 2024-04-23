@@ -60,6 +60,7 @@ impl crate::PluginRepository {
         let register: libloading::Symbol<unsafe extern "Rust" fn(&crate::PluginRepository)> = lib.get(b"register")?;
         register(self);
         let lib = Box::new(lib);
+        // keep the allocated memory
         Box::leak(lib);
         Ok(())
     }

@@ -155,8 +155,8 @@ pub trait PluginSchemaExt {
 type MakePfMethod = dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static;
 #[derive(Default, Clone)]
 pub struct PluginRepository {
-    pub plugins: Arc<RwLock<HashMap<String, PluginDefinitionObject>>>,
-    pub instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
+    plugins: Arc<RwLock<HashMap<String, PluginDefinitionObject>>>,
+    instances: Arc<RwLock<HashMap<PluginInstanceId, PluginInstance>>>,
 }
 
 impl PluginRepository {
@@ -237,7 +237,6 @@ impl PluginRepository {
             let instance = PluginInstance {
                 config,
                 plugin_function: pf,
-                resource: Default::default(),
                 mount_points: Default::default(),
                 hooks: Default::default(),
             };

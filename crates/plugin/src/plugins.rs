@@ -18,5 +18,3 @@ pub mod rewrite;
 // pub mod status;
 
 pub mod static_resource;
-
-// pub mod ffi;

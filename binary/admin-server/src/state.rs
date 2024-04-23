@@ -16,10 +16,11 @@ impl ToString for PluginCode {
     }
 }
 
-#[derive(Debug)]
 pub struct AppState<B> {
     pub backend: Arc<B>,
     pub version: mw::version_control::Version,
+    pub secret: Option<Arc<[u8]>>,
+    pub sk_digest: Option<Arc<[u8; 32]>>,
     // pub plugin_schemas: Arc<RwLock<HashMap<PluginCode, serde_json::Value>>>,
 }
 
@@ -28,6 +29,8 @@ impl<B> Clone for AppState<B> {
         Self {
             backend: self.backend.clone(),
             version: self.version.clone(),
+            secret: self.secret.clone(),
+            sk_digest: self.sk_digest.clone(),
             // plugin_schemas: self.plugin_schemas.clone(),
         }
     }

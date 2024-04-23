@@ -200,21 +200,9 @@ crate::schema!(MaintenancePlugin, MaintenancePluginConfig);
 #[cfg(test)]
 mod test {
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
     // use tardis::chrono::{Duration, Local};
     // use tardis::serde_json;
     // use tardis::tokio;
-
-    
-    
 
     // #[tokio::test]
     // async fn test_config() -> Result<(), BoxError> {
