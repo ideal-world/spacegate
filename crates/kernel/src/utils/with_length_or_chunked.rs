@@ -1,5 +1,7 @@
 use crate::SgBody;
 use hyper::{header::HeaderValue, Response};
+
+/// Set the content length header or transfer encoding to chunked.
 pub fn with_length_or_chunked(resp: &mut Response<SgBody>) {
     const CHUNKED: &str = "chunked";
     resp.headers_mut().remove(hyper::header::CONTENT_LENGTH);

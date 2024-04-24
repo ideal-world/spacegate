@@ -18,9 +18,10 @@ pub mod echo;
 pub mod http_client_service;
 pub mod static_file_service;
 pub mod ws_client_service;
-pub trait SharedHyperService<R>: hyper::service::Service<R> {}
+pub trait SharedHyperService<R>: hyper::service::Service<R> + Send + Sync + 'static {}
 
 impl<R, T> SharedHyperService<R> for T where T: hyper::service::Service<R> + Send + Sync + 'static {}
+/// a service that can be shared between threads
 pub struct ArcHyperService {
     pub shared: Arc<
         dyn SharedHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible, Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>> + Send + Sync,
@@ -73,7 +74,7 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgRe
     tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "start a backend request");
     x_forwarded_for(&mut req)?;
     let mut client = get_client();
-    let mut response = if req.headers().get(UPGRADE).is_some_and(|upgrade| upgrade.as_bytes().eq_ignore_ascii_case(b"websocket")) {
+    let response = if req.headers().get(UPGRADE).is_some_and(|upgrade| upgrade.as_bytes().eq_ignore_ascii_case(b"websocket")) {
         // dump request
         let (part, body) = req.into_parts();
         let body = body.dump().await?;
@@ -100,15 +101,11 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgRe
             ws_client_service::tcp_transfer(upgrade_as_server, upgrade_as_client).await?;
             <Result<(), BoxError>>::Ok(())
         });
-        tracing::trace!(elapsed = ?resp.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend websocket forward");
         // return response to client
         resp
     } else {
-        let resp = client.request(req).await;
-        tracing::trace!(elapsed = ?resp.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend request");
-        resp
+        client.request(req).await
     };
-    response.extensions_mut().insert(unsafe { crate::extension::FromBackend::new() });
     Ok(response)
 }
 

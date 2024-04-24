@@ -58,7 +58,7 @@ impl<S> SgListen<S> {
 }
 
 #[derive(Clone)]
-pub struct HyperServiceAdapter<S>
+struct HyperServiceAdapter<S>
 where
     S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,

@@ -1,3 +1,16 @@
+/// A zero-copy query key-value iterator.
+///
+/// # Example
+/// ```rust
+/// # use spacegate_kernel::utils::QueryKvIter;
+/// # fn main() {
+/// let query = "a=1&b=2&c";
+/// let mut iter = QueryKvIter::new(query);
+/// assert_eq!(iter.next(), Some(("a", Some("1"))));
+/// assert_eq!(iter.next(), Some(("b", Some("2"))));
+/// assert_eq!(iter.next(), Some(("c", None)));
+/// # }
+/// ```
 pub struct QueryKvIter<'a> {
     inner: &'a str,
 }

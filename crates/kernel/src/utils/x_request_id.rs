@@ -7,9 +7,11 @@ use hyper::{http::HeaderValue, Request, Response};
 
 use crate::{helper_layers::function::Inner, SgBody};
 
+/// Generate a `x-request-id` header for the request and response.
 pub trait XRequestIdAlgo {
     fn generate() -> HeaderValue;
 }
+/// The header name for `x-request-id`.
 pub const X_REQUEST_ID_HEADER_NAME: &str = "x-request-id";
 /// Add a `x-request-id` header to the request and then response.
 ///

@@ -33,6 +33,37 @@ pub mod plugins;
 #[cfg(feature = "schema")]
 pub use schemars;
 pub use spacegate_model::{plugin_meta, PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, PluginMetaData};
+
+/// # Plugin Trait
+/// It's a easy way to define a plugin through this trait.
+/// You should give a unique [`code`](Plugin::CODE) for the plugin,
+/// and implement the [`call`](Plugin::call) function and the [`create`](Plugin::create) function.
+///
+/// # Example
+/// In the follow example, we add a server header for each response.
+/// ```rust
+/// # use spacegate_plugin::{Plugin, SgRequest, SgResponse, Inner, BoxError, PluginConfig};
+/// pub struct ServerHeaderPlugin {
+///     header_value: String,
+/// }
+///
+/// impl Plugin for ServerHeaderPlugin {
+///     const CODE: &'static str = "server-header";
+///     async fn call(&self, req: SgRequest, inner: Inner) -> Result<SgResponse, BoxError> {
+///         let mut resp = inner.call(req).await;    
+///         resp.headers_mut().insert("server", self.header_value.parse()?);
+///         Ok(resp)
+///     }
+///     fn create(plugin_config: PluginConfig) -> Result<Self, BoxError> {
+///         let Some(header_value) = plugin_config.spec.get("header_value") else {
+///             return Err("missing header_value".into())
+///         };
+///         Ok(Self {
+///            header_value: header_value.as_str().unwrap_or("spacegate").to_string(),
+///         })
+///     }
+/// }
+/// ```
 pub trait Plugin: Any + Sized + Send + Sync {
     /// plugin code, it should be unique repository-wise.
     const CODE: &'static str;
@@ -71,7 +102,7 @@ pub trait Plugin: Any + Sized + Send + Sync {
     }
 }
 
-/// Plugin Attributes
+/// Plugin Trait Object
 pub struct PluginDefinitionObject {
     pub mono: bool,
     pub code: Cow<'static, str>,
@@ -118,7 +149,9 @@ impl PluginDefinitionObject {
             let plugin = Arc::new(P::create(config)?);
             let function = move |req: Request<SgBody>, inner: Inner| {
                 let plugin = plugin.clone();
+                let plugin_span = tracing::span!(tracing::Level::INFO, "plugin", code = P::CODE);
                 let task = async move {
+                    let _entered = plugin_span.enter();
                     match plugin.call(req, inner).await {
                         Ok(resp) => resp,
                         Err(e) => {
@@ -152,7 +185,12 @@ pub trait PluginSchemaExt {
     fn schema() -> schemars::schema::RootSchema;
 }
 
-type MakePfMethod = dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static;
+pub type MakePfMethod = dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static;
+
+/// # Plugin Repository
+/// A repository to manage plugins, it stores plugin definitions and instances.
+///
+/// You can get a global instance through [`PluginRepository::global`].
 #[derive(Default, Clone)]
 pub struct PluginRepository {
     plugins: Arc<RwLock<HashMap<String, PluginDefinitionObject>>>,
@@ -160,6 +198,9 @@ pub struct PluginRepository {
 }
 
 impl PluginRepository {
+    /// Get a global instance of this repository.
+    ///
+    /// Once the repository is initialized, it will register all plugins in this crate.
     pub fn global() -> &'static Self {
         static INIT: OnceLock<PluginRepository> = OnceLock::new();
         INIT.get_or_init(|| {
@@ -169,6 +210,7 @@ impl PluginRepository {
         })
     }
 
+    /// register all plugins in this crates
     pub fn register_prelude(&self) {
         self.register::<plugins::static_resource::StaticResourcePlugin>();
         #[cfg(feature = "limit")]
@@ -198,20 +240,24 @@ impl PluginRepository {
         }
     }
 
+    /// create a new empty repository
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// register by [`Plugin`] trait
     pub fn register<P: Plugin>(&self) {
         self.register_custom(PluginDefinitionObject::from_trait::<P>())
     }
 
+    /// register a custom plugin
     pub fn register_custom<A: Into<PluginDefinitionObject>>(&self, attr: A) {
         let attr: PluginDefinitionObject = attr.into();
         let mut map = self.plugins.write().expect("SgPluginRepository register error");
         let _old_attr = map.insert(attr.code.to_string(), attr);
     }
 
+    /// clear all instances
     pub fn clear_instances(&self) {
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         for (_, inst) in instances.drain() {
@@ -221,6 +267,7 @@ impl PluginRepository {
         }
     }
 
+    /// create or update a plugin instance by config
     pub fn create_or_update_instance(&self, config: PluginConfig) -> Result<(), BoxError> {
         let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
         let code = config.code();
@@ -246,6 +293,7 @@ impl PluginRepository {
         Ok(())
     }
 
+    /// remove a plugin instance by id
     pub fn remove_instance(&self, id: &PluginInstanceId) -> Result<HashSet<MountPointIndex>, BoxError> {
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.remove(id) {
@@ -256,6 +304,7 @@ impl PluginRepository {
         }
     }
 
+    /// mount a plugin instance to a mount point
     pub fn mount<M: MountPoint>(&self, mount_point: &mut M, mount_index: MountPointIndex, id: PluginInstanceId) -> Result<(), BoxError> {
         let attr_rg = self.plugins.read().expect("SgPluginRepository register error");
         let code = id.code.as_ref();

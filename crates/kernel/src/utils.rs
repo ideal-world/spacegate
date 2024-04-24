@@ -2,6 +2,7 @@ pub mod fold_box_layers;
 mod never;
 pub mod query_kv;
 pub use never::never;
+pub use query_kv::QueryKvIter;
 pub mod schema_port;
 mod x_forwarded_for;
 pub use x_forwarded_for::x_forwarded_for;

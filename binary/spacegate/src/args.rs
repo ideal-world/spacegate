@@ -86,6 +86,8 @@ impl<'de> Deserialize<'de> for Config {
         Config::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
+
+/// Spacegate start up arguments
 #[derive(Debug, Serialize, Deserialize, Clone, Parser)]
 #[command(version, about, long_about = None)]
 pub struct Args {
@@ -93,11 +95,11 @@ pub struct Args {
     ///
     /// # Example
     /// ## File
-    /// file:/path/to/dir
+    /// `-c file:/path/to/dir`
     /// ## K8s
-    /// k8s:namespace
+    /// `-c k8s:namespace`
     /// ## Redis
-    /// redis:redis://some-redis-url
+    /// `-c redis:redis://some-redis-url`
     #[arg(short, long, env)]
     pub config: Config,
     /// The dynamic lib plugins dir
