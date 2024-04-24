@@ -41,9 +41,10 @@ impl crate::PluginRepository {
     /// # Usage
     /// The library must implement a function named `register` with the following signature:
     /// ```rust no_run
+    /// # use spacegate_plugin::PluginRepository;
     /// #[no_mangle]
-    /// pub extern "Rust" fn register(repo: &SgPluginRepository) {
-    ///     ...
+    /// pub extern "Rust" fn register(repo: &PluginRepository) {
+    ///     
     /// }
     /// ```
     /// A way to define this function is using the [`crate::dynamic_lib!`] macro.

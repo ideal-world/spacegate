@@ -1,13 +1,24 @@
+//! # Spacegate kernel crate.
+//!
+//! This crate provides the core functionality of spacegate.
+
 #![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
 #![warn(clippy::missing_errors_doc, clippy::indexing_slicing)]
-// pub mod config;
+/// https services, ws services, and static file services.
 pub mod backend_service;
+/// a boxed body
 pub mod body;
+/// extensions for request and response
 pub mod extension;
+/// extractors for request
 pub mod extractor;
+/// helper layers
 pub mod helper_layers;
+/// tcp listener
 pub mod listener;
+/// gateway service
 pub mod service;
+/// util functions and structs
 pub mod utils;
 
 pub use backend_service::ArcHyperService;
@@ -22,11 +33,15 @@ use hyper::{body::Bytes, Request, Response, StatusCode};
 use tower_layer::layer_fn;
 
 pub type BoxResult<T> = Result<T, BoxError>;
+/// A boxed error.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
+/// Alias for a request with a boxed body.
 pub type SgRequest = Request<SgBody>;
+/// Alias for a response with a boxed body.
 pub type SgResponse = Response<SgBody>;
 
+/// Provides extension methods for [`Request`](hyper::Request).
 pub trait SgRequestExt {
     fn with_reflect(&mut self);
     fn reflect_mut(&mut self) -> &mut Reflect;
@@ -72,6 +87,7 @@ impl SgRequestExt for SgRequest {
     }
 }
 
+/// Provides extension methods for [`Response`](hyper::Response).
 pub trait SgResponseExt {
     fn with_code_message(code: StatusCode, message: impl Into<Bytes>) -> Self;
     fn bad_gateway<E: std::error::Error>(e: E) -> Self
@@ -94,14 +110,13 @@ impl SgResponseExt for Response<SgBody> {
     }
 }
 
-pub type ReqOrResp = Result<Request<SgBody>, Response<SgBody>>;
-
+/// A boxed [`Layer`] that can be used as a plugin layer in gateway.
 pub struct BoxLayer {
     boxed: Box<dyn Layer<ArcHyperService, Service = ArcHyperService> + Send + Sync + 'static>,
 }
 
 impl BoxLayer {
-    /// Create a new [`SgBoxLayer`].
+    /// Create a new [`BoxLayer`].
     pub fn new<L>(inner_layer: L) -> Self
     where
         L: Layer<ArcHyperService> + Send + Sync + 'static,
@@ -115,15 +130,17 @@ impl BoxLayer {
 
         Self { boxed: Box::new(layer) }
     }
+
+    /// Create a new [`BoxLayer`] with an arc wrapped layer.
     #[must_use]
-    pub fn layer_boxed(&self, inner: ArcHyperService) -> ArcHyperService {
+    pub fn layer_shared(&self, inner: ArcHyperService) -> ArcHyperService {
         self.boxed.layer(inner)
     }
 }
 
 impl<S> Layer<S> for BoxLayer
 where
-    S: Clone + hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
+    S: hyper::service::Service<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
     <S as hyper::service::Service<hyper::Request<SgBody>>>::Future: std::marker::Send,
 {
     type Service = ArcHyperService;

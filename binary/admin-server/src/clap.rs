@@ -50,8 +50,6 @@ impl FromStr for Base64Decoded {
     }
 }
 
-pub struct Sk(String);
-
 #[derive(Debug, Clone)]
 pub struct Schemas(PathBuf);
 
