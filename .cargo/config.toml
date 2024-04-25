@@ -3,3 +3,6 @@ TS_RS_EXPORT_DIR = { value = "./sdk/admin-client/src/model", relative = true }
 CONFIG = "file:./resource/local-example"
 PLUGINS = "./target/debug"
 RUST_LOG = "trace"
+FORMAT = "json"
+KEY = "moCZihByqvXt4dfMYjOz75fzBi0eul6Ffg2EoUzWyqA="
+SK = "password"

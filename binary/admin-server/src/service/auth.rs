@@ -39,7 +39,10 @@ async fn login<B>(State(AppState { secret, sk_digest, .. }): State<AppState<B>>,
             &EncodingKey::from_secret(sec.as_ref()),
         )
         .map_err(InternalError::boxed)?;
-        response.headers_mut().insert(SET_COOKIE, HeaderValue::from_str(&format!("jwt={jwt}; HttpOnly")).expect("invalid jwt"));
+        response.headers_mut().insert(
+            SET_COOKIE,
+            HeaderValue::from_str(&format!("jwt={jwt}; path=/; HttpOnly; Max-Age=3600")).expect("invalid jwt"),
+        );
     }
     Ok(response)
 }
