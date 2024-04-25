@@ -240,3 +240,11 @@ export async function authLogin(ak: string, sk: string): Promise<AxiosResponse> 
         ak, sk
     })
 }
+
+/**********************************************
+                        instance
+**********************************************/
+
+export async function instanceHealth(): Promise<AxiosResponse<boolean>> {
+    return Client.axiosInstance.get(`/instance/health`)
+}
