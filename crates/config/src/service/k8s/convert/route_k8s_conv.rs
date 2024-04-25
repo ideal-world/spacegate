@@ -119,7 +119,7 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
                             if let Some(rewrite_path) = url_rewrite.path {
                                 match m_p {
                                     SgHttpPathMatch::Exact { value, replace } => match rewrite_path {
-                                        HttpPathModifier::ReplaceFullPath { replace_full_path } => todo!(),
+                                        HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathMatch::Exact { name:, value: (), replace: () },
                                         HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => todo!(),
                                     },
                                     SgHttpPathMatch::Prefix { value, replace } => todo!(),
