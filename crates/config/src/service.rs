@@ -219,6 +219,9 @@ pub trait CreateListener {
 
 pub trait Discovery {
     fn api_url(&self) -> impl Future<Output = Result<Option<String>, BoxError>> + Send;
+    fn backends(&self) -> impl Future<Output = Result<Vec<BackendHost>, BoxError>> + Send {
+        std::future::ready(Ok(vec![]))
+    }
 }
 
 pub type ListenEvent = (ConfigType, ConfigEventType);

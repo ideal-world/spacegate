@@ -1,17 +1,36 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use axum::{extract::State, routing::get, Json, Router};
 use serde_json::Value;
-use spacegate_config::{service::Discovery, BoxError, PluginAttributes};
+use spacegate_config::{service::Discovery, BackendHost, BoxError, PluginAttributes};
+use tokio::{sync::RwLock, time::Instant};
 
 use crate::{error::InternalError, state::AppState};
 
-pub struct K8sInstance {
-    pub name: Arc<str>,
-    pub namespace: Arc<str>,
-}
-
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_HEALTH_CACHE_EXPIRE: Duration = Duration::from_secs(1);
+static HEALTH_CACHE: OnceLock<Arc<RwLock<(bool, Instant)>>> = OnceLock::new();
+fn health_cache() -> Arc<RwLock<(bool, Instant)>> {
+    HEALTH_CACHE.get_or_init(|| Arc::new(RwLock::new((false, Instant::now())))).clone()
+}
+async fn set_health_cache(health: bool) {
+    let expire = Instant::now() + DEFAULT_HEALTH_CACHE_EXPIRE;
+    let cache = health_cache();
+    let mut wg = cache.write().await;
+    *wg = (health, expire)
+}
+async fn get_health_cache() -> Option<bool> {
+    let cache = health_cache();
+    let (health, expire) = *cache.read().await;
+    if expire.elapsed() >= Duration::ZERO {
+        None
+    } else {
+        Some(health)
+    }
+}
 
 pub trait Instance: Send + Sync + 'static {
     fn api_url(&self) -> &str;
@@ -35,10 +54,16 @@ impl dyn Instance {
     }
     /// check server health
     pub async fn health(&self) -> bool {
-        use reqwest::Client;
-        let client = Client::default();
-        let timeout = self.timeout();
-        client.get(self.url("/health")).timeout(timeout).send().await.is_ok_and(|x| x.status().is_success())
+        if let Some(health) = get_health_cache().await {
+            health
+        } else {
+            use reqwest::Client;
+            let client = Client::default();
+            let timeout = self.timeout();
+            let health = client.get(self.url("/health")).timeout(timeout).send().await.is_ok_and(|x| x.status().is_success());
+            set_health_cache(health).await;
+            health
+        }
     }
 
     pub async fn schema(&self, plugin_code: &str) -> Result<Option<Value>, BoxError> {
@@ -67,9 +92,15 @@ async fn health<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>
     }
 }
 
+async fn backends<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<BackendHost>>, InternalError> {
+    backend.backends().await.map(Json).map_err(InternalError)
+}
+
 pub fn router<B>() -> axum::Router<AppState<B>>
 where
     B: Discovery + Send + Sync + 'static,
 {
-    Router::new().route("/health", get(health::<B>))
+    Router::new()
+    .route("/health", get(health::<B>))
+    .route("/backends", get(backends::<B>))
 }
