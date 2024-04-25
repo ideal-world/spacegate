@@ -1,5 +1,5 @@
 import axios, { AxiosResponse, AxiosInstance, AxiosError } from 'axios'
-import { Config, ConfigItem, PluginAttributes, SgGateway, SgHttpRoute } from '../model'
+import { BackendHost, Config, ConfigItem, PluginAttributes, SgGateway, SgHttpRoute } from '../model'
 import { PluginConfig } from '../model/PluginConfig'
 import { PluginInstanceName } from '../model/PluginInstanceName'
 import { PluginInstanceId } from '../model/PluginInstanceId'
@@ -247,4 +247,8 @@ export async function authLogin(ak: string, sk: string): Promise<AxiosResponse> 
 
 export async function instanceHealth(): Promise<AxiosResponse<boolean>> {
     return Client.axiosInstance.get(`/instance/health`)
+}
+
+export async function instanceBackends(): Promise<AxiosResponse<Array<BackendHost>>> {
+    return Client.axiosInstance.get(`/instance/backends`)
 }

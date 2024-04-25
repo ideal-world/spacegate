@@ -36,7 +36,7 @@ where
         let server = spacegate_ext_axum::GlobalAxumServer::default();
         server
             .modify_router(|router| {
-                router.fallback(axum::routing::any(axum::response::Html(axum::body::Bytes::from_static(include_bytes!(
+                router.route("/health", axum::routing::get(axum::Json(true))).fallback(axum::routing::any(axum::response::Html(axum::body::Bytes::from_static(include_bytes!(
                     "./config/web-server-index.html"
                 )))))
             })
