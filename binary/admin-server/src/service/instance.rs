@@ -100,7 +100,5 @@ pub fn router<B>() -> axum::Router<AppState<B>>
 where
     B: Discovery + Send + Sync + 'static,
 {
-    Router::new()
-    .route("/health", get(health::<B>))
-    .route("/backends", get(backends::<B>))
+    Router::new().route("/health", get(health::<B>)).route("/backends", get(backends::<B>))
 }
