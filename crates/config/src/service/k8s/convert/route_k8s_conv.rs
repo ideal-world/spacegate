@@ -98,9 +98,48 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
     }
 
     fn from_kube_httproute(rule: http_spaceroute::HttpRouteRule) -> BoxResult<SgHttpRouteRule> {
+        let (ext_plugins, legacy_plugins): (Vec<_>, Vec<_>) =
+            rule.filters.map(|f_vec| f_vec.into_iter().partition(|f| matches!(f, HttpRouteFilter::ExtensionRef { extension_ref: _ }))).unwrap_or_default();
+        let matches = if let Some(mut matches) = rule.matches {
+            if matches.len() > 1 {
+                if legacy_plugins.iter().find(|p| matches!(p, HttpRouteFilter::URLRewrite { url_rewrite: _ })).is_some() {
+                    return Err("url_rewrite is not supported with multiple matches".into());
+                }
+                if legacy_plugins.iter().find(|p| matches!(p, HttpRouteFilter::RequestHeaderModifier { request_header_modifier: _ })).is_some() {
+                    return Err("request_header_modifier is not supported with multiple matches".into());
+                }
+                Some(matches.into_iter().map(|m| SgHttpRouteMatch::from_kube_httproute(m)).collect::<Vec<_>>())
+            } else if let Some(match_) = matches.pop() {
+                let mut m = SgHttpRouteMatch::from_kube_httproute(match_);
+                if legacy_plugins.iter().filter(|p| matches!(p, HttpRouteFilter::URLRewrite { url_rewrite: _ })).count() > 1 {
+                    return Err("url_rewrite can only have one in each rule".into());
+                } else if let Some(url_rewrite) = legacy_plugins.iter().find(|p| matches!(p, HttpRouteFilter::URLRewrite { url_rewrite: _ })) {
+                    m.path.map(|m_p| match url_rewrite {
+                        HttpRouteFilter::URLRewrite { url_rewrite } => {
+                            if let Some(rewrite_path) = url_rewrite.path {
+                                match m_p {
+                                    SgHttpPathMatch::Exact { value, replace } => match rewrite_path {
+                                        HttpPathModifier::ReplaceFullPath { replace_full_path } => todo!(),
+                                        HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => todo!(),
+                                    },
+                                    SgHttpPathMatch::Prefix { value, replace } => todo!(),
+                                    SgHttpPathMatch::RegExp { value, replace } => todo!(),
+                                }
+                            }
+                        }
+                        _ => unreachable!(),
+                    });
+                }
+                Some(vec![m])
+            } else {
+                Some(vec![])
+            }
+        } else {
+            None
+        };
         Ok(SgHttpRouteRule {
-            matches: rule.matches.map(|m_vec| m_vec.into_iter().map(SgHttpRouteMatch::from_kube_httproute).collect::<Vec<_>>()),
-            plugins: rule.filters.map(|f_vec| f_vec.into_iter().map(PluginConfig::from_http_route_filter).collect::<BoxResult<Vec<_>>>()).transpose()?.unwrap_or_default(),
+            matches,
+            plugins: ext_plugins.into_iter().filter_map(|f| PluginInstanceId::from_http_route_filter(f)).collect(),
             backends: rule
                 .backend_refs
                 .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<BoxResult<Vec<_>>>())
@@ -271,8 +310,8 @@ impl SgBackendRefConv for SgBackendRef {
         let backend_inner_ref = match self.host {
             BackendHost::Host { host } => {
                 let kind = match self.protocol {
-                    Some(SgBackendProtocol::Https) => Some(constants::BANCKEND_KIND_EXTERNAL_HTTPS.to_string()),
-                    _ => Some(constants::BANCKEND_KIND_EXTERNAL_HTTP.to_string()),
+                    Some(SgBackendProtocol::Https) => Some(constants::BACKEND_KIND_EXTERNAL_HTTPS.to_string()),
+                    _ => Some(constants::BACKEND_KIND_EXTERNAL_HTTP.to_string()),
                 };
                 BackendObjectReference {
                     group: None,
@@ -306,15 +345,15 @@ impl SgBackendRefConv for SgBackendRef {
             .map(|backend| {
                 let (protocol, backend_host) = if let Some(kind) = backend.inner.kind.as_ref() {
                     match kind.as_str() {
-                        constants::BANCKEND_KIND_SERVICE => (
+                        constants::BACKEND_KIND_SERVICE => (
                             None,
                             BackendHost::K8sService(K8sServiceData {
                                 name: backend.inner.name,
                                 namespace: backend.inner.namespace,
                             }),
                         ),
-                        constants::BANCKEND_KIND_EXTERNAL_HTTP => (Some(gateway::SgBackendProtocol::Http), BackendHost::Host { host: backend.inner.name }),
-                        constants::BANCKEND_KIND_EXTERNAL_HTTPS => (Some(gateway::SgBackendProtocol::Https), BackendHost::Host { host: backend.inner.name }),
+                        constants::BACKEND_KIND_EXTERNAL_HTTP => (Some(gateway::SgBackendProtocol::Http), BackendHost::Host { host: backend.inner.name }),
+                        constants::BACKEND_KIND_EXTERNAL_HTTPS => (Some(gateway::SgBackendProtocol::Https), BackendHost::Host { host: backend.inner.name }),
                         _ => (None, BackendHost::Host { host: backend.inner.name }),
                     }
                 } else {

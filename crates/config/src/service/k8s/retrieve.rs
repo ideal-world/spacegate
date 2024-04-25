@@ -4,7 +4,13 @@ use http_route::SgHttpRouteRule;
 use k8s_gateway_api::{Gateway, HttpRoute, Listener};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
-use spacegate_model::ext::k8s::crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter};
+use spacegate_model::{
+    ext::k8s::crd::{
+        http_spaceroute::HttpSpaceroute,
+        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
+    },
+    PluginInstanceId,
+};
 
 use crate::{
     constants::{self, GATEWAY_CLASS_NAME},
@@ -13,7 +19,10 @@ use crate::{
     BoxError, BoxResult,
 };
 
-use super::K8s;
+use super::{
+    convert::{filter_k8s_conv::PluginConfigConv, gateway_k8s_conv::SgParametersConv as _, route_k8s_conv::SgHttpRouteRuleConv as _},
+    K8s,
+};
 
 impl Retrieve for K8s {
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> BoxResult<Option<SgGateway>> {
@@ -124,39 +133,27 @@ impl Retrieve for K8s {
     }
 
     async fn retrieve_all_plugins(&self) -> Result<Vec<PluginConfig>, BoxError> {
-      let filter_api: Api<SgFilter> = self.get_namespace_api();
-      
-      let result = filter_api.list(&ListParams::default()).await?.iter().map(|gateway| gateway.to_pluginconfig()).collect();
+        let filter_api: Api<SgFilter> = self.get_namespace_api();
 
-      Ok(result)
+        let result = filter_api.list(&ListParams::default()).await?.into_iter().filter_map(|filter_obj| PluginConfig::from_first_filter_obj(filter_obj)).collect();
+        Ok(result)
     }
 
     async fn retrieve_plugin(&self, id: &spacegate_model::PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {
         let filter_api: Api<SgFilter> = self.get_namespace_api();
 
-        match id.name {
-            spacegate_model::PluginInstanceName::Anon { uid } => Ok(None),
+        match &id.name {
+            spacegate_model::PluginInstanceName::Anon { uid: _ } => Ok(None),
             spacegate_model::PluginInstanceName::Named { name } => {
-                let result = if let Some(gateway_obj) = filter_api.get_opt(&name).await?.and_then(|gateway_obj| {
-                    if gateway_obj.spec. == GATEWAY_CLASS_NAME {
-                        Some(gateway_obj)
-                    } else {
-                        None
-                    }
-                }) {
-                    Some()
-                } else {
-                    None
-                }
+                let result = filter_api.get_opt(&name).await?.and_then(|filter_obj| PluginConfig::from_first_filter_obj(filter_obj));
                 Ok(result)
             }
             spacegate_model::PluginInstanceName::Mono => Ok(None),
         }
-
     }
 
     async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, BoxError> {
-        todo!()
+        Ok(self.retrieve_all_plugins().await?.into_iter().filter(|p| p.code() == code).collect())
     }
 }
 
@@ -180,17 +177,17 @@ impl K8s {
     }
 
     async fn kube_httpspaceroute_2_sg_route(&self, httpspace_route: HttpSpaceroute) -> BoxResult<SgHttpRoute> {
+        let route_name = httpspace_route.name_any();
         let kind = if let Some(kind) = httpspace_route.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
             kind.clone()
         } else {
             SgFilterTargetKind::Httpspaceroute.into()
         };
         let priority = httpspace_route.annotations().get(crate::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i16>().ok()).unwrap_or(0);
-        let gateway_refs = httpspace_route.spec.inner.parent_refs.clone().unwrap_or_default();
-        let filters = self
+        let plugins = self
             .retrieve_config_item_filters(K8sSgFilterSpecTargetRef {
                 kind,
-                name: httpspace_route.name_any(),
+                name: route_name.clone(),
                 namespace: httpspace_route.namespace(),
             })
             .await?;
@@ -204,7 +201,7 @@ impl K8s {
                 .transpose()?
                 .unwrap_or_default(),
             priority,
-            route_name: httpspace_route.name_any(),
+            route_name,
         })
     }
 
@@ -212,13 +209,13 @@ impl K8s {
         self.kube_httpspaceroute_2_sg_route(http_route.into()).await
     }
 
-    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<PluginConfig>> {
+    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<PluginInstanceId>> {
         let kind = target.kind;
         let name = target.name;
         let namespace = target.namespace.unwrap_or(self.namespace.to_string());
 
         let filter_api: Api<SgFilter> = self.get_all_api();
-        let filter_objs: Vec<PluginConfig> = filter_api
+        let plugin_ids: Vec<PluginInstanceId> = filter_api
             .list(&ListParams::default())
             .await
             .map_err(Box::new)?
@@ -230,19 +227,19 @@ impl K8s {
                         && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
                 })
             })
-            .flat_map(|filter_obj| filter_obj.spec.filters.into_iter().map(|filter| PluginConfig { spec: filter.config, id: todo!() }))
+            .flat_map(|filter_obj| PluginConfig::from_first_filter_obj(filter_obj).map(|f| f.into()))
             .collect();
 
-        if !filter_objs.is_empty() {
+        if !plugin_ids.is_empty() {
             let mut filter_vec = String::new();
-            filter_objs.clone().into_iter().for_each(|filter| filter_vec.push_str(&format!("Filter{{code: {},name:{}}},", filter.code, filter.name.unwrap_or("None".to_string()))));
+            plugin_ids.clone().into_iter().for_each(|id| filter_vec.push_str(&format!("plugin:{{id:{}}},", id.to_string())));
             tracing::trace!("[SG.Common] {namespace}.{kind}.{name} filter found: {}", filter_vec.trim_end_matches(','));
         }
 
-        if filter_objs.is_empty() {
+        if plugin_ids.is_empty() {
             Ok(vec![])
         } else {
-            Ok(filter_objs)
+            Ok(plugin_ids)
         }
     }
 

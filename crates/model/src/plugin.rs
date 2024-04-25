@@ -53,6 +53,12 @@ impl ToString for PluginInstanceId {
     }
 }
 
+impl From<PluginConfig> for PluginInstanceId {
+    fn from(value: PluginConfig) -> Self {
+        value.id
+    }
+}
+
 impl PluginInstanceId {
     pub fn new(code: impl Into<Cow<'static, str>>, name: PluginInstanceName) -> Self {
         PluginInstanceId { code: code.into(), name }

@@ -37,9 +37,6 @@ pub struct K8sSgFilterSpecTargetRef {
     pub name: String,
     /// if namespace is None, use SgFilter's namespace
     pub namespace: Option<String>,
-    /// if kind is `HttpspacerouteRule` or `HttpspacerouteBackend`, parent_ref must be set, otherwise target_ref will be ignored
-    /// value should be `Httpspaceroute`'s name
-    pub parent_ref: Option<String>,
 }
 
 impl PartialEq for K8sSgFilterSpecTargetRef {
