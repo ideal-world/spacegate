@@ -8,6 +8,7 @@ members = [
   "crates/model",
   "crates/config",
   "crates/shell",
+  "examples/sayhello"
 ]
 resolver = "2"
 
@@ -37,7 +38,6 @@ rust-version = "1.64"
 [workspace.dependencies]
 spacegate-kernel = { path = "./crates/kernel" }
 spacegate-plugin = { path = "./crates/plugin" }
-spacegate-model = { path = "./crates/model" }
 spacegate-config = { path = "./crates/config" }
 spacegate-shell = { path = "./crates/shell" }
 spacegate-ext-axum = { path = "./crates/extension/axum" }
@@ -51,11 +51,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 toml = { version = "0.8", features = ["preserve_order"] }
 lazy_static = { version = "1.4" }
-async-trait = { version = "0.1" }
-itertools = { version = "0" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = { version = "0" }
-urlencoding = { version = "2" }
 
 
 # Time
@@ -69,9 +66,6 @@ hyper-util = { version = "0" }
 
 # ws
 tokio-tungstenite = { version = "0" }
-
-# tower
-tower-service = { version = "0.3" }
 tower-layer = { version = "0.3" }
 tower-http = { version = "0.5" }
 tower = { version = "0.4" }
@@ -86,12 +80,6 @@ schemars = { version = "0.8.6" }
 # Test
 reqwest = { version = "0.11", features = ["json", "gzip", "brotli"] }
 testcontainers-modules = { version = "0.3" }
-async-compression = { version = "0.3.13",  features = [
-  "tokio",
-  "gzip",
-  "deflate",
-  "brotli",
-] }
 
 
 bytes = { version = "1" }
@@ -100,9 +88,6 @@ bytes = { version = "1" }
 hyper-rustls = { version = "0.26" }
 rustls-pemfile = "2"
 tokio-rustls = { version = "0.25" }
-
-# serde
-duration-str = "0.7.1"
 
 # regex
 regex = { version = "1" }
@@ -119,8 +104,6 @@ ipnet = { version = "2" }
 # notify
 notify = { version = "6.1.1" }
 
-# redis
-deadpool-redis = { version = "0.14" }
-
 # web-server
 axum = "0.7.4"
+

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use spacegate_ext_axum::{
@@ -28,16 +28,16 @@ pub async fn register_plugin_routes() {
         .await
 }
 
-pub async fn repo_snapshot() -> axum::Json<HashMap<Cow<'static, str>, PluginRepoSnapshot>> {
-    axum::Json(crate::SgPluginRepository::global().repo_snapshot())
+pub async fn repo_snapshot() -> axum::Json<HashMap<String, PluginRepoSnapshot>> {
+    axum::Json(crate::PluginRepository::global().repo_snapshot())
 }
 
 pub async fn instance_snapshot(Query(instance_id): Query<PluginInstanceId>) -> axum::Json<Option<PluginInstanceSnapshot>> {
-    axum::Json(crate::SgPluginRepository::global().instance_snapshot(instance_id))
+    axum::Json(crate::PluginRepository::global().instance_snapshot(instance_id))
 }
 
 pub async fn plugin_list() -> axum::Json<Vec<PluginAttributes>> {
-    axum::Json(crate::SgPluginRepository::global().plugin_list())
+    axum::Json(crate::PluginRepository::global().plugin_list())
 }
 
 #[cfg(feature = "schema")]
@@ -48,7 +48,6 @@ pub struct PluginCode {
 
 #[cfg(feature = "schema")]
 pub async fn plugin_schema(Query(PluginCode { code }): Query<PluginCode>) -> axum::Json<Option<schemars::schema::RootSchema>> {
-    let code: Cow<'static, str> = code.into();
-    let schema = crate::SgPluginRepository::global().plugins.read().expect("poisoned").get(&code).and_then(|p| p.schema.clone());
+    let schema = crate::PluginRepository::global().plugins.read().expect("poisoned").get(&code).and_then(|p| p.schema.clone());
     axum::Json(schema)
 }

@@ -23,6 +23,10 @@
         {
           "name": "add-server-header",
           "code": "header-modifier"
+        },
+        {
+          "name": "say-hello",
+          "code": "sayhello"
         }
       ],
       "routes": [
@@ -36,8 +40,8 @@
                 {
                   "path": {
                     "kind": "Prefix",
-                    "value": "/",
-                    "replace": null
+                    "value": "/doc",
+                    "replace": "/"
                   },
                   "header": null,
                   "query": null,
@@ -49,7 +53,7 @@
                 {
                   "host": {
                     "kind": "File",
-                    "path": "./"
+                    "path": "./target/doc"
                   },
                   "port": 80,
                   "timeout_ms": null,
@@ -111,16 +115,6 @@
   "plugins": {
     "named": [
       {
-        "name": "new-instance-2",
-        "code": "limit",
-        "spec": {}
-      },
-      {
-        "name": "new-instance",
-        "code": "limit",
-        "spec": {}
-      },
-      {
         "name": "rewrite-test",
         "code": "rewrite",
         "spec": {}
@@ -146,6 +140,11 @@
           },
           "content_type": "text/html"
         }
+      },
+      {
+        "name": "say-hello",
+        "code": "sayhello",
+        "spec": null
       }
     ],
     "mono": []

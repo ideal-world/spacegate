@@ -3,6 +3,7 @@ use std::{convert::Infallible, ops::Index};
 use futures_util::future::BoxFuture;
 pub use hyper::http::request::Parts;
 use hyper::{Request, Response};
+use tracing::{instrument, Instrument};
 
 use crate::{extension::Matched, SgBody};
 
@@ -44,26 +45,18 @@ where
     type Error = Infallible;
     type Response = Response<SgBody>;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+    #[instrument("router", skip_all, fields(http.uri =? req.uri(), http.method =? req.method()))]
     fn call(&self, mut req: Request<SgBody>) -> Self::Future {
-        tracing::trace!("enter route {req:?}");
         let fut: Self::Future = if let Some(index) = self.router.route(&mut req) {
             req.extensions_mut().insert(Matched {
                 index: index.clone(),
                 router: self.router.clone(),
             });
             let fut = self.services.index(index).call(req);
-            Box::pin(async move {
-                let result = fut.await;
-                tracing::trace!("leave route");
-                result
-            })
+            Box::pin(fut.in_current_span())
         } else {
             let fut = self.fallback.call(req);
-            Box::pin(async move {
-                let result = fut.await;
-                tracing::trace!("leave route");
-                result
-            })
+            Box::pin(fut.in_current_span())
         };
         fut
     }

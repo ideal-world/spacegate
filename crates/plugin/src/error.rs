@@ -5,6 +5,17 @@ use spacegate_kernel::{SgBody, SgResponseExt};
 
 use crate::Plugin;
 
+/// # Usage
+/// 1. Create a plugin error with a status code
+/// ```rust ignore
+/// let x = result.map_err(PluginError::status::<MyPlugin, 404>);
+/// ```
+/// 2. Create a plugin error with a status 500
+/// ```rust ignore
+/// let x = result.map_err(PluginError::internal_error::<MyPlugin>);
+/// ```
+/// 3. Convert it into a response
+/// Just use [`Response<SgBody>::from`].
 #[derive(Debug)]
 pub struct PluginError<E> {
     plugin_code: &'static str,

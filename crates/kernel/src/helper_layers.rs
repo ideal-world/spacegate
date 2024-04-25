@@ -1,6 +1,3 @@
-/// Sync request filter.
-pub mod filter;
-
 /// Map service's future into another future.
 pub mod map_future;
 
@@ -21,3 +18,6 @@ pub mod route;
 
 /// Timeout layer based on tokio timer
 pub mod timeout;
+
+/// Balancer layer
+pub mod balancer;

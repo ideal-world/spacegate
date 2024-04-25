@@ -1,4 +1,4 @@
-import axios, { AxiosResponse, AxiosInstance } from 'axios'
+import axios, { AxiosResponse, AxiosInstance, AxiosError } from 'axios'
 import { Config, ConfigItem, PluginAttributes, SgGateway, SgHttpRoute } from '../model'
 import { PluginConfig } from '../model/PluginConfig'
 import { PluginInstanceName } from '../model/PluginInstanceName'
@@ -28,25 +28,45 @@ export class ExceptionVersionConflict extends Error {
     }
 }
 
+export class ExceptionUnauthorized extends Error {
+    constructor() {
+        super('spacegate-admin-client: Unauthorized')
+    }
+}
+
+
 export function setClient(...args: Parameters<typeof axios.create>) {
     let instance = axios.create(...args)
     instance.interceptors.request.use((cfg) => {
         cfg.headers['X-Client-Version'] = Client.clientVersion ?? '0'
         return cfg
     });
-    instance.interceptors.response.use((resp) => {
-        // this shall be lower case
-        let value = resp.headers['x-server-version'];
-        let is_conflict = (resp.status == 409)
-        if (value !== undefined && value !== Client.clientVersion) {
-            if (is_conflict) {
-                throw new ExceptionVersionConflict()
-            } else {
-                Client.clientVersion = value
+    instance.interceptors.response.use(
+        (resp) => {
+            // this shall be lower case
+            let value = resp.headers['x-server-version'];
+            let is_conflict = (resp.status == 409)
+            if (value !== undefined && value !== Client.clientVersion) {
+                if (is_conflict) {
+                    throw new ExceptionVersionConflict()
+                } else {
+                    Client.clientVersion = value
+                }
             }
+            return resp
+        },
+        (err) => {
+            if (err instanceof AxiosError) {
+                if (err.response?.status == 409) {
+                    throw new ExceptionVersionConflict()
+                }
+                if (err.response?.status == 401) {
+                    throw new ExceptionUnauthorized()
+                }
+            }
+            throw err
         }
-        return resp
-    })
+    )
     Client.axiosInstance = instance
 }
 
@@ -209,4 +229,14 @@ export async function pluginAttr(code: string): Promise<AxiosResponse<PluginAttr
 
 export async function pluginSchema(code: string): Promise<AxiosResponse<unknown>> {
     return Client.axiosInstance.get(`/plugin/schema/${code}`)
+}
+
+/**********************************************
+                        auth
+**********************************************/
+
+export async function authLogin(ak: string, sk: string): Promise<AxiosResponse> {
+    return Client.axiosInstance.post(`/auth/login`, {
+        ak, sk
+    })
 }

@@ -10,6 +10,7 @@ use std::{
 
 use clap::Parser;
 use serde_json::Value;
+use spacegate_config::BoxError;
 use tracing::{info, warn};
 
 use crate::state::PluginCode;
@@ -34,6 +35,19 @@ pub struct Args {
     /// the format of the config file
     #[arg(short, long, env, default_value_t = ConfigFormat::Toml)]
     pub format: ConfigFormat,
+    #[arg(short, long, env)]
+    pub key: Option<Base64Decoded>,
+    #[arg(short, long, env)]
+    pub sk: Option<String>,
+}
+#[derive(Debug, Clone)]
+pub struct Base64Decoded(pub Vec<u8>);
+impl FromStr for Base64Decoded {
+    type Err = BoxError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        base64::decode(s).map_err(Into::into).map(Base64Decoded)
+    }
 }
 
 #[derive(Debug, Clone)]

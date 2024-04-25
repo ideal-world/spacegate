@@ -20,6 +20,7 @@ path = "src/lib.rs"
 cache = ["redis"]
 redis = ["spacegate-kernel/ext-redis", "spacegate-model/ext-redis", "spacegate-ext-redis"]
 axum = ["spacegate-ext-axum", "spacegate-model/ext-axum"]
+dylib = ["libloading"]
 limit = ["cache"]
 header-modifier = []
 inject = []
@@ -44,6 +45,7 @@ full = [
 schema = ["schemars", "schemars/chrono"]
 
 [dependencies]
+libloading = { version = "0.8", optional = true }
 spacegate-model = { path = "../model" }
 spacegate-kernel = { path = "../kernel" }
 tracing = { workspace = true }
@@ -74,7 +76,7 @@ spacegate-ext-redis = { path = "../extension/redis", optional = true }
 spacegate-ext-axum = { path = "../extension/axum", optional = true }
 
 # rt
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt", "fs", "time", "net"]}
 arc-swap = "1"
 
 [dev-dependencies]

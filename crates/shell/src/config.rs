@@ -3,7 +3,7 @@ use std::{collections::VecDeque, net::SocketAddr};
 use crate::server::RunningSgGateway;
 use futures_util::{Stream, StreamExt};
 
-use spacegate_plugin::SgPluginRepository;
+use spacegate_plugin::PluginRepository;
 use tokio_util::sync::CancellationToken;
 
 pub use spacegate_config::model::*;
@@ -122,14 +122,14 @@ async fn handler<C: Retrieve>(event: (ConfigType, ConfigEventType), config: &C, 
         (ConfigType::Plugin { id }, ConfigEventType::Create | ConfigEventType::Update) => {
             let config = config.retrieve_plugin(&id).await?;
             if let Some(config) = config {
-                if let Err(e) = SgPluginRepository::global().create_or_update_instance(config) {
+                if let Err(e) = PluginRepository::global().create_or_update_instance(config) {
                     tracing::error!("[SG.Config] plugin {id:?} create failed: {e}", id = id, e = e);
                 }
             } else {
                 tracing::error!("[SG.Config] plugin {id:?} not found");
             }
         }
-        (ConfigType::Plugin { id }, ConfigEventType::Delete) => match SgPluginRepository::global().remove_instance(&id) {
+        (ConfigType::Plugin { id }, ConfigEventType::Delete) => match PluginRepository::global().remove_instance(&id) {
             Ok(_mount_points) => {}
             Err(e) => {
                 tracing::error!("[SG.Config] file to remove plugin {id:?} : {e}", id = id, e = e);

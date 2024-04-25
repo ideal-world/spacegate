@@ -13,7 +13,7 @@ use spacegate_kernel::{
     service::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
     ArcHyperService, BoxError,
 };
-use spacegate_plugin::{mount::MountPointIndex, SgPluginRepository};
+use spacegate_plugin::{mount::MountPointIndex, PluginRepository};
 use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
@@ -157,7 +157,7 @@ pub static GLOBAL_STORE: OnceLock<Arc<Mutex<HashMap<String, RunningSgGateway>>>>
 impl RunningSgGateway {
     pub async fn global_init(config: Config, signal: CancellationToken) {
         for (id, spec) in config.plugins.into_inner() {
-            if let Err(err) = SgPluginRepository::global().create_or_update_instance(PluginConfig { id: id.clone(), spec }) {
+            if let Err(err) = PluginRepository::global().create_or_update_instance(PluginConfig { id: id.clone(), spec }) {
                 tracing::error!("[SG.Config] fail to init plugin [{id}]: {err}", id = id.to_string());
             }
         }
@@ -182,7 +182,7 @@ impl RunningSgGateway {
         while let Some(res) = task.join_next().await {
             res.expect("tokio join error")
         }
-        SgPluginRepository::global().clear_instances()
+        PluginRepository::global().clear_instances()
     }
 
     pub fn global_store() -> Arc<Mutex<HashMap<String, RunningSgGateway>>> {

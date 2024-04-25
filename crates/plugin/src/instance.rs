@@ -14,22 +14,20 @@ use spacegate_model::PluginConfig;
 use crate::mount::{MountPoint, MountPointIndex};
 
 pub struct PluginInstance {
-    // data
     pub config: PluginConfig,
     pub mount_points: HashMap<MountPointIndex, DropTracer>,
     pub hooks: PluginInstanceHooks,
-    pub resource: PluginInstanceResource,
     pub plugin_function: crate::layer::PluginFunction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DropMarker {
+pub(crate) struct DropMarker {
     drop_signal: Arc<u64>,
 }
 
 #[derive(Debug, Clone, Default)]
 
-pub struct DropMarkerSet {
+pub(crate) struct DropMarkerSet {
     pub(crate) inner: HashSet<DropMarker>,
 }
 
@@ -39,9 +37,6 @@ pub struct DropTracer {
 }
 
 impl DropTracer {
-    pub fn count(&self) -> usize {
-        self.drop_signal.strong_count()
-    }
     pub fn all_dropped(&self) -> bool {
         self.drop_signal.strong_count() == 0
     }
@@ -58,7 +53,6 @@ pub(crate) fn drop_trace() -> (DropTracer, DropMarker) {
     )
 }
 
-pub type BoxMakeFn = Box<dyn Fn(&PluginInstance) -> Result<BoxLayer, BoxError> + Sync + Send + 'static>;
 type PluginInstanceHook = Box<dyn Fn(&PluginInstance) -> Result<(), BoxError> + Send + Sync + 'static>;
 
 #[derive(Default)]
@@ -104,7 +98,7 @@ macro_rules! expose_hooks {
             pub(crate) fn $hook(&self) -> BoxResult<()> {
                 self.call_hook(&self.hooks.$hook)
             }
-            pub fn $setter<M>(&mut self, hook: M)
+            pub(crate) fn $setter<M>(&mut self, hook: M)
             where M: Fn(&PluginInstance) -> Result<(), BoxError> + Send + Sync + 'static
             {
                 self.hooks.$hook = Some(Box::new(hook))
@@ -112,7 +106,7 @@ macro_rules! expose_hooks {
         )*
     };
 }
-
+#[allow(dead_code)]
 impl PluginInstance {
     pub(crate) fn mount_at<M: MountPoint>(&mut self, mount_point: &mut M, index: MountPointIndex) -> Result<(), BoxError> {
         let tracer = mount_point.mount(self)?;
