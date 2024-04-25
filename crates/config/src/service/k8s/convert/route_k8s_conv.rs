@@ -119,12 +119,23 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
                             if let Some(rewrite_path) = url_rewrite.path {
                                 match m_p {
                                     SgHttpPathMatch::Exact { value, replace } => match rewrite_path {
-                                        HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathMatch::Exact { name:, value: (), replace: () },
-                                        HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => todo!(),
+                                        HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathMatch::Exact {
+                                            value,
+                                            replace: Some(replace_full_path),
+                                        },
+                                        _ => m_p,
                                     },
-                                    SgHttpPathMatch::Prefix { value, replace } => todo!(),
-                                    SgHttpPathMatch::RegExp { value, replace } => todo!(),
+                                    SgHttpPathMatch::Prefix { value, replace } => match rewrite_path {
+                                        HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathMatch::Exact {
+                                            value,
+                                            replace: Some(replace_prefix_match),
+                                        },
+                                        _ => m_p,
+                                    },
+                                    _ => m_p,
                                 }
+                            } else {
+                                m_p
                             }
                         }
                         _ => unreachable!(),
@@ -139,7 +150,7 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
         };
         Ok(SgHttpRouteRule {
             matches,
-            plugins: ext_plugins.into_iter().filter_map(|f| PluginInstanceId::from_http_route_filter(f)).collect(),
+            plugins: ext_plugins.into_iter().filter_map(PluginInstanceId::from_http_route_filter).collect(),
             backends: rule
                 .backend_refs
                 .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<BoxResult<Vec<_>>>())
@@ -365,17 +376,15 @@ impl SgBackendRefConv for SgBackendRef {
                         }),
                     )
                 };
+                let (ext_plugins, _): (Vec<_>, Vec<_>) =
+                    http_backend.filters.map(|f_vec| f_vec.into_iter().partition(|f| matches!(f, HttpRouteFilter::ExtensionRef { extension_ref: _ }))).unwrap_or_default();
                 Ok(SgBackendRef {
                     host: backend_host,
                     port: backend.inner.port.unwrap_or(80),
                     timeout_ms: backend.timeout_ms,
                     protocol,
                     weight: backend.weight.unwrap_or(1),
-                    plugins: http_backend
-                        .filters
-                        .map(|f_vec| f_vec.into_iter().map(PluginConfig::from_http_route_filter).collect::<BoxResult<Vec<PluginConfig>>>())
-                        .transpose()?
-                        .unwrap_or_default(),
+                    plugins: ext_plugins.into_iter().filter_map(PluginInstanceId::from_http_route_filter).collect(),
                 })
             })
             .transpose()
