@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::OnceLock, time::Duration};
 
 use crate::{
     error::InternalError,
+    service::instance::Instance,
     state::{self, AppState},
 };
 use axum::{
@@ -23,7 +24,7 @@ async fn sync_attr_cache<B: Discovery>(backend: &B, refresh: bool) -> Result<(),
         drop(next_sync);
         let mut cache = ATTR_CACHE.get_or_init(Default::default).write().await;
         if let Some(remote) = backend.api_url().await? {
-            let attrs = reqwest::Client::new().get(format!("http://{}/plugin-list", remote)).send().await?.json::<Vec<PluginAttributes>>().await?;
+            let attrs = <dyn Instance>::plugin_list(&remote).await?;
             cache.clear();
             cache.extend(attrs.into_iter().map(|attr| (attr.code.to_string(), attr)));
         };
@@ -35,15 +36,7 @@ async fn sync_attr_cache<B: Discovery>(backend: &B, refresh: bool) -> Result<(),
 
 async fn get_schema_by_code<B: Discovery>(Path(plugin_code): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Option<Value>>, InternalError> {
     if let Some(remote) = backend.api_url().await.map_err(InternalError)? {
-        reqwest::Client::new()
-            .get(format!("http://{}/plugin-schema?code={plugin_code}", remote))
-            .send()
-            .await
-            .map_err(InternalError::boxed)?
-            .json::<Option<Value>>()
-            .await
-            .map(Json)
-            .map_err(InternalError::boxed)
+        <dyn Instance>::schema(&remote, &plugin_code).await.map(Json).map_err(InternalError)
     } else {
         Ok(Json(None))
     }
