@@ -4,8 +4,8 @@ use futures_util::future::join_all;
 use gateway::SgBackendProtocol;
 use http_route::SgHttpRoute;
 use k8s_gateway_api::{
-    BackendObjectReference, CommonRouteSpec, HttpHeaderMatch, HttpPathMatch, HttpPathModifier, HttpQueryParamMatch, HttpRouteFilter, HttpRouteMatch, HttpUrlRewriteFilter,
-    ParentReference, RouteParentStatus, RouteStatus,
+    BackendObjectReference, CommonRouteSpec, HttpHeader, HttpHeaderMatch, HttpPathMatch, HttpPathModifier, HttpQueryParamMatch, HttpRequestHeaderFilter, HttpRouteFilter,
+    HttpRouteMatch, HttpUrlRewriteFilter, ParentReference, RouteParentStatus, RouteStatus,
 };
 use kube::{api::ObjectMeta, ResourceExt};
 use spacegate_model::{
@@ -55,7 +55,7 @@ impl SgHttpRouteConv for SgHttpRoute {
             },
             spec: HttpSpacerouteSpec {
                 inner: CommonRouteSpec {
-                    parent_refs: Some(vec![gateway_ref]),
+                    parent_refs: Some(vec![gateway_ref.clone()]),
                 },
                 hostnames: self.hostnames,
                 rules: Some(self.rules.into_iter().map(|r| r.into_kube_httproute()).collect::<Vec<_>>()),
@@ -112,25 +112,25 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
                 }
                 Some(matches.into_iter().map(|m| SgHttpRouteMatch::from_kube_httproute(m)).collect::<Vec<_>>())
             } else if let Some(match_) = matches.pop() {
-                let mut m = SgHttpRouteMatch::from_kube_httproute(match_);
+                let mut m: SgHttpRouteMatch = SgHttpRouteMatch::from_kube_httproute(match_);
                 if legacy_plugins.iter().filter(|p| matches!(p, HttpRouteFilter::URLRewrite { url_rewrite: _ })).count() > 1 {
                     return Err("url_rewrite can only have one in each rule".into());
                 } else if let Some(url_rewrite) = legacy_plugins.iter().find(|p| matches!(p, HttpRouteFilter::URLRewrite { url_rewrite: _ })) {
-                    m.path.map(|m_p| match url_rewrite {
+                    m.path = m.path.map(|m_p| match url_rewrite {
                         HttpRouteFilter::URLRewrite { url_rewrite } => {
-                            if let Some(rewrite_path) = url_rewrite.path {
-                                match m_p {
-                                    SgHttpPathMatch::Exact { value, replace } => match rewrite_path {
+                            if let Some(rewrite_path) = &url_rewrite.path {
+                                match &m_p {
+                                    SgHttpPathMatch::Exact { value, replace: _ } => match &rewrite_path {
                                         HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathMatch::Exact {
-                                            value,
-                                            replace: Some(replace_full_path),
+                                            value: value.clone(),
+                                            replace: Some(replace_full_path.clone()),
                                         },
                                         _ => m_p,
                                     },
-                                    SgHttpPathMatch::Prefix { value, replace } => match rewrite_path {
+                                    SgHttpPathMatch::Prefix { value, replace: _ } => match rewrite_path {
                                         HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathMatch::Exact {
-                                            value,
-                                            replace: Some(replace_prefix_match),
+                                            value: value.clone(),
+                                            replace: Some(replace_prefix_match.clone()),
                                         },
                                         _ => m_p,
                                     },
@@ -181,6 +181,7 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                             (Some(path), plugin)
                         })
                         .unwrap_or((None, None));
+
                     (
                         HttpRouteMatch {
                             path: path,
@@ -272,15 +273,27 @@ impl SgHttpPathMatchConv for SgHttpPathMatch {
 
 pub(crate) trait SgHttpHeaderMatchConv {
     fn from_kube_httproute(header_match: HttpHeaderMatch) -> SgHttpHeaderMatch;
-    fn into_kube_httproute(self) -> HttpHeaderMatch;
+    fn into_kube_httproute(self) -> (HttpHeaderMatch, Option<HttpRouteFilter>);
 }
 
 impl SgHttpHeaderMatchConv for SgHttpHeaderMatch {
-    //todo to plugin
-    fn into_kube_httproute(self) -> HttpHeaderMatch {
+    fn into_kube_httproute(self) -> (HttpHeaderMatch, Option<HttpRouteFilter>) {
         match self {
-            SgHttpHeaderMatch::Exact { name, value, replace } => HttpHeaderMatch::Exact { name, value },
-            SgHttpHeaderMatch::RegExp { name, re, replace } => HttpHeaderMatch::RegularExpression { name, value: re },
+            SgHttpHeaderMatch::Exact { name, value, replace } => (
+                HttpHeaderMatch::Exact { name, value },
+                replace.map(|r| HttpRouteFilter::RequestHeaderModifier {
+                    request_header_modifier: HttpRequestHeaderFilter {
+                        set: Some(vec![HttpHeader { name, value: r }]),
+                        add: None,
+                        remove: None,
+                    },
+                }),
+            ),
+            SgHttpHeaderMatch::RegExp { name, re, replace } => (
+                HttpHeaderMatch::RegularExpression { name, value: re },
+                // not supported yet
+                None,
+            ),
         }
     }
 

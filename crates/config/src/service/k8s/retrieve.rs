@@ -5,9 +5,12 @@ use k8s_gateway_api::{Gateway, HttpRoute, Listener};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
 use spacegate_model::{
-    ext::k8s::crd::{
-        http_spaceroute::HttpSpaceroute,
-        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
+    ext::k8s::{
+        crd::{
+            http_spaceroute::HttpSpaceroute,
+            sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
+        },
+        helper_struct::SgTargetKind,
     },
     PluginInstanceId,
 };
