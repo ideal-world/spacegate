@@ -103,6 +103,10 @@ pub struct Args {
     #[arg(short, long, env)]
     pub config: Config,
     /// The dynamic lib plugins dir
+    /// 
+    /// # Example
+    /// If you are using linux, you may put the plugins dll in `/lib/spacegate/plugins`.
+    /// `-p /lib/spacegate/plugins`
     #[arg(short, long, env)]
     pub plugins: Option<PathBuf>,
 }
