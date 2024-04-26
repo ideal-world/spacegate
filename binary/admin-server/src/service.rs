@@ -26,5 +26,6 @@ where
                 .layer(middleware::from_fn_with_state(state.clone(), mw::version_control::version_control)),
         )
         .nest("/auth", auth::router::<B>())
+        .nest("/instance", instance::router::<B>())
         .with_state(state)
 }
