@@ -3,14 +3,17 @@ use std::collections::BTreeMap;
 use futures_util::future::join_all;
 use gateway::SgBackendProtocol;
 use http_route::SgHttpRoute;
-use hyper::client;
 use k8s_gateway_api::{
     BackendObjectReference, CommonRouteSpec, HttpHeaderMatch, HttpPathMatch, HttpPathModifier, HttpQueryParamMatch, HttpRouteFilter, HttpRouteMatch, HttpUrlRewriteFilter,
-    ParentReference,
+    ParentReference, RouteParentStatus, RouteStatus,
 };
 use kube::{api::ObjectMeta, ResourceExt};
 use spacegate_model::{
-    ext::k8s::crd::sg_filter::{K8sSgFilterSpecTargetRef, SgFilterTargetKind},
+    constants::GATEWAY_CONTROLLER_NAME,
+    ext::k8s::{
+        crd::{http_spaceroute::HttpSpacerouteStatus, sg_filter::K8sSgFilterSpecTargetRef},
+        helper_struct::{BackendObjectRefKind, SgTargetKind},
+    },
     PluginInstanceId,
 };
 
@@ -18,7 +21,7 @@ use crate::{
     constants,
     ext::k8s::{
         crd::http_spaceroute::{self, BackendRef, HttpBackendRef, HttpRouteRule, HttpSpaceroute, HttpSpacerouteSpec},
-        helper_filter::SgSingeFilter,
+        helper_struct::SgSingeFilter,
     },
     gateway, http_route,
     service::k8s::K8s,
@@ -28,11 +31,19 @@ use crate::{
 use super::{filter_k8s_conv::PluginIdConv as _, ToTarget};
 pub(crate) trait SgHttpRouteConv {
     /// Convert to HttpSpaceroute and SgSingeFilter
-    fn to_kube_httproute(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>);
+    fn to_kube_httproute(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> (HttpSpaceroute, Vec<PluginInstanceId>);
 }
 
 impl SgHttpRouteConv for SgHttpRoute {
-    fn to_kube_httproute(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>) {
+    fn to_kube_httproute(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> (HttpSpaceroute, Vec<PluginInstanceId>) {
+        let gateway_ref = ParentReference {
+            group: None,
+            kind: Some(SgTargetKind::Gateway.into()),
+            namespace: Some(gateway_namespace.to_string()),
+            name: gateway_name.to_string(),
+            section_name: None,
+            port: None,
+        };
         let httproute = HttpSpaceroute {
             metadata: ObjectMeta {
                 labels: None,
@@ -44,19 +55,20 @@ impl SgHttpRouteConv for SgHttpRoute {
             },
             spec: HttpSpacerouteSpec {
                 inner: CommonRouteSpec {
-                    parent_refs: Some(vec![ParentReference {
-                        group: None,
-                        kind: Some("Gateway".to_string()),
-                        namespace: Some(client.namespace.to_string()),
-                        name: gateway_name.to_string(),
-                        section_name: None,
-                        port: None,
-                    }]),
+                    parent_refs: Some(vec![gateway_ref]),
                 },
                 hostnames: self.hostnames,
                 rules: Some(self.rules.into_iter().map(|r| r.into_kube_httproute()).collect::<Vec<_>>()),
             },
-            status: None,
+            status: Some(HttpSpacerouteStatus {
+                inner: RouteStatus {
+                    parents: vec![RouteParentStatus {
+                        parent_ref: gateway_ref,
+                        controller_name: GATEWAY_CONTROLLER_NAME.to_string(),
+                        conditions: Vec::new(),
+                    }],
+                },
+            }),
         };
         (httproute, self.plugins)
     }
@@ -275,7 +287,7 @@ impl SgHttpHeaderMatchConv for SgHttpHeaderMatch {
     fn from_kube_httproute(header_match: HttpHeaderMatch) -> SgHttpHeaderMatch {
         match header_match {
             HttpHeaderMatch::Exact { name, value } => SgHttpHeaderMatch::Exact { name, value, replace: None },
-            HttpHeaderMatch::RegularExpression { name, value } => SgHttpHeaderMatch::Regular { name, re: value },
+            HttpHeaderMatch::RegularExpression { name, value } => SgHttpHeaderMatch::RegExp { name, re: value, replace: None },
         }
     }
 }
@@ -311,8 +323,8 @@ impl SgBackendRefConv for SgBackendRef {
         let backend_inner_ref = match self.host {
             BackendHost::Host { host } => {
                 let kind = match self.protocol {
-                    Some(SgBackendProtocol::Https) => Some(constants::BACKEND_KIND_EXTERNAL_HTTPS.to_string()),
-                    _ => Some(constants::BACKEND_KIND_EXTERNAL_HTTP.to_string()),
+                    Some(SgBackendProtocol::Https) => BackendObjectRefKind::ExternalHttps.into(),
+                    _ => BackendObjectRefKind::ExternalHttp.into(),
                 };
                 BackendObjectReference {
                     group: None,
@@ -324,12 +336,18 @@ impl SgBackendRefConv for SgBackendRef {
             }
             BackendHost::K8sService(k8s_param) => BackendObjectReference {
                 group: None,
-                kind: None,
+                kind: BackendObjectRefKind::Service.into(),
                 name: k8s_param.name,
                 namespace: k8s_param.namespace,
                 port: Some(self.port),
             },
-            BackendHost::File { path } => todo!(),
+            BackendHost::File { path } => BackendObjectReference {
+                group: None,
+                kind: BackendObjectRefKind::File.into(),
+                name: path,
+                namespace: None,
+                port: None,
+            },
         };
         HttpBackendRef {
             backend_ref: Some(BackendRef {
@@ -346,17 +364,17 @@ impl SgBackendRefConv for SgBackendRef {
             .backend_ref
             .map(|backend| {
                 let (protocol, backend_host) = if let Some(kind) = backend.inner.kind.as_ref() {
-                    match kind.as_str() {
-                        constants::BACKEND_KIND_SERVICE => (
+                    match kind.to_string().into() {
+                        BackendObjectRefKind::Service => (
                             None,
                             BackendHost::K8sService(K8sServiceData {
                                 name: backend.inner.name,
                                 namespace: backend.inner.namespace,
                             }),
                         ),
-                        constants::BACKEND_KIND_EXTERNAL_HTTP => (Some(gateway::SgBackendProtocol::Http), BackendHost::Host { host: backend.inner.name }),
-                        constants::BACKEND_KIND_EXTERNAL_HTTPS => (Some(gateway::SgBackendProtocol::Https), BackendHost::Host { host: backend.inner.name }),
-                        _ => (None, BackendHost::Host { host: backend.inner.name }),
+                        BackendObjectRefKind::ExternalHttp => (Some(gateway::SgBackendProtocol::Http), BackendHost::Host { host: backend.inner.name }),
+                        BackendObjectRefKind::ExternalHttps => (Some(gateway::SgBackendProtocol::Https), BackendHost::Host { host: backend.inner.name }),
+                        BackendObjectRefKind::File => (None, BackendHost::File { path: backend.inner.name }),
                     }
                 } else {
                     (
@@ -385,7 +403,7 @@ impl SgBackendRefConv for SgBackendRef {
 impl ToTarget for HttpSpaceroute {
     fn to_target_ref(&self) -> K8sSgFilterSpecTargetRef {
         K8sSgFilterSpecTargetRef {
-            kind: SgFilterTargetKind::Httpspaceroute.into(),
+            kind: SgTargetKind::Httpspaceroute.into(),
             name: self.name_any(),
             namespace: self.namespace(),
         }

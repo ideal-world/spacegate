@@ -7,7 +7,7 @@ use kube::{api::ListParams, Api, ResourceExt};
 use spacegate_model::{
     ext::k8s::crd::{
         http_spaceroute::HttpSpaceroute,
-        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
+        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
     },
     PluginInstanceId,
 };
@@ -162,7 +162,7 @@ impl K8s {
         let gateway_name = gateway_obj.name_any();
         let plugins = self
             .retrieve_config_item_filters(K8sSgFilterSpecTargetRef {
-                kind: SgFilterTargetKind::Gateway.into(),
+                kind: SgTargetKind::Gateway.into(),
                 name: gateway_name.clone(),
                 namespace: gateway_obj.namespace(),
             })
@@ -181,7 +181,7 @@ impl K8s {
         let kind = if let Some(kind) = httpspace_route.annotations().get(constants::RAW_HTTP_ROUTE_KIND) {
             kind.clone()
         } else {
-            SgFilterTargetKind::Httpspaceroute.into()
+            SgTargetKind::Httpspaceroute.into()
         };
         let priority = httpspace_route.annotations().get(crate::constants::ANNOTATION_RESOURCE_PRIORITY).and_then(|a| a.parse::<i16>().ok()).unwrap_or(0);
         let plugins = self

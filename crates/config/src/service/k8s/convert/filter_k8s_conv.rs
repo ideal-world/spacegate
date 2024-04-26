@@ -10,7 +10,7 @@ use spacegate_model::{constants::SG_FILTER_KIND, ext::k8s::crd::sg_filter::SgFil
 use crate::{
     ext::k8s::{
         crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef},
-        helper_filter::SgSingeFilter,
+        helper_struct::SgSingeFilter,
     },
     plugin::{
         gatewayapi_support_filter::{

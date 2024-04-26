@@ -4,7 +4,7 @@ use kube::{api::PostParams, Api, ResourceExt};
 use spacegate_model::{
     ext::k8s::crd::{
         http_spaceroute,
-        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
+        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
     },
     BoxError, PluginInstanceId,
 };
@@ -36,8 +36,8 @@ impl Create for K8s {
     }
 
     async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgHttpRoute) -> BoxResult<()> {
-        let (http_spaceroute, plugin_ids) = route.to_kube_httproute(gateway_name, route_name, &self);
-        // todo
+        let (http_spaceroute, plugin_ids) = route.to_kube_httproute(gateway_name, route_name, &self.namespace);
+
         let http_spaceroute_api: Api<http_spaceroute::HttpSpaceroute> = self.get_namespace_api();
         http_spaceroute_api.create(&PostParams::default(), &http_spaceroute).await?;
 

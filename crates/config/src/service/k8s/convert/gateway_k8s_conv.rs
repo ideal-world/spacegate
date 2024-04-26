@@ -4,13 +4,9 @@ use chrono::Utc;
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference};
 use k8s_openapi::{api::core::v1::Secret, ByteString};
 use kube::{api::ObjectMeta, ResourceExt};
-use spacegate_model::PluginInstanceId;
+use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, PluginInstanceId};
 
-use crate::{
-    constants,
-    ext::k8s::crd::sg_filter::{K8sSgFilterSpecTargetRef, SgFilterTargetKind},
-    SgGateway, SgParameters,
-};
+use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, SgGateway, SgParameters};
 
 use super::ToTarget;
 pub(crate) trait SgGatewayConv {
@@ -131,7 +127,7 @@ impl SgParametersConv for SgParameters {
 impl ToTarget for Gateway {
     fn to_target_ref(&self) -> K8sSgFilterSpecTargetRef {
         K8sSgFilterSpecTargetRef {
-            kind: SgFilterTargetKind::Gateway.into(),
+            kind: SgTargetKind::Gateway.into(),
             name: self.name_any(),
             namespace: self.namespace(),
         }

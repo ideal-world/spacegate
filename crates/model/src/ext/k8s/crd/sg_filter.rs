@@ -44,23 +44,3 @@ impl PartialEq for K8sSgFilterSpecTargetRef {
         self.name == other.name && self.kind == other.kind && self.namespace.as_ref().unwrap_or(&"".to_string()) == other.namespace.as_ref().unwrap_or(&"".to_string())
     }
 }
-
-pub enum SgFilterTargetKind {
-    Gateway,
-    Httproute,
-    Httpspaceroute,
-    HttpspacerouteRule,
-    HttpspacerouteBackend,
-}
-
-impl From<SgFilterTargetKind> for String {
-    fn from(value: SgFilterTargetKind) -> Self {
-        match value {
-            SgFilterTargetKind::Gateway => "Gateway".to_string(),
-            SgFilterTargetKind::Httproute => "HTTPRoute".to_string(),
-            SgFilterTargetKind::Httpspaceroute => "HTTPSpaceroute".to_string(),
-            SgFilterTargetKind::HttpspacerouteRule => "HTTPSpacerouteRule".to_string(),
-            SgFilterTargetKind::HttpspacerouteBackend => "HTTPSpacerouteBackend".to_string(),
-        }
-    }
-}

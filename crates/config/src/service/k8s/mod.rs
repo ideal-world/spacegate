@@ -8,6 +8,7 @@ pub mod create;
 // pub mod listen;
 pub mod retrieve;
 // pub mod update;
+pub mod discovery;
 
 pub struct K8s {
     pub namespace: Arc<str>,
