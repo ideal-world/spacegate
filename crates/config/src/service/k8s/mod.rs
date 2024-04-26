@@ -3,7 +3,7 @@ use std::sync::Arc;
 use k8s_openapi::NamespaceResourceScope;
 
 pub mod convert;
-// pub mod create;
+pub mod create;
 // pub mod delete;
 // pub mod listen;
 pub mod retrieve;

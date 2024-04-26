@@ -8,8 +8,11 @@ use k8s_gateway_api::{
     BackendObjectReference, CommonRouteSpec, HttpHeaderMatch, HttpPathMatch, HttpPathModifier, HttpQueryParamMatch, HttpRouteFilter, HttpRouteMatch, HttpUrlRewriteFilter,
     ParentReference,
 };
-use kube::api::ObjectMeta;
-use spacegate_model::PluginInstanceId;
+use kube::{api::ObjectMeta, ResourceExt};
+use spacegate_model::{
+    ext::k8s::crd::sg_filter::{K8sSgFilterSpecTargetRef, SgFilterTargetKind},
+    PluginInstanceId,
+};
 
 use crate::{
     constants,
@@ -22,28 +25,14 @@ use crate::{
     BackendHost, BoxResult, K8sServiceData, PluginConfig, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch, SgHttpRouteRule,
 };
 
-use super::filter_k8s_conv::PluginIdConv as _;
+use super::{filter_k8s_conv::PluginIdConv as _, ToTarget};
 pub(crate) trait SgHttpRouteConv {
     /// Convert to HttpSpaceroute and SgSingeFilter
-    /// And SgSingeFilter ref kind is 'HTTPRoute'
-    async fn to_kube_httproute_route_filters(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>);
-    /// Convert to HttpSpaceroute and SgSingeFilter
-    /// And SgSingeFilter ref kind is 'HTTPSpaceroute'
-    async fn to_kube_httproute_spaceroute_filters(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>);
-
-    async fn to_kube_httproute(self, gateway_name: &str, name: &str, client: &K8s, self_kind: &str) -> (HttpSpaceroute, Vec<PluginInstanceId>);
+    fn to_kube_httproute(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>);
 }
 
 impl SgHttpRouteConv for SgHttpRoute {
-    async fn to_kube_httproute_spaceroute_filters(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>) {
-        self.to_kube_httproute(gateway_name, name, client, constants::RAW_HTTP_ROUTE_KIND_SPACEROUTE).await
-    }
-
-    async fn to_kube_httproute_route_filters(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>) {
-        self.to_kube_httproute(gateway_name, name, client, constants::RAW_HTTP_ROUTE_KIND_DEFAULT).await
-    }
-
-    async fn to_kube_httproute(self, gateway_name: &str, name: &str, client: &K8s, self_kind: &str) -> (HttpSpaceroute, Vec<PluginInstanceId>) {
+    fn to_kube_httproute(self, gateway_name: &str, name: &str, client: &K8s) -> (HttpSpaceroute, Vec<PluginInstanceId>) {
         let httproute = HttpSpaceroute {
             metadata: ObjectMeta {
                 labels: None,
@@ -76,22 +65,23 @@ impl SgHttpRouteConv for SgHttpRoute {
 pub(crate) trait SgHttpRouteRuleConv {
     /// # to_kube_httproute
     /// `SgHttpRouteRule` to `HttpRouteRule`, include `HttpRouteFilter` and  excluding `SgFilter`.
-    async fn into_kube_httproute(self, client: &K8s) -> HttpRouteRule;
+    fn into_kube_httproute(self) -> HttpRouteRule;
     fn from_kube_httproute(rule: http_spaceroute::HttpRouteRule) -> BoxResult<SgHttpRouteRule>;
 }
 
 impl SgHttpRouteRuleConv for SgHttpRouteRule {
-    async fn into_kube_httproute(self, client: &K8s) -> HttpRouteRule {
-        let (matches, plugins): (Option<Vec<HttpRouteMatch>>, Option<Vec<HttpRouteFilter>>) = self
+    fn into_kube_httproute(self) -> HttpRouteRule {
+        let (matches, mut plugins): (Option<Vec<HttpRouteMatch>>, Vec<HttpRouteFilter>) = self
             .matches
             .map(|m_vec| {
-                let (a, b): (Vec<_>, Vec<_>) = m_vec.into_iter().map(|m| m.into_kube_httproute()).unzip();
-                (Some(a.into_iter().flatten().collect()), Some(b.into_iter().flatten().collect()))
+                let (matches, plugins): (Vec<_>, Vec<_>) = m_vec.into_iter().map(|m| m.into_kube_httproute()).unzip();
+                (Some(matches.into_iter().flatten().collect()), plugins.into_iter().flatten().collect())
             })
             .unwrap_or_default();
+        plugins.append(&mut self.plugins.into_iter().filter_map(|p| p.to_http_route_filter()).collect::<Vec<_>>());
         HttpRouteRule {
-            matches: matches,
-            filters: plugins,
+            matches,
+            filters: Some(plugins),
             backend_refs: Some(self.backends.into_iter().map(|b| b.into_kube_httproute()).collect::<Vec<_>>()),
             timeout_ms: self.timeout_ms,
         }
@@ -167,7 +157,7 @@ pub(crate) trait SgHttpRouteMatchConv {
 }
 impl SgHttpRouteMatchConv for SgHttpRouteMatch {
     fn into_kube_httproute(self) -> (Vec<HttpRouteMatch>, Vec<HttpRouteFilter>) {
-        let (matchs, plugins) = if let Some(method_vec) = self.method {
+        let (match_vec, plugins) = if let Some(method_vec) = self.method {
             method_vec
                 .into_iter()
                 .map(|m| {
@@ -209,7 +199,7 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                 vec![plugin],
             )
         };
-        (matchs, plugins.into_iter().filter_map(|x| x).collect())
+        (match_vec, plugins.into_iter().filter_map(|x| x).collect())
     }
 
     fn from_kube_httproute(route_match: HttpRouteMatch) -> SgHttpRouteMatch {
@@ -339,6 +329,7 @@ impl SgBackendRefConv for SgBackendRef {
                 namespace: k8s_param.namespace,
                 port: Some(self.port),
             },
+            BackendHost::File { path } => todo!(),
         };
         HttpBackendRef {
             backend_ref: Some(BackendRef {
@@ -388,5 +379,15 @@ impl SgBackendRefConv for SgBackendRef {
                 })
             })
             .transpose()
+    }
+}
+
+impl ToTarget for HttpSpaceroute {
+    fn to_target_ref(&self) -> K8sSgFilterSpecTargetRef {
+        K8sSgFilterSpecTargetRef {
+            kind: SgFilterTargetKind::Httpspaceroute.into(),
+            name: self.name_any(),
+            namespace: self.namespace(),
+        }
     }
 }

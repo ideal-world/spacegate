@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use k8s_gateway_api::{HttpHeader, HttpPathModifier, HttpRequestHeaderFilter, HttpRequestRedirectFilter, HttpRouteFilter, HttpUrlRewriteFilter, LocalObjectReference};
-use kube::{Api, ResourceExt};
+use kube::{
+    api::{PatchParams, PostParams},
+    Api, ResourceExt,
+};
 use spacegate_model::{constants::SG_FILTER_KIND, ext::k8s::crd::sg_filter::SgFilter};
 
 use crate::{
@@ -31,12 +34,12 @@ pub(crate) trait PluginIdConv {
     /// # to_http_route_filter
     /// ref [SgRouteFilter::to_singe_filter]
     /// can be use in rule level and backend level
-    async fn to_http_route_filter(self, client: &K8s) -> Option<HttpRouteFilter>;
+    fn to_http_route_filter(self) -> Option<HttpRouteFilter>;
 
     fn from_http_route_filter(route_filter: HttpRouteFilter) -> Option<PluginInstanceId>;
 
     /// can be ues in gateway and route level
-    async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s);
+    async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()>;
 
     // mix of [SgRouteFilter::to_singe_filter] and [SgRouteFilter::to_http_route_filter]
     // PluginInstanceId can be converted into `SgRouteFilter` or `HttpRouteFilter`
@@ -59,75 +62,6 @@ impl PluginIdConv for PluginInstanceId {
                 target_ref: target,
             }),
             PluginInstanceName::Mono => None,
-        }
-    }
-
-    async fn to_http_route_filter(self, client: &service::k8s::K8s) -> Option<HttpRouteFilter> {
-        let filter_api: Api<SgFilter> = client.get_namespace_api();
-        if let Ok(filter) = filter_api.get(&self.name.to_string()).await {
-            if let Some(plugin) = filter.spec.filters.iter().find(|f| f.code == self.code && f.name == Some(self.name.to_string())) {
-                let value = plugin.config.clone();
-                if self.code == SG_FILTER_HEADER_MODIFIER_CODE {
-                    if let Ok(header) = serde_json::from_value::<SgFilterHeaderModifier>(value) {
-                        let header_filter = HttpRequestHeaderFilter {
-                            set: header.sets.map(|header_map| header_map.into_iter().map(|(k, v)| HttpHeader { name: k, value: v }).collect()),
-                            add: None,
-                            remove: header.remove,
-                        };
-                        match header.kind {
-                            SgFilterHeaderModifierKind::Request => Some(HttpRouteFilter::RequestHeaderModifier {
-                                request_header_modifier: header_filter,
-                            }),
-                            SgFilterHeaderModifierKind::Response => Some(HttpRouteFilter::ResponseHeaderModifier {
-                                response_header_modifier: header_filter,
-                            }),
-                        }
-                    } else {
-                        None
-                    }
-                } else if self.code == SG_FILTER_REDIRECT_CODE {
-                    if let Ok(redirect) = serde_json::from_value::<SgFilterRedirect>(value) {
-                        Some(HttpRouteFilter::RequestRedirect {
-                            request_redirect: HttpRequestRedirectFilter {
-                                scheme: redirect.scheme,
-                                hostname: redirect.hostname,
-                                path: redirect.path.map(|p| p.to_http_path_modifier()),
-                                port: redirect.port,
-                                status_code: redirect.status_code,
-                            },
-                        })
-                    } else {
-                        None
-                    }
-                } else if self.code == SG_FILTER_REWRITE_CODE {
-                    if let Ok(rewrite) = serde_json::from_value::<SgFilterRewrite>(value) {
-                        Some(HttpRouteFilter::URLRewrite {
-                            url_rewrite: HttpUrlRewriteFilter {
-                                hostname: rewrite.hostname,
-                                path: rewrite.path.map(|p| p.to_http_path_modifier()),
-                            },
-                        })
-                    } else {
-                        None
-                    }
-                } else {
-                    match self.name {
-                        PluginInstanceName::Anon { uid: _ } => None,
-                        PluginInstanceName::Named { name } => Some(HttpRouteFilter::ExtensionRef {
-                            extension_ref: LocalObjectReference {
-                                group: "".to_string(),
-                                kind: SG_FILTER_KIND.to_string(),
-                                name,
-                            },
-                        }),
-                        PluginInstanceName::Mono => None,
-                    }
-                }
-            } else {
-                None
-            }
-        } else {
-            None
         }
     }
 
@@ -211,8 +145,29 @@ impl PluginIdConv for PluginInstanceId {
     //     Ok(sg_filter)
     // }
 
-    async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) {
-        todo!()
+    async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
+        let filter_api: Api<SgFilter> = client.get_namespace_api();
+        if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
+            if filter.spec.target_refs.iter().find(|t| t.eq(&&target)).is_none() {
+                filter.spec.target_refs.push(target);
+                filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
+            };
+        }
+        Ok(())
+    }
+
+    fn to_http_route_filter(self) -> Option<HttpRouteFilter> {
+        match self.name {
+            PluginInstanceName::Anon { uid: _ } => None,
+            PluginInstanceName::Named { name } => Some(HttpRouteFilter::ExtensionRef {
+                extension_ref: LocalObjectReference {
+                    group: "".to_string(),
+                    kind: SG_FILTER_KIND.to_string(),
+                    name,
+                },
+            }),
+            PluginInstanceName::Mono => None,
+        }
     }
 
     fn from_http_route_filter(route_filter: HttpRouteFilter) -> Option<PluginInstanceId> {

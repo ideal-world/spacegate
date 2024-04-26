@@ -1,20 +1,18 @@
 use k8s_gateway_api::Gateway;
 use k8s_openapi::api::core::v1::Secret;
-use kube::{api::PostParams, Api};
+use kube::{api::PostParams, Api, ResourceExt};
 use spacegate_model::{
-    ext::k8s::crd::{http_spaceroute, sg_filter::SgFilter},
+    ext::k8s::crd::{
+        http_spaceroute,
+        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter, SgFilterTargetKind},
+    },
     BoxError, PluginInstanceId,
 };
 
 use crate::{service::Create, BoxResult};
 
 use super::{
-    convert::{
-        filter_k8s_conv::PluginIdConv as _,
-        gateway_k8s_conv::{GatewayConv as _, SgGatewayConv as _},
-        route_k8s_conv::SgHttpRouteConv as _,
-        ToTarget as _,
-    },
+    convert::{filter_k8s_conv::PluginIdConv as _, gateway_k8s_conv::SgGatewayConv as _, route_k8s_conv::SgHttpRouteConv as _, ToTarget as _},
     K8s,
 };
 
@@ -31,17 +29,21 @@ impl Create for K8s {
         }
 
         for plugin_id in plugin_ids {
-            plugin_id.add_filter_target(gateway.to_target_ref(), self);
+            plugin_id.add_filter_target(gateway.to_target_ref(), self).await?;
         }
 
         Ok(())
     }
 
     async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgHttpRoute) -> BoxResult<()> {
-        let http_spaceroute = route.to_kube_httproute_spaceroute_filters(gateway_name, route_name, &self.namespace);
-
+        let (http_spaceroute, plugin_ids) = route.to_kube_httproute(gateway_name, route_name, &self);
+        // todo
         let http_spaceroute_api: Api<http_spaceroute::HttpSpaceroute> = self.get_namespace_api();
         http_spaceroute_api.create(&PostParams::default(), &http_spaceroute).await?;
+
+        for id in plugin_ids {
+            id.add_filter_target(http_spaceroute.to_target_ref(), self).await?;
+        }
 
         Ok(())
     }
