@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{cmp::Ordering, collections::BTreeMap};
 
 use futures_util::future::join_all;
 use gateway::SgBackendProtocol;
@@ -182,6 +182,32 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                         })
                         .unwrap_or((None, None));
 
+                    let (path, plugin) = self
+                        .header
+                        .clone()
+                        .map(|hs| {
+                            let mut headers_p = hs
+                                .into_iter()
+                                .map(|h| {
+                                    let (path, plugin) = h.into_kube_httproute();
+                                    (Some(path), plugin)
+                                })
+                                .collect::<Vec<_>>();
+                            headers_p.sort_by(|a, b| {
+                                if a.1.is_some() && b.1.is_some() {
+                                    Ordering::Equal
+                                } else if a.1.is_some() {
+                                    Ordering::Less
+                                } else {
+                                    Ordering::Greater
+                                }
+                            });
+
+                            let (a, b) = headers_p.into_iter().unzip();
+                            (a, b)
+                        })
+                        .unwrap_or((None, None));
+
                     (
                         HttpRouteMatch {
                             path: path,
@@ -280,7 +306,7 @@ impl SgHttpHeaderMatchConv for SgHttpHeaderMatch {
     fn into_kube_httproute(self) -> (HttpHeaderMatch, Option<HttpRouteFilter>) {
         match self {
             SgHttpHeaderMatch::Exact { name, value, replace } => (
-                HttpHeaderMatch::Exact { name, value },
+                HttpHeaderMatch::Exact { name: name.clone(), value },
                 replace.map(|r| HttpRouteFilter::RequestHeaderModifier {
                     request_header_modifier: HttpRequestHeaderFilter {
                         set: Some(vec![HttpHeader { name, value: r }]),
@@ -289,11 +315,14 @@ impl SgHttpHeaderMatchConv for SgHttpHeaderMatch {
                     },
                 }),
             ),
-            SgHttpHeaderMatch::RegExp { name, re, replace } => (
-                HttpHeaderMatch::RegularExpression { name, value: re },
-                // not supported yet
-                None,
-            ),
+            SgHttpHeaderMatch::RegExp { name, re, replace: _ } => {
+                tracing::warn!("[{name} {re}]RegExp trype replace is not supported yet in kube:");
+                (
+                    HttpHeaderMatch::RegularExpression { name, value: re },
+                    // not supported yet
+                    None,
+                )
+            }
         }
     }
 

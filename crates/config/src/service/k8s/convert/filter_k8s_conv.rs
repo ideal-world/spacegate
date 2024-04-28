@@ -191,11 +191,12 @@ pub(crate) trait PluginConfigConv {
 
 impl PluginConfigConv for PluginConfig {
     fn from_first_filter_obj(filter_obj: SgFilter) -> Option<PluginConfig> {
+        let filter_name = filter_obj.name_any();
         filter_obj.spec.filters.into_iter().filter(|f| f.enable).next().map(|f| PluginConfig {
             id: PluginInstanceId {
                 code: f.code.into(),
                 name: PluginInstanceName::Named {
-                    name: f.name.unwrap_or(filter_obj.name_any()),
+                    name: f.name.unwrap_or(filter_name.clone()),
                 },
             },
             spec: f.config,

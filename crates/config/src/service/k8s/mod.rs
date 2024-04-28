@@ -4,7 +4,7 @@ use k8s_openapi::NamespaceResourceScope;
 
 pub mod convert;
 pub mod create;
-// pub mod delete;
+pub mod delete;
 // pub mod listen;
 pub mod retrieve;
 // pub mod update;
