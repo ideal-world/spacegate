@@ -35,7 +35,7 @@ impl Default for AxumServerInner {
 }
 
 /// Global axum http server for spacegate and its plugins.
-/// 
+///
 /// # Usage
 /// ```
 /// # use spacegate_ext_axum::GlobalAxumServer;
