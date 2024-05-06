@@ -165,6 +165,25 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
 
 pub(crate) trait SgHttpRouteMatchConv {
     fn from_kube_httproute(route_match: HttpRouteMatch) -> SgHttpRouteMatch;
+    /// Returns (matches, filters)
+    /// path 和 header 对应插件的关系是:
+    ///
+    /// e.g
+    ///
+    /// | matches | plugins |
+    /// | --- | --- |
+    /// | path_match1 | Some(url_rewrite1) |
+    /// | path_match2 | Some(url_rewrite2) |
+    /// | path_match3 | None |
+    /// | header1 | Some(request_header_modifier1) |
+    /// | header2 | Some(request_header_modifier2) |
+    /// | header3 | None |
+    ///
+    /// ==>
+    ///
+    /// | matches | plugins |
+    /// | --- | --- |
+    ///
     fn into_kube_httproute(self) -> (Vec<HttpRouteMatch>, Vec<HttpRouteFilter>);
 }
 impl SgHttpRouteMatchConv for SgHttpRouteMatch {
@@ -182,7 +201,7 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                         })
                         .unwrap_or((None, None));
 
-                    let (path, plugin) = self
+                    let (header_path, header_plugins) = self
                         .header
                         .clone()
                         .map(|hs| {
@@ -203,15 +222,16 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                                 }
                             });
 
-                            let (a, b) = headers_p.into_iter().unzip();
+                            let (a, b): (Vec<_>, Vec<_>) = headers_p.into_iter().unzip();
                             (a, b)
                         })
-                        .unwrap_or((None, None));
+                        .unwrap_or((vec![], vec![]));
+                    let header_paths: Vec<_> = header_path.into_iter().filter_map(|x| x).collect();
 
                     (
                         HttpRouteMatch {
                             path: path,
-                            headers: self.header.clone().map(|h_vec| h_vec.into_iter().map(|h| h.into_kube_httproute()).collect::<Vec<_>>()),
+                            headers: if header_paths.is_empty() { None } else { Some(header_paths) },
                             query_params: self.query.clone().map(|q_vec| q_vec.into_iter().map(|q| q.into_kube_httproute()).collect::<Vec<_>>()),
                             method: Some(m.0),
                         },
@@ -231,7 +251,8 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
             (
                 vec![HttpRouteMatch {
                     path: path,
-                    headers: self.header.map(|h_vec| h_vec.into_iter().map(|h| h.into_kube_httproute()).collect::<Vec<_>>()),
+                    //todo
+                    headers: None,
                     query_params: self.query.map(|q_vec| q_vec.into_iter().map(|q| q.into_kube_httproute()).collect::<Vec<_>>()),
                     method: None,
                 }],
