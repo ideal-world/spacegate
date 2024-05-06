@@ -1,10 +1,14 @@
-// pub mod backend;
+/// Config file format
 pub mod config_format;
+/// File system backend
 #[cfg(feature = "fs")]
 pub mod fs;
+/// Kubernetes backend
 #[cfg(feature = "k8s")]
 pub mod k8s;
+/// In-memory backend
 pub mod memory;
+/// Redis backend
 #[cfg(feature = "redis")]
 pub mod redis;
 use std::{collections::BTreeMap, error::Error, str::FromStr};

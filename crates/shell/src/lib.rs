@@ -38,18 +38,24 @@ pub use spacegate_config::model;
 pub use spacegate_config::model::{BoxError, BoxResult};
 use spacegate_config::service::{CreateListener, Retrieve};
 use spacegate_config::Config;
+/// re-export spacegate_kernel
 pub use spacegate_kernel as kernel;
+/// re-export spacegate_plugin
 pub use spacegate_plugin as plugin;
 use tokio::signal;
 use tracing::{info, instrument};
 
+/// Configuration retrieval and event listener
 pub mod config;
-pub mod constants;
+/// http extensions
 pub mod extension;
+/// Spacegate service creation
 pub mod server;
 
+#[cfg(feature = "ext-axum")]
+pub use spacegate_ext_axum as ext_axum;
 #[cfg(feature = "ext-redis")]
-pub use spacegate_ext_redis;
+pub use spacegate_ext_redis as ext_redis;
 
 #[cfg(feature = "fs")]
 /// # Startup the gateway by config file

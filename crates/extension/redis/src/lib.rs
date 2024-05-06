@@ -3,18 +3,11 @@ use std::{collections::HashMap, sync::RwLock};
 pub use deadpool_redis::{Connection, Manager, Pool};
 pub use redis;
 use redis::RedisResult;
-/// hash: {gateway name} -> {gateway config}
-pub const CONF_GATEWAY_KEY: &str = "sg:conf:gateway";
-/// hash: {gateway name} -> {<http route name> -> <http route config>}
-pub const CONF_HTTP_ROUTE_KEY: &str = "sg:conf:route:http:";
-/// string: {timestamp}##{changed obj}##{method}##{changed gateway name}##{changed route name} -> None
-/// changed obj: gateway/httproute
-/// method: create/update/delete
-/// changed route name: None or <route name>
-pub const CONF_CHANGE_TRIGGER: &str = "sg:conf:change:trigger:";
 
+/// Wrapper for pooled Redis client.
 #[derive(Clone)]
 pub struct RedisClient {
+    /// Pooled Redis client.
     pub redis_conn_pool: Pool,
 }
 
@@ -25,12 +18,13 @@ impl std::fmt::Debug for RedisClient {
 }
 
 impl RedisClient {
+    /// Create a new Redis client from connect url.
     pub fn new(url: impl AsRef<str>) -> RedisResult<Self> {
         let url = url.as_ref();
         let redis_conn_pool = Pool::builder(Manager::new(url)?).build().expect("Failed to create Redis pool");
         Ok(Self { redis_conn_pool })
     }
-
+    /// Get a connection from the pool.
     pub async fn get_conn(&self) -> Connection {
         self.redis_conn_pool.get().await.unwrap()
     }
@@ -42,29 +36,35 @@ impl From<&str> for RedisClient {
     }
 }
 
+/// Redis Client Repository.
 #[derive(Debug, Default)]
 pub struct RedisClientRepo {
     repos: RwLock<HashMap<String, RedisClient>>,
 }
 
 impl RedisClientRepo {
+    /// Get the global Redis client repository instance.
     pub fn global() -> &'static Self {
         static INIT: std::sync::OnceLock<RedisClientRepo> = std::sync::OnceLock::new();
         INIT.get_or_init(Self::new)
     }
 
+    /// Create a new Redis client repository.
     pub fn new() -> Self {
         Self { repos: RwLock::default() }
     }
 
+    /// Add a Redis client to the repository.
     pub fn add(&self, name: impl Into<String>, client: impl Into<RedisClient>) {
         self.repos.write().expect("poisoned global redis client repo").insert(name.into(), client.into());
     }
 
+    /// Get a Redis client from the repository by its name.
     pub fn get(&self, name: &str) -> Option<RedisClient> {
         self.repos.read().expect("poisoned global redis client repo").get(name).cloned()
     }
 
+    /// Remove a Redis client from the repository by its name.
     pub fn remove(&self, name: &str) -> Option<RedisClient> {
         self.repos.write().expect("poisoned global redis client repo").remove(name)
     }
