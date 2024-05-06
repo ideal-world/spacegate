@@ -69,13 +69,12 @@ fn collect_http_route(
                             #[cfg(feature = "k8s")]
                             {
                                 use crate::extension::k8s_service::K8sService;
-                                use spacegate_config::model::BackendHost;
                                 use spacegate_kernel::helper_layers::map_request::{add_extension::add_extension, MapRequestLayer};
                                 use spacegate_kernel::BoxLayer;
-                                if let BackendHost::K8sService(data) = backend.host {
-                                    let namespace_ext = K8sService(data.into());
+                                if let BackendHost::K8sService(ref data) = backend.host {
+                                    let namespace_ext = K8sService(data.clone().into());
                                     // need to add to front
-                                    builder = builder.plugin(SgBoxLayer::new(MapRequestLayer::new(add_extension(namespace_ext, true))))
+                                    builder = builder.plugin(BoxLayer::new(MapRequestLayer::new(add_extension(namespace_ext, true))))
                                 }
                             }
                             builder = builder.host(host).port(backend.port);
