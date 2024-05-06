@@ -14,7 +14,7 @@ readme = "../../README.md"
 
 
 [features]
-default = ["fs", "dylib"]
+default = ["fs"]
 full = ["k8s", "fs", "redis", "axum"]
 build-k8s = ["k8s", "redis", "axum"]
 build-local = ["fs", "redis", "axum"]
