@@ -26,11 +26,14 @@ pub const ROUTES_SUFFIX: &str = "routes";
 /// ``` no_rust
 /// |- config.json
 /// |- plugins/
-/// |  |- plugin_code.plugin.json
-/// |- gateway_name.gateway.json
-/// |- gateway_name.routes/
-/// |  |- route_name_1.json
-/// |  |- route_name_2.json
+/// |  |- plugin_code.json
+/// |- gateways/
+/// |  |- admin/
+/// |  |  |- config.json
+/// |  |  |- routes/
+/// |  |  |  |- static.json
+/// |  |  |  |- api.json
+/// |  |- app.json
 ///
 /// ```
 #[derive(Debug, Clone)]
