@@ -47,19 +47,19 @@ pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgRespon
     }
     let Ok(dir) = dir.canonicalize() else {
         *response.body_mut() = SgBody::full(format!("cannot canonicalize dir path {dir:?}"));
-        *response.status_mut() = StatusCode::FORBIDDEN;
+        *response.status_mut() = StatusCode::NOT_FOUND;
         return response;
     };
 
     let Ok(path) = dir.join(request.uri().path().trim_start_matches('/')).canonicalize() else {
         *response.body_mut() = SgBody::full("cannot canonicalize file path");
-        *response.status_mut() = StatusCode::FORBIDDEN;
+        *response.status_mut() = StatusCode::NOT_FOUND;
         return response;
     };
     trace!("static file path: {:?}", path);
     if !path.starts_with(dir) {
         *response.body_mut() = SgBody::full("file is not under the path");
-        *response.status_mut() = StatusCode::FORBIDDEN;
+        *response.status_mut() = StatusCode::NOT_FOUND;
         return response;
     }
     let mut file = match tokio::fs::File::open(&path).await {
