@@ -9,22 +9,21 @@ sudo mkdir /etc/spacegate
 
 if [ -f $CONFIG_PATH ]; then
     echo "Config file already exists"
-else 
-    sudo echo "{}" > /etc/spacegate/config.json
+else
+    sudo echo "{}" >/etc/spacegate/config.json
     sudo chmod 666 /etc/spacegate/config.json
 fi
 
 if [ -f $PLUGIN_PATH ]; then
     echo "Plugin dir already exists"
-else 
+else
     # Create plugin directory
     sudo mkdir $PLUGIN_PATH
 fi
 
-
 if [ -f /etc/systemd/system/spacegate.service ]; then
     echo "Systemd unit file already exists"
-else 
+else
     # Create systemd service
     sudo cp resource/install/spacegate.service /etc/systemd/system/spacegate.service
 fi

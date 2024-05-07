@@ -32,6 +32,7 @@ hyper-util = { workspace = true, features = [
   "client-legacy",
   "tokio",
 ] }
+mime_guess = "2"
 
 # log
 tracing = { workspace = true }

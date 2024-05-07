@@ -29,11 +29,12 @@ pub struct Args {
     /// the config backend you choose
 
     /// see [`ConfigBackend`]
-    #[arg(short, long, env, default_value_t = ConfigBackend::File(PathBuf::from("./config")))]
+    #[arg(short, long, env)]
+    #[cfg_attr(target_family = "unix", arg(default_value="file:/etc/spacegate"))]
     pub config: ConfigBackend,
 
     /// the format of the config file
-    #[arg(short, long, env, default_value_t = ConfigFormat::Toml)]
+    #[arg(short, long, env, default_value_t = ConfigFormat::Json)]
     pub format: ConfigFormat,
     #[arg(short, long, env)]
     pub key: Option<Base64Decoded>,
