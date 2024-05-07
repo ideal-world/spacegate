@@ -22,6 +22,7 @@ pub type BoxResult<T> = Result<T, BoxError>;
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct ConfigItem<P = PluginInstanceId> {
     pub gateway: SgGateway<P>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub routes: BTreeMap<String, SgHttpRoute<P>>,
 }
 

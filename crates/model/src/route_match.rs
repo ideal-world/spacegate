@@ -5,12 +5,24 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub enum SgHttpPathMatch {
     /// Matches the URL path exactly and with case sensitivity.
-    Exact { value: String, replace: Option<String> },
+    Exact {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replace: Option<String>,
+    },
     /// Matches based on a URL path prefix split by /. Matching is case sensitive and done on a path element by element basis.
     /// A path element refers to the list of labels in the path split by the / separator. When specified, a trailing / is ignored.
-    Prefix { value: String, replace: Option<String> },
+    Prefix {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replace: Option<String>,
+    },
     /// Matches if the URL path matches the given regular expression with case sensitivity.
-    RegExp { value: String, replace: Option<String> },
+    RegExp {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replace: Option<String>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -18,9 +30,19 @@ pub enum SgHttpPathMatch {
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub enum SgHttpHeaderMatch {
     /// Matches the HTTP header exactly and with case sensitivity.
-    Exact { name: String, value: String, replace: Option<String> },
+    Exact {
+        name: String,
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replace: Option<String>,
+    },
     /// Matches if the Http header matches the given regular expression with case sensitivity.
-    RegExp { name: String, re: String, replace: Option<String> },
+    RegExp {
+        name: String,
+        re: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replace: Option<String>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -44,15 +66,19 @@ pub struct SgHttpMethodMatch(pub String);
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct SgHttpRouteMatch {
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Path specifies a HTTP request path matcher.
     /// If this field is not specified, a default prefix match on the “/” path is provided.
     pub path: Option<SgHttpPathMatch>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Headers specifies HTTP request header matchers.
     /// Multiple match values are ANDed together, meaning, a request must match all the specified headers to select the route.
     pub header: Option<Vec<SgHttpHeaderMatch>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Query specifies HTTP query parameter matchers.
     /// Multiple match values are ANDed together, meaning, a request must match all the specified query parameters to select the route.
     pub query: Option<Vec<SgHttpQueryMatch>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Method specifies HTTP method matcher.
     /// When specified, this route will be matched only if the request has the specified method.
     pub method: Option<Vec<SgHttpMethodMatch>>,
