@@ -30,7 +30,7 @@ pub struct Args {
 
     /// see [`ConfigBackend`]
     #[arg(short, long, env)]
-    #[cfg_attr(target_family = "unix", arg(default_value="file:/etc/spacegate"))]
+    #[cfg_attr(target_family = "unix", arg(default_value = "file:/etc/spacegate"))]
     pub config: ConfigBackend,
 
     /// the format of the config file
