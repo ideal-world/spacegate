@@ -1,7 +1,7 @@
 CONFIG_PATH=/etc/spacegate/config.json
 PLUGIN_PATH=/lib/spacegate/plugins
 BIN_PATH=/usr/local/bin
-cargo build --release --features dylib
+cargo build spacegate --release --features dylib
 sudo cp target/release/spacegate $BIN_PATH
 
 # Create config file
