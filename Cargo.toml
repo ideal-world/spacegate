@@ -33,7 +33,7 @@ documentation = "https://docs.rs/spacegate/"
 repository = "https://github.com/ideal-world/spacegate"
 edition = "2021"
 license = "MIT/Apache-2.0"
-rust-version = "1.64"
+rust-version = "1.76"
 
 [workspace.dependencies]
 spacegate-kernel = { path = "./crates/kernel" }

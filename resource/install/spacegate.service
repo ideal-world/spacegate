@@ -1,0 +1,13 @@
+[Unit]
+Description=Spacegate
+
+[Service]
+PIDFile=/run/spacegate.pid
+ExecStart=spacegate
+Restart=always
+ExecStop=/bin/kill -INT $MAINPID
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

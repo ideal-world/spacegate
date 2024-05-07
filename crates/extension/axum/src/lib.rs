@@ -9,9 +9,11 @@ use axum::{BoxError, Router};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-
+/// Default port for the global server
 const GLOBAL_SERVER_PORT: u16 = 9876;
+/// Default host for the global server
 const GLOBAL_SERVER_HOST: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
+/// Default bind to [::]:9876
 const GLOBAL_SERVER_BIND: SocketAddr = SocketAddr::new(GLOBAL_SERVER_HOST, GLOBAL_SERVER_PORT);
 #[derive(Debug)]
 struct AxumServerInner {
@@ -32,6 +34,13 @@ impl Default for AxumServerInner {
     }
 }
 
+/// Global axum http server for spacegate and its plugins.
+///
+/// # Usage
+/// ```
+/// # use spacegate_ext_axum::GlobalAxumServer;
+/// let server = GlobalAxumServer::default();
+/// ```
 #[derive(Debug, Clone)]
 pub struct GlobalAxumServer(Arc<RwLock<AxumServerInner>>);
 
@@ -42,6 +51,7 @@ impl Default for GlobalAxumServer {
 }
 
 impl GlobalAxumServer {
+    /// Set the bind address for the server. If the server is already running, new bind address will take effect after restart.
     pub async fn set_bind<A>(&self, socket_addr: A)
     where
         A: Into<SocketAddr>,
@@ -50,10 +60,14 @@ impl GlobalAxumServer {
         let mut wg = self.0.write().await;
         wg.bind = socket_addr;
     }
+
+    /// Set the cancellation token for the server.
     pub async fn set_cancellation(&self, token: CancellationToken) {
         let mut wg = self.0.write().await;
         wg.cancel_token = token;
     }
+
+    /// Modify the router with the given closure.
     pub async fn modify_router<M>(&self, modify: M)
     where
         M: FnOnce(Router) -> Router,
@@ -64,11 +78,13 @@ impl GlobalAxumServer {
         wg.router = (modify)(swap_out)
     }
 
+    /// Start the server, if the server is already running, it will be restarted.
     pub async fn start(&self) -> Result<(), std::io::Error> {
         let mut wg = self.0.write().await;
         wg.start().await
     }
 
+    /// Shutdown the server.
     pub async fn shutdown(&self) -> Result<(), std::io::Error> {
         let mut wg = self.0.write().await;
         wg.shutdown().await

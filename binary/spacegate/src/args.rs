@@ -101,6 +101,8 @@ pub struct Args {
     /// ## Redis
     /// `-c redis:redis://some-redis-url`
     #[arg(short, long, env)]
+    #[cfg_attr(feature = "build-k8s", arg(default_value_t=Config::K8s(String::from("default"))))]
+    #[cfg_attr(all(not(feature = "build-k8s"), target_family = "unix", feature="fs"), arg(default_value_t=Config::File(PathBuf::from("/etc/spacegate"))))]
     pub config: Config,
     /// The dynamic lib plugins dir
     ///
@@ -108,5 +110,6 @@ pub struct Args {
     /// If you are using linux, you may put the plugins dll in `/lib/spacegate/plugins`.
     /// `-p /lib/spacegate/plugins`
     #[arg(short, long, env)]
+    #[cfg_attr(target_family = "unix", arg(default_value = "/lib/spacegate/plugins"))]
     pub plugins: Option<PathBuf>,
 }
