@@ -165,6 +165,7 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
 
 pub(crate) trait SgHttpRouteMatchConv {
     fn from_kube_httproute(route_match: HttpRouteMatch) -> SgHttpRouteMatch;
+
     /// Returns (matches, filters)
     /// path 和 header 对应插件的关系是:
     ///
@@ -178,16 +179,21 @@ pub(crate) trait SgHttpRouteMatchConv {
     /// | header1 | Some(request_header_modifier1) |
     /// | header2 | Some(request_header_modifier2) |
     /// | header3 | None |
+    /// | ~~header4,header5~~（not support） | ~~Some(request_header_modifier3),None~~ |
+    /// | path_match4,header6 | Some(url_rewrite3),None |
+    /// | path_match5,header7 | None,Some(request_header_modifier4) |
     ///
-    /// ==>
+    /// result ==>
     ///
-    /// | matches | plugins |
-    /// | --- | --- |
+    /// matches_vec:[path_match1, path_match2, path_match3, header1, header2, header3, (path_match4,header6), (path_match5,header7)]
+    /// filter_vec:[url_rewrite1,url_rewrite2,request_header_modifier1,request_header_modifier2,url_rewrite3,request_header_modifier4]
+    ///
     ///
     fn into_kube_httproute(self) -> (Vec<HttpRouteMatch>, Vec<HttpRouteFilter>);
 }
 impl SgHttpRouteMatchConv for SgHttpRouteMatch {
     fn into_kube_httproute(self) -> (Vec<HttpRouteMatch>, Vec<HttpRouteFilter>) {
+        // todo: not complete
         let (match_vec, plugins) = if let Some(method_vec) = self.method {
             method_vec
                 .into_iter()

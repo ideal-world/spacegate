@@ -1,4 +1,6 @@
-use spacegate_model::{BackendHost, BoxResult};
+use k8s_openapi::api::core::v1::Service;
+use kube::{api::ListParams, Api, ResourceExt};
+use spacegate_model::{BackendHost, BoxResult, K8sServiceData};
 
 use crate::service::Discovery;
 
@@ -10,7 +12,18 @@ impl Discovery for K8s {
     }
 
     async fn backends(&self) -> BoxResult<Vec<BackendHost>> {
-        todo!();
-        Ok(vec![])
+        let service_api: Api<Service> = self.get_all_api();
+        let result = service_api
+            .list(&ListParams::default())
+            .await?
+            .into_iter()
+            .map(|s| {
+                BackendHost::K8sService(K8sServiceData {
+                    name: s.name_any(),
+                    namespace: s.namespace(),
+                })
+            })
+            .collect();
+        Ok(result)
     }
 }

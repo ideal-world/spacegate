@@ -7,15 +7,15 @@ use kube::{
     runtime::{watcher, WatchStreamExt},
     Api, Resource, ResourceExt,
 };
-
-use crate::{
+use spacegate_model::{
     constants,
-    k8s_crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter},
-    service::{backend::k8s::K8s, Retrieve},
+    ext::k8s::crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter},
     BoxResult, Config,
 };
 
-use super::{ConfigEventType, ConfigType, CreateListener, Listen};
+use crate::service::{ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve as _};
+
+use super::K8s;
 
 pub struct K8sListener {
     rx: tokio::sync::mpsc::UnboundedReceiver<(ConfigType, ConfigEventType)>,
@@ -168,7 +168,7 @@ impl CreateListener for K8s {
         let move_evt_tx = evt_tx.clone();
         let move_namespace = self.namespace.to_string();
         let move_http_spaceroute_api = http_spaceroute_api.clone();
-        //watche http spaceroute
+        //watch http spaceroute
         tokio::task::spawn(async move {
             let mut uid_version_map = HashMap::new();
             let ew = watcher::watcher(move_http_spaceroute_api, watcher::Config::default());
@@ -182,7 +182,7 @@ impl CreateListener for K8s {
         let move_evt_tx = evt_tx.clone();
         let move_namespace = self.namespace.to_string();
         let move_http_route_api = http_route_api.clone();
-        //watche http route
+        //watch http route
         tokio::task::spawn(async move {
             let mut uid_version_map = HashMap::new();
             let ew = watcher::watcher(move_http_route_api, watcher::Config::default());
@@ -204,22 +204,23 @@ impl CreateListener for K8s {
             .clone()
             .into_values()
             .flat_map(|item| {
-                let mut filters = item.gateway.filters.clone();
-                let route_filters = item.routes.values().flat_map(|route| route.filters.clone()).collect::<Vec<_>>();
-                filters.extend(route_filters);
-                filters
+                let mut plugin_ids = item.gateway.plugins.clone();
+                let route_plugin_ids = item.routes.values().flat_map(|route| route.plugins.clone()).collect::<Vec<_>>();
+                plugin_ids.extend(route_plugin_ids);
+                plugin_ids
             })
             .map(|f| (f.code, f.name))
             .collect::<Vec<_>>();
         let move_evt_tx = evt_tx.clone();
         let move_namespace = self.namespace.to_string();
-        //watche sgfilter
+
+        //watch sgfilter
         tokio::task::spawn(async move {
             let mut uid_version_map = HashMap::new();
             let ew = watcher::watcher(sg_filter_api, watcher::Config::default()).touched_objects();
             pin_mut!(ew);
             while let Some(filter) = ew.try_next().await.unwrap_or_default() {
-                if filter.spec.filters.iter().any(|inner_filter| move_filter_codes_names.contains(&(inner_filter.code.clone(), inner_filter.name.clone())))
+                if filter.spec.filters.iter().any(|inner_filter| move_filter_codes_names.contains(&(inner_filter.code.clone().into(), inner_filter.name.clone().into())))
                     && uid_version_map.get(&filter.name_any()).is_none()
                 {
                     uid_version_map.insert(filter.name_any(), filter.resource_version());
@@ -270,7 +271,7 @@ impl CreateListener for K8s {
 }
 
 impl Listen for K8sListener {
-    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<BoxResult<super::ListenEvent>> {
+    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<BoxResult<ListenEvent>> {
         if let Some(next) = ready!(self.rx.poll_recv(cx)) {
             std::task::Poll::Ready(Ok(next))
         } else {

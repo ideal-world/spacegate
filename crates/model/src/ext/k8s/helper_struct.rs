@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
 pub struct SgSingeFilter {
-    pub name: Option<String>,
+    pub name: String,
     pub namespace: String,
     pub filter: super::crd::sg_filter::K8sSgFilterSpecFilter,
     pub target_ref: Option<super::crd::sg_filter::K8sSgFilterSpecTargetRef>,
@@ -36,7 +36,7 @@ impl From<SgSingeFilter> for super::crd::sg_filter::SgFilter {
     fn from(value: SgSingeFilter) -> Self {
         super::crd::sg_filter::SgFilter {
             metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                name: value.name.clone(),
+                name: if value.name.is_empty() { Some(value.name.clone()) } else { None },
                 namespace: Some(value.namespace.clone()),
                 ..Default::default()
             },

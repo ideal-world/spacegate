@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use k8s_gateway_api::{HttpHeader, HttpPathModifier, HttpRequestHeaderFilter, HttpRequestRedirectFilter, HttpRouteFilter, HttpUrlRewriteFilter, LocalObjectReference};
 use kube::{
-    api::{PatchParams, PostParams},
+    api::{DeleteParams, PatchParams, PostParams},
     Api, ResourceExt,
 };
 use spacegate_model::{constants::SG_FILTER_KIND, ext::k8s::crd::sg_filter::SgFilter};
@@ -41,6 +41,9 @@ pub(crate) trait PluginIdConv {
     /// can be ues in gateway and route level
     async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()>;
 
+    /// can be ues in gateway and route level
+    async fn remove_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()>;
+
     // mix of [SgRouteFilter::to_singe_filter] and [SgRouteFilter::to_http_route_filter]
     // PluginInstanceId can be converted into `SgRouteFilter` or `HttpRouteFilter`
     // async fn to_route_filter_or_add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> Option<HttpRouteFilter>;
@@ -51,7 +54,7 @@ impl PluginIdConv for PluginInstanceId {
         match self.name.clone() {
             PluginInstanceName::Anon { uid: _ } => None,
             PluginInstanceName::Named { name } => Some(SgSingeFilter {
-                name: Some(name.clone()),
+                name: name.clone(),
                 namespace: namespace.to_owned(),
                 filter: K8sSgFilterSpecFilter {
                     code: self.code.to_string(),
@@ -151,6 +154,22 @@ impl PluginIdConv for PluginInstanceId {
             if filter.spec.target_refs.iter().find(|t| t.eq(&&target)).is_none() {
                 filter.spec.target_refs.push(target);
                 filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
+            };
+        }
+        Ok(())
+    }
+
+    async fn remove_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
+        let filter_api: Api<SgFilter> = client.get_namespace_api();
+        if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
+            if filter.spec.target_refs.iter().find(|t| t.eq(&&target)).is_some() {
+                filter.spec.target_refs.retain(|t| !t.eq(&target));
+
+                if filter.spec.target_refs.is_empty() {
+                    filter_api.delete(&filter.name_any(), &DeleteParams::default()).await?;
+                } else {
+                    filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
+                }
             };
         }
         Ok(())

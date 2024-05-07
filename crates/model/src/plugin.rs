@@ -39,6 +39,21 @@ impl PluginInstanceName {
     }
 }
 
+impl From<Option<String>> for PluginInstanceName {
+    fn from(value: Option<String>) -> Self {
+        match value {
+            Some(name) => PluginInstanceName::Named { name },
+            None => PluginInstanceName::Mono,
+        }
+    }
+}
+
+impl From<String> for PluginInstanceName {
+    fn from(value: String) -> Self {
+        Some(value).into()
+    }
+}
+
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct PluginInstanceId {

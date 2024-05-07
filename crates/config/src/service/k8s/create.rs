@@ -1,15 +1,15 @@
 use k8s_gateway_api::Gateway;
 use k8s_openapi::api::core::v1::Secret;
-use kube::{api::PostParams, Api, ResourceExt};
+use kube::{api::PostParams, Api};
 use spacegate_model::{
-    ext::k8s::crd::{
-        http_spaceroute,
-        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
-    },
+    ext::k8s::crd::{http_spaceroute, sg_filter::SgFilter},
     BoxError, PluginInstanceId,
 };
 
-use crate::{service::Create, BoxResult};
+use crate::{
+    service::{Create, Update},
+    BoxResult,
+};
 
 use super::{
     convert::{filter_k8s_conv::PluginIdConv as _, gateway_k8s_conv::SgGatewayConv as _, route_k8s_conv::SgHttpRouteConv as _, ToTarget as _},
@@ -53,7 +53,12 @@ impl Create for K8s {
 
         if let Some(filter) = filter {
             let filter_api: Api<SgFilter> = self.get_namespace_api();
-            filter_api.create(&PostParams::default(), &filter.into()).await?;
+            if filter_api.get_opt(&filter.name).await?.is_none() {
+                filter_api.create(&PostParams::default(), &filter.into()).await?;
+            } else {
+                // do update
+                self.update_plugin(id, filter.filter.config).await?;
+            }
         }
         Ok(())
     }
