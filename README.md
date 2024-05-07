@@ -44,7 +44,6 @@ listener.listen().await?;
 ```
 
 
-
 ## Why create this project
 
 There are a lot of API gateway products out there, but they are mostly in the form of standalone services. The customization ability is relatively poor, and the cost of using and deploying is relatively high.
@@ -71,6 +70,11 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 ![Crates](./.readme/dep.svg)
 
 
+## Build and Install
+Build and install on your own linux machine.
+```shell
+bash resource/install/install.sh
+```
 
 ## 🔖 Releases
 > Release binary naming method: {crate}-{arch}{OS}{abi}-{version}
