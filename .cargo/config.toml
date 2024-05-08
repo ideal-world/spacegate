@@ -1,6 +1,6 @@
 [env]
 TS_RS_EXPORT_DIR = { value = "./sdk/admin-client/src/model", relative = true }
-CONFIG = "file:./resource/local-example"
+CONFIG = "file:resource/install/default-config"
 PLUGINS = "./target/debug"
 RUST_LOG = "trace"
 FORMAT = "json"

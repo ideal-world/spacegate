@@ -5,6 +5,7 @@ fn main() -> Result<(), BoxError> {
     // todo: more subscriber required
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     let args = args::Args::parse();
+    #[allow(unused_variables)]
     if let Some(plugins) = args.plugins {
         #[cfg(feature = "dylib")]
         {
