@@ -94,7 +94,7 @@ jobs:
           dockerfile: resource/docker/spacegate-admin-server/Dockerfile
           registry: docker.io
           image: ecfront/spacegate-admin-server
-          tags: latest
+          tags: ${{ github.ref == 'refs/heads/master' && 'latest' || github.ref_name }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
