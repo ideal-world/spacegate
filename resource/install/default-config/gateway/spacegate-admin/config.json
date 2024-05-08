@@ -1,0 +1,16 @@
+{
+    "gateway": {
+        "name": "spacegate-admin",
+        "listeners": [
+            {
+                "name": "http",
+                "ip": null,
+                "port": 9991,
+                "protocol": {
+                    "type": "http"
+                },
+                "hostname": null
+            }
+        ]
+    }
+}

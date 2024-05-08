@@ -15,7 +15,7 @@ use tracing::{info, warn};
 
 use crate::state::PluginCode;
 const DEFAULT_HOST: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
-const DEFAULT_PORT: u16 = 80;
+const DEFAULT_PORT: u16 = 9992;
 /// Arguments to initiate the server
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

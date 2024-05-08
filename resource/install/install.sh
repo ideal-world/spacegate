@@ -1,7 +1,7 @@
 CONFIG_PATH=/etc/spacegate/config.json
 PLUGIN_PATH=/lib/spacegate/plugins
 BIN_PATH=/usr/local/bin
-cargo build spacegate --release --features dylib
+cargo build --bin spacegate --release --features dylib
 sudo cp target/release/spacegate $BIN_PATH
 
 # Create config file
@@ -10,8 +10,7 @@ sudo mkdir /etc/spacegate
 if [ -f $CONFIG_PATH ]; then
     echo "Config file already exists"
 else
-    sudo echo "{}" >/etc/spacegate/config.json
-    sudo chmod 666 /etc/spacegate/config.json
+    sudo cp resource/install/default-config/config.json /etc/spacegate/config.json
 fi
 
 if [ -f $PLUGIN_PATH ]; then

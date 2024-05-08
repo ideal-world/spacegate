@@ -72,8 +72,13 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 
 ## Build and Install
 Build and install on your own linux machine.
+### Install spacegate
 ```shell
-bash resource/install/install.sh
+sh resource/install/install.sh
+```
+### Install spacegate-admin manage tool
+```shell
+sh resource/install/install-admin.sh
 ```
 
 ## 🔖 Releases

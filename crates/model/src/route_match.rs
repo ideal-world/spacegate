@@ -65,6 +65,7 @@ pub struct SgHttpMethodMatch(pub String);
 /// Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+#[serde(default)]
 pub struct SgHttpRouteMatch {
     #[serde(skip_serializing_if = "Option::is_none")]
     /// Path specifies a HTTP request path matcher.

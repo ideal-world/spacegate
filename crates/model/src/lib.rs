@@ -20,6 +20,7 @@ pub type BoxResult<T> = Result<T, BoxError>;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+#[serde(default)]
 pub struct ConfigItem<P = PluginInstanceId> {
     pub gateway: SgGateway<P>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -38,7 +39,7 @@ impl<P> ConfigItem<P> {
     }
 }
 
-impl<P: Default> Default for ConfigItem<P> {
+impl<P> Default for ConfigItem<P> {
     fn default() -> Self {
         Self {
             gateway: Default::default(),
