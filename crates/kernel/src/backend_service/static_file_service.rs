@@ -94,7 +94,7 @@ pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgRespon
         }
         let cache_this = cache_policy(&metadata);
         if cache_this {
-            // todo: cache
+            // TODO: cache
         }
     }
     let mut buffer = Vec::new();

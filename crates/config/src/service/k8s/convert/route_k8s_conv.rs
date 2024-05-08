@@ -193,7 +193,7 @@ pub(crate) trait SgHttpRouteMatchConv {
 }
 impl SgHttpRouteMatchConv for SgHttpRouteMatch {
     fn into_kube_httproute(self) -> (Vec<HttpRouteMatch>, Vec<HttpRouteFilter>) {
-        // todo: not complete
+        // TODO: not complete
         let (match_vec, plugins) = if let Some(method_vec) = self.method {
             method_vec
                 .into_iter()
@@ -257,7 +257,7 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
             (
                 vec![HttpRouteMatch {
                     path: path,
-                    //todo
+                    //TODO
                     headers: None,
                     query_params: self.query.map(|q_vec| q_vec.into_iter().map(|q| q.into_kube_httproute()).collect::<Vec<_>>()),
                     method: None,

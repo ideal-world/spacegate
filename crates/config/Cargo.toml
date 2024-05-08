@@ -28,6 +28,7 @@ k8s = [
   "k8s-gateway-api",
   "schemars",
   "spacegate-model/ext-k8s",
+  "rand",
 ]
 [dependencies]
 spacegate-model = { path = "../model" }
@@ -53,9 +54,7 @@ k8s-gateway-api = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 lazy_static.workspace = true
 
-notify = { workspace = true, features = [
-  "macos_kqueue",
-], optional = true }
+notify = { workspace = true, features = ["macos_kqueue"], optional = true }
 
 chrono = { version = "0.4" }
 
@@ -65,6 +64,7 @@ redis = { version = "0.24", features = [
 ], optional = true }
 deadpool-redis = { version = "0.14", optional = true }
 lru = { version = "0.12.0", optional = true }
+rand = { version = "*", optional = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }

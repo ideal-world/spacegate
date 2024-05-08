@@ -119,6 +119,7 @@ impl K8s {
         Ok(())
     }
 
+    // TODO remove
     // pub(crate) async fn update_filter_changes(&self, old: Vec<SgSingeFilter>, update: Vec<SgSingeFilter>) -> BoxResult<()> {
     //     if old.is_empty() && update.is_empty() {
     //         return Ok(());
