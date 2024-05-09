@@ -106,7 +106,7 @@ mod test {
 
     #[tokio::test]
     async fn test_op_res_count_limit() {
-        const GW_NAME: &str = "DEFAULT";
+        const GW_NAME: &str = "REDIS-COUNT-TEST";
         const AK: &str = "3count";
         std::env::set_var("RUST_LOG", "trace");
 
