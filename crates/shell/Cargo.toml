@@ -34,6 +34,7 @@ k8s = [
   "spacegate-plugin/rewrite",
   "spacegate-plugin/header-modifier",
   "spacegate-plugin/redirect",
+  "spacegate-config/k8s",
 ]
 plugin-all = ["spacegate-plugin/full"]
 plugin-cache = ["spacegate-plugin/cache"]

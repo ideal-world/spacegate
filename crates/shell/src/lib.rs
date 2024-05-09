@@ -71,7 +71,6 @@ pub async fn startup_file(conf_dir: impl AsRef<std::path::Path>) -> Result<(), B
 /// If the `namespace` is None, it will use the default namespace.
 pub async fn startup_k8s(namespace: Option<&str>) -> Result<(), BoxError> {
     use spacegate_config::service::k8s::K8s;
-
     let namespace = namespace.unwrap_or("default");
     let config = K8s::with_default_client(namespace).await?;
     startup(config).await
