@@ -54,12 +54,16 @@ impl<P> SgGateway<P> {
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct SgParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Gateway Log_Level
     pub log_level: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Gateway language
     pub lang: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Ignore backend tls verification
     pub ignore_tls_verification: Option<bool>,
 }

@@ -103,19 +103,21 @@ impl<P> Default for SgHttpRouteRule<P> {
 pub struct SgBackendRef<P = PluginInstanceId> {
     // #[serde(flatten)]
     pub host: BackendHost,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Port specifies the destination port number to use for this resource.
-    pub port: u16,
+    pub port: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     /// Timeout specifies the timeout for requests forwarded to the referenced backend.
     pub timeout_ms: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     // Protocol specifies the protocol used to talk to the referenced backend.
     pub protocol: Option<SgBackendProtocol>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Weight specifies the proportion of requests forwarded to the referenced backend.
     /// This is computed as weight/(sum of all weights in this BackendRefs list).
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
     /// Weight is not a percentage and the sum of weights does not need to equal 100.
-    pub weight: u16,
+    pub weight: Option<u16>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     /// plugins define the filters that are applied to backend that match this hostnames.
     ///
@@ -144,10 +146,10 @@ impl<P> Default for SgBackendRef<P> {
     fn default() -> Self {
         Self {
             host: Default::default(),
-            port: 80,
+            port: Default::default(),
             timeout_ms: Default::default(),
             protocol: Default::default(),
-            weight: 1,
+            weight: Default::default(),
             plugins: Default::default(),
         }
     }
