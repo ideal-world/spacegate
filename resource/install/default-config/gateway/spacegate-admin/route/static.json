@@ -1,25 +1,24 @@
 {
-    "route_name": "static",
-    "rules": [
+  "route_name": "static",
+  "rules": [
+    {
+      "matches": [
         {
-            "matches": [
-                {
-                    "path": {
-                        "kind": "Prefix",
-                        "value": "/",
-                        "replace": null
-                    }
-                }
-            ],
-            "backends": [
-                {
-                    "host": {
-                        "kind": "File",
-                        "path": "/var/www/spacegate-admin"
-                    }
-                }
-            ]
+          "path": {
+            "kind": "Prefix",
+            "value": "/"
+          }
         }
-    ],
-    "priority": 0
+      ],
+      "backends": [
+        {
+          "host": {
+            "kind": "File",
+            "path": "/var/www/spacegate-admin"
+          }
+        }
+      ]
+    }
+  ],
+  "priority": 0
 }

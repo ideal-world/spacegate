@@ -1,3 +1,5 @@
 {
-    "api_port": 9876
+  "gateways": {},
+  "plugins": {},
+  "api_port": 9876
 }

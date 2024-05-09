@@ -1,16 +1,15 @@
 {
-    "gateway": {
-        "name": "spacegate-admin",
-        "listeners": [
-            {
-                "name": "http",
-                "ip": null,
-                "port": 9991,
-                "protocol": {
-                    "type": "http"
-                },
-                "hostname": null
-            }
-        ]
-    }
+  "gateway": {
+    "name": "spacegate-admin",
+    "parameters": {},
+    "listeners": [
+      {
+        "name": "http",
+        "port": 9991,
+        "protocol": {
+          "type": "http"
+        }
+      }
+    ]
+  }
 }

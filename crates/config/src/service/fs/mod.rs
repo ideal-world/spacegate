@@ -98,6 +98,7 @@ where
     }
 
     pub async fn save_config(&self, config: Config) -> Result<(), BoxError> {
+        // save config
         let Config { plugins, gateways, api_port } = config;
         let main_config_to_save: Config = Config { api_port, ..Default::default() };
         let b_main_config = self.format.ser(&main_config_to_save)?;
@@ -111,7 +112,10 @@ where
             let dir = self.gateway_dir().join(&gateway_name);
             tokio::fs::create_dir_all(dir).await?;
             let gateway_path = self.gateway_main_config_path(&gateway_name);
-            let b_gateway = self.format.ser(&item.gateway)?;
+            let b_gateway = self.format.ser(&ConfigItem {
+                gateway: item.gateway,
+                ..Default::default()
+            })?;
             tokio::fs::write(&gateway_path, &b_gateway).await?;
             let route_dir_path = self.routes_dir(&gateway_name);
             tokio::fs::create_dir_all(&route_dir_path).await?;
@@ -169,6 +173,8 @@ where
         let mut config = self.collect_config().await?;
         let result = map(&mut config);
         if result.is_ok() {
+            tokio::fs::remove_dir_all(&self.dir).await?;
+            tokio::fs::create_dir_all(&self.dir).await?;
             self.save_config(config).await?;
         }
         Ok(())
