@@ -297,7 +297,7 @@ impl HttpSpaceroute {
     }
 }
 
-// // todo replace kernel::config::config_by_k8s::get_http_spaceroute_by_api
+// // TODO replace kernel::config::config_by_k8s::get_http_spaceroute_by_api
 // pub async fn get_http_spaceroute_by_api(
 //     gateway_uniques: &[String],
 //     (http_spaceroute_api, http_route_api): (&Api<HttpSpaceroute>, &Api<HttpRoute>),

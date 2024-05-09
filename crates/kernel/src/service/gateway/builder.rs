@@ -50,7 +50,7 @@ impl GatewayBuilder {
     }
     pub fn http_routers(mut self, routes: impl IntoIterator<Item = (String, HttpRoute)>) -> Self {
         for (name, mut route) in routes {
-            route.name = name.clone();
+            route.name.clone_from(&name);
             self.http_routers.insert(name, route);
         }
         self

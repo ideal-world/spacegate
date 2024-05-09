@@ -11,13 +11,13 @@ use spacegate_kernel::BoxResult;
 /// Macro to register plugins from a dynamic library.
 ///
 /// # Usage
-/// ```rust no_run
+/// ```rust
 /// use spacegate_plugin::dynamic_lib;
+/// pub struct MyPlugin1;
+///
 /// dynamic_lib! {
 ///     #[cfg(feature = "my_plugin1")]
-///     MyPlugin1,
-///     MyPlugin2,
-///     MyPlugin3,
+///     MyPlugin1
 /// }
 ///
 /// ```

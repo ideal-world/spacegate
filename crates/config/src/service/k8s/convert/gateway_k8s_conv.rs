@@ -3,19 +3,17 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference};
 use k8s_openapi::{api::core::v1::Secret, ByteString};
-use kube::api::ObjectMeta;
+use kube::{api::ObjectMeta, ResourceExt};
+use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, PluginInstanceId};
 
-use crate::{
-    constants,
-    ext::k8s::{
-        crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef, SgFilterTargetKind},
-        helper_filter::SgSingeFilter,
-    },
-    SgGateway, SgParameters,
-};
+use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, SgGateway, SgParameters};
 
-impl SgGateway {
-    pub fn to_kube_gateway(self, namespace: &str) -> (Gateway, Option<Secret>, Vec<SgSingeFilter>) {
+use super::ToTarget;
+pub(crate) trait SgGatewayConv {
+    fn to_kube_gateway(self, namespace: &str) -> (Gateway, Option<Secret>, Vec<PluginInstanceId>);
+}
+impl SgGatewayConv for SgGateway {
+    fn to_kube_gateway(self, namespace: &str) -> (Gateway, Option<Secret>, Vec<PluginInstanceId>) {
         let mut secret = None;
 
         let gateway = Gateway {
@@ -66,6 +64,7 @@ impl SgGateway {
                                     options: None,
                                 })
                             }
+                            _ => None,
                         },
                         allowed_routes: None,
                     })
@@ -75,32 +74,17 @@ impl SgGateway {
             status: None,
         };
 
-        let sgfilters: Vec<SgSingeFilter> = self
-            .plugins
-            .into_iter()
-            .map(|f| SgSingeFilter {
-                name: f.name,
-                namespace: namespace.to_string(),
-                filter: K8sSgFilterSpecFilter {
-                    code: f.code,
-                    name: None,
-                    enable: true,
-                    config: f.spec,
-                },
-                target_ref: K8sSgFilterSpecTargetRef {
-                    kind: SgFilterTargetKind::Gateway.into(),
-                    name: self.name.clone(),
-                    namespace: Some(namespace.to_string()),
-                },
-            })
-            .collect();
-
-        (gateway, secret, sgfilters)
+        (gateway, secret, self.plugins)
     }
 }
 
-impl SgParameters {
-    pub fn into_kube_gateway(self) -> BTreeMap<String, String> {
+pub(crate) trait SgParametersConv {
+    fn from_kube_gateway(gateway: &Gateway) -> Self;
+    fn into_kube_gateway(self) -> BTreeMap<String, String>;
+}
+
+impl SgParametersConv for SgParameters {
+    fn into_kube_gateway(self) -> BTreeMap<String, String> {
         let mut ann = BTreeMap::new();
         if let Some(redis_url) = self.redis_url {
             ann.insert(crate::constants::GATEWAY_ANNOTATION_REDIS_URL.to_string(), redis_url);
@@ -120,7 +104,7 @@ impl SgParameters {
         ann
     }
 
-    pub fn from_kube_gateway(gateway: &Gateway) -> Self {
+    fn from_kube_gateway(gateway: &Gateway) -> Self {
         let gateway_annotations = gateway.metadata.annotations.clone();
         if let Some(gateway_annotations) = gateway_annotations {
             SgParameters {
@@ -136,6 +120,16 @@ impl SgParameters {
                 lang: None,
                 ignore_tls_verification: None,
             }
+        }
+    }
+}
+
+impl ToTarget for Gateway {
+    fn to_target_ref(&self) -> K8sSgFilterSpecTargetRef {
+        K8sSgFilterSpecTargetRef {
+            kind: SgTargetKind::Gateway.into(),
+            name: self.name_any(),
+            namespace: self.namespace(),
         }
     }
 }
