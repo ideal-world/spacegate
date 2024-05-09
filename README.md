@@ -11,6 +11,13 @@ Do NOT use in production environment!**
 [![License](https://img.shields.io/github/license/ideal-world/spacegate)](https://github.com/ideal-world/spacegate/blob/master/LICENSE)
 
 > SpaceGate("Spacegates are Stargates suspended in space, or in planetary orbit") From "Stargate".
+# 💖 Core functions
+* Tiny: based on rust, the executable file only takes 6MB.
+* Cloud Native: Implemented the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/api-types/gatewayclass/) specification.
+* Easy to extent: Build your own plugin with rust in just two function.
+* Easy to extent: Build your own plugin with rust in just two function.
+* High performance
+* Low resource usage
 
 # Usage
 
@@ -42,7 +49,7 @@ Or visit config folder
 ls /etc/spacegate
 ```
 
-Reload config
+After you edited config, use systemctl to reload config.
 ```shell
 sudo systemctl reload spacegate
 ```
@@ -179,13 +186,7 @@ There are a lot of API gateway products out there, but they are mostly in the fo
 
 This project is based on the ``Rust`` language and uses ``hyper`` as the base network library. The goal is to: **provide a library-first, lightweight, high-performance, cloud-native supported API gateway** .
 
-# 💖 Core functions
 
-* Cloud Native Support, implementing the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/api-types/gatewayclass/) specification
-* Microkernel, plugin-based architecture
-* Built-in websocket support
-* High performance
-* Low resource usage
 
 # 📦 Components
 
