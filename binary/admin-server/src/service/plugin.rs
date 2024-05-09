@@ -13,6 +13,7 @@ use axum::{
 use serde_json::Value;
 use spacegate_config::{service::Discovery, BoxError, PluginAttributes};
 use tokio::{sync::RwLock, time::Instant};
+use tracing::info;
 
 static ATTR_CACHE: OnceLock<RwLock<HashMap<String, PluginAttributes>>> = OnceLock::new();
 
@@ -24,6 +25,7 @@ async fn sync_attr_cache<B: Discovery>(backend: &B, refresh: bool) -> Result<(),
         drop(next_sync);
         let mut cache = ATTR_CACHE.get_or_init(Default::default).write().await;
         if let Some(remote) = backend.api_url().await? {
+            info!("refresh plugin attr from: {}", remote);
             let attrs = <dyn Instance>::plugin_list(&remote).await?;
             cache.clear();
             cache.extend(attrs.into_iter().map(|attr| (attr.code.to_string(), attr)));

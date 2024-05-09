@@ -86,7 +86,7 @@ mod test {
 
     #[tokio::test]
     async fn test_op_res_freq_limit() {
-        const GW_NAME: &str = "DEFAULT";
+        const GW_NAME: &str = "REDIS-LIMIT-TEST";
         const AK: &str = "3qpm";
         std::env::set_var("RUST_LOG", "trace");
 

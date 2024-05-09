@@ -2,7 +2,7 @@ use clap::Parser;
 use spacegate_shell::BoxError;
 mod args;
 fn main() -> Result<(), BoxError> {
-    // todo: more subscriber required
+    // TODO: more subscriber required
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     let args = args::Args::parse();
     #[allow(unused_variables)]

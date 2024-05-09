@@ -102,7 +102,7 @@ mod test {
     use tracing_subscriber::EnvFilter;
     #[tokio::test]
     async fn test_op_res_count_limit() {
-        const GW_NAME: &str = "DEFAULT";
+        const GW_NAME: &str = "REDIS-TIME-RANGE-TEST";
         std::env::set_var("RUST_LOG", "trace");
         tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
 

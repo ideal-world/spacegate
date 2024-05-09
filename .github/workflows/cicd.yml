@@ -71,19 +71,19 @@ jobs:
           cat ~/.kube/config
           kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
           cargo build -p spacegate
-          cd services/full/res
+          cd resource/docker/spacegate
           mv ../../../target/debug/spacegate ./
-          docker build -t ecfront/spacegate:0.1.0-alpha.2 .
+          docker build -t ecfront/spacegate:latest .
           rm spacegate
-          k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test --verbose
+          k3d image import ecfront/spacegate:latest -c spacegate-test --verbose
 
           kubectl wait --for=condition=Ready pod -l name=gateway-api-admission-server -n gateway-system
           sleep 10
           cd ../../../
-          kubectl apply -f ./kernel/res/namespace.yaml
-          kubectl apply -f ./kernel/res/gatewayclass.yaml
-          kubectl apply -f ./kernel/res/spacegate-gateway.yaml
-          kubectl apply -f ./kernel/res/spacegate-httproute.yaml
+          kubectl apply -f ./resource/kube-manifests/namespace.yaml
+          kubectl apply -f ./resource/kube-manifests/gatewayclass.yaml
+          kubectl apply -f ./resource/kube-manifests/spacegate-gateway.yaml
+          kubectl apply -f ./resource/kube-manifests/spacegate-httproute.yaml
           sleep 5
           kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
 

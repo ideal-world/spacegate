@@ -97,7 +97,7 @@ pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgRespon
         }
         let cache_this = cache_policy(&metadata);
         if cache_this {
-            // todo: cache
+            // TODO: cache
         }
     }
     let mimes = mime_guess::from_path(path).into_iter().filter_map(|mime| HeaderValue::from_str(mime.essence_str()).ok());

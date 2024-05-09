@@ -117,3 +117,6 @@ spec:
           ports:
             - containerPort: 9080
               hostPort: 9080
+          env:
+            - name: CONFIG
+              value: k8s:spacegate
