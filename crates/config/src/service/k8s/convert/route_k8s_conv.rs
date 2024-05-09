@@ -400,7 +400,7 @@ impl SgBackendRefConv for SgBackendRef {
                     kind,
                     name: host,
                     namespace: None,
-                    port: Some(self.port),
+                    port: self.port,
                 }
             }
             BackendHost::K8sService(k8s_param) => BackendObjectReference {
@@ -408,7 +408,7 @@ impl SgBackendRefConv for SgBackendRef {
                 kind: BackendObjectRefKind::Service.into(),
                 name: k8s_param.name,
                 namespace: k8s_param.namespace,
-                port: Some(self.port),
+                port: self.port,
             },
             BackendHost::File { path } => BackendObjectReference {
                 group: None,
@@ -420,7 +420,7 @@ impl SgBackendRefConv for SgBackendRef {
         };
         HttpBackendRef {
             backend_ref: Some(BackendRef {
-                weight: Some(self.weight),
+                weight: self.weight,
                 timeout_ms: self.timeout_ms,
                 inner: backend_inner_ref,
             }),
@@ -458,10 +458,10 @@ impl SgBackendRefConv for SgBackendRef {
                     http_backend.filters.map(|f_vec| f_vec.into_iter().partition(|f| matches!(f, HttpRouteFilter::ExtensionRef { extension_ref: _ }))).unwrap_or_default();
                 Ok(SgBackendRef {
                     host: backend_host,
-                    port: backend.inner.port.unwrap_or(80),
+                    port: backend.inner.port,
                     timeout_ms: backend.timeout_ms,
                     protocol,
-                    weight: backend.weight.unwrap_or(1),
+                    weight: backend.weight,
                     plugins: ext_plugins.into_iter().filter_map(PluginInstanceId::from_http_route_filter).collect(),
                 })
             })
