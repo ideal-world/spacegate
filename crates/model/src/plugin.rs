@@ -83,6 +83,22 @@ impl PluginInstanceId {
         let name = id.strip_prefix(code.as_ref()).ok_or("unmatched code")?.trim_matches('-').parse()?;
         Ok(PluginInstanceId { code, name })
     }
+    pub fn as_file_stem(&self) -> String {
+        match &self.name {
+            PluginInstanceName::Anon { uid } => format!("{}.{}", self.code, uid),
+            PluginInstanceName::Named { ref name } => format!("{}.{}", self.code, name),
+            PluginInstanceName::Mono => self.code.to_string(),
+        }
+    }
+    pub fn from_file_stem(stem: &str) -> Self {
+        let mut iter = stem.split('.');
+        let code = iter.next().expect("should have the first part").to_string();
+        if let Some(name) = iter.next() {
+            Self::new(code, PluginInstanceName::named(name))
+        } else {
+            Self::new(code, PluginInstanceName::mono())
+        }
+    }
 }
 
 impl ToString for PluginInstanceName {

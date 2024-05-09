@@ -15,7 +15,7 @@ use tracing::{info, warn};
 
 use crate::state::PluginCode;
 const DEFAULT_HOST: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
-const DEFAULT_PORT: u16 = 80;
+const DEFAULT_PORT: u16 = 9992;
 /// Arguments to initiate the server
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -29,11 +29,12 @@ pub struct Args {
     /// the config backend you choose
 
     /// see [`ConfigBackend`]
-    #[arg(short, long, env, default_value_t = ConfigBackend::File(PathBuf::from("./config")))]
+    #[arg(short, long, env)]
+    #[cfg_attr(target_family = "unix", arg(default_value = "file:/etc/spacegate"))]
     pub config: ConfigBackend,
 
     /// the format of the config file
-    #[arg(short, long, env, default_value_t = ConfigFormat::Toml)]
+    #[arg(short, long, env, default_value_t = ConfigFormat::Json)]
     pub format: ConfigFormat,
     #[arg(short, long, env)]
     pub key: Option<Base64Decoded>,

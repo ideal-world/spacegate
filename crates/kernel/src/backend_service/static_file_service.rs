@@ -2,7 +2,7 @@ use std::{fs::Metadata, os::unix::fs::MetadataExt, path::Path};
 
 use chrono::{DateTime, Utc};
 use hyper::{
-    header::{HeaderValue, IF_MODIFIED_SINCE, IF_UNMODIFIED_SINCE, LOCATION},
+    header::{HeaderValue, CONTENT_TYPE, IF_MODIFIED_SINCE, IF_UNMODIFIED_SINCE, LOCATION},
     HeaderMap, Response, StatusCode,
 };
 use tokio::io::AsyncReadExt;
@@ -46,21 +46,23 @@ pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgRespon
         *response.extensions_mut() = reflect.into_inner();
     }
     let Ok(dir) = dir.canonicalize() else {
-        *response.status_mut() = StatusCode::FORBIDDEN;
+        *response.body_mut() = SgBody::full(format!("cannot canonicalize dir path {dir:?}"));
+        *response.status_mut() = StatusCode::NOT_FOUND;
         return response;
     };
 
     let Ok(path) = dir.join(request.uri().path().trim_start_matches('/')).canonicalize() else {
-        *response.status_mut() = StatusCode::FORBIDDEN;
+        *response.body_mut() = SgBody::full("cannot canonicalize file path");
+        *response.status_mut() = StatusCode::NOT_FOUND;
         return response;
     };
-
     trace!("static file path: {:?}", path);
     if !path.starts_with(dir) {
-        *response.status_mut() = StatusCode::FORBIDDEN;
+        *response.body_mut() = SgBody::full("file is not under the path");
+        *response.status_mut() = StatusCode::NOT_FOUND;
         return response;
     }
-    let mut file = match tokio::fs::File::open(path).await {
+    let mut file = match tokio::fs::File::open(&path).await {
         Ok(file) => file,
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => {
@@ -68,6 +70,7 @@ pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgRespon
                 return response;
             }
             std::io::ErrorKind::PermissionDenied => {
+                *response.body_mut() = SgBody::full("access permission denied");
                 *response.status_mut() = StatusCode::FORBIDDEN;
                 return response;
             }
@@ -96,6 +99,10 @@ pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgRespon
         if cache_this {
             // TODO: cache
         }
+    }
+    let mimes = mime_guess::from_path(path).into_iter().filter_map(|mime| HeaderValue::from_str(mime.essence_str()).ok());
+    for mime_value in mimes {
+        response.headers_mut().append(CONTENT_TYPE, mime_value);
     }
     let mut buffer = Vec::new();
     let _read = file.read_to_end(&mut buffer).await;

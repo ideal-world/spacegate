@@ -1,14 +1,12 @@
 [Unit]
-Description=Spacegate
+Description=Spacegate Admin
 
 [Service]
-PIDFile=/run/spacegate.pid
-ExecStart=spacegate
+ExecStart=spacegate-admin-server -p 9992
 Restart=always
-ExecReload=/bin/kill -HUP $MAINPID
 ExecStop=/bin/kill -INT $MAINPID
 KillSignal=SIGINT
 TimeoutStopSec=5
-Environment="RUST_LOG=WARN"
+Environment="RUST_LOG=INFO"
 [Install]
 WantedBy=multi-user.target

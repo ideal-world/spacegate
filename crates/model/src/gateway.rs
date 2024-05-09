@@ -16,8 +16,10 @@ pub struct SgGateway<P = PluginInstanceId> {
     pub name: String,
     /// Some parameters necessary for the gateway.
     pub parameters: SgParameters,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     /// Listeners associated with this Gateway. Listeners define logical endpoints that are bound on this Gateway’s addresses.
     pub listeners: Vec<SgListener>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     /// Filters define the filters that are applied to requests that match this gateway.
     pub plugins: Vec<P>,
 }
@@ -52,12 +54,16 @@ impl<P> SgGateway<P> {
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct SgParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Gateway Log_Level
     pub log_level: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Gateway language
     pub lang: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Ignore backend tls verification
     pub ignore_tls_verification: Option<bool>,
 }
@@ -69,12 +75,14 @@ pub struct SgParameters {
 pub struct SgListener {
     /// Name is the name of the Listener. This name MUST be unique within a Gateway.
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Ip bound to the Listener. Default is 0.0.0.0
     pub ip: Option<IpAddr>,
     /// Port is the network port. Multiple listeners may use the same port, subject to the Listener compatibility rules.
     pub port: u16,
     /// Protocol specifies the network protocol this listener expects to receive.
     pub protocol: SgProtocolConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// `HostName` is used to define the host on which the listener accepts requests.
     pub hostname: Option<String>,
 }

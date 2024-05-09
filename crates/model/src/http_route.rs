@@ -12,10 +12,13 @@ use super::{gateway::SgBackendProtocol, PluginInstanceId};
 pub struct SgHttpRoute<P = PluginInstanceId> {
     /// Route name
     pub route_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
     pub hostnames: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     /// Filters define the filters that are applied to requests that match this hostnames.
     pub plugins: Vec<P>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     /// Rules are a list of HTTP matchers, filters and actions.
     pub rules: Vec<SgHttpRouteRule<P>>,
     /// Rule priority, the rule of higher priority will be chosen.
@@ -54,12 +57,16 @@ impl<P> Default for SgHttpRoute<P> {
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct SgHttpRouteRule<P = PluginInstanceId> {
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     /// Filters define the filters that are applied to requests that match this rule.
     pub plugins: Vec<P>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     /// BackendRefs defines the backend(s) where matching requests should be sent.
     pub backends: Vec<SgBackendRef<P>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Timeout define the timeout for requests that match this rule.
     pub timeout_ms: Option<u32>,
 }
@@ -96,17 +103,22 @@ impl<P> Default for SgHttpRouteRule<P> {
 pub struct SgBackendRef<P = PluginInstanceId> {
     // #[serde(flatten)]
     pub host: BackendHost,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Port specifies the destination port number to use for this resource.
-    pub port: u16,
+    pub port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Timeout specifies the timeout for requests forwarded to the referenced backend.
     pub timeout_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     // Protocol specifies the protocol used to talk to the referenced backend.
     pub protocol: Option<SgBackendProtocol>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Weight specifies the proportion of requests forwarded to the referenced backend.
     /// This is computed as weight/(sum of all weights in this BackendRefs list).
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
     /// Weight is not a percentage and the sum of weights does not need to equal 100.
-    pub weight: u16,
+    pub weight: Option<u16>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     /// plugins define the filters that are applied to backend that match this hostnames.
     ///
     /// # Notice!
@@ -134,10 +146,10 @@ impl<P> Default for SgBackendRef<P> {
     fn default() -> Self {
         Self {
             host: Default::default(),
-            port: 80,
+            port: Default::default(),
             timeout_ms: Default::default(),
             protocol: Default::default(),
-            weight: 1,
+            weight: Default::default(),
             plugins: Default::default(),
         }
     }

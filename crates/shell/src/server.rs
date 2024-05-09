@@ -77,7 +77,10 @@ fn collect_http_route(
                                     builder = builder.plugin(BoxLayer::new(MapRequestLayer::new(add_extension(namespace_ext, true))))
                                 }
                             }
-                            builder = builder.host(host).port(backend.port);
+                            builder = builder.host(host);
+                            if let Some(port) = backend.port {
+                                builder = builder.port(port)
+                            }
                             if let Some(timeout) = backend.timeout_ms.map(|timeout| Duration::from_millis(timeout as u64)) {
                                 builder = builder.timeout(timeout)
                             }

@@ -1,0 +1,24 @@
+{
+  "route_name": "static",
+  "rules": [
+    {
+      "matches": [
+        {
+          "path": {
+            "kind": "Prefix",
+            "value": "/"
+          }
+        }
+      ],
+      "backends": [
+        {
+          "host": {
+            "kind": "File",
+            "path": "/var/www/spacegate-admin"
+          }
+        }
+      ]
+    }
+  ],
+  "priority": 0
+}
