@@ -109,11 +109,11 @@ impl K8s {
 
         let add_vec: Vec<_> = update_set.difference(&old_set).collect();
         for add_id in add_vec {
-            add_id.add_filter_target(target.clone(), &self).await?;
+            add_id.add_filter_target(target.clone(), self).await?;
         }
         let delete_vec: Vec<_> = old_set.difference(&update_set).collect();
         for delete_id in delete_vec {
-            delete_id.remove_filter_target(target.clone(), &self).await?;
+            delete_id.remove_filter_target(target.clone(), self).await?;
         }
 
         Ok(())

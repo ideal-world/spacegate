@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
-use k8s_gateway_api::{HttpHeader, HttpPathModifier, HttpRequestHeaderFilter, HttpRequestRedirectFilter, HttpRouteFilter, HttpUrlRewriteFilter, LocalObjectReference};
+use k8s_gateway_api::{HttpPathModifier, HttpRouteFilter, LocalObjectReference};
 use kube::{
-    api::{DeleteParams, PatchParams, PostParams},
+    api::{DeleteParams, PostParams},
     Api, ResourceExt,
 };
 use spacegate_model::{constants::SG_FILTER_KIND, ext::k8s::crd::sg_filter::SgFilter};
@@ -13,13 +11,10 @@ use crate::{
         helper_struct::SgSingeFilter,
     },
     plugin::{
-        gatewayapi_support_filter::{
-            SgFilterHeaderModifier, SgFilterHeaderModifierKind, SgFilterRedirect, SgFilterRewrite, SgHttpPathModifier, SgHttpPathModifierType, SG_FILTER_HEADER_MODIFIER_CODE,
-            SG_FILTER_REDIRECT_CODE, SG_FILTER_REWRITE_CODE,
-        },
+        gatewayapi_support_filter::{SgHttpPathModifier, SgHttpPathModifierType},
         PluginConfig,
     },
-    service::{self, k8s::K8s},
+    service::k8s::K8s,
     BoxResult, PluginInstanceId, PluginInstanceName,
 };
 
@@ -151,7 +146,7 @@ impl PluginIdConv for PluginInstanceId {
     async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
         let filter_api: Api<SgFilter> = client.get_namespace_api();
         if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
-            if filter.spec.target_refs.iter().find(|t| t.eq(&&target)).is_none() {
+            if !filter.spec.target_refs.iter().any(|t| t.eq((&target))) {
                 filter.spec.target_refs.push(target);
                 filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
             };
@@ -162,7 +157,7 @@ impl PluginIdConv for PluginInstanceId {
     async fn remove_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
         let filter_api: Api<SgFilter> = client.get_namespace_api();
         if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
-            if filter.spec.target_refs.iter().find(|t| t.eq(&&target)).is_some() {
+            if filter.spec.target_refs.iter().any(|t| t.eq((&target))) {
                 filter.spec.target_refs.retain(|t| !t.eq(&target));
 
                 if filter.spec.target_refs.is_empty() {
@@ -211,7 +206,7 @@ pub(crate) trait PluginConfigConv {
 impl PluginConfigConv for PluginConfig {
     fn from_first_filter_obj(filter_obj: SgFilter) -> Option<PluginConfig> {
         let filter_name = filter_obj.name_any();
-        filter_obj.spec.filters.into_iter().filter(|f| f.enable).next().map(|f| PluginConfig {
+        filter_obj.spec.filters.into_iter().find(|f| f.enable).map(|f| PluginConfig {
             id: PluginInstanceId {
                 code: f.code.into(),
                 name: PluginInstanceName::Named {

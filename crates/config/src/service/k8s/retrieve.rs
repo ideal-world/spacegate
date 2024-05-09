@@ -148,7 +148,7 @@ impl Retrieve for K8s {
         match &id.name {
             spacegate_model::PluginInstanceName::Anon { uid: _ } => Ok(None),
             spacegate_model::PluginInstanceName::Named { name } => {
-                let result = filter_api.get_opt(&name).await?.and_then(|filter_obj| PluginConfig::from_first_filter_obj(filter_obj));
+                let result = filter_api.get_opt(name).await?.and_then(PluginConfig::from_first_filter_obj);
                 Ok(result)
             }
             spacegate_model::PluginInstanceName::Mono => Ok(None),

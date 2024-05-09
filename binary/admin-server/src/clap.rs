@@ -20,10 +20,10 @@ const DEFAULT_PORT: u16 = 9992;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    ///
+    /// the port of the server
     #[arg(short, long, env, default_value_t = DEFAULT_PORT)]
     pub port: u16,
-    ///
+    /// the host of the server
     #[arg(short='H', env, long, default_value_t = DEFAULT_HOST)]
     pub host: IpAddr,
     /// the config backend you choose

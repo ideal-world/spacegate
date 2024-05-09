@@ -1,6 +1,5 @@
 use std::{cmp::Ordering, collections::BTreeMap};
 
-use futures_util::future::join_all;
 use gateway::SgBackendProtocol;
 use http_route::SgHttpRoute;
 use k8s_gateway_api::{
@@ -19,13 +18,8 @@ use spacegate_model::{
 
 use crate::{
     constants,
-    ext::k8s::{
-        crd::http_spaceroute::{self, BackendRef, HttpBackendRef, HttpRouteRule, HttpSpaceroute, HttpSpacerouteSpec},
-        helper_struct::SgSingeFilter,
-    },
-    gateway, http_route,
-    service::k8s::K8s,
-    BackendHost, BoxResult, K8sServiceData, PluginConfig, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch, SgHttpRouteRule,
+    ext::k8s::crd::http_spaceroute::{self, BackendRef, HttpBackendRef, HttpRouteRule, HttpSpaceroute, HttpSpacerouteSpec},
+    gateway, http_route, BackendHost, BoxResult, K8sServiceData, SgBackendRef, SgHttpHeaderMatch, SgHttpPathMatch, SgHttpQueryMatch, SgHttpRouteMatch, SgHttpRouteRule,
 };
 
 use super::{filter_k8s_conv::PluginIdConv as _, ToTarget};
@@ -104,13 +98,13 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
             rule.filters.map(|f_vec| f_vec.into_iter().partition(|f| matches!(f, HttpRouteFilter::ExtensionRef { extension_ref: _ }))).unwrap_or_default();
         let matches = if let Some(mut matches) = rule.matches {
             if matches.len() > 1 {
-                if legacy_plugins.iter().find(|p| matches!(p, HttpRouteFilter::URLRewrite { url_rewrite: _ })).is_some() {
+                if legacy_plugins.iter().any(|p| matches!(&p, HttpRouteFilter::URLRewrite { url_rewrite: _ })) {
                     return Err("url_rewrite is not supported with multiple matches".into());
                 }
-                if legacy_plugins.iter().find(|p| matches!(p, HttpRouteFilter::RequestHeaderModifier { request_header_modifier: _ })).is_some() {
+                if legacy_plugins.iter().any(|p| matches!(&p, HttpRouteFilter::RequestHeaderModifier { request_header_modifier: _ })) {
                     return Err("request_header_modifier is not supported with multiple matches".into());
                 }
-                Some(matches.into_iter().map(|m| SgHttpRouteMatch::from_kube_httproute(m)).collect::<Vec<_>>())
+                Some(matches.into_iter().map(SgHttpRouteMatch::from_kube_httproute).collect::<Vec<_>>())
             } else if let Some(match_) = matches.pop() {
                 let mut m: SgHttpRouteMatch = SgHttpRouteMatch::from_kube_httproute(match_);
                 if legacy_plugins.iter().filter(|p| matches!(p, HttpRouteFilter::URLRewrite { url_rewrite: _ })).count() > 1 {
@@ -232,11 +226,11 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                             (a, b)
                         })
                         .unwrap_or((vec![], vec![]));
-                    let header_paths: Vec<_> = header_path.into_iter().filter_map(|x| x).collect();
+                    let header_paths: Vec<_> = header_path.into_iter().flatten().collect();
 
                     (
                         HttpRouteMatch {
-                            path: path,
+                            path,
                             headers: if header_paths.is_empty() { None } else { Some(header_paths) },
                             query_params: self.query.clone().map(|q_vec| q_vec.into_iter().map(|q| q.into_kube_httproute()).collect::<Vec<_>>()),
                             method: Some(m.0),
@@ -256,7 +250,7 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                 .unwrap_or((None, None));
             (
                 vec![HttpRouteMatch {
-                    path: path,
+                    path,
                     //TODO
                     headers: None,
                     query_params: self.query.map(|q_vec| q_vec.into_iter().map(|q| q.into_kube_httproute()).collect::<Vec<_>>()),
@@ -265,7 +259,7 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                 vec![plugin],
             )
         };
-        (match_vec, plugins.into_iter().filter_map(|x| x).collect())
+        (match_vec, plugins.into_iter().flatten().collect())
     }
 
     fn from_kube_httproute(route_match: HttpRouteMatch) -> SgHttpRouteMatch {

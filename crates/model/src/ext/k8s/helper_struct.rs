@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 #[derive(Clone)]
 pub struct SgSingeFilter {
     pub name: String,
@@ -8,6 +6,7 @@ pub struct SgSingeFilter {
     pub target_ref: Option<super::crd::sg_filter::K8sSgFilterSpecTargetRef>,
 }
 
+//TODO remove
 // impl PartialEq for SgSingeFilter {
 //     fn eq(&self, other: &Self) -> bool {
 //         self.name == other.name
