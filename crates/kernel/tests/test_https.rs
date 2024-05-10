@@ -51,17 +51,8 @@ async fn gateway() {
             rustls_pemfile::private_key(&mut key.as_slice()).ok().flatten().expect("fail to get key"),
         )
         .expect("fail to build tls config");
-    let http_listener = SgListen::new(
-        SocketAddr::from_str("[::]:9080").expect("invalid host"),
-        gateway.as_service(),
-        cancel.child_token(),
-    );
-    let https_listener = SgListen::new(
-        SocketAddr::from_str("[::]:9443").expect("invalid host"),
-        gateway.as_service(),
-        cancel.child_token(),
-    )
-    .with_tls_config(tls_config);
+    let http_listener = SgListen::new(SocketAddr::from_str("[::]:9080").expect("invalid host"), gateway.as_service(), cancel.child_token());
+    let https_listener = SgListen::new(SocketAddr::from_str("[::]:9443").expect("invalid host"), gateway.as_service(), cancel.child_token()).with_tls_config(tls_config);
     let task = tokio::spawn(async move {
         http_listener.listen().await.expect("fail to listen");
     });
