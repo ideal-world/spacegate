@@ -110,7 +110,7 @@ impl CreateListener for K8s {
             let mut gateway_uid_version_map = HashMap::new();
 
             let apply_event = |gateway: Gateway, mut gateway_uid_version_map: HashMap<_, _>| -> HashMap<_, _> {
-                if move_gateway_names.contains(&gateway.name_any()) && gateway_uid_version_map.get(&gateway.uid()).is_none() {
+                if move_gateway_names.contains(&gateway.name_any()) && !gateway_uid_version_map.contains_key(&gateway.uid()) {
                     // ignore existing obj
                     gateway_uid_version_map.insert(gateway.uid(), gateway.meta().clone());
                     return gateway_uid_version_map;
@@ -223,7 +223,7 @@ impl CreateListener for K8s {
             pin_mut!(ew);
             while let Some(filter) = ew.try_next().await.unwrap_or_default() {
                 if filter.spec.filters.iter().any(|inner_filter| move_filter_codes_names.contains(&(inner_filter.code.clone().into(), inner_filter.name.clone().into())))
-                    && uid_version_map.get(&filter.name_any()).is_none()
+                    && !uid_version_map.contains_key(&filter.name_any())
                 {
                     uid_version_map.insert(filter.name_any(), filter.resource_version());
                     continue;

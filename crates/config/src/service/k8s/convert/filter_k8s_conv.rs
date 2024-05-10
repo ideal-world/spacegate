@@ -146,7 +146,7 @@ impl PluginIdConv for PluginInstanceId {
     async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
         let filter_api: Api<SgFilter> = client.get_namespace_api();
         if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
-            if !filter.spec.target_refs.iter().any(|t| t.eq((&target))) {
+            if !filter.spec.target_refs.iter().any(|t| t.eq(&target)) {
                 filter.spec.target_refs.push(target);
                 filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
             };
@@ -157,7 +157,7 @@ impl PluginIdConv for PluginInstanceId {
     async fn remove_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
         let filter_api: Api<SgFilter> = client.get_namespace_api();
         if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
-            if filter.spec.target_refs.iter().any(|t| t.eq((&target))) {
+            if filter.spec.target_refs.iter().any(|t| t.eq(&target)) {
                 filter.spec.target_refs.retain(|t| !t.eq(&target));
 
                 if filter.spec.target_refs.is_empty() {

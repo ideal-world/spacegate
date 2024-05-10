@@ -25,15 +25,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let out: [u8; 32] = out.into();
         Arc::new(out)
     });
-    let schemas = args.schemas.load_all()?;
+    // let schemas = args.schemas.load_all()?;
     let app = match args.config {
         clap::ConfigBackend::File(path) => {
             let backend = spacegate_config::service::fs::Fs::new(path, config_format::Json::default());
             create_app(backend, sec, digest)
         }
         clap::ConfigBackend::K8s(ns) => {
-            let backend = spacegate_config::service::backend::k8s::K8s::with_default_client(ns).await?;
-            create_app(backend, schemas)
+            let backend = spacegate_config::service::k8s::K8s::with_default_client(ns).await?;
+            create_app(backend, sec, digest)
         }
     };
     let listener = tokio::net::TcpListener::bind(addr).await?;
