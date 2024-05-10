@@ -115,6 +115,7 @@ rules:
   - gatewayclasses/status
   verbs:
   - update
+  - get
 - apiGroups:
   - spacegate.idealworld.group
   resources:
@@ -124,6 +125,14 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - spacegate.idealworld.group
+  resources:
+  - sgfilters/status
+  - httpspaceroutes/status
+  verbs:
+  - get
+  - update
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
