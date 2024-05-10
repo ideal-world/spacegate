@@ -16,8 +16,8 @@ rust-version.workspace = true
 
 [features]
 ext-k8s = ["k8s-openapi", "k8s-gateway-api", "kube", "schemars", "chrono"]
-ext-axum = ["spacegate-ext-redis"]
-ext-redis = ["spacegate-ext-axum"]
+ext-axum = ["spacegate-ext-axum"]
+ext-redis = ["spacegate-ext-redis"]
 typegen = ["ts-rs"]
 [dependencies]
 serde.workspace = true
@@ -29,4 +29,4 @@ k8s-gateway-api = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
-ts-rs = { version = "8", optional = true, features = ["serde-json-impl"]}
+ts-rs = { version = "8", optional = true, features = ["serde-json-impl"] }
