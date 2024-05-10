@@ -6,12 +6,14 @@ use std::{
 
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
 
+use hyper::{header, StatusCode};
 use spacegate_config::{BackendHost, Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
-    helper_layers::reload::Reloader,
+    helper_layers::{function::FnLayer, reload::Reloader},
     listener::SgListen,
     service::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
-    ArcHyperService, BoxError,
+    utils::HostAndPort,
+    ArcHyperService, BoxError, Layer, SgBody, SgResponse,
 };
 use spacegate_plugin::{mount::MountPointIndex, PluginRepository};
 use std::sync::Arc;
@@ -265,9 +267,6 @@ impl RunningSgGateway {
         for listener in &gateway.listeners {
             let ip = listener.ip.unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
             let addr = SocketAddr::new(ip, listener.port);
-
-            let gateway_name = gateway_name.clone();
-            let protocol = listener.protocol.to_string();
             let mut tls_cfg = None;
             if let SgProtocolConfig::Https { ref tls } = listener.protocol {
                 tracing::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
@@ -291,8 +290,21 @@ impl RunningSgGateway {
                         });
                         if let Some(key) = key {
                             info!("[SG.Server] using cert key {key:?}");
-                            let mut tls_server_cfg = rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(certs, key)?;
-                            tls_server_cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+                            let provider: Arc<_> = rustls::crypto::ring::default_provider().into();
+                            let builder = rustls::ServerConfig::builder_with_provider(provider.clone())
+                                .with_safe_default_protocol_versions()
+                                .expect("fail to build tls config")
+                                .with_no_client_auth();
+                            let mut tls_server_cfg = if let Some(ref host_name) = listener.hostname {
+                                let mut resolver = rustls::server::ResolvesServerCertUsingSni::new();
+                                let signed_key = provider.key_provider.load_private_key(key)?;
+                                let ck = rustls::sign::CertifiedKey::new(certs, signed_key);
+                                resolver.add(host_name, ck)?;
+                                builder.with_cert_resolver(Arc::new(resolver))
+                            } else {
+                                builder.with_single_cert(certs, key)?
+                            };
+                            tls_server_cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
                             tls_cfg.replace(tls_server_cfg);
                         } else {
                             error!("[SG.Server] Can not found a valid Tls private key");
@@ -300,8 +312,8 @@ impl RunningSgGateway {
                     };
                 }
             }
-            let listen_id = format!("{gateway_name}-{name}-{protocol}", name = listener.name, protocol = protocol);
-            let mut listen = SgListen::new(addr, service.clone(), cancel_token.child_token(), listen_id);
+            let mut listen = SgListen::new(addr, service.clone(), cancel_token.child_token());
+
             if let Some(tls_cfg) = tls_cfg {
                 listen = listen.with_tls_config(tls_cfg);
             }

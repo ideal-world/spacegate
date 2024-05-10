@@ -37,14 +37,15 @@ impl<S> std::fmt::Debug for SgListen<S> {
 
 impl<S> SgListen<S> {
     /// we only have 65535 ports for a console, so it's a safe size
-    pub fn new(socket_addr: SocketAddr, service: S, cancel_token: CancellationToken, id: impl Into<String>) -> Self {
+    pub fn new(socket_addr: SocketAddr, service: S, cancel_token: CancellationToken) -> Self {
+        let listener_id = format!("{socket_addr}");
         Self {
             conn_builder: hyper_util::server::conn::auto::Builder::new(rt::TokioExecutor::new()),
             socket_addr,
             service,
             tls_cfg: None,
             cancel_token,
-            listener_id: id.into(),
+            listener_id,
         }
     }
 
@@ -102,6 +103,7 @@ where
         req.extensions_mut().insert(reflect);
         req.extensions_mut().insert(PeerAddr(self.peer));
         req.extensions_mut().insert(enter_time);
+
         Box::pin(async move {
             let mut resp = service.call(req).await.expect("infallible");
             with_length_or_chunked(&mut resp);

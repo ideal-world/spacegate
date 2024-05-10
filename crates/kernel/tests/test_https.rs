@@ -55,13 +55,11 @@ async fn gateway() {
         SocketAddr::from_str("[::]:9080").expect("invalid host"),
         gateway.as_service(),
         cancel.child_token(),
-        "listener",
     );
     let https_listener = SgListen::new(
         SocketAddr::from_str("[::]:9443").expect("invalid host"),
         gateway.as_service(),
         cancel.child_token(),
-        "listener",
     )
     .with_tls_config(tls_config);
     let task = tokio::spawn(async move {

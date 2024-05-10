@@ -37,7 +37,7 @@ async fn gateway() {
         )])
         .build();
     let addr = SocketAddr::from_str("[::]:9003").expect("invalid host");
-    let listener = SgListen::new(addr, gateway.as_service(), cancel, "listener");
+    let listener = SgListen::new(addr, gateway.as_service(), cancel);
     listener.listen().await.expect("fail to listen");
 }
 

@@ -110,7 +110,6 @@ let listener = SgListen::new(
     addr,
     gateway.as_service(),
     cancel.child_token(),
-    "listener",
 );
 // start listen
 listener.listen().await?;

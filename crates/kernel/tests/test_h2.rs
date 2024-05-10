@@ -72,8 +72,8 @@ async fn gateway() {
     let addr = SocketAddr::from_str("[::]:9080").expect("invalid host");
     let addr_tls = SocketAddr::from_str("[::]:9443").expect("invalid host");
 
-    let listener_tls = SgListen::new(addr_tls, gateway.as_service(), cancel.clone(), "listener").with_tls_config(tls_config());
-    let listener = SgListen::new(addr, gateway.as_service(), cancel, "listener");
+    let listener_tls = SgListen::new(addr_tls, gateway.as_service(), cancel.clone()).with_tls_config(tls_config());
+    let listener = SgListen::new(addr, gateway.as_service(), cancel);
 
     let f_tls = listener_tls.listen();
     let f = listener.listen();
