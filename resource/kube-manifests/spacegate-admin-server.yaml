@@ -14,6 +14,7 @@ rules:
       - ""
     resources:
       - services
+      - pods
     verbs:
       - get
       - list
@@ -40,9 +41,9 @@ rules:
       - update
       - patch
   - apiGroups:
-      - discovery.k8s.io
+      - apps
     resources:
-      - endpointslices
+      - daemonsets
     verbs:
       - list
       - watch
@@ -72,6 +73,7 @@ rules:
     resources:
       - sgfilters
       - httpspaceroutes
+      - httpspaceroutes/status
     verbs:
       - get
       - create
