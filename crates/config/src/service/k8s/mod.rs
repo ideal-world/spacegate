@@ -51,7 +51,7 @@ impl K8s {
         let condition = Condition {
             last_transition_time: k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(chrono::Utc::now()),
             message: "Accepted".to_string(),
-            reason: "".to_string(),
+            reason: "None".to_string(),
             status: "True".to_string(),
             type_: "Accepted".to_string(),
             observed_generation: None,
@@ -85,7 +85,7 @@ impl K8s {
         let condition = Condition {
             last_transition_time: k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(chrono::Utc::now()),
             message: "Load config or refresh config , waiting for complete".to_string(),
-            reason: "".to_string(),
+            reason: "Waiting for controller".to_string(),
             status: "False".to_string(),
             type_: "Accepted".to_string(),
             observed_generation: None,
