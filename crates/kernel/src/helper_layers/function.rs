@@ -33,7 +33,7 @@ where
     F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
     Fut: Future<Output = Response<SgBody>> + Send + 'static,
 {
-    const fn new(f: F) -> Self {
+    pub const fn new(f: F) -> Self {
         Self { f }
     }
 }
