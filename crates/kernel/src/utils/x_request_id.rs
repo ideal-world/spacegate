@@ -64,7 +64,7 @@ fn machine_id() -> u64 {
             #[cfg(target_os = "linux")]
             {
                 // let's try to read system mid
-                let mid = std::fs::read_to_string("/var/lib/dbus/machine-id").expect("fail to read machine id");
+                let mid = std::fs::read_to_string("/var/lib/dbus/machine-id").unwrap_or(rand::random::<u64>().to_string());
                 hasher.write(mid.as_bytes());
                 hasher.finish()
             }
