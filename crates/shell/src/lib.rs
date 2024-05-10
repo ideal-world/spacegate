@@ -40,11 +40,11 @@ use spacegate_config::service::{CreateListener, Retrieve};
 use spacegate_config::Config;
 /// re-export spacegate_kernel
 pub use spacegate_kernel as kernel;
+pub use spacegate_kernel::{SgBody, SgRequest, SgRequestExt, SgResponse, SgResponseExt};
 /// re-export spacegate_plugin
 pub use spacegate_plugin as plugin;
 use tokio::signal;
 use tracing::{info, instrument};
-pub use spacegate_kernel::{SgBody, SgRequest, SgRequestExt, SgResponse, SgResponseExt};
 /// Configuration retrieval and event listener
 pub mod config;
 /// http extensions
