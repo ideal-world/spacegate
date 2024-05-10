@@ -122,7 +122,7 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
                                         _ => m_p,
                                     },
                                     SgHttpPathMatch::Prefix { value, replace: _ } => match rewrite_path {
-                                        HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathMatch::Exact {
+                                        HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathMatch::Prefix {
                                             value: value.clone(),
                                             replace: Some(replace_prefix_match.clone()),
                                         },
