@@ -95,9 +95,9 @@ impl CreateListener for K8s {
     async fn create_listener(&self) -> BoxResult<(Config, Box<dyn Listen>)> {
         let (evt_tx, evt_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        self.reject_gateway_class(constants::GATEWAY_CLASS_NAME).await?;
+        // self.reject_gateway_class(constants::GATEWAY_CLASS_NAME).await?;
         let config = self.retrieve_config().await?;
-        self.accept_gateway_class(constants::GATEWAY_CLASS_NAME).await?;
+        // self.accept_gateway_class(constants::GATEWAY_CLASS_NAME).await?;
 
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         let http_route_api: Api<HttpRoute> = self.get_namespace_api();

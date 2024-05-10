@@ -84,7 +84,7 @@ impl K8s {
     pub(crate) async fn reject_gateway_class(&self, name: &str) -> BoxResult<()> {
         let condition = Condition {
             last_transition_time: k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(chrono::Utc::now()),
-            message: "Load config or refresh config,waiting for complete".to_string(),
+            message: "Load config or refresh config , waiting for complete".to_string(),
             reason: "".to_string(),
             status: "False".to_string(),
             type_: "Accepted".to_string(),
