@@ -38,7 +38,7 @@ mime_guess = "2"
 tracing = { workspace = true }
 
 # runtime
-tokio = { workspace = true, features = ["net", "time", "macros"] }
+tokio = { workspace = true, features = ["net", "time", "macros", "fs"] }
 tokio-util = { workspace = true }
 
 # time
