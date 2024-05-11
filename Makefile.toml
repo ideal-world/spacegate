@@ -1,0 +1,41 @@
+# ref: https://sagiegurari.github.io/cargo-make/
+[env]
+# DOCKER_REPO = "ecfront"
+# DOCKER_VERSION = "${CARGO_MAKE_PROJECT_VERSION}"
+
+[tasks.format]
+workspace = true
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--all", "--emit=files"]
+
+[tasks.clean]
+workspace = true
+command = "cargo"
+args = ["clean"]
+
+[tasks.check]
+workspace = true
+dependencies = ["format"]
+install_crate = "clippy"
+command = "cargo"
+args = ["clippy", "--all-features"]
+
+
+[tasks.build-spacegate-k8s]
+workspace = false
+command = "cargo"
+args = ["build", "--bin", "spacegate", "--release", "--features", "build-k8s"]
+
+[tasks.build-k8s-docker]
+workspace = false
+dependencies = ["build-spacegate-k8s"]
+script = '''
+echo ${CARGO_MAKE_CRATE_VERSION}
+cd ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}
+cp target/release/spacegate resource/docker/spacegate
+docker build -t ${DOCKER_REPO}/spacegate:${DOCKER_VERSION} resource/docker/spacegate
+rm resource/docker/spacegate/spacegate
+cd ${CARGO_MAKE_WORKING_DIRECTORY}
+'''
+
