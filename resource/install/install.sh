@@ -5,7 +5,7 @@ cargo build --bin spacegate --release --features dylib
 sudo cp target/release/spacegate $BIN_PATH
 
 # Create config file
-sudo mkdir /etc/spacegate
+sudo mkdir /etc/spacegate || true
 
 if [ -f $CONFIG_PATH ]; then
     echo "Config file already exists"
@@ -13,7 +13,7 @@ else
     sudo cp resource/install/default-config/config.json /etc/spacegate/config.json
 fi
 
-if [ -f $PLUGIN_PATH ]; then
+if [ -d $PLUGIN_PATH ]; then
     echo "Plugin dir already exists"
 else
     # Create plugin directory
