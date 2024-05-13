@@ -27,6 +27,11 @@ workspace = false
 command = "cargo"
 args = ["build", "--bin", "spacegate", "--release", "--features", "build-k8s"]
 
+[tasks.build-spacegate-linux]
+workspace = false
+command = "cargo"
+args = ["build", "--bin", "spacegate", "--release", "--features", "dylib"]
+
 [tasks.build-k8s-docker]
 workspace = false
 dependencies = ["build-spacegate-k8s"]
@@ -39,3 +44,8 @@ rm resource/docker/spacegate/spacegate
 cd ${CARGO_MAKE_WORKING_DIRECTORY}
 '''
 
+
+[tasks.install-spacegate]
+workspace = false
+dependencies = ["build-spacegate-linux"]
+script = { file = "resource/install/install.sh" }
