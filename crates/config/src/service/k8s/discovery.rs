@@ -1,3 +1,4 @@
+use k8s_gateway_api::GatewayClass;
 use k8s_openapi::api::{
     apps::v1::DaemonSet,
     core::v1::{Pod, Service},
@@ -12,19 +13,27 @@ use super::K8s;
 
 impl Discovery for K8s {
     async fn api_url(&self) -> BoxResult<Option<String>> {
-        // TODO Start from GatewayClass and look down, and read api port from GatewayClass
+        let gateway_class_api: Api<GatewayClass> = self.get_all_api();
         let pod_api: Api<Pod> = self.get_namespace_api();
         let ds_api: Api<DaemonSet> = self.get_namespace_api();
-        let dss = ds_api.list(&ListParams::default()).await?;
-        let pods = pod_api.list(&ListParams::default()).await?;
 
+        let instance_name = if let Some(mut gateway_class) = gateway_class_api.get_opt(spacegate_model::constants::GATEWAY_CLASS_NAME).await? {
+            gateway_class.labels_mut().remove(spacegate_model::constants::KUBE_OBJECT_INSTANCE).unwrap_or(spacegate_model::constants::GATEWAY_DEFAULT_INSTANCE.to_string())
+        } else {
+            return Err("gateway class not found".into());
+        };
+
+        let ds_instance = if let Some(ds) = ds_api.get_opt(&instance_name).await? {
+            ds
+        } else {
+            return Err("spacegate instance not found".into());
+        };
+        let pods = pod_api.list(&ListParams::default()).await?;
         let mut pods = pods.items;
         pods.retain(|p| {
             for owner_ref in p.owner_references() {
-                for ds in &dss {
-                    if owner_ref.uid == ds.uid().unwrap_or_default() && owner_ref.name == ds.name_any() {
-                        return true;
-                    }
+                if owner_ref.uid == ds_instance.uid().unwrap_or_default() && owner_ref.name == ds_instance.name_any() {
+                    return true;
                 }
             }
             false
