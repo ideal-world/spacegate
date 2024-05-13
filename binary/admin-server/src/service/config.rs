@@ -3,19 +3,34 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use spacegate_config::{
     model::{SgGateway, SgHttpRoute},
     service::*,
     BoxError, Config, ConfigItem, PluginConfig, PluginInstanceId,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     error::InternalError,
     state::{self, AppState},
     Backend,
 };
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct QueryKvPairs(HashMap<String, String>);
+
+impl TryFrom<QueryKvPairs> for PluginInstanceId {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(value: QueryKvPairs) -> Result<Self, Self::Error> {
+        let json_val = serde_json::to_value(value.0)?;
+        let id = serde_json::from_value(json_val)?;
+        Ok(id)
+    }
+}
 /**********************************************
                        GET
 **********************************************/
@@ -57,9 +72,10 @@ async fn get_config_all_plugin<B: Retrieve>(State(AppState { backend, .. }): Sta
     backend.retrieve_all_plugins().await.map(Json).map_err(InternalError)
 }
 async fn get_config_plugin<B: Retrieve>(
-    Query(id): Query<PluginInstanceId>,
+    Query(id): Query<QueryKvPairs>,
     State(AppState { backend, .. }): State<AppState<B>>,
 ) -> Result<Json<Option<PluginConfig>>, InternalError<BoxError>> {
+    let id = id.try_into().map_err(InternalError)?;
     backend.retrieve_plugin(&id).await.map(Json).map_err(InternalError)
 }
 
@@ -97,10 +113,11 @@ async fn post_config_item_route<B: Create>(
     backend.create_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 async fn post_config_plugin<B: Create>(
-    Query(id): Query<PluginInstanceId>,
+    Query(id): Query<QueryKvPairs>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
+    let id = id.try_into().map_err(InternalError)?;
     backend.create_plugin(&id, spec).await.map_err(InternalError)
 }
 /**********************************************
@@ -135,10 +152,11 @@ async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B
 }
 
 async fn put_config_plugin<B: Update>(
-    Query(id): Query<PluginInstanceId>,
+    Query(id): Query<QueryKvPairs>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
+    let id = id.try_into().map_err(InternalError)?;
     backend.update_plugin(&id, spec).await.map_err(InternalError)
 }
 /**********************************************
@@ -170,7 +188,8 @@ where
     backend.delete_config_item_all_routes(&name).await.map_err(InternalError)
 }
 
-async fn delete_config_plugin<B: Delete>(Query(id): Query<PluginInstanceId>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
+async fn delete_config_plugin<B: Delete>(Query(id): Query<QueryKvPairs>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
+    let id = id.try_into().map_err(InternalError)?;
     backend.delete_plugin(&id).await.map_err(InternalError)
 }
 
