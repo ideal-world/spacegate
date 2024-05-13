@@ -33,7 +33,7 @@ pub mod plugins;
 #[cfg(feature = "schema")]
 pub use schemars;
 pub use spacegate_model::{plugin_meta, PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, PluginMetaData};
-
+pub use spacegate_model;
 /// # Plugin Trait
 /// It's a easy way to define a plugin through this trait.
 /// You should give a unique [`code`](Plugin::CODE) for the plugin,

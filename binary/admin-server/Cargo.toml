@@ -20,13 +20,13 @@ default = []
 clap = { version = "4.5", features = ["derive", "env"] }
 base64 = "0.13"
 spacegate-config = { workspace = true, features = ["fs", "k8s"] }
-axum = { workspace = true }
+axum = { workspace = true , features = ["tracing"]}
 axum-extra = { version = "*", features = ["cookie"] }
 tower = { version = "0.4" }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-tower-http = { version = "*", features = ["trace"] }
+tower-http = { version = "0.5", features = ["trace"] }
 serde_json = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
