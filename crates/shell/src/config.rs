@@ -1,4 +1,5 @@
-use std::{collections::VecDeque, net::SocketAddr};
+use std::collections::VecDeque;
+use std::net::SocketAddr;
 
 use crate::server::RunningSgGateway;
 use futures_util::{Stream, StreamExt};
@@ -51,7 +52,7 @@ where
     }
     RunningSgGateway::global_init(init_config, shutdown_signal.clone()).await;
     let mut listener = ListenerWrapper(listener);
-    tracing::info!("[SG.Config] Entering listening");
+    info!("[SG.Config] Entering listening");
     let mut local_queue = VecDeque::new();
     let gateway_shutdown_signal = shutdown_signal.child_token();
 

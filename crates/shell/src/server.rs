@@ -6,14 +6,12 @@ use std::{
 
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
 
-use hyper::{header, StatusCode};
 use spacegate_config::{BackendHost, Config, ConfigItem, PluginInstanceId};
 use spacegate_kernel::{
-    helper_layers::{function::FnLayer, reload::Reloader},
+    helper_layers::reload::Reloader,
     listener::SgListen,
     service::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
-    utils::HostAndPort,
-    ArcHyperService, BoxError, Layer, SgBody, SgResponse,
+    ArcHyperService, BoxError,
 };
 use spacegate_plugin::{mount::MountPointIndex, PluginRepository};
 use std::sync::Arc;
