@@ -39,6 +39,7 @@ pub(crate) trait PluginIdConv {
     /// can be ues in gateway and route level
     async fn remove_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()>;
 
+    // TODO remove
     // mix of [SgRouteFilter::to_singe_filter] and [SgRouteFilter::to_http_route_filter]
     // PluginInstanceId can be converted into `SgRouteFilter` or `HttpRouteFilter`
     // async fn to_route_filter_or_add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> Option<HttpRouteFilter>;
@@ -63,6 +64,7 @@ impl PluginIdConv for PluginInstanceId {
         }
     }
 
+    // TODO remove
     // fn from_http_route_filter(route_filter: HttpRouteFilter) -> BoxResult<PluginConfig> {
     //     let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> BoxResult<PluginConfig> {
     //         let mut sg_sets = HashMap::new();
@@ -145,7 +147,7 @@ impl PluginIdConv for PluginInstanceId {
 
     async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
         let filter_api: Api<SgFilter> = client.get_namespace_api();
-        if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
+        if let Ok(mut filter) = filter_api.get(&self.name.to_raw_str()).await {
             if !filter.spec.target_refs.iter().any(|t| t.eq(&target)) {
                 filter.spec.target_refs.push(target);
                 filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
@@ -156,7 +158,7 @@ impl PluginIdConv for PluginInstanceId {
 
     async fn remove_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
         let filter_api: Api<SgFilter> = client.get_namespace_api();
-        if let Ok(mut filter) = filter_api.get(&self.name.to_string()).await {
+        if let Ok(mut filter) = filter_api.get(&self.name.to_raw_str()).await {
             if filter.spec.target_refs.iter().any(|t| t.eq(&target)) {
                 filter.spec.target_refs.retain(|t| !t.eq(&target));
 
@@ -218,6 +220,7 @@ impl PluginConfigConv for PluginConfig {
     }
 }
 
+// TODO remove?
 pub(crate) trait PathModifierConv {
     fn to_http_path_modifier(self) -> HttpPathModifier;
 }

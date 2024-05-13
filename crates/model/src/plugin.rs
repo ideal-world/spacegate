@@ -37,6 +37,14 @@ impl PluginInstanceName {
     pub fn anon(uid: impl ToString) -> Self {
         PluginInstanceName::Anon { uid: uid.to_string() }
     }
+
+    pub fn to_raw_str(&self) -> String {
+        match self {
+            PluginInstanceName::Anon { uid } => uid.to_string(),
+            PluginInstanceName::Named { name } => name.to_string(),
+            PluginInstanceName::Mono => "".to_string(),
+        }
+    }
 }
 
 impl From<Option<String>> for PluginInstanceName {
