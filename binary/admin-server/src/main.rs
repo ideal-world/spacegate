@@ -2,6 +2,7 @@ use axum::Router;
 use spacegate_config::service::*;
 use state::AppState;
 use std::{net::SocketAddr, sync::Arc};
+use tower_http::trace::TraceLayer;
 pub mod clap;
 pub mod mw;
 pub mod service;
@@ -37,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
+    axum::serve(listener, app.layer(TraceLayer::new_for_http()))
         .with_graceful_shutdown(async move {
             let _ = tokio::signal::ctrl_c().await;
         })

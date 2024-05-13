@@ -104,5 +104,5 @@ ipnet = { version = "2" }
 notify = { version = "6.1.1" }
 
 # web-server
-axum = "0.7.4"
+axum = "0.7.5"
 
