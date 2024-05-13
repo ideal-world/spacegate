@@ -42,6 +42,7 @@ impl SgHttpRouteConv for SgHttpRoute {
             metadata: ObjectMeta {
                 labels: None,
                 name: Some(name.to_string()),
+                namespace: Some(gateway_namespace.to_string()),
                 owner_references: None,
                 self_link: None,
                 annotations: Some(BTreeMap::from([(constants::ANNOTATION_RESOURCE_PRIORITY.to_string(), self.priority.to_string())])),
