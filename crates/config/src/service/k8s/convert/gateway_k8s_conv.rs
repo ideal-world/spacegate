@@ -21,6 +21,7 @@ impl SgGatewayConv for SgGateway {
                 annotations: Some(self.parameters.into_kube_gateway()),
                 labels: None,
                 name: Some(self.name.clone()),
+                namespace: Some(namespace.to_string()),
                 owner_references: None,
                 self_link: None,
                 ..Default::default()
