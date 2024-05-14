@@ -14,6 +14,7 @@ impl InternalError<BoxError> {
 impl IntoResponse for InternalError<BoxError> {
     fn into_response(self) -> Response {
         let body = axum::body::Body::from(format!("Internal error: {}", self.0));
+        tracing::warn!("Internal error: {}", self.0);
         Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(body).unwrap()
     }
 }

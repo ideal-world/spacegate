@@ -323,7 +323,7 @@ mod test {
     }
 
     #[test]
-    fn test_parse_id() {
+    fn test_parse_name() {
         assert_eq!("a-1".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::anon(1));
         assert_eq!("n-my-plugin".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Named { name: "my-plugin".into() });
         assert_eq!("g".parse::<PluginInstanceName>().unwrap(), PluginInstanceName::Mono {});
@@ -339,6 +339,12 @@ mod test {
         assert!("g-".parse::<PluginInstanceName>().is_ok());
     }
 
+    #[test]
+    fn test_parse_id() {
+        let json = r#"{"code": "header-modifier", "kind": "named", "name": "hello"}"#;
+        let id: PluginInstanceId = serde_json::from_str(json).expect("fail to deserialize");
+        println!("{id:?}");
+    }
     #[test]
     fn test_dec() {
         let config = json!(

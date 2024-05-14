@@ -49,3 +49,13 @@ cd ${CARGO_MAKE_WORKING_DIRECTORY}
 workspace = false
 dependencies = ["build-spacegate-linux"]
 script = { file = "resource/install/install.sh" }
+
+[tasks.build-spacegate-admin]
+workspace = false
+command = "cargo"
+args = ["build", "--bin", "spacegate-admin-server", "--release"]
+
+[tasks.install-spacegate-admin]
+workspace = false
+dependencies = ["build-spacegate-admin"]
+script = { file = "resource/install/install-admin.sh" }
