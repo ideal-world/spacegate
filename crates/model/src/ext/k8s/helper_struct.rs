@@ -35,7 +35,11 @@ impl From<SgSingeFilter> for super::crd::sg_filter::SgFilter {
     fn from(value: SgSingeFilter) -> Self {
         super::crd::sg_filter::SgFilter {
             metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                name: if value.name.is_empty() { Some(value.name.clone()) } else { None },
+                name: if value.name.is_empty() {
+                    Some(value.filter.code.clone())
+                } else {
+                    Some(value.name.clone())
+                },
                 namespace: Some(value.namespace.clone()),
                 ..Default::default()
             },
