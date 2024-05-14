@@ -1,7 +1,9 @@
+use std::fmt::Display;
+
 use k8s_gateway_api::{Gateway, HttpRoute};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::DeleteParams, Api, ResourceExt as _};
-use spacegate_model::ext::k8s::crd::http_spaceroute::HttpSpaceroute;
+use spacegate_model::ext::k8s::crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter};
 
 use crate::{
     service::{Delete, Retrieve as _},
@@ -55,8 +57,15 @@ impl Delete for K8s {
         }
     }
 
-    async fn delete_plugin(&self, _id: &spacegate_model::PluginInstanceId) -> BoxResult<()> {
-        // do nothing
+    async fn delete_plugin(&self, id: &spacegate_model::PluginInstanceId) -> BoxResult<()> {
+        let filter_api: Api<SgFilter> = self.get_namespace_api();
+        if let Ok(filter) = filter_api.get(&id.name.to_raw_str()).await {
+            if filter.spec.target_refs.is_empty() {
+                filter_api.delete(&filter.name_any(), &DeleteParams::default()).await?;
+            } else {
+                return Err(format!("The filter have references [{:?}]", filter.spec.target_refs).into());
+            }
+        }
         Ok(())
     }
 }

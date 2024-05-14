@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 use k8s_openapi::schemars::JsonSchema;
@@ -42,5 +44,15 @@ pub struct K8sSgFilterSpecTargetRef {
 impl PartialEq for K8sSgFilterSpecTargetRef {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && self.kind == other.kind && self.namespace.as_ref().unwrap_or(&"".to_string()) == other.namespace.as_ref().unwrap_or(&"".to_string())
+    }
+}
+
+impl Display for K8sSgFilterSpecTargetRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ns) = self.namespace.clone() {
+            write!(f, "{}:{}.{}", self.kind, self.name, ns)
+        } else {
+            write!(f, "{}:{}", self.kind, self.name)
+        }
     }
 }
