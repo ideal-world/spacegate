@@ -65,7 +65,7 @@ impl K8s {
                         return Ok(());
                     }
                 }
-                conditions.push(condition);
+                conditions.insert(0, condition);
                 Some(conditions)
             } else {
                 Some(vec![condition])

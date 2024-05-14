@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use k8s_gateway_api::{Gateway, HttpRoute};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::DeleteParams, Api, ResourceExt as _};
@@ -63,7 +61,11 @@ impl Delete for K8s {
             if filter.spec.target_refs.is_empty() {
                 filter_api.delete(&filter.name_any(), &DeleteParams::default()).await?;
             } else {
-                return Err(format!("The filter have references [{:?}]", filter.spec.target_refs).into());
+                return Err(format!(
+                    "The filter have references [{}]",
+                    filter.spec.target_refs.iter().map(|t| format!("{}", t)).collect::<Vec<String>>().join(", ")
+                )
+                .into());
             }
         }
         Ok(())
