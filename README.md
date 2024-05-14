@@ -193,8 +193,6 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 |-------------------------------|------|------------------------------------------------------------------------------------|
 | **spacegate-kernel** [![Crate](https://img.shields.io/crates/v/spacegate-kernel.svg)](https://crates.io/crates/spacegate-kernel) [![Docs](https://docs.rs/spacegate-kernel/badge.svg)](https://docs.rs/spacegate-kernel) | lib  | Class library with all functions, support for embedding into your own rust project |
 | **spacegate** | bin  | Out-of-the-box service with all features                                           |
-| **spacegate-native** | bin  | Out-of-the-box service that include all features except kubernetes support         |
-| **spacegate-simplify** | bin  | Out-of-the-box service for standalone environments                                 | -->
 
 ![Crates](./.readme/dep.svg)
 
