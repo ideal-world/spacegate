@@ -103,10 +103,13 @@ where
         let main_config_to_save: Config = Config { api_port, ..Default::default() };
         let b_main_config = self.format.ser(&main_config_to_save)?;
         tokio::fs::write(self.entrance_config_path(), &b_main_config).await?;
-        for (id, spec) in plugins.into_inner().into_iter() {
-            let path = self.plugin_path(&id);
-            let b_spec = self.format.ser(&spec)?;
-            tokio::fs::write(&path, &b_spec).await?;
+        if !plugins.is_empty() {
+            tokio::fs::create_dir_all(self.plugin_dir()).await?;
+            for (id, spec) in plugins.into_inner().into_iter() {
+                let path = self.plugin_path(&id);
+                let b_spec = self.format.ser(&spec)?;
+                tokio::fs::write(&path, &b_spec).await?;
+            }
         }
         for (gateway_name, item) in gateways.into_iter() {
             let dir = self.gateway_dir().join(&gateway_name);
