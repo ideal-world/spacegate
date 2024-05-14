@@ -177,7 +177,7 @@ impl PluginIdConv for PluginInstanceId {
             PluginInstanceName::Anon { uid: _ } => None,
             PluginInstanceName::Named { name } => Some(HttpRouteFilter::ExtensionRef {
                 extension_ref: LocalObjectReference {
-                    group: "".to_string(),
+                    group: self.code.into(),
                     kind: SG_FILTER_KIND.to_string(),
                     name,
                 },
@@ -188,13 +188,13 @@ impl PluginIdConv for PluginInstanceId {
 
     fn from_http_route_filter(route_filter: HttpRouteFilter) -> Option<PluginInstanceId> {
         match route_filter {
-            HttpRouteFilter::RequestHeaderModifier { request_header_modifier } => None,
-            HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => None,
-            HttpRouteFilter::RequestMirror { request_mirror } => None,
-            HttpRouteFilter::RequestRedirect { request_redirect } => None,
-            HttpRouteFilter::URLRewrite { url_rewrite } => None,
+            HttpRouteFilter::RequestHeaderModifier { request_header_modifier: _ } => None,
+            HttpRouteFilter::ResponseHeaderModifier { response_header_modifier: _ } => None,
+            HttpRouteFilter::RequestMirror { request_mirror: _ } => None,
+            HttpRouteFilter::RequestRedirect { request_redirect: _ } => None,
+            HttpRouteFilter::URLRewrite { url_rewrite: _ } => None,
             HttpRouteFilter::ExtensionRef { extension_ref } => Some(PluginInstanceId {
-                code: extension_ref.kind.into(),
+                code: extension_ref.group.into(),
                 name: PluginInstanceName::Named { name: extension_ref.name },
             }),
         }
