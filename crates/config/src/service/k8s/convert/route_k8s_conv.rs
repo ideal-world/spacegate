@@ -338,7 +338,7 @@ impl SgHttpHeaderMatchConv for SgHttpHeaderMatch {
                 }),
             ),
             SgHttpHeaderMatch::RegExp { name, re, replace: _ } => {
-                tracing::warn!("[{name} {re}]RegExp trype replace is not supported yet in kube:");
+                tracing::warn!("[{name} {re}]RegExp type replace is not supported yet in kube:");
                 (
                     HttpHeaderMatch::RegularExpression { name, value: re },
                     // not supported yet
