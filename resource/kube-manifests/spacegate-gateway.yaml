@@ -114,6 +114,7 @@ rules:
       - gateways/status
       - gatewayclasses/status
     verbs:
+      - get
       - update
   - apiGroups:
       - spacegate.idealworld.group
