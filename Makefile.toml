@@ -59,3 +59,11 @@ args = ["build", "--bin", "spacegate-admin-server", "--release"]
 workspace = false
 dependencies = ["build-spacegate-admin"]
 script = { file = "resource/install/install-admin.sh" }
+
+
+[tasks.build-sdk]
+workspace = false
+script = '''
+cd sdk/admin-client;
+npm run build-model;
+'''

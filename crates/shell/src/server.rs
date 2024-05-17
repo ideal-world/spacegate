@@ -6,7 +6,7 @@ use std::{
 
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
 
-use spacegate_config::{BackendHost, Config, ConfigItem, PluginInstanceId};
+use spacegate_config::{BackendHost, Config, ConfigItem};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
     listener::SgListen,
@@ -113,15 +113,16 @@ fn collect_http_route(
 }
 
 /// Create a gateway service from plugins and http_routes
-pub(crate) fn create_service(
-    gateway_name: &str,
-    plugins: Vec<PluginInstanceId>,
-    http_routes: BTreeMap<String, crate::SgHttpRoute>,
-    reloader: Reloader<HttpRouterService>,
-) -> Result<ArcHyperService, BoxError> {
-    let gateway_name: Arc<str> = gateway_name.into();
+pub(crate) fn create_service(item: ConfigItem, reloader: Reloader<HttpRouterService>) -> Result<ArcHyperService, BoxError> {
+    let gateway_name: Arc<str> = item.gateway.name.into();
+    let http_routes = item.routes;
     let routes = collect_http_route(gateway_name.clone(), http_routes)?;
-    let mut layer = spacegate_kernel::service::gateway::Gateway::builder(gateway_name.clone()).http_routers(routes).http_route_reloader(reloader).build();
+    let plugins = item.gateway.plugins.clone();
+    let mut builder = spacegate_kernel::service::gateway::Gateway::builder(gateway_name.clone());
+    if let Some(enable) = item.gateway.parameters.enable_x_request_id {
+        builder = builder.x_request_id(enable);
+    }
+    let mut layer = builder.http_routers(routes).http_route_reloader(reloader).build();
     global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
     let service = ArcHyperService::new(layer.as_service());
     Ok(service)
@@ -221,43 +222,25 @@ impl RunningSgGateway {
     /// Start a gateway from plugins and http_routes
     #[instrument(fields(gateway=%config_item.gateway.name), skip_all, err)]
     pub fn create(config_item: ConfigItem, cancel_token: CancellationToken) -> Result<Self, BoxError> {
-        let ConfigItem { gateway, routes } = config_item;
         #[allow(unused_mut)]
         // let mut builder_ext = hyper::http::Extensions::new();
         #[cfg(feature = "cache")]
         {
-            if let Some(url) = &gateway.parameters.redis_url {
+            if let Some(url) = &config_item.gateway.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
                 // builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
                 // builder_ext.insert(spacegate_kernel::extension::GatewayName(config.gateway.name.clone().into()));
                 // Initialize cache instances
                 tracing::trace!("Initialize cache client...url:{url}");
-                spacegate_ext_redis::RedisClientRepo::global().add(&gateway.name, url.as_ref());
+                spacegate_ext_redis::RedisClientRepo::global().add(&config_item.gateway.name, url.as_ref());
             }
         }
         tracing::info!("[SG.Server] start gateway");
         let reloader = <Reloader<HttpRouterService>>::default();
-        let service = create_service(&gateway.name, gateway.plugins, routes, reloader.clone())?;
+        let gateway = config_item.gateway.clone();
+        let service = create_service(config_item, reloader.clone())?;
         if gateway.listeners.is_empty() {
             error!("[SG.Server] Missing Listeners");
-        }
-        if let Some(_log_level) = gateway.parameters.log_level.clone() {
-            // not supported yet
-
-            // tracing::debug!("[SG.Server] change log level to {log_level}");
-            // let fw_config = TardisFuns::fw_config();
-            // let old_configs = fw_config.log();
-            // let directive = format!("{domain}={log_level}", domain = crate::constants::DOMAIN_CODE).parse().expect("invalid directive");
-            // let mut directives = old_configs.directives.clone();
-            // if let Some(index) = directives.iter().position(|d| d.to_string().starts_with(crate::constants::DOMAIN_CODE)) {
-            //     directives.remove(index);
-            // }
-            // directives.push(directive);
-            // TardisFuns::tracing().update_config(&LogConfig {
-            //     level: old_configs.level.clone(),
-            //     directives,
-            //     ..Default::default()
-            // })?;
         }
 
         let gateway_name: Arc<str> = Arc::from(gateway.name.to_string());
