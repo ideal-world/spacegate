@@ -16,4 +16,8 @@ lang: string | null,
 /**
  * Ignore backend tls verification
  */
-ignore_tls_verification: boolean | null, };
+ignore_tls_verification: boolean | null, 
+/**
+ * Add request id for every request
+ */
+enable_x_request_id: boolean | null, };
