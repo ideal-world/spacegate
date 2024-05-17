@@ -14,20 +14,33 @@ use super::K8s;
 impl Discovery for K8s {
     async fn api_url(&self) -> BoxResult<Option<String>> {
         let gateway_class_api: Api<GatewayClass> = self.get_all_api();
-        let pod_api: Api<Pod> = self.get_namespace_api();
-        let ds_api: Api<DaemonSet> = self.get_namespace_api();
 
-        let instance_name = if let Some(mut gateway_class) = gateway_class_api.get_opt(spacegate_model::constants::GATEWAY_CLASS_NAME).await? {
+        let instance = if let Some(mut gateway_class) = gateway_class_api.get_opt(spacegate_model::constants::GATEWAY_CLASS_NAME).await? {
             gateway_class.labels_mut().remove(spacegate_model::constants::KUBE_OBJECT_INSTANCE).unwrap_or(spacegate_model::constants::GATEWAY_DEFAULT_INSTANCE.to_string())
         } else {
             return Err("gateway class not found".into());
         };
 
-        let ds_instance = if let Some(ds) = ds_api.get_opt(&instance_name).await? {
+        let instance_split: Vec<_> = instance.split('.').collect();
+        let (ds_api, pod_api, ds_name): (Api<DaemonSet>, Api<Pod>, String) = if instance_split.len() == 2 {
+            let ns = instance_split.get(1).expect("unexpected");
+            let ds_api: Api<DaemonSet> = self.get_specify_namespace_api(ns);
+            let pod_api: Api<Pod> = self.get_specify_namespace_api(ns);
+            let instance_name = instance_split.get(0).expect("unexpected");
+            (ds_api, pod_api, instance_name.to_string())
+        } else {
+            let ds_api: Api<DaemonSet> = self.get_namespace_api();
+            let pod_api: Api<Pod> = self.get_namespace_api();
+            let instance_name = instance;
+            (ds_api, pod_api, instance_name)
+        };
+
+        let ds_instance = if let Some(ds) = ds_api.get_opt(&ds_name).await? {
             ds
         } else {
             return Err("spacegate instance not found".into());
         };
+
         let pods = pod_api.list(&ListParams::default()).await?;
         let mut pods = pods.items;
         pods.retain(|p| {

@@ -47,6 +47,13 @@ impl K8s {
         kube::Api::namespaced(self.client.clone(), &self.namespace)
     }
 
+    pub fn get_specify_namespace_api<T: kube::Resource<Scope = NamespaceResourceScope>>(&self, ns: &str) -> kube::Api<T>
+    where
+        <T as kube::Resource>::DynamicType: Default,
+    {
+        kube::Api::namespaced(self.client.clone(), ns)
+    }
+
     pub(crate) async fn accept_gateway_class(&self, name: &str) -> BoxResult<()> {
         let condition = Condition {
             last_transition_time: k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(chrono::Utc::now()),
