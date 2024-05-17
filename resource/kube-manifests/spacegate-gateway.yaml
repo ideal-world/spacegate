@@ -161,9 +161,7 @@ spec:
           image: ecfront/spacegate:latest
           imagePullPolicy: IfNotPresent
           env:
-            - name: spacegate_ns
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+            - name: CONFIG
+              value: k8s:spacegate
           # - name: RUST_LOG
           #   value: trace,hyper=error,tower=off,mio=error,kube_client=error
