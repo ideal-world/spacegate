@@ -7,5 +7,5 @@ spec:
   listeners:
     - name: http
       port: 9000
-      protocol: WS
+      protocol: http
 
