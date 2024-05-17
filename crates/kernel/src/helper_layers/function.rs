@@ -1,3 +1,5 @@
+pub mod handler;
+
 use futures_util::future::BoxFuture;
 use futures_util::Future;
 use hyper::{service::Service, Request, Response};
@@ -17,6 +19,43 @@ where
 {
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
         self.as_ref().call(req, inner).await
+    }
+}
+
+pub struct Handler<H, T, Fut> {
+    handler: H,
+    marker: std::marker::PhantomData<fn(T) -> Fut>,
+}
+
+impl<H, T, Fut> Clone for Handler<H, T, Fut>
+where
+    H: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            handler: self.handler.clone(),
+            marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<H, T, Fut> Handler<H, T, Fut> {
+    pub const fn new(handler: H) -> Self {
+        Self {
+            handler,
+            marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<H, T, Fut> FnLayerMethod for Handler<H, T, Fut>
+where
+    T: 'static,
+    H: handler::HandlerTrait<T, Fut> + Send + Clone + 'static,
+    Fut: Future<Output = Response<SgBody>> + Send + 'static,
+{
+    fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Response<SgBody>> + Send {
+        (self.handler).apply(req, inner)
     }
 }
 
@@ -120,6 +159,15 @@ where
     }
 }
 
+impl<H, F, Fut> FnLayer<Handler<H, F, Fut>>
+where
+    Handler<H, F, Fut>: FnLayerMethod,
+{
+    pub const fn new_handler(h: H) -> Self {
+        Self::new(Handler::new(h))
+    }
+}
+
 impl<M, S> Layer<S> for FnLayer<M>
 where
     M: FnLayerMethod + Clone,
@@ -185,7 +233,7 @@ impl Inner {
 mod test {
     use std::{collections::HashMap, sync::Arc};
 
-    use hyper::{header::HeaderValue, StatusCode};
+    use hyper::{header::HeaderValue, Method, StatusCode, Uri};
     #[derive(Debug, Default, Clone)]
     pub struct MyPlugin {
         status_message: HashMap<StatusCode, String>,
@@ -204,7 +252,7 @@ mod test {
             resp
         }
     }
-    use crate::BoxLayer;
+    use crate::{BoxLayer, Extract};
 
     use super::*;
     #[test]
@@ -225,7 +273,29 @@ mod test {
                 resp
             }
         }));
+        #[derive(Debug, Clone)]
+        struct Server {
+            #[allow(dead_code)]
+            pub name: String,
+        }
+        impl Extract for Option<Server> {
+            fn extract(req: &Request<SgBody>) -> Self {
+                let host = req.headers().get("server");
+                if let Some(Ok(host)) = host.map(HeaderValue::to_str) {
+                    Some(Server { name: host.to_string() })
+                } else {
+                    None
+                }
+            }
+        }
+
+        async fn custom_handler(req: Request<SgBody>, inner: Inner, uri: Uri, method: Method, server: Option<Server>) -> Response<SgBody> {
+            tokio::spawn(async move { println!("{method} // {uri} // {server:?}") });
+            inner.call(req).await
+        }
+        let boxed_layer3 = BoxLayer::new(FnLayer::new_handler(custom_handler));
         drop(boxed_layer);
         drop(boxed_layer2);
+        drop(boxed_layer3);
     }
 }

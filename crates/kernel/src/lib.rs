@@ -24,7 +24,7 @@ pub mod utils;
 pub use backend_service::ArcHyperService;
 pub use body::SgBody;
 use extension::Reflect;
-pub use extractor::Extractor;
+pub use extractor::Extract;
 use std::{convert::Infallible, fmt};
 pub use tower_layer::Layer;
 
@@ -48,7 +48,7 @@ pub trait SgRequestExt {
     fn reflect(&self) -> &Reflect;
     #[cfg(feature = "ext-redis")]
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
-    fn extract<M: Extractor>(&self) -> Option<M>;
+    fn extract<M: Extract>(&self) -> M;
 }
 
 impl SgRequestExt for SgRequest {
@@ -82,7 +82,7 @@ impl SgRequestExt for SgRequest {
     }
 
     /// Extract a value from the request.
-    fn extract<M: Extractor>(&self) -> Option<M> {
+    fn extract<M: Extract>(&self) -> M {
         M::extract(self)
     }
 }

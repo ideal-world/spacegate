@@ -1,6 +1,6 @@
 use hyper::Request;
 
-use crate::{Extractor, SgBody};
+use crate::{Extract, SgBody};
 
 /// Just extract and attach the extension to the request
 #[derive(Debug, Clone)]
@@ -16,11 +16,24 @@ impl<E> Extension<E> {
     }
 }
 
-impl<E> Extractor for Extension<E>
+impl<E> Extract for Option<Extension<E>>
 where
     E: Send + Sync + 'static + Clone,
 {
-    fn extract(req: &Request<SgBody>) -> Option<Self> {
-        req.extensions().get::<E>().cloned().map(Extension)
+    fn extract(req: &Request<SgBody>) -> Self {
+        req.extensions().get::<Extension<E>>().cloned()
+    }
+}
+
+impl<E> Extract for Extension<Option<E>>
+where
+    E: Send + Sync + 'static + Clone,
+{
+    fn extract(req: &Request<SgBody>) -> Self {
+        if let Some(ext) = req.extensions().get::<Extension<E>>() {
+            Self(Some(ext.0.clone()))
+        } else {
+            Self(None)
+        }
     }
 }
