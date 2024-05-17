@@ -112,16 +112,6 @@ pub struct PluginDefinitionObject {
     pub make_pf: Box<MakePfMethod>,
 }
 
-impl PluginDefinitionObject {
-    pub fn attr(&self) -> PluginAttributes {
-        PluginAttributes {
-            mono: self.mono,
-            code: self.code.clone(),
-            meta: self.meta.clone(),
-        }
-    }
-}
-
 impl Debug for PluginDefinitionObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = f.debug_struct("PluginAttributes");
@@ -144,6 +134,13 @@ pub struct PluginRepoSnapshot {
 }
 
 impl PluginDefinitionObject {
+    pub fn attr(&self) -> PluginAttributes {
+        PluginAttributes {
+            mono: self.mono,
+            code: self.code.clone(),
+            meta: self.meta.clone(),
+        }
+    }
     pub fn from_trait<P: Plugin>() -> Self {
         let constructor = move |config: PluginConfig| {
             let plugin = Arc::new(P::create(config)?);
