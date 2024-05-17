@@ -1,5 +1,4 @@
 pub mod builder;
-
 use std::{collections::HashMap, ops::Index, sync::Arc};
 
 use crate::{
@@ -84,6 +83,9 @@ impl Index<(usize, usize)> for HttpRoutedService {
 impl Router for GatewayRouter {
     type Index = (usize, usize);
     #[instrument(skip_all, fields(http.host =? req.headers().get(HOST) ))]
+    /// Route the request to the corresponding service.
+    /// 
+    /// (Maybe it will be radix tree in the future.)
     fn route(&self, req: &mut Request<SgBody>) -> Option<Self::Index> {
         let host = req.uri().host().or(req.headers().get(HOST).and_then(|x| x.to_str().ok()))?;
         let indices = self.hostname_tree.get(host)?;

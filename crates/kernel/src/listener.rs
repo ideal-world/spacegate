@@ -107,7 +107,7 @@ where
         Box::pin(async move {
             let mut resp = service.call(req).await.expect("infallible");
             with_length_or_chunked(&mut resp);
-            tracing::trace!(time_used = ?enter_time.elapsed(), "request finished");
+            tracing::trace!(latency = ?enter_time.elapsed(), "request finished");
             Ok(resp)
         })
     }
