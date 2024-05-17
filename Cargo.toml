@@ -8,7 +8,7 @@ members = [
   "crates/model",
   "crates/config",
   "crates/shell",
-  "examples/sayhello"
+  "examples/sayhello",
 ]
 resolver = "2"
 [profile.release]
@@ -23,7 +23,11 @@ strip = true
 
 [workspace.package]
 version = "0.2.0-alpha.1"
-authors = ["gudaoxuri <i@sunisle.org>"]
+authors = [
+  "gudaoxuri <i@sunisle.org>",
+  "4t145 <u4t145@163.com>",
+  "RWDai <rwdai@foxmail.com>",
+]
 description = "A library-first, lightweight, high-performance, cloud-native supported API gateway"
 keywords = ["http", "gateway", "proxy", "websocket", "kubernates"]
 categories = ["gateway", "web-programming", "kubernetes", "api"]
@@ -105,4 +109,3 @@ notify = { version = "6.1.1" }
 
 # web-server
 axum = "0.7.5"
-

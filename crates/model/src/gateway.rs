@@ -66,6 +66,9 @@ pub struct SgParameters {
     #[serde(skip_serializing_if = "Option::is_none")]
     /// Ignore backend tls verification
     pub ignore_tls_verification: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Add request id for every request
+    pub enable_x_request_id: Option<bool>,
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.

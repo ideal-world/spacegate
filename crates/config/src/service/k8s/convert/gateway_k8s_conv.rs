@@ -113,6 +113,7 @@ impl SgParametersConv for SgParameters {
                 log_level: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
                 lang: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
                 ignore_tls_verification: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
+                enable_x_request_id: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_ENABLE_X_REQUEST_ID).and_then(|v| v.parse::<bool>().ok()),
             }
         } else {
             SgParameters {
@@ -120,6 +121,7 @@ impl SgParametersConv for SgParameters {
                 log_level: None,
                 lang: None,
                 ignore_tls_verification: None,
+                enable_x_request_id: None,
             }
         }
     }
