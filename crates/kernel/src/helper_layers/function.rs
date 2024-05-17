@@ -6,6 +6,7 @@ use tower_layer::Layer;
 
 use crate::{ArcHyperService, SgBody};
 
+/// see [`FnLayer`]
 pub trait FnLayerMethod: Send + 'static {
     fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Response<SgBody>> + Send;
 }
@@ -19,6 +20,7 @@ where
     }
 }
 
+/// see [`FnLayer`]
 #[derive(Debug)]
 pub struct Closure<F, Fut>
 where
@@ -68,6 +70,35 @@ where
     }
 }
 
+/// A functional layer
+///
+/// This is an example of how to create a layer that adds a header to the response:
+/// ```
+/// # use spacegate_kernel::helper_layers::function::FnLayer;
+/// # use hyper::http::header::HeaderValue;
+/// let layer = FnLayer::new_closure(move |req, inner| {
+///    async move {
+///        let mut resp = inner.call(req).await;
+///        resp.headers_mut().insert("server", HeaderValue::from_static("potato"));
+///        resp
+///    }
+/// });
+/// ```
+///
+/// Or you can use a struct that implements `FnLayerMethod`:
+/// ```
+/// # use spacegate_kernel::{helper_layers::function::{FnLayer, FnLayerMethod, Inner}, SgRequest, SgResponse};
+/// # use hyper::http::header::HeaderValue;
+/// struct MyPlugin;
+/// impl FnLayerMethod for MyPlugin {
+///    async fn call(&self, req: SgRequest, inner: Inner) -> SgResponse {
+///       let mut resp = inner.call(req).await;
+///       resp.headers_mut().insert("server", HeaderValue::from_static("potato"));
+///       resp
+///    }
+/// }
+/// let layer = FnLayer::new(MyPlugin);
+/// ```
 #[derive(Debug, Clone)]
 pub struct FnLayer<M> {
     method: M,
@@ -104,6 +135,10 @@ where
         }
     }
 }
+
+
+
+/// The corresponded server for [`FnLayer`]
 #[derive(Debug, Clone)]
 pub struct FnService<M> {
     m: M,
@@ -127,6 +162,7 @@ where
     }
 }
 
+/// A shared hyper service wrapper
 #[derive(Clone)]
 pub struct Inner {
     inner: ArcHyperService,
@@ -136,9 +172,14 @@ impl Inner {
     pub fn new(inner: ArcHyperService) -> Self {
         Inner { inner }
     }
+    /// Call the inner service and get the response
     pub async fn call(self, req: Request<SgBody>) -> Response<SgBody> {
         // just infallible
         unsafe { self.inner.call(req).await.unwrap_unchecked() }
+    }
+    /// Unwrap the inner service
+    pub fn into_inner(self) -> ArcHyperService {
+        self.inner
     }
 }
 

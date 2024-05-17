@@ -110,13 +110,11 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct Meta {
     pub version: &'static str,
-    // pub commit: &'static str,
 }
 
 impl Meta {
     const DEFAULT: Meta = Self {
         version: env!("CARGO_PKG_VERSION"),
-        // commit: tardis::utils::build_info::git_version!(cargo_prefix = "cargo:", fallback = "unknown"),
     };
     pub const fn new() -> Self {
         Self::DEFAULT
