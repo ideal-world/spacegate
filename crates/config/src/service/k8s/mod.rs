@@ -67,7 +67,7 @@ impl K8s {
         let mut gateway_class = gateway_class_api.get_status(name).await?;
         gateway_class.status = if let Some(mut status) = gateway_class.status {
             status.conditions = if let Some(mut conditions) = status.conditions {
-                for condition in &conditions {
+                if let Some(condition) = conditions.first() {
                     if condition.status == "True" && condition.type_ == "Accepted" {
                         return Ok(());
                     }
@@ -94,15 +94,15 @@ impl K8s {
             message: "Load config or refresh config , waiting for complete".to_string(),
             reason: "WaitingForController".to_string(),
             status: "False".to_string(),
-            type_: "Accepted".to_string(),
+            type_: "Progressing".to_string(),
             observed_generation: None,
         };
         let gateway_class_api: kube::Api<GatewayClass> = self.get_all_api();
         let mut gateway_class = gateway_class_api.get_status(name).await?;
         gateway_class.status = if let Some(mut status) = gateway_class.status {
             status.conditions = if let Some(mut conditions) = status.conditions {
-                for condition in conditions {
-                    if condition.status == "False" && condition.type_ == "Accepted" {
+                if let Some(condition) = conditions.first() {
+                    if condition.status == "False" && condition.type_ == "Progressing" {
                         return Ok(());
                     }
                 }

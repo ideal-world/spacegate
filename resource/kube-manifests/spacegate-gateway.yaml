@@ -163,5 +163,5 @@ spec:
           env:
             - name: CONFIG
               value: k8s:spacegate
-          # - name: RUST_LOG
-          #   value: trace,hyper=error,tower=off,mio=error,kube_client=error
+            # - name: RUST_LOG
+            #   value: trace,hyper=error,tower=off,mio=error,kube_client=error
