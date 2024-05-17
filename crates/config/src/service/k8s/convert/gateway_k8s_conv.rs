@@ -39,31 +39,35 @@ impl SgGatewayConv for SgGateway {
                         tls: match l.protocol {
                             crate::SgProtocolConfig::Http => None,
                             crate::SgProtocolConfig::Https { tls } => {
-                                let current_time_utc = Utc::now().timestamp();
-                                let name = tls.key[..2].to_string() + &current_time_utc.to_string();
-                                secret = Some(Secret {
-                                    metadata: ObjectMeta {
-                                        name: Some(name.clone()),
-                                        namespace: Some(namespace.to_string()),
+                                if tls.key.len() < 3 && tls.cert.len() < 3 {
+                                    None
+                                } else {
+                                    let current_time_utc = Utc::now().timestamp();
+                                    let name = tls.key[..2].to_string() + &current_time_utc.to_string();
+                                    secret = Some(Secret {
+                                        metadata: ObjectMeta {
+                                            name: Some(name.clone()),
+                                            namespace: Some(namespace.to_string()),
+                                            ..Default::default()
+                                        },
+                                        type_: Some("kubernetes.io/tls".to_string()),
+                                        data: Some(BTreeMap::from([
+                                            ("tls.key".to_string(), ByteString(tls.key.into_bytes())),
+                                            ("tls.crt".to_string(), ByteString(tls.cert.into_bytes())),
+                                        ])),
                                         ..Default::default()
-                                    },
-                                    type_: Some("kubernetes.io/tls".to_string()),
-                                    data: Some(BTreeMap::from([
-                                        ("tls.key".to_string(), ByteString(tls.key.into_bytes())),
-                                        ("tls.crt".to_string(), ByteString(tls.cert.into_bytes())),
-                                    ])),
-                                    ..Default::default()
-                                });
-                                Some(GatewayTlsConfig {
-                                    mode: Some(tls.mode.into()),
-                                    certificate_refs: Some(vec![SecretObjectReference {
-                                        kind: Some("Secret".to_string()),
-                                        name,
-                                        namespace: Some(namespace.to_string()),
-                                        ..Default::default()
-                                    }]),
-                                    options: None,
-                                })
+                                    });
+                                    Some(GatewayTlsConfig {
+                                        mode: Some(tls.mode.into()),
+                                        certificate_refs: Some(vec![SecretObjectReference {
+                                            kind: Some("Secret".to_string()),
+                                            name,
+                                            namespace: Some(namespace.to_string()),
+                                            ..Default::default()
+                                        }]),
+                                        options: None,
+                                    })
+                                }
                             }
                             _ => None,
                         },

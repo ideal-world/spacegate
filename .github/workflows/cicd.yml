@@ -7,7 +7,7 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     services:
       redis:
         image: redis
@@ -23,6 +23,7 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
+      - uses: davidB/rust-cargo-make@v1
 
       - name: Cache rust
         uses: Swatinem/rust-cache@v2
@@ -63,33 +64,11 @@ jobs:
 
       - name: Init k8s e2e env
         run: |
-          cd ~
-          pwd
-          cd -
-          echo $KUBECONFIG
-          echo "========="
-          cat ~/.kube/config
-          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
-          cargo build -p spacegate
-          cd resource/docker/spacegate
-          mv ../../../target/debug/spacegate ./
-          docker build -t ecfront/spacegate:latest .
-          rm spacegate
-          k3d image import ecfront/spacegate:latest -c spacegate-test --verbose
-
-          kubectl wait --for=condition=Ready pod -l name=gateway-api-admission-server -n gateway-system
-          sleep 10
-          cd ../../../
-          kubectl apply -f ./resource/kube-manifests/namespace.yaml
-          kubectl apply -f ./resource/kube-manifests/gatewayclass.yaml
-          kubectl apply -f ./resource/kube-manifests/spacegate-gateway.yaml
-          kubectl apply -f ./resource/kube-manifests/spacegate-httproute.yaml
-          sleep 5
-          kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
+          bash ./tests/e2e/e2e-test-init.sh
 
       - name: Run k8s e2e test
         run: |
-          cd ./e2e
+          cd ./tests/e2e
           sudo bash ./e2e-test.sh
 
       - name: Upload to codecov.io
