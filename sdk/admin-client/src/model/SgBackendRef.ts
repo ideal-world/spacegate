@@ -7,7 +7,7 @@ export type SgBackendRef<P = PluginInstanceId> = { host: BackendHost,
 /**
  * Port specifies the destination port number to use for this resource.
  */
-port: number, 
+port: number | null, 
 /**
  * Timeout specifies the timeout for requests forwarded to the referenced backend.
  */
@@ -18,7 +18,7 @@ timeout_ms: number | null, protocol: SgBackendProtocol | null,
  * For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
  * Weight is not a percentage and the sum of weights does not need to equal 100.
  */
-weight: number, 
+weight: number | null, 
 /**
  * plugins define the filters that are applied to backend that match this hostnames.
  *

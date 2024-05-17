@@ -4,10 +4,6 @@ import type { SgHttpMethodMatch } from "./SgHttpMethodMatch";
 import type { SgHttpPathMatch } from "./SgHttpPathMatch";
 import type { SgHttpQueryMatch } from "./SgHttpQueryMatch";
 
-/**
- * HTTPRouteMatch defines the predicate used to match requests to a given action.
- * Multiple match types are ANDed together, i.e. the match will evaluate to true only if all conditions are satisfied.
- */
 export type SgHttpRouteMatch = { 
 /**
  * Path specifies a HTTP request path matcher.
