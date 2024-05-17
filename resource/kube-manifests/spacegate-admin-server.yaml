@@ -115,7 +115,7 @@ spec:
       serviceAccountName: spacegate-admin
       containers:
         - name: spacegate-admin
-          image: ecfront/spacegate-admin:latest
+          image: ecfront/spacegate-admin-server:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9080
