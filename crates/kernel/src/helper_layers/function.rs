@@ -136,8 +136,6 @@ where
     }
 }
 
-
-
 /// The corresponded server for [`FnLayer`]
 #[derive(Debug, Clone)]
 pub struct FnService<M> {
