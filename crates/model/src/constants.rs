@@ -2,7 +2,7 @@ pub const KUBE_OBJECT_INSTANCE: &str = "app.kubernetes.io/instance";
 
 pub const GATEWAY_CONTROLLER_NAME: &str = "spacegate.idealworld.group/spacegate-controller";
 pub const GATEWAY_CLASS_NAME: &str = "spacegate";
-pub const GATEWAY_DEFAULT_INSTANCE: &str = "spacegate";
+pub const GATEWAY_DEFAULT_INSTANCE: &str = "spacegate.spacegate";
 pub const GATEWAY_ANNOTATION_REDIS_URL: &str = "redis_url";
 pub const GATEWAY_ANNOTATION_LOG_LEVEL: &str = "log_level";
 pub const GATEWAY_ANNOTATION_LANGUAGE: &str = "lang";
