@@ -51,7 +51,7 @@ impl<H, T, Fut> Handler<H, T, Fut> {
 impl<H, T, Fut> FnLayerMethod for Handler<H, T, Fut>
 where
     T: 'static,
-    H: handler::HandlerTrait<T, Fut> + Send + Clone + 'static,
+    H: handler::HandlerFn<T, Fut> + Send + Clone + 'static,
     Fut: Future<Output = Response<SgBody>> + Send + 'static,
 {
     fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Response<SgBody>> + Send {
