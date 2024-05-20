@@ -20,10 +20,9 @@ pub use spacegate_kernel::BoxError;
 pub use spacegate_kernel::BoxLayer;
 pub use spacegate_kernel::{SgBody, SgRequest, SgRequestExt, SgResponse, SgResponseExt};
 pub mod error;
+pub mod instance;
 pub mod model;
 pub mod mount;
-// pub mod plugins;
-pub mod instance;
 pub use error::PluginError;
 #[cfg(feature = "dylib")]
 pub mod dynamic;

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 sudo apt update && sudo apt install curl
-curl --location --remote-name https://github.com/Orange-OpenSource/hurl/releases/download/3.0.0/hurl_3.0.0_amd64.deb
-sudo apt update && sudo apt install ./hurl_3.0.0_amd64.deb
+curl --location --remote-name https://github.com/Orange-OpenSource/hurl/releases/download/4.3.0/hurl_4.3.0_amd64.deb
+sudo apt update && sudo apt install ./hurl_4.3.0_amd64.deb
 
 
 kubectl --kubeconfig /home/runner/.kube/config get nodes -o wide
@@ -25,7 +25,7 @@ EOF
 hurl --test echo -v
 
 echo "============change config test============"
-kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/port", "value": 9001}]'
+kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway -n spacegate --type json -p='[{"op": "replace", "path": "/spec/listeners/0/port", "value": 9001}]'
 sleep 1
 
 cat>change-port<<EOF 
@@ -37,13 +37,13 @@ jsonpath "$.url" == "http://${cluster_ip}:9001/get"
 EOF
 hurl --test change-port -v
 
-kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "replace", "path": "/spec/rules/0/matches/0/path/value", "value": "/hi"}]'
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo -n spacegate --type json -p='[{"op": "replace", "path": "/spec/rules/0/matches/0/path/value", "value": "/hi"}]'
 sleep 1
 
 cat>change-route<<EOF 
 GET http://${cluster_ip}:9001/echo/get
 
-HTTP 200
+HTTP 404
 [Asserts]
 header "content-length" == "0"
 
@@ -55,7 +55,6 @@ jsonpath "$.url" == "http://${cluster_ip}:9001/get"
 EOF
 hurl --test change-route -v
 
-kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway log_level="trace"
 sleep 1
 
 echo "kubectl logs -l app=spacegate -n spacegate"
@@ -85,7 +84,7 @@ kubectl --kubeconfig /home/runner/.kube/config apply -f secret.yaml
 
 kubectl --kubeconfig /home/runner/.kube/config get secret -o wide
 
-kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/protocol", "value": "HTTPS"},{"op": "replace", "path": "/spec/listeners/0/tls", "value": {"mode": "Terminate","certificateRefs":[{"kind":"Secret","name":"tls-secret","namespace":"default"}]}}]'
+kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway -n spacegate --type json -p='[{"op": "replace", "path": "/spec/listeners/0/protocol", "value": "HTTPS"},{"op": "replace", "path": "/spec/listeners/0/tls", "value": {"mode": "Terminate","certificateRefs":[{"kind":"Secret","name":"tls-secret","namespace":"default"}]}}]'
 sleep 1
 
 cat>tls-test1.hurl<<EOF
@@ -114,9 +113,9 @@ ${cluster_ip} testhosts2
 ${cluster_ip} app.testhosts2
 EOF
 
-kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway -n spacegate
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
-kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "testhosts1"}]'
+kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway  -n spacegate --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "testhosts1"}]'
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
 sleep 5
 
@@ -137,7 +136,7 @@ EOF
 
 hurl --test hostname_test.hurl -v
 
-kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "*.testhosts2"}]'
+kubectl --kubeconfig /home/runner/.kube/config patch gateway gateway -n spacegate --type json -p='[{"op": "replace", "path": "/spec/listeners/0/hostname", "value": "*.testhosts2"}]'
 sleep 1
 
 cat>hostname_test2.hurl<<EOF
@@ -178,10 +177,10 @@ hurl --test mult_listeners.hurl -v
 
 
 echo "============[gateway]redis connction test============"
-kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway -n spacegate
 kubectl --kubeconfig /home/runner/.kube/config apply -f gateway_redis_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=redis
-kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway redis_url="redis://redis-service.default:6379"
+kubectl --kubeconfig /home/runner/.kube/config annotate --overwrite gateway gateway -n spacegate redis_url="redis://redis-service.default:6379"
 sleep 1
 
 cat>redis.hurl<<EOF
@@ -196,8 +195,8 @@ hurl --test redis.hurl -v
 
 
 echo "============[websocket]no backend test============"
-kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
-kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway -n spacegate
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all -n spacegate
 wget https://github.com/vi/websocat/releases/download/v1.11.0/websocat.x86_64-unknown-linux-musl
 chmod 770 websocat.x86_64-unknown-linux-musl
 
@@ -238,8 +237,8 @@ expected_output="hi"
  fi
 
 echo "============[httproute]hostnames test============"
-kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
-kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all -n spacegate
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway -n spacegate
 cat>>/etc/hosts<<EOF
 ${cluster_ip} testhosts1.httproute
 ${cluster_ip} testhosts2.httproute
@@ -247,7 +246,7 @@ ${cluster_ip} app.testhosts2.httproute
 EOF
 
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
-kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "add", "path": "/spec/hostnames", "value": ["testhosts1.httproute"]}]'
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo -n spacegate --type json -p='[{"op": "add", "path": "/spec/hostnames", "value": ["testhosts1.httproute"]}]'
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
 sleep 5
 
@@ -268,7 +267,7 @@ EOF
 
 hurl --test hostname_test.hurl -v
 
-kubectl --kubeconfig /home/runner/.kube/config patch httproute echo --type json -p='[{"op": "replace", "path": "/spec/hostnames/0", "value": "*.testhosts2.httproute"}]'
+kubectl --kubeconfig /home/runner/.kube/config patch httproute echo -n spacegate --type json -p='[{"op": "replace", "path": "/spec/hostnames/0", "value": "*.testhosts2.httproute"}]'
 sleep 1
 
 cat>hostname_test2.hurl<<EOF
@@ -293,8 +292,8 @@ echo "============[httproute]timeout test============"
 echo "============[httproute]backend with k8s service test============"
 echo "============[httproute]backend weight test============"
 echo "============[filter]routing level test============"
-kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all
-kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway
+kubectl --kubeconfig /home/runner/.kube/config delete httproutes --all -n spacegate
+kubectl --kubeconfig /home/runner/.kube/config delete gateway gateway -n spacegate
 kubectl --kubeconfig /home/runner/.kube/config apply -f filter_httproute_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
@@ -309,7 +308,7 @@ HTTP 200
 EOF
 hurl --test filter_routing.hurl -v
 echo "============[filter]global level test============"
-kubectl --kubeconfig /home/runner/.kube/config delete sgfilters --all
+kubectl --kubeconfig /home/runner/.kube/config delete sgfilters --all -n spacegate
 kubectl --kubeconfig /home/runner/.kube/config apply -f echo.yaml
 kubectl --kubeconfig /home/runner/.kube/config apply -f filter_gateway_test.yaml
 kubectl --kubeconfig /home/runner/.kube/config wait --for=condition=Ready pod -l app=echo
