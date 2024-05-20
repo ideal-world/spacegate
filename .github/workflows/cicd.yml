@@ -304,6 +304,7 @@ jobs:
             ${{ env.ARTIFACT_DIR }}/*.*
 
   release-docker:
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
     runs-on: ubuntu-latest
     name: Release docker image to registry
@@ -328,13 +329,13 @@ jobs:
         run: cargo build --release -p spacegate
 
       - name: Copy binary to workspace
-        run: cp ./target/release/spacegate ./services/full/res/
+        run: cp ./target/release/spacegate resource/docker/spacegate/
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: services/full/res/
-          dockerfile: services/full/res/Dockerfile
+          directory: resource/docker/spacegate/
+          dockerfile: resource/docker/spacegate/Dockerfile
           registry: docker.io
           image: ecfront/spacegate
           tags: ${{ github.ref_name }}
@@ -342,6 +343,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
   push-docker:
+    if: startsWith(github.ref, 'refs/tags/') != true
     needs: [check]
     runs-on: ubuntu-latest
     name: Push docker image to registry
@@ -366,16 +368,16 @@ jobs:
         run: cargo build --release -p spacegate
 
       - name: Copy binary to workspace
-        run: cp ./target/release/spacegate ./services/full/res/
+        run: cp ./target/release/spacegate resource/docker/spacegate/
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: services/full/res/
-          dockerfile: services/full/res/Dockerfile
+          directory: resource/docker/spacegate/
+          dockerfile: resource/docker/spacegate/Dockerfile
           registry: docker.io
           image: ecfront/spacegate
-          tags: latest
+          tags: ${{ github.ref == 'refs/heads/master' && 'latest' || github.ref_name }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
