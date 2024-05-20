@@ -31,11 +31,11 @@ jobs:
       - name: Check format
         run: cargo fmt --all -- --check
 
-      # - name: Check clippy
-      #   run: cargo clippy --all --all-features
+      - name: Check clippy
+        run: cargo clippy --all --all-features
 
-      # - name: Run rust test
-      #   run: cargo test --all-features
+      - name: Run rust test
+        run: cargo test --all-features
 
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
@@ -402,3 +402,37 @@ jobs:
       - name: Cargo publish kernel
         working-directory: kernel
         run: cargo publish
+  
+  release-kube-manifest:
+    needs: [release-docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Generate kube manifest
+        run: |
+        DEST_DIR=${{ env.ARTIFACT_DIR }}
+        tag=${{ github.ref_name }}
+        mkdir -p ${DEST_DIR}
+        MANIFEST_NAME=spacegate-${{ github.ref_name }}.yaml
+
+        for file in gatewayclass.yaml namespace.yaml spacegate-admin-server.yaml spacegate-gateway.yaml spacegate-httproute.yaml; do
+            sed "s/:latest/:$tag/g" "$file"
+            echo -e "\n---"
+        done > ${MANIFEST_NAME}
+
+        mv ${MANIFEST_NAME} ${DEST_DIR}
+
+      - name: Upload artifacts to summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_DIR }}
+          path: |
+            ${{ env.ARTIFACT_DIR }}/
+
+      - name: Upload artifacts to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ARTIFACT_DIR }}/*.*
