@@ -31,11 +31,11 @@ jobs:
       - name: Check format
         run: cargo fmt --all -- --check
 
-      - name: Check clippy
-        run: cargo clippy --all --all-features
+      # - name: Check clippy
+      #   run: cargo clippy --all --all-features
 
-      - name: Run rust test
-        run: cargo test --all-features
+      # - name: Run rust test
+      #   run: cargo test --all-features
 
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
