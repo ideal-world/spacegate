@@ -22,7 +22,11 @@ Do NOT use in production environment!**
 # Usage
 
 ## Use spacegate in k8s
-todo!
+### Install for kubernetes
+```shell
+kubectl apply -f https://github.com/ideal-world/spacegate/releases/download/0.2/spacegate-0.2.yaml
+```
+### Open spacegate admin web,and enjoy!
 
 
 ## Use spacegate as an executable binary
