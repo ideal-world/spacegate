@@ -416,6 +416,7 @@ jobs:
         tag=${{ github.ref_name }}
         mkdir -p ${DEST_DIR}
         MANIFEST_NAME=spacegate-${{ github.ref_name }}.yaml
+        mv resource/kube-manifests/* ./
 
         for file in gatewayclass.yaml namespace.yaml spacegate-admin-server.yaml spacegate-gateway.yaml spacegate-httproute.yaml; do
             sed "s/:latest/:$tag/g" "$file"
