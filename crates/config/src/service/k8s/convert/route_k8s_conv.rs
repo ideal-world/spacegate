@@ -8,7 +8,7 @@ use k8s_gateway_api::{
 };
 use kube::{api::ObjectMeta, ResourceExt};
 use spacegate_model::{
-    constants::GATEWAY_CONTROLLER_NAME,
+    constants::{DEFAULT_NAMESPACE, GATEWAY_CONTROLLER_NAME},
     ext::k8s::{
         crd::{http_spaceroute::HttpSpacerouteStatus, sg_filter::K8sSgFilterSpecTargetRef},
         helper_struct::{BackendObjectRefKind, SgTargetKind},
@@ -402,7 +402,7 @@ impl SgBackendRefConv for SgBackendRef {
                 group: None,
                 kind: BackendObjectRefKind::Service.into(),
                 name: k8s_param.name,
-                namespace: k8s_param.namespace,
+                namespace: Some(k8s_param.namespace.unwrap_or(DEFAULT_NAMESPACE.to_string())),
                 port: self.port,
             },
             BackendHost::File { path } => BackendObjectReference {
