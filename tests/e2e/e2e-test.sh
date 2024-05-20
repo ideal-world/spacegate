@@ -43,7 +43,7 @@ sleep 1
 cat>change-route<<EOF 
 GET http://${cluster_ip}:9001/echo/get
 
-HTTP 200
+HTTP 404
 [Asserts]
 header "content-length" == "0"
 
