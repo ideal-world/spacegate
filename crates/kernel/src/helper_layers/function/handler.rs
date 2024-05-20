@@ -8,7 +8,7 @@ use super::Inner;
 use crate::extractor::Extract;
 // F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
 // Fut: Future<Output = Response<SgBody>> + Send + 'static,
-pub trait HandlerTrait<T, Fut>
+pub trait HandlerFn<T, Fut>
 where
     Fut: Future<Output = Response<SgBody>> + Send + 'static,
 {
@@ -18,7 +18,7 @@ where
 macro_rules! impl_handler {
     ($($t:ident),*) => {
         #[allow(unused_variables, unused_parens)]
-        impl<'a, F, Fut, $($t),* > HandlerTrait<($($t),*), Fut> for F
+        impl<F, Fut, $($t),* > HandlerFn<($($t),*), Fut> for F
         where
             F: (Fn(Request<SgBody>, Inner, $($t,)*) -> Fut) + Send + Sync + Clone + 'static ,
             Fut: Future<Output = Response<SgBody>> + Send + 'static,
@@ -30,6 +30,16 @@ macro_rules! impl_handler {
             }
         }
     };
+}
+
+impl Inner {
+    pub fn invoke<T, Fut, H>(self, request: Request<SgBody>, handler: H) -> Fut
+    where
+        H: HandlerFn<T, Fut>,
+        Fut: Future<Output = Response<SgBody>> + Send + 'static,
+    {
+        handler.apply(request, self)
+    }
 }
 
 impl_handler!();
