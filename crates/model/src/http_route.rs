@@ -1,3 +1,5 @@
+use crate::constants::DEFAULT_NAMESPACE;
+
 pub use super::route_match::*;
 use serde::{Deserialize, Serialize};
 
@@ -167,7 +169,7 @@ impl ToString for K8sServiceData {
     fn to_string(&self) -> String {
         match self.namespace {
             Some(ref ns) => format!("{}.{}", self.name, ns),
-            None => self.name.clone(),
+            None => format!("{}.{}", self.name, DEFAULT_NAMESPACE),
         }
     }
 }

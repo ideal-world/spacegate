@@ -3,6 +3,6 @@ kind: GatewayClass
 metadata:
   name: spacegate
   labels:
-    app.kubernetes.io/instance: spacegate
+    app.kubernetes.io/instance: spacegate.spacegate
 spec:
   controllerName: spacegate.idealworld.group/spacegate-controller

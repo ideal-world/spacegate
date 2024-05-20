@@ -1,7 +1,8 @@
 use hyper::Request;
 
 use crate::SgBody;
-pub mod extension;
+mod extension;
+pub use extension::*;
 use hyper::http;
 /// a marker is some information that can be attached to a request and can be extracted from a request.
 pub trait Extract: Sized + Send + Sync {

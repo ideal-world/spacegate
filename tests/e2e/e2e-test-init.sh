@@ -19,5 +19,7 @@ kubectl apply -f ./resource/kube-manifests/namespace.yaml
 kubectl apply -f ./resource/kube-manifests/gatewayclass.yaml
 kubectl apply -f ./resource/kube-manifests/spacegate-gateway.yaml
 kubectl apply -f ./resource/kube-manifests/spacegate-httproute.yaml
+kubectl patch ds spacegate -n spacegate --type json -p='[{"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "RUST_LOG", "value": "trace,hyper=error,tower=off,mio=error,kube_client=error"}}]'
+
 sleep 5
 kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
