@@ -1,4 +1,5 @@
 FROM nginx:latest
+LABEL org.opencontainers.image.source https://github.com/ideal-world/spacegate
 
 WORKDIR /usr/src/app
 
