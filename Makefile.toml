@@ -134,5 +134,5 @@ dependencies = [
     "publish-config",
     "publish-kernel",
     "publish-shell",
-    "publish-spacegate",
+    # "publish-spacegate",
 ]
