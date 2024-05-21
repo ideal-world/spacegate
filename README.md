@@ -204,7 +204,7 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 | **spacegate-config** [![Crate](https://img.shields.io/crates/v/spacegate-config.svg)](https://crates.io/crates/spacegate-config) [![Docs](https://docs.rs/spacegate-config/badge.svg)](https://docs.rs/spacegate-config) | rust-lib  | Config listener interface and implementations. |
 | **spacegate** | bin  | An out-of-box executable based on spacegate-shell. |
 | **spacegate-admin** | bin  | Spacegate admin application backend service. |
-| **spacegate-admin-client** | js-lib  | JavaScript/TypeScript sdk for spacegate-admin. |
+| **spacegate-admin-client** [![NPM Version](https://img.shields.io/npm/v/spacegate-admin-client)](https://www.npmjs.com/package/spacegate-admin-client) | js-lib  | JavaScript/TypeScript sdk for spacegate-admin. |
 | **spacegate-admin-fe** | web  | Spacegate admin front end. |
 ## Project Structure
 ![Crates](./.readme/dep.svg)
