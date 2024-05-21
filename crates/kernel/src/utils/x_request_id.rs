@@ -71,7 +71,7 @@ fn machine_id() -> u64 {
             #[cfg(not(target_os = "linux"))]
             {
                 // let's generate random one
-                let mid = rand::random::<u64>();
+                rand::random::<u64>()
             }
         }
     })
