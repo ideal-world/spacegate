@@ -19,7 +19,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -132,6 +132,17 @@ jobs:
 
       - name: Extract front artifact
         run: cd resource/docker/spacegate-admin-server/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
+
+      - name: Build and push Docker image to github
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: resource/docker/spacegate-admin-server
+          dockerfile: resource/docker/spacegate-admin-server/Dockerfile
+          registry: ghcr.io
+          image: ideal-world/spacegate-admin-server
+          tags: ${{ github.ref_name }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5

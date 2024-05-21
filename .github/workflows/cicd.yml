@@ -18,7 +18,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -315,7 +315,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -330,6 +330,17 @@ jobs:
 
       - name: Copy binary to workspace
         run: cp ./target/release/spacegate resource/docker/spacegate/
+
+      - name: Build and push Docker image to github
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: resource/docker/spacegate/
+          dockerfile: resource/docker/spacegate/Dockerfile
+          registry: ghcr.io
+          image: ideal-world/spacegate
+          tags: ${{ github.ref_name }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
@@ -354,7 +365,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -392,7 +403,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
