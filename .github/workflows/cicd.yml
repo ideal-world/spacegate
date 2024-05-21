@@ -381,11 +381,14 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-  publish-lib-kernel:
+  release-lib-kernel:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
     runs-on: ubuntu-latest
     steps:
+      - name: rust-cargo-make
+        uses: davidB/rust-cargo-make@v1.10.0
+
       - name: Check out the repo
         uses: actions/checkout@v3
 
@@ -397,13 +400,8 @@ jobs:
       - name: Cargo login
         run: cargo login ${{ secrets.CRATES_TOKEN }}
 
-      - name: Cargo package kernel
-        working-directory: kernel
-        run: cargo package
-
-      - name: Cargo publish kernel
-        working-directory: kernel
-        run: cargo publish
+      - name: cargo Publish all
+        run: cargo make publish
   
   release-kube-manifest:
     needs: [release-docker]

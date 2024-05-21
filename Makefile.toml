@@ -67,3 +67,120 @@ script = '''
 cd sdk/admin-client;
 npm run build-model;
 '''
+
+
+[tasks.package-ext-redis]
+workspace = false
+command = "cargo"
+args = ["package", "-p", "spacegate-ext-redis"]
+
+[tasks.publish-ext-redis]
+workspace = false
+dependencies = ["package-ext-redis"]
+command = "cargo"
+args = ["publish", "-p", "spacegate-ext-redis"]
+
+[tasks.package-ext-axum]
+workspace = false
+command = "cargo"
+args = ["package", "-p", "spacegate-ext-axum"]
+
+[tasks.publish-ext-axum]
+workspace = false
+dependencies = ["package-ext-axum"]
+command = "cargo"
+args = ["publish", "-p", "spacegate-ext-axum"]
+
+[tasks.package-kernel]
+workspace = false
+dependencies = ["publish-ext-axum", "publish-ext-redis"]
+command = "cargo"
+args = ["package", "-p", "spacegate-kernel"]
+
+[tasks.publish-kernel]
+workspace = false
+dependencies = ["package-kernel"]
+command = "cargo"
+args = ["publish", "-p", "spacegate-kernel"]
+
+[tasks.package-model]
+workspace = false
+dependencies = ["publish-ext-axum", "publish-ext-redis"]
+command = "cargo"
+args = ["package", "-p", "spacegate-model"]
+
+[tasks.publish-model]
+workspace = false
+dependencies = ["package-model"]
+command = "cargo"
+args = ["publish", "-p", "spacegate-model"]
+
+[tasks.package-plugin]
+workspace = false
+dependencies = ["publish-kernel", "publish-model"]
+command = "cargo"
+args = ["package", "-p", "spacegate-model"]
+
+[tasks.publish-plugin]
+workspace = false
+dependencies = ["package-plugin"]
+command = "cargo"
+args = ["publish", "-p", "spacegate-plugin"]
+
+[tasks.package-config]
+workspace = false
+dependencies = ["publish-ext-axum", "publish-ext-redis", "publish-model"]
+command = "cargo"
+args = ["package", "-p", "spacegate-config"]
+
+[tasks.publish-config]
+workspace = false
+dependencies = ["package-config"]
+command = "cargo"
+args = ["publish", "-p", "spacegate-config"]
+
+[tasks.package-shell]
+workspace = false
+dependencies = [
+    "publish-ext-axum",
+    "publish-ext-redis",
+    "publish-model",
+    "publish-plugin",
+    "publish-config",
+    "publish-kernel",
+]
+command = "cargo"
+args = ["package", "-p", "spacegate-shell"]
+
+[tasks.publish-shell]
+workspace = false
+dependencies = ["package-shell"]
+command = "cargo"
+args = ["publish", "-p", "spacegate-shell"]
+
+[tasks.package-spacegate]
+workspace = false
+dependencies = [
+    "publish-shell"
+]
+command = "cargo"
+args = ["package", "-p", "spacegate"]
+
+[tasks.publish-spacegate]
+workspace = false
+dependencies = ["package-spacegate"]
+command = "cargo"
+args = ["publish", "-p", "spacegate"]
+
+[tasks.publish]
+workspace = false
+dependencies = [
+    "publish-ext-axum",
+    "publish-ext-redis",
+    "publish-model",
+    "publish-plugin",
+    "publish-config",
+    "publish-kernel",
+    "publish-shell",
+    "publish-spacegate",
+]

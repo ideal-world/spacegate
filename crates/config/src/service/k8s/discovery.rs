@@ -26,7 +26,7 @@ impl Discovery for K8s {
             let ns = instance_split.get(1).expect("unexpected");
             let ds_api: Api<DaemonSet> = self.get_specify_namespace_api(ns);
             let pod_api: Api<Pod> = self.get_specify_namespace_api(ns);
-            let instance_name = instance_split.get(0).expect("unexpected");
+            let instance_name = instance_split.first().expect("unexpected");
             (ds_api, pod_api, instance_name.to_string())
         } else {
             let ds_api: Api<DaemonSet> = self.get_namespace_api();
