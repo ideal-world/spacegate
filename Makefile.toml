@@ -1,7 +1,7 @@
 # ref: https://sagiegurari.github.io/cargo-make/
 [env]
 # DOCKER_REPO = "ecfront"
-# DOCKER_VERSION = "${CARGO_MAKE_PROJECT_VERSION}"
+CARGO_MAKE_PROJECT_VERSION = "0.2.0-alpha.1"
 
 [tasks.format]
 workspace = true
@@ -69,77 +69,41 @@ npm run build-model;
 '''
 
 
-[tasks.package-ext-redis]
-workspace = false
-command = "cargo"
-args = ["package", "-p", "spacegate-ext-redis"]
-
 [tasks.publish-ext-redis]
 workspace = false
-dependencies = ["package-ext-redis"]
-command = "cargo"
-args = ["publish", "-p", "spacegate-ext-redis"]
-
-[tasks.package-ext-axum]
-workspace = false
-command = "cargo"
-args = ["package", "-p", "spacegate-ext-axum"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-ext-redis"]
 
 [tasks.publish-ext-axum]
 workspace = false
-dependencies = ["package-ext-axum"]
-command = "cargo"
-args = ["publish", "-p", "spacegate-ext-axum"]
-
-[tasks.package-kernel]
-workspace = false
-dependencies = ["publish-ext-axum", "publish-ext-redis"]
-command = "cargo"
-args = ["package", "-p", "spacegate-kernel"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-ext-axum"]
 
 [tasks.publish-kernel]
 workspace = false
-dependencies = ["package-kernel"]
-command = "cargo"
-args = ["publish", "-p", "spacegate-kernel"]
-
-[tasks.package-model]
-workspace = false
 dependencies = ["publish-ext-axum", "publish-ext-redis"]
-command = "cargo"
-args = ["package", "-p", "spacegate-model"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-kernel"]
 
 [tasks.publish-model]
 workspace = false
-dependencies = ["package-model"]
-command = "cargo"
-args = ["publish", "-p", "spacegate-model"]
-
-[tasks.package-plugin]
-workspace = false
-dependencies = ["publish-kernel", "publish-model"]
-command = "cargo"
-args = ["package", "-p", "spacegate-model"]
+dependencies = ["publish-ext-axum", "publish-ext-redis"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-model"]
 
 [tasks.publish-plugin]
 workspace = false
-dependencies = ["package-plugin"]
-command = "cargo"
-args = ["publish", "-p", "spacegate-plugin"]
-
-[tasks.package-config]
-workspace = false
-dependencies = ["publish-ext-axum", "publish-ext-redis", "publish-model"]
-command = "cargo"
-args = ["package", "-p", "spacegate-config"]
+dependencies = ["publish-model", "publish-kernel", "publish-ext-redis", "publish-ext-axum"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-plugin"]
 
 [tasks.publish-config]
 workspace = false
-dependencies = ["package-config"]
-command = "cargo"
-args = ["publish", "-p", "spacegate-config"]
+dependencies = ["publish-ext-axum", "publish-ext-redis", "publish-model"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-config"]
 
-[tasks.package-shell]
+[tasks.publish-shell]
 workspace = false
 dependencies = [
     "publish-ext-axum",
@@ -149,28 +113,16 @@ dependencies = [
     "publish-config",
     "publish-kernel",
 ]
-command = "cargo"
-args = ["package", "-p", "spacegate-shell"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-shell"]
 
-[tasks.publish-shell]
-workspace = false
-dependencies = ["package-shell"]
-command = "cargo"
-args = ["publish", "-p", "spacegate-shell"]
-
-[tasks.package-spacegate]
+[tasks.publish-spacegate]
 workspace = false
 dependencies = [
     "publish-shell"
 ]
-command = "cargo"
-args = ["package", "-p", "spacegate"]
-
-[tasks.publish-spacegate]
-workspace = false
-dependencies = ["package-spacegate"]
-command = "cargo"
-args = ["publish", "-p", "spacegate"]
+command = "bash"
+args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate"]
 
 [tasks.publish]
 workspace = false
