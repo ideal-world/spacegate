@@ -193,14 +193,19 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 
 # 📦 Components
 
-<!-- | Crate                         | Form | Description                                                                        | 
+| Crate                         | Type | Description                                                                        | 
 |-------------------------------|------|------------------------------------------------------------------------------------|
-| **spacegate-kernel** [![Crate](https://img.shields.io/crates/v/spacegate-kernel.svg)](https://crates.io/crates/spacegate-kernel) [![Docs](https://docs.rs/spacegate-kernel/badge.svg)](https://docs.rs/spacegate-kernel) | lib  | Class library with all functions, support for embedding into your own rust project |
-| **spacegate** | bin  | Out-of-the-box service with all features                                           |
-
+| **spacegate-kernel** [![Crate](https://img.shields.io/crates/v/spacegate-kernel.svg)](https://crates.io/crates/spacegate-kernel) [![Docs](https://docs.rs/spacegate-kernel/badge.svg)](https://docs.rs/spacegate-kernel) | rust-lib  | Kernel functions for creating a gateway service |
+| **spacegate-shell** [![Crate](https://img.shields.io/crates/v/spacegate-shell.svg)](https://crates.io/crates/spacegate-shell) [![Docs](https://docs.rs/spacegate-shell/badge.svg)](https://docs.rs/spacegate-shell) | rust-lib  | Integrated collection including a plugin system, config listeners and a easy-to-use program entrance. |
+| **spacegate-plugin** [![Crate](https://img.shields.io/crates/v/spacegate-plugin.svg)](https://crates.io/crates/spacegate-plugin) [![Docs](https://docs.rs/spacegate-plugin/badge.svg)](https://docs.rs/spacegate-plugin) | rust-lib  | A plugin system implementation for  spacegate-shell. |
+| **spacegate-model** [![Crate](https://img.shields.io/crates/v/spacegate-model.svg)](https://crates.io/crates/spacegate-model) [![Docs](https://docs.rs/spacegate-model/badge.svg)](https://docs.rs/spacegate-model) | rust-lib  | Common data structures in spacegate project. |
+| **spacegate-config** [![Crate](https://img.shields.io/crates/v/spacegate-config.svg)](https://crates.io/crates/spacegate-config) [![Docs](https://docs.rs/spacegate-config/badge.svg)](https://docs.rs/spacegate-config) | rust-lib  | Config listener interface and implementations. |
+| **spacegate** | bin  | An out-of-box executable based on spacegate-shell. |
+| **spacegate-admin** | bin  | Spacegate admin application backend service. |
+| **spacegate-admin-client** | js-lib  | JavaScript/TypeScript sdk for spacegate-admin. |
+| **spacegate-admin-fe** | web  | Spacegate admin front end. |
+## Project Structure
 ![Crates](./.readme/dep.svg)
-
-
 
 
 ## 🔖 Releases
@@ -210,6 +215,6 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 | OS          | Arch                   | abi           | Remark                                       |
 |-------------|------------------------|---------------|----------------------------------------------|
 | **linux**   | **x86_64**,**aarch64** | **gnu,musl**  | If you need static linking please use `musl` |
-| **macos**   | **x86_64**,**aarch64** | **Libsystem** |                                              |
-| **windows** | **x86_64**             | **msvc**      |                                              |
+<!-- | **macos**   | **x86_64**,**aarch64** | **Libsystem** |                                              |
+| **windows** | **x86_64**             | **msvc**      |                                              | -->
 
