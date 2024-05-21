@@ -96,7 +96,7 @@ jobs:
             aarch64-unknown-linux-gnu,
             aarch64-unknown-linux-musl,
           ]
-        service: [spacegate-simplify, spacegate-native, spacegate]
+        service: [spacegate]
     env:
       OPENSSL_DIR: /opt/openssl
     steps:
@@ -139,7 +139,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }} --features dylib
 
       - name: Prepare artifacts
         run: |
@@ -178,7 +178,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
-        service: [spacegate-simplify, spacegate-native, spacegate]
+        service: [spacegate]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -199,7 +199,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }} --features dylib
 
       - name: Prepare artifacts
         run: |
@@ -241,7 +241,7 @@ jobs:
             #x86_64-pc-windows-gnu,
             x86_64-pc-windows-msvc,
           ]
-        service: [spacegate-simplify, spacegate-native, spacegate]
+        service: [spacegate]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -271,7 +271,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}  --features dylib
 
       - name: Prepare artifacts
         shell: bash
@@ -326,7 +326,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build rust
-        run: cargo build --release -p spacegate
+        run: cargo build --release -p spacegate --features build-k8s
 
       - name: Copy binary to workspace
         run: cp ./target/release/spacegate resource/docker/spacegate/
@@ -365,7 +365,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build rust
-        run: cargo build --release -p spacegate
+        run: cargo build --release -p spacegate --features build-k8s
 
       - name: Copy binary to workspace
         run: cp ./target/release/spacegate resource/docker/spacegate/
