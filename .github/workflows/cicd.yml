@@ -337,7 +337,7 @@ jobs:
           directory: resource/docker/spacegate/
           dockerfile: resource/docker/spacegate/Dockerfile
           registry: ghcr.io
-          image: ideal-world/spacegate
+          image: spacegate
           tags: ${{ github.ref_name }}
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
