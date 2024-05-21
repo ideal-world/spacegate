@@ -46,8 +46,8 @@ schema = ["schemars", "schemars/chrono"]
 
 [dependencies]
 libloading = { version = "0.8", optional = true }
-spacegate-model = { path = "../model" }
-spacegate-kernel = { path = "../kernel" }
+spacegate-model = { workspace = true }
+spacegate-kernel = {  workspace = true }
 tracing = { workspace = true }
 hyper = { workspace = true }
 http-body-util = { workspace = true }
@@ -72,8 +72,8 @@ chrono = { workspace = true }
 url = { version = "2", optional = true }
 
 # cache
-spacegate-ext-redis = { path = "../extension/redis", optional = true }
-spacegate-ext-axum = { path = "../extension/axum", optional = true }
+spacegate-ext-redis = {  workspace = true, optional = true }
+spacegate-ext-axum = { workspace = true, optional = true }
 
 # rt
 tokio = { workspace = true, features = ["rt", "fs", "time", "net"]}

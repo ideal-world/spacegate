@@ -57,7 +57,7 @@ rand = { version = "0" }
 regex = { workspace = true }
 
 # ext-redis
-spacegate-ext-redis = { path = "../extension/redis", optional = true }
+spacegate-ext-redis = {  workspace = true, optional = true }
 
 
 [dev-dependencies]

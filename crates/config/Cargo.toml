@@ -31,7 +31,7 @@ k8s = [
   "rand",
 ]
 [dependencies]
-spacegate-model = { path = "../model" }
+spacegate-model = {  workspace = true }
 serde_regex = { workspace = true }
 regex = { workspace = true }
 tokio = { workspace = true, features = ["fs", "signal"] }
