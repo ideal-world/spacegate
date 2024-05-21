@@ -157,28 +157,25 @@ async fn delete_config_item_route<B: Delete>(
     backend.delete_config_item_route(&name, &route_name).await.map_err(InternalError)
 }
 
-async fn delete_config_item<B: Delete>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>>
-where
-    B: Retrieve,
-{
+async fn delete_config_item<B: Delete + Retrieve>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
     backend.delete_config_item(&name).await.map_err(InternalError)
 }
 
-async fn delete_config_item_all_routes<B: Delete>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>>
-where
-    B: Retrieve,
-{
+async fn delete_config_item_all_routes<B: Delete + Retrieve>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
     backend.delete_config_item_all_routes(&name).await.map_err(InternalError)
 }
 
-async fn delete_config_plugin<B: Delete>(Query(id): Query<PluginInstanceId>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<(), InternalError<BoxError>> {
+async fn delete_config_plugin<B: Delete + Retrieve>(
+    Query(id): Query<PluginInstanceId>,
+    State(AppState { backend, .. }): State<AppState<B>>,
+) -> Result<(), InternalError<BoxError>> {
     backend.delete_plugin(&id).await.map_err(InternalError)
 }
 
 // router
-pub fn router<B: Backend>() -> axum::Router<state::AppState<B>>
+pub fn router<B>() -> axum::Router<state::AppState<B>>
 where
-    B: Create + Retrieve + Update + Delete + Send + Sync + 'static,
+    B: Backend + Create + Retrieve + Update + Delete + Send + Sync + 'static,
 {
     Router::new()
         .route("/", get(get_config::<B>).post(post_config::<B>).put(put_config::<B>))

@@ -43,6 +43,7 @@ impl SgGatewayConv for SgGateway {
                                     None
                                 } else {
                                     let current_time_utc = Utc::now().timestamp();
+                                    #[allow(clippy::indexing_slicing)]
                                     let name = tls.key[..2].to_string() + &current_time_utc.to_string();
                                     secret = Some(Secret {
                                         metadata: ObjectMeta {
