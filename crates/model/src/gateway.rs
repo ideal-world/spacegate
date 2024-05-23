@@ -160,8 +160,8 @@ pub enum SgTlsMode {
 impl From<SgTlsMode> for String {
     fn from(value: SgTlsMode) -> Self {
         match value {
-            SgTlsMode::Terminate => "terminate".to_string(),
-            SgTlsMode::Passthrough => "passthrough".to_string(),
+            SgTlsMode::Terminate => "Terminate".to_string(),
+            SgTlsMode::Passthrough => "Passthrough".to_string(),
         }
     }
 }
