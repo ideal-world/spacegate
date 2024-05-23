@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 /// Default port for the global server
 const GLOBAL_SERVER_PORT: u16 = 9876;
 /// Default host for the global server
-const GLOBAL_SERVER_HOST: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
+const GLOBAL_SERVER_HOST: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 /// Default bind to [::]:9876
 const GLOBAL_SERVER_BIND: SocketAddr = SocketAddr::new(GLOBAL_SERVER_HOST, GLOBAL_SERVER_PORT);
 #[derive(Debug)]
