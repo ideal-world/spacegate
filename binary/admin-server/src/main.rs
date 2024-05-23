@@ -5,9 +5,9 @@ use std::{net::SocketAddr, sync::Arc};
 use tower_http::trace::TraceLayer;
 use tracing::Span;
 pub mod clap;
+pub mod error;
 pub mod mw;
 pub mod service;
-pub mod error;
 pub mod state;
 pub trait Backend: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
 
