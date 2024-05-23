@@ -7,7 +7,6 @@ use tracing::Span;
 pub mod clap;
 pub mod mw;
 pub mod service;
-
 pub mod error;
 pub mod state;
 pub trait Backend: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
