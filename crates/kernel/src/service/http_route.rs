@@ -104,10 +104,10 @@ impl hyper::service::Service<Request<SgBody>> for HttpRouteRuleService {
     type Response = Response<SgBody>;
     type Error = Infallible;
     type Future = <ArcHyperService as hyper::service::Service<Request<SgBody>>>::Future;
-    #[instrument("route_rule", skip_all)]
+    // #[instrument("route_rule", skip_all)]
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         let fut = self.service.call(req);
-        Box::pin(fut.in_current_span())
+        Box::pin(fut)
     }
 }
 
@@ -167,7 +167,6 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>;
 
-    #[instrument("backend", skip_all)]
     fn call(&self, mut req: Request<SgBody>) -> Self::Future {
         let req = match self.backend.as_ref() {
             Backend::Http {
@@ -211,19 +210,16 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
         };
         let backend = self.backend.clone();
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter backend {backend:?}");
-        Box::pin(
-            async move {
-                unsafe {
-                    let mut response = match backend.as_ref() {
-                        Backend::Http { .. } => http_backend_service(req).await.unwrap_unchecked(),
-                        Backend::File { path } => static_file_service(req, path).await,
-                    };
-                    response.extensions_mut().insert(crate::extension::FromBackend::new());
-                    tracing::trace!(elapsed = ?response.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend request");
-                    Ok(response)
-                }
+        Box::pin(async move {
+            unsafe {
+                let mut response = match backend.as_ref() {
+                    Backend::Http { .. } => http_backend_service(req).await.unwrap_unchecked(),
+                    Backend::File { path } => static_file_service(req, path).await,
+                };
+                response.extensions_mut().insert(crate::extension::FromBackend::new());
+                tracing::trace!(elapsed = ?response.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "finish backend request");
+                Ok(response)
             }
-            .in_current_span(),
-        )
+        })
     }
 }

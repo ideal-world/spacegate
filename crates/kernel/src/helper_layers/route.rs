@@ -45,7 +45,7 @@ where
     type Error = Infallible;
     type Response = Response<SgBody>;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-    #[instrument("router", skip_all, fields(http.uri =? req.uri(), http.method =? req.method()))]
+    // #[instrument("router", skip_all, fields(http.uri =? req.uri(), http.method =? req.method()))]
     fn call(&self, mut req: Request<SgBody>) -> Self::Future {
         let fut: Self::Future = if let Some(index) = self.router.route(&mut req) {
             req.extensions_mut().insert(Matched {
@@ -53,10 +53,10 @@ where
                 router: self.router.clone(),
             });
             let fut = self.services.index(index).call(req);
-            Box::pin(fut.in_current_span())
+            Box::pin(fut)
         } else {
             let fut = self.fallback.call(req);
-            Box::pin(fut.in_current_span())
+            Box::pin(fut)
         };
         fut
     }
