@@ -53,7 +53,16 @@ async fn test_h2c() {
     for idx in 0..10 {
         let client = client.clone();
         task_set.spawn(async move {
-            let echo = client.post("http://[::]:9080/echo").body(idx.to_string()).send().await.expect("fail to send").text().await.expect("fail to get text");
+            let echo = client
+                .post("http://[::]:9080/echo")
+                .body(idx.to_string())
+                .header("custom-header", "test")
+                .send()
+                .await
+                .expect("fail to send")
+                .text()
+                .await
+                .expect("fail to get text");
             println!("echo: {echo}");
             assert_eq!(idx.to_string(), echo);
         });
@@ -99,6 +108,7 @@ fn tls_config() -> ServerConfig {
 async fn axum_server() {
     use axum::{response::IntoResponse, serve, Router};
     pub async fn echo(request: axum::extract::Request<axum::body::Body>) -> impl IntoResponse {
+        println!("{headers:?}", headers = request.headers());
         axum::response::Response::new(request.into_body())
     }
     let config = axum_server::tls_rustls::RustlsConfig::from_pem(CERT.to_vec(), KEY.to_vec()).await.expect("fail to build");
