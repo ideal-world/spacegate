@@ -59,7 +59,7 @@ impl SgGatewayConv for SgGateway {
                                         ..Default::default()
                                     });
                                     Some(GatewayTlsConfig {
-                                        mode: Some(tls.mode.into()),
+                                        mode: Some(tls.mode.to_pascal_case().to_string()),
                                         certificate_refs: Some(vec![SecretObjectReference {
                                             kind: Some("Secret".to_string()),
                                             name,
