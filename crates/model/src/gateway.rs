@@ -181,3 +181,12 @@ impl From<Option<String>> for SgTlsMode {
         SgTlsMode::from(value.unwrap_or_default())
     }
 }
+
+impl SgTlsMode {
+    pub fn to_pascal_case(&self) -> &'static str {
+        match self {
+            SgTlsMode::Terminate => "Terminate",
+            SgTlsMode::Passthrough => "Passthrough",
+        }
+    }
+}
