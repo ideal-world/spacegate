@@ -1,10 +1,11 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Binary, hash::Hasher};
 
 use chrono::Utc;
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference};
 use k8s_openapi::{api::core::v1::Secret, ByteString};
 use kube::{api::ObjectMeta, ResourceExt};
 use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, PluginInstanceId};
+use tracing_subscriber::fmt::format;
 
 use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, SgGateway, SgParameters};
 
@@ -39,36 +40,32 @@ impl SgGatewayConv for SgGateway {
                         tls: match l.protocol {
                             crate::SgProtocolConfig::Http => None,
                             crate::SgProtocolConfig::Https { tls } => {
-                                if tls.key.len() < 3 && tls.cert.len() < 3 {
-                                    None
-                                } else {
-                                    let current_time_utc = Utc::now().timestamp();
-                                    #[allow(clippy::indexing_slicing)]
-                                    let name = tls.key[..2].to_string() + &current_time_utc.to_string();
-                                    secret = Some(Secret {
-                                        metadata: ObjectMeta {
-                                            name: Some(name.clone()),
-                                            namespace: Some(namespace.to_string()),
-                                            ..Default::default()
-                                        },
-                                        type_: Some("kubernetes.io/tls".to_string()),
-                                        data: Some(BTreeMap::from([
-                                            ("tls.key".to_string(), ByteString(tls.key.into_bytes())),
-                                            ("tls.crt".to_string(), ByteString(tls.cert.into_bytes())),
-                                        ])),
+                                let mut hasher = std::hash::DefaultHasher::new();
+                                hasher.write(tls.key.as_bytes());
+                                let name = format!("{:016x}", hasher.finish());
+                                secret = Some(Secret {
+                                    metadata: ObjectMeta {
+                                        name: Some(name.clone()),
+                                        namespace: Some(namespace.to_string()),
                                         ..Default::default()
-                                    });
-                                    Some(GatewayTlsConfig {
-                                        mode: Some(tls.mode.to_pascal_case().to_string()),
-                                        certificate_refs: Some(vec![SecretObjectReference {
-                                            kind: Some("Secret".to_string()),
-                                            name,
-                                            namespace: Some(namespace.to_string()),
-                                            ..Default::default()
-                                        }]),
-                                        options: None,
-                                    })
-                                }
+                                    },
+                                    type_: Some("kubernetes.io/tls".to_string()),
+                                    data: Some(BTreeMap::from([
+                                        ("tls.key".to_string(), ByteString(tls.key.into_bytes())),
+                                        ("tls.crt".to_string(), ByteString(tls.cert.into_bytes())),
+                                    ])),
+                                    ..Default::default()
+                                });
+                                Some(GatewayTlsConfig {
+                                    mode: Some(tls.mode.to_pascal_case().to_string()),
+                                    certificate_refs: Some(vec![SecretObjectReference {
+                                        kind: Some("Secret".to_string()),
+                                        name,
+                                        namespace: Some(namespace.to_string()),
+                                        ..Default::default()
+                                    }]),
+                                    options: None,
+                                })
                             }
                             _ => None,
                         },
