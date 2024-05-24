@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
+    fmt::Display,
     hash::Hash,
     ops::{Deref, DerefMut},
     str::FromStr,
@@ -72,7 +73,7 @@ pub struct PluginInstanceId {
 
 impl ToString for PluginInstanceId {
     fn to_string(&self) -> String {
-        format!("{}-{}", self.code, self.name.to_string())
+        format!("{}-{}", self.code, self.name)
     }
 }
 
@@ -109,12 +110,12 @@ impl PluginInstanceId {
     }
 }
 
-impl ToString for PluginInstanceName {
-    fn to_string(&self) -> String {
+impl Display for PluginInstanceName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            PluginInstanceName::Anon { uid } => format!("a-{}", uid),
-            PluginInstanceName::Named { name } => format!("n-{}", name),
-            PluginInstanceName::Mono => "m".to_string(),
+            PluginInstanceName::Anon { uid } => write!(f, "a-{}", uid),
+            PluginInstanceName::Named { name } => write!(f, "n-{}", name),
+            PluginInstanceName::Mono => write!(f, "m"),
         }
     }
 }

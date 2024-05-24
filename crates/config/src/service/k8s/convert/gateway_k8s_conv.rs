@@ -102,6 +102,9 @@ impl SgParametersConv for SgParameters {
                 ignore_tls_verification.to_string(),
             );
         }
+        if let Some(enable_x_request_id) = self.enable_x_request_id {
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_ENABLE_X_REQUEST_ID.to_string(), enable_x_request_id.to_string());
+        }
         ann
     }
 

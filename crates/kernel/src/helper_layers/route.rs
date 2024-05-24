@@ -3,7 +3,6 @@ use std::{convert::Infallible, ops::Index};
 use futures_util::future::BoxFuture;
 pub use hyper::http::request::Parts;
 use hyper::{Request, Response};
-use tracing::{instrument, Instrument};
 
 use crate::{extension::Matched, SgBody};
 
