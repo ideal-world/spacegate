@@ -34,7 +34,6 @@ impl Update for K8s {
             .ok_or_else(|| -> BoxError { format!("[Sg.Config] gateway [{gateway_name}] not found ,update failed").into() })?;
 
         gateway.metadata.resource_version = gateway_api.get_metadata(gateway_name).await?.resource_version();
-        warn!("========{:?}", gateway);
         gateway_api.replace(gateway_name, &PostParams::default(), &gateway).await?;
 
         let secret_api: Api<Secret> = self.get_namespace_api();

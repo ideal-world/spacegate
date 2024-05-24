@@ -27,6 +27,7 @@ rules:
       - list
       - create
       - watch
+      - update
       - delete
   - apiGroups:
       - ""
