@@ -1,4 +1,4 @@
-use k8s_gateway_api::{HttpPathModifier, HttpRouteFilter, LocalObjectReference};
+use k8s_gateway_api::{HttpRouteFilter, LocalObjectReference};
 use kube::{
     api::{DeleteParams, PostParams},
     Api, ResourceExt,
@@ -11,7 +11,6 @@ use crate::{
         helper_struct::SgSingeFilter,
     },
     plugin::{
-        gatewayapi_support_filter::{SgHttpPathModifier, SgHttpPathModifierType},
         PluginConfig,
     },
     service::k8s::K8s,
@@ -217,19 +216,5 @@ impl PluginConfigConv for PluginConfig {
             },
             spec: f.config,
         })
-    }
-}
-
-// TODO remove?
-pub(crate) trait PathModifierConv {
-    fn to_http_path_modifier(self) -> HttpPathModifier;
-}
-
-impl PathModifierConv for SgHttpPathModifier {
-    fn to_http_path_modifier(self) -> HttpPathModifier {
-        match self.kind {
-            SgHttpPathModifierType::ReplaceFullPath => HttpPathModifier::ReplaceFullPath { replace_full_path: self.value },
-            SgHttpPathModifierType::ReplacePrefixMatch => HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: self.value },
-        }
     }
 }

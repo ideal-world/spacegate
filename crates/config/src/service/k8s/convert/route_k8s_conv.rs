@@ -202,7 +202,7 @@ impl SgHttpRouteMatchConv for SgHttpRouteMatch {
                         })
                         .unwrap_or((None, None));
 
-                    let (header_path, header_plugins) = self
+                    let (header_path, _) = self
                         .header
                         .clone()
                         .map(|hs| {

@@ -11,7 +11,7 @@ pub mod memory;
 /// Redis backend
 #[cfg(feature = "redis")]
 pub mod redis;
-use std::{collections::BTreeMap, error::Error, str::FromStr};
+use std::{collections::BTreeMap, error::Error, fmt::Display, str::FromStr};
 
 use futures_util::Future;
 use serde_json::Value;
@@ -159,12 +159,12 @@ impl FromStr for ConfigEventType {
     }
 }
 
-impl ToString for ConfigEventType {
-    fn to_string(&self) -> String {
+impl Display for ConfigEventType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Create => "create".to_string(),
-            Self::Update => "update".to_string(),
-            Self::Delete => "delete".to_string(),
+            Self::Create => write!(f, "create"),
+            Self::Update => write!(f, "update"),
+            Self::Delete => write!(f, "delete"),
         }
     }
 }
@@ -184,13 +184,13 @@ pub enum ConfigType {
     Global,
 }
 
-impl ToString for ConfigType {
-    fn to_string(&self) -> String {
+impl Display for ConfigType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Gateway { name } => format!("gateway/{}", name),
-            Self::Route { gateway_name, name } => format!("httproute/{}/{}", gateway_name, name),
-            Self::Plugin { id } => format!("plugin/{}/{}", id.code, id.name.to_string()),
-            Self::Global => "global".to_string(),
+            Self::Gateway { name } => write!(f, "gateway/{}", name),
+            Self::Route { gateway_name, name } => write!(f, "httproute/{}/{}", gateway_name, name),
+            Self::Plugin { id } => write!(f, "plugin/{}/{}", id.code, id.name),
+            Self::Global => write!(f, "global"),
         }
     }
 }

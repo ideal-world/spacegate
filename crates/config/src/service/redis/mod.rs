@@ -57,7 +57,7 @@ struct RedisConfEvent(pub(crate) ConfigType, pub(crate) ConfigEventType);
 
 impl ToRedisArgs for RedisConfEvent {
     fn write_redis_args<W: ?Sized + RedisWrite>(&self, out: &mut W) {
-        out.write_arg_fmt(format!("{}/{}", self.1.to_string(), self.0.to_string()));
+        out.write_arg_fmt(format!("{}/{}", self.1, self.0));
     }
 }
 

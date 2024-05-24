@@ -15,7 +15,6 @@ use futures_util::future::BoxFuture;
 use hyper::{Request, Response};
 
 use tower_layer::Layer;
-use tracing::{instrument, Instrument};
 
 use self::{
     builder::{HttpBackendBuilder, HttpRouteBuilder, HttpRouteRuleBuilder},

@@ -13,7 +13,6 @@ use spacegate_model::{
     },
     BoxError, BoxResult, PluginInstanceId,
 };
-use tracing::warn;
 
 use crate::service::{Retrieve as _, Update};
 

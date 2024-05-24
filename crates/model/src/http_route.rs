@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::constants::DEFAULT_NAMESPACE;
 
 pub use super::route_match::*;
@@ -165,11 +167,11 @@ pub struct K8sServiceData {
     pub namespace: Option<String>,
 }
 
-impl ToString for K8sServiceData {
-    fn to_string(&self) -> String {
+impl Display for K8sServiceData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.namespace {
-            Some(ref ns) => format!("{}.{}", self.name, ns),
-            None => format!("{}.{}", self.name, DEFAULT_NAMESPACE),
+            Some(ref ns) => write!(f, "{}.{}", self.name, ns),
+            None => write!(f, "{}.{}", self.name, DEFAULT_NAMESPACE),
         }
     }
 }
@@ -179,18 +181,16 @@ impl ToString for K8sServiceData {
 #[serde(tag = "kind")]
 pub enum BackendHost {
     Host { host: String },
-    // #[cfg(feature = "k8s")]
     K8sService(K8sServiceData),
     File { path: String },
 }
 
-impl ToString for BackendHost {
-    fn to_string(&self) -> String {
+impl Display for BackendHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Host { host } => host.clone(),
-            // #[cfg(feature = "k8s")]
-            Self::K8sService(k8s_service) => k8s_service.to_string(),
-            Self::File { path } => path.clone(),
+            Self::Host { host } => write!(f, "{}", host),
+            Self::K8sService(k8s_service) => write!(f, "{}", k8s_service),
+            Self::File { path } => write!(f, "{}", path),
         }
     }
 }
