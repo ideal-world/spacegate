@@ -1,11 +1,9 @@
-use std::{collections::BTreeMap, fmt::Binary, hash::Hasher};
+use std::{collections::BTreeMap, hash::Hasher};
 
-use chrono::Utc;
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference};
 use k8s_openapi::{api::core::v1::Secret, ByteString};
 use kube::{api::ObjectMeta, ResourceExt};
 use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, PluginInstanceId};
-use tracing_subscriber::fmt::format;
 
 use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, SgGateway, SgParameters};
 
