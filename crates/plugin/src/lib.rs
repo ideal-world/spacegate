@@ -145,9 +145,9 @@ impl PluginDefinitionObject {
             let plugin = Arc::new(P::create(config)?);
             let function = move |req: Request<SgBody>, inner: Inner| {
                 let plugin = plugin.clone();
-                let plugin_span = tracing::span!(tracing::Level::INFO, "plugin", code = P::CODE);
+                // let plugin_span = tracing::span!(tracing::Level::INFO, "plugin", code = P::CODE);
                 let task = async move {
-                    let _entered = plugin_span.enter();
+                    // let _entered = plugin_span.enter();
                     match plugin.call(req, inner).await {
                         Ok(resp) => resp,
                         Err(e) => {
