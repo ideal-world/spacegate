@@ -10,9 +10,7 @@ use crate::{
         crd::sg_filter::{K8sSgFilterSpecFilter, K8sSgFilterSpecTargetRef},
         helper_struct::SgSingeFilter,
     },
-    plugin::{
-        PluginConfig,
-    },
+    plugin::PluginConfig,
     service::k8s::K8s,
     BoxResult, PluginInstanceId, PluginInstanceName,
 };
