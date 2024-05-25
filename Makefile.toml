@@ -72,67 +72,103 @@ npm run build-model;
 [tasks.publish-ext-redis]
 workspace = false
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-ext-redis"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-ext-redis",
+]
 
 [tasks.publish-ext-axum]
 workspace = false
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-ext-axum"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-ext-axum",
+]
 
 [tasks.publish-kernel]
 workspace = false
 dependencies = ["publish-ext-axum", "publish-ext-redis"]
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-kernel"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-kernel",
+]
 
 [tasks.publish-model]
 workspace = false
 dependencies = ["publish-ext-axum", "publish-ext-redis"]
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-model"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-model",
+]
 
 [tasks.publish-plugin]
 workspace = false
-dependencies = ["publish-model", "publish-kernel", "publish-ext-redis", "publish-ext-axum"]
+dependencies = [
+  "publish-model",
+  "publish-kernel",
+  "publish-ext-redis",
+  "publish-ext-axum",
+]
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-plugin"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-plugin",
+]
 
 [tasks.publish-config]
 workspace = false
 dependencies = ["publish-ext-axum", "publish-ext-redis", "publish-model"]
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-config"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-config",
+]
 
 [tasks.publish-shell]
 workspace = false
 dependencies = [
-    "publish-ext-axum",
-    "publish-ext-redis",
-    "publish-model",
-    "publish-plugin",
-    "publish-config",
-    "publish-kernel",
+  "publish-ext-axum",
+  "publish-ext-redis",
+  "publish-model",
+  "publish-plugin",
+  "publish-config",
+  "publish-kernel",
 ]
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate-shell"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-shell",
+]
 
 [tasks.publish-spacegate]
 workspace = false
-dependencies = [
-    "publish-shell"
-]
+dependencies = ["publish-shell"]
 command = "bash"
-args = ["resource/publish/publish.sh", "${CARGO_MAKE_PROJECT_VERSION}", "spacegate"]
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate",
+]
 
 [tasks.publish]
 workspace = false
+script = "echo end of publish"
 dependencies = [
-    "publish-ext-axum",
-    "publish-ext-redis",
-    "publish-model",
-    "publish-plugin",
-    "publish-config",
-    "publish-kernel",
-    "publish-shell",
-    # "publish-spacegate",
+  "publish-ext-axum",
+  "publish-ext-redis",
+  "publish-model",
+  "publish-plugin",
+  "publish-config",
+  "publish-kernel",
+  "publish-shell",
+  # "publish-spacegate",
 ]
