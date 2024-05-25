@@ -161,7 +161,7 @@ args = [
 
 [tasks.publish]
 workspace = false
-script = "echo end of publish"
+clear = true
 dependencies = [
   "publish-ext-axum",
   "publish-ext-redis",
