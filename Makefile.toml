@@ -1,0 +1,174 @@
+# ref: https://sagiegurari.github.io/cargo-make/
+[env]
+# DOCKER_REPO = "ecfront"
+CARGO_MAKE_PROJECT_VERSION = "0.2.0-alpha.1"
+
+[tasks.format]
+workspace = true
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--all", "--emit=files"]
+
+[tasks.clean]
+workspace = true
+command = "cargo"
+args = ["clean"]
+
+[tasks.check]
+workspace = true
+dependencies = ["format"]
+install_crate = "clippy"
+command = "cargo"
+args = ["clippy", "--all-features"]
+
+
+[tasks.build-spacegate-k8s]
+workspace = false
+command = "cargo"
+args = ["build", "--bin", "spacegate", "--release", "--features", "build-k8s"]
+
+[tasks.build-spacegate-linux]
+workspace = false
+command = "cargo"
+args = ["build", "--bin", "spacegate", "--release", "--features", "dylib"]
+
+[tasks.build-k8s-docker]
+workspace = false
+dependencies = ["build-spacegate-k8s"]
+script = '''
+echo ${CARGO_MAKE_CRATE_VERSION}
+cd ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}
+cp target/release/spacegate resource/docker/spacegate
+docker build -t ${DOCKER_REPO}/spacegate:${DOCKER_VERSION} resource/docker/spacegate
+rm resource/docker/spacegate/spacegate
+cd ${CARGO_MAKE_WORKING_DIRECTORY}
+'''
+
+
+[tasks.install-spacegate]
+workspace = false
+dependencies = ["build-spacegate-linux"]
+script = { file = "resource/install/install.sh" }
+
+[tasks.build-spacegate-admin]
+workspace = false
+command = "cargo"
+args = ["build", "--bin", "spacegate-admin-server", "--release"]
+
+[tasks.install-spacegate-admin]
+workspace = false
+dependencies = ["build-spacegate-admin"]
+script = { file = "resource/install/install-admin.sh" }
+
+
+[tasks.build-sdk]
+workspace = false
+script = '''
+cd sdk/admin-client;
+npm run build-model;
+'''
+
+
+[tasks.publish-ext-redis]
+workspace = false
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-ext-redis",
+]
+
+[tasks.publish-ext-axum]
+workspace = false
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-ext-axum",
+]
+
+[tasks.publish-kernel]
+workspace = false
+dependencies = ["publish-ext-axum", "publish-ext-redis"]
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-kernel",
+]
+
+[tasks.publish-model]
+workspace = false
+dependencies = ["publish-ext-axum", "publish-ext-redis"]
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-model",
+]
+
+[tasks.publish-plugin]
+workspace = false
+dependencies = [
+  "publish-model",
+  "publish-kernel",
+  "publish-ext-redis",
+  "publish-ext-axum",
+]
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-plugin",
+]
+
+[tasks.publish-config]
+workspace = false
+dependencies = ["publish-ext-axum", "publish-ext-redis", "publish-model"]
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-config",
+]
+
+[tasks.publish-shell]
+workspace = false
+dependencies = [
+  "publish-ext-axum",
+  "publish-ext-redis",
+  "publish-model",
+  "publish-plugin",
+  "publish-config",
+  "publish-kernel",
+]
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate-shell",
+]
+
+[tasks.publish-spacegate]
+workspace = false
+dependencies = ["publish-shell"]
+command = "bash"
+args = [
+  "resource/publish/publish.sh",
+  "${CARGO_MAKE_PROJECT_VERSION}",
+  "spacegate",
+]
+
+[tasks.publish]
+workspace = false
+clear = true
+dependencies = [
+  "publish-ext-axum",
+  "publish-ext-redis",
+  "publish-model",
+  "publish-plugin",
+  "publish-config",
+  "publish-kernel",
+  "publish-shell",
+  # "publish-spacegate",
+]

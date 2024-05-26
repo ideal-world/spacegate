@@ -1,0 +1,12 @@
+[Unit]
+Description=Spacegate Admin
+
+[Service]
+ExecStart=spacegate-admin-server -p 9992
+Restart=always
+ExecStop=/bin/kill -INT $MAINPID
+KillSignal=SIGINT
+TimeoutStopSec=5
+Environment="RUST_LOG=INFO"
+[Install]
+WantedBy=multi-user.target

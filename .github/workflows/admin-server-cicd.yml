@@ -3,8 +3,8 @@ name: ADMIN SERVER CICD
 on:
   push:
     paths:
-      - 'admin-server/**'
-      - 'config/**'
+      - 'binary/admin-server/**'
+      - 'crates/config/**'
       - 'Cargo.toml'
       - '.github/workflows/admin-server-cicd.yml'
 
@@ -14,16 +14,17 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           components: rustfmt, clippy
+      - uses: davidB/rust-cargo-make@v1
 
       - name: Cache rust
         uses: Swatinem/rust-cache@v2
@@ -68,10 +69,7 @@ jobs:
         run: cargo build --release -p spacegate-admin-server
 
       - name: Copy artifact to workspace
-        run: cp ./target/release/spacegate-admin-server admin-server/res/
-      
-      - name: Copy plugin schema to workspace
-        run: rm admin-server/res/schema && cp -r ./plugin/schema admin-server/res/
+        run: cp ./target/release/spacegate-admin-server resource/docker/spacegate-admin-server/
         
       - name: Get front run id
         run: |
@@ -83,21 +81,21 @@ jobs:
         with:
           name: ${{ env.FRONTEND_ARTIFACT_NAME }}
           repository: ideal-world/spacegate-admin-fe
-          path: admin-server/res/
+          path: resource/docker/spacegate-admin-server/
           run-id: ${{ env.FRONTEND_RUN_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract front artifact
-        run: cd admin-server/res/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
+        run: cd resource/docker/spacegate-admin-server && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: admin-server/res/
-          dockerfile: admin-server/res/Dockerfile
+          directory: resource/docker/spacegate-admin-server
+          dockerfile: resource/docker/spacegate-admin-server/Dockerfile
           registry: docker.io
           image: ecfront/spacegate-admin-server
-          tags: latest
+          tags: ${{ github.ref == 'refs/heads/master' && 'latest' || github.ref_name }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
@@ -116,7 +114,7 @@ jobs:
         run: cargo build --release -p spacegate-admin-server
 
       - name: Copy artifact to workspace
-        run: cp ./target/release/spacegate-admin-server admin-server/res/
+        run: cp ./target/release/spacegate-admin-server resource/docker/spacegate-admin-server
 
       - name: Get front run id
         run: |
@@ -128,18 +126,29 @@ jobs:
         with:
           name: ${{ env.FRONTEND_ARTIFACT_NAME }}
           repository: ideal-world/spacegate-admin-fe
-          path: admin-server/res/
+          path: resource/docker/spacegate-admin-server
           run-id: ${{ env.FRONTEND_RUN_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract front artifact
-        run: cd admin-server/res/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
+        run: cd resource/docker/spacegate-admin-server/ && tar -xzvf ${{ env.FRONTEND_ARTIFACT_NAME }}.tar.gz
+
+      - name: Build and push Docker image to github
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: resource/docker/spacegate-admin-server
+          dockerfile: resource/docker/spacegate-admin-server/Dockerfile
+          registry: ghcr.io
+          image: spacegate-admin-server
+          tags: ${{ github.ref_name }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: admin-server/res/
-          dockerfile: admin-server/res/Dockerfile
+          directory: resource/docker/spacegate-admin-server
+          dockerfile: resource/docker/spacegate-admin-server/Dockerfile
           registry: docker.io
           image: ecfront/spacegate-admin-server
           tags: ${{ github.ref_name }}

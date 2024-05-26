@@ -1,0 +1,15 @@
+{
+  "gateway": {
+    "name": "spacegate-admin",
+    "parameters": {},
+    "listeners": [
+      {
+        "name": "http",
+        "port": 9991,
+        "protocol": {
+          "type": "http"
+        }
+      }
+    ]
+  }
+}

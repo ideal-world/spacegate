@@ -1,0 +1,41 @@
+[package]
+name = "spacegate-admin-server"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../../README.md"
+
+[features]
+default = []
+
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+base64 = "0.13"
+spacegate-config = { workspace = true, features = ["fs", "k8s"] }
+axum = { workspace = true , features = ["tracing"]}
+axum-extra = { version = "0.9", features = ["cookie"] }
+tower = { version = "0.4" }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tower-http = { version = "0.5", features = ["trace"] }
+serde_json = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+jsonwebtoken = "9"
+digest = "0.10.7"
+sha2 = "0.10.8"
+[dev-dependencies]
+serde_urlencoded = "*"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

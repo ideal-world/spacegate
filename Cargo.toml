@@ -1,17 +1,33 @@
 [workspace]
-members = ["kernel", "shell", "plugin", "config", "admin-server", "extension/*"]
+members = [
+  "binary/spacegate",
+  "binary/admin-server",
+  "crates/extension/*",
+  "crates/kernel",
+  "crates/plugin",
+  "crates/model",
+  "crates/config",
+  "crates/shell",
+  "examples/sayhello",
+]
 resolver = "2"
-
 [profile.release]
-lto = true
 codegen-units = 1
+debug = false
+debug-assertions = false
+lto = "fat"
 opt-level = "z"
-panic = 'abort'
+panic = "abort"
+rpath = false
 strip = true
 
 [workspace.package]
 version = "0.2.0-alpha.1"
-authors = ["gudaoxuri <i@sunisle.org>"]
+authors = [
+  "gudaoxuri <i@sunisle.org>",
+  "4t145 <u4t145@163.com>",
+  "RWDai <rwdai@foxmail.com>",
+]
 description = "A library-first, lightweight, high-performance, cloud-native supported API gateway"
 keywords = ["http", "gateway", "proxy", "websocket", "kubernates"]
 categories = ["gateway", "web-programming", "kubernetes", "api"]
@@ -20,29 +36,31 @@ documentation = "https://docs.rs/spacegate/"
 repository = "https://github.com/ideal-world/spacegate"
 edition = "2021"
 license = "MIT/Apache-2.0"
-rust-version = "1.64"
+rust-version = "1.76"
 
 [workspace.dependencies]
+spacegate-kernel = { version = "0.2.0-alpha.1", path = "./crates/kernel" }
+spacegate-plugin = { version = "0.2.0-alpha.1", path = "./crates/plugin" }
+spacegate-config = { version = "0.2.0-alpha.1", path = "./crates/config" }
+spacegate-model = { version = "0.2.0-alpha.1", path = "./crates/model" }
+spacegate-shell = { version = "0.2.0-alpha.1", path = "./crates/shell" }
+spacegate-ext-axum = { version = "0.2.0-alpha.1", path = "./crates/extension/axum" }
+spacegate-ext-redis = { version = "0.2.0-alpha.1", path = "./crates/extension/redis" }
+
+
 # runtime
 tokio = { version = "1" }
 # Basic
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
+toml = { version = "0.8", features = ["preserve_order"] }
 lazy_static = { version = "1.4" }
-async-trait = { version = "0.1" }
-itertools = { version = "0" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = { version = "0" }
-urlencoding = { version = "2" }
 
 
 # Time
 chrono = { version = "0.4" }
-
-# Tardis
-# tardis = { version = "=0.1.0-rc.8" }
-# tardis = { path = "../tardis/tardis" }
-tardis = { git = "https://github.com/ideal-world/tardis.git", rev = "aa8931b" }
 
 # Http
 rustls = { version = "0.21.0" }
@@ -52,9 +70,6 @@ hyper-util = { version = "0" }
 
 # ws
 tokio-tungstenite = { version = "0" }
-
-# tower
-tower-service = { version = "0.3" }
 tower-layer = { version = "0.3" }
 tower-http = { version = "0.5" }
 tower = { version = "0.4" }
@@ -69,12 +84,6 @@ schemars = { version = "0.8.6" }
 # Test
 reqwest = { version = "0.11", features = ["json", "gzip", "brotli"] }
 testcontainers-modules = { version = "0.3" }
-async-compression = { version = "0.3.13", default-features = false, features = [
-  "tokio",
-  "gzip",
-  "deflate",
-  "brotli",
-] }
 
 
 bytes = { version = "1" }
@@ -83,9 +92,6 @@ bytes = { version = "1" }
 hyper-rustls = { version = "0.26" }
 rustls-pemfile = "2"
 tokio-rustls = { version = "0.25" }
-
-# serde
-duration-str = "0.7.1"
 
 # regex
 regex = { version = "1" }
@@ -102,5 +108,5 @@ ipnet = { version = "2" }
 # notify
 notify = { version = "6.1.1" }
 
-# redis
-deadpool-redis = { version = "0.14" }
+# web-server
+axum = "0.7.5"

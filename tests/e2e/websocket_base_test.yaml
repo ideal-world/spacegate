@@ -1,0 +1,12 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: gateway
+  namespace: spacegate
+spec:
+  gatewayClassName: spacegate
+  listeners:
+    - name: http
+      port: 9000
+      protocol: http
+

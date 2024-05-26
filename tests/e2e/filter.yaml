@@ -1,0 +1,14 @@
+apiVersion: spacegate.idealworld.group/v1
+kind: SgFilter
+metadata:
+  name: filters
+  namespace: spacegate
+spec:
+  filters:
+    - code: limit
+      config:
+        max_request_number: 10
+  targetRefs:
+    - kind: gateway
+      name: echo
+      namespace: spacegate

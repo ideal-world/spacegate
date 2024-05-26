@@ -7,7 +7,7 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     services:
       redis:
         image: redis
@@ -18,11 +18,12 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           components: rustfmt, clippy
+      - uses: davidB/rust-cargo-make@v1
 
       - name: Cache rust
         uses: Swatinem/rust-cache@v2
@@ -63,33 +64,11 @@ jobs:
 
       - name: Init k8s e2e env
         run: |
-          cd ~
-          pwd
-          cd -
-          echo $KUBECONFIG
-          echo "========="
-          cat ~/.kube/config
-          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v0.6.2/experimental-install.yaml
-          cargo build -p spacegate
-          cd services/full/res
-          mv ../../../target/debug/spacegate ./
-          docker build -t ecfront/spacegate:0.1.0-alpha.2 .
-          rm spacegate
-          k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test --verbose
-
-          kubectl wait --for=condition=Ready pod -l name=gateway-api-admission-server -n gateway-system
-          sleep 10
-          cd ../../../
-          kubectl apply -f ./kernel/res/namespace.yaml
-          kubectl apply -f ./kernel/res/gatewayclass.yaml
-          kubectl apply -f ./kernel/res/spacegate-gateway.yaml
-          kubectl apply -f ./kernel/res/spacegate-httproute.yaml
-          sleep 5
-          kubectl wait --for=condition=Ready pod -l app=spacegate -n spacegate
+          bash ./tests/e2e/e2e-test-init.sh
 
       - name: Run k8s e2e test
         run: |
-          cd ./e2e
+          cd ./tests/e2e
           sudo bash ./e2e-test.sh
 
       - name: Upload to codecov.io
@@ -117,7 +96,7 @@ jobs:
             aarch64-unknown-linux-gnu,
             aarch64-unknown-linux-musl,
           ]
-        service: [spacegate-simplify, spacegate-native, spacegate]
+        service: [spacegate]
     env:
       OPENSSL_DIR: /opt/openssl
     steps:
@@ -160,7 +139,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }} --features dylib
 
       - name: Prepare artifacts
         run: |
@@ -199,7 +178,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
-        service: [spacegate-simplify, spacegate-native, spacegate]
+        service: [spacegate]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -220,7 +199,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }} --features dylib
 
       - name: Prepare artifacts
         run: |
@@ -262,7 +241,7 @@ jobs:
             #x86_64-pc-windows-gnu,
             x86_64-pc-windows-msvc,
           ]
-        service: [spacegate-simplify, spacegate-native, spacegate]
+        service: [spacegate]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -292,7 +271,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}
+          args: --release -F static-openssl --target ${{ matrix.target }} -p ${{ matrix.service }}  --features dylib
 
       - name: Prepare artifacts
         shell: bash
@@ -325,6 +304,7 @@ jobs:
             ${{ env.ARTIFACT_DIR }}/*.*
 
   release-docker:
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
     runs-on: ubuntu-latest
     name: Release docker image to registry
@@ -335,7 +315,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -346,16 +326,27 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build rust
-        run: cargo build --release -p spacegate
+        run: cargo build --release -p spacegate --features build-k8s
 
       - name: Copy binary to workspace
-        run: cp ./target/release/spacegate ./services/full/res/
+        run: cp ./target/release/spacegate resource/docker/spacegate/
+
+      - name: Build and push Docker image to github
+        uses: mr-smithers-excellent/docker-build-push@v5
+        with:
+          directory: resource/docker/spacegate/
+          dockerfile: resource/docker/spacegate/Dockerfile
+          registry: ghcr.io
+          image: spacegate
+          tags: ${{ github.ref_name }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: services/full/res/
-          dockerfile: services/full/res/Dockerfile
+          directory: resource/docker/spacegate/
+          dockerfile: resource/docker/spacegate/Dockerfile
           registry: docker.io
           image: ecfront/spacegate
           tags: ${{ github.ref_name }}
@@ -363,6 +354,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
   push-docker:
+    if: startsWith(github.ref, 'refs/tags/') != true
     needs: [check]
     runs-on: ubuntu-latest
     name: Push docker image to registry
@@ -373,7 +365,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -384,31 +376,34 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build rust
-        run: cargo build --release -p spacegate
+        run: cargo build --release -p spacegate --features build-k8s
 
       - name: Copy binary to workspace
-        run: cp ./target/release/spacegate ./services/full/res/
+        run: cp ./target/release/spacegate resource/docker/spacegate/
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: services/full/res/
-          dockerfile: services/full/res/Dockerfile
+          directory: resource/docker/spacegate/
+          dockerfile: resource/docker/spacegate/Dockerfile
           registry: docker.io
           image: ecfront/spacegate
-          tags: latest
+          tags: ${{ github.ref == 'refs/heads/master' && 'latest' || github.ref_name }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-  publish-lib-kernel:
-    if: startsWith(github.ref, 'refs/tags/')
+  release-all:
+    # if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
     runs-on: ubuntu-latest
     steps:
+      - name: rust-cargo-make
+        uses: davidB/rust-cargo-make@v1.10.0
+
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Init rust envrionment
+      - name: Init rust environment
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -416,10 +411,40 @@ jobs:
       - name: Cargo login
         run: cargo login ${{ secrets.CRATES_TOKEN }}
 
-      - name: Cargo package kernel
-        working-directory: kernel
-        run: cargo package
+      - name: cargo Publish all
+        run: cargo make publish
+  
+  release-kube-manifest:
+    needs: [release-docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
 
-      - name: Cargo publish kernel
-        working-directory: kernel
-        run: cargo publish
+      - name: Generate kube manifest
+        run: |
+          DEST_DIR=${{ env.ARTIFACT_DIR }}
+          tag=${{ github.ref_name }}
+          mkdir -p ${DEST_DIR}
+          MANIFEST_NAME=spacegate-${{ github.ref_name }}.yaml
+          mv resource/kube-manifests/* ./
+
+          for file in gatewayclass.yaml namespace.yaml spacegate-admin-server.yaml spacegate-gateway.yaml spacegate-httproute.yaml; do
+              sed "s/:latest/:$tag/g" "$file"
+              echo -e "\n---"
+          done > ${MANIFEST_NAME}
+
+          mv ${MANIFEST_NAME} ${DEST_DIR}
+
+      - name: Upload artifacts to summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_DIR }}
+          path: |
+            ${{ env.ARTIFACT_DIR }}/
+
+      - name: Upload artifacts to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ARTIFACT_DIR }}/*.*
