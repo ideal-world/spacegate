@@ -1,0 +1,14 @@
+apiVersion: spacegate.idealworld.group/v1
+kind: SgFilter
+metadata:
+  name: filters
+  namespace: spacegate
+spec:
+  filters:
+    - code: status
+      config:
+        title: SystemStatus
+  targetRefs:
+    - kind: httproute
+      name: echo
+      namespace: spacegate

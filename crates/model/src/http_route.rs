@@ -1,0 +1,208 @@
+use std::fmt::Display;
+
+use crate::constants::DEFAULT_NAMESPACE;
+
+pub use super::route_match::*;
+use serde::{Deserialize, Serialize};
+
+use super::{gateway::SgBackendProtocol, PluginInstanceId};
+
+/// HTTPRoute provides a way to route HTTP requests.
+///
+/// Reference: [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPRoute)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+#[serde(default)]
+pub struct SgHttpRoute<P = PluginInstanceId> {
+    /// Route name
+    pub route_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Hostnames defines a set of hostname that should match against the HTTP Host header to select a HTTPRoute to process the request.
+    pub hostnames: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// Filters define the filters that are applied to requests that match this hostnames.
+    pub plugins: Vec<P>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// Rules are a list of HTTP matchers, filters and actions.
+    pub rules: Vec<SgHttpRouteRule<P>>,
+    /// Rule priority, the rule of higher priority will be chosen.
+    pub priority: i16,
+}
+
+impl<P> SgHttpRoute<P> {
+    pub fn map_plugins<F, T>(self, mut f: F) -> SgHttpRoute<T>
+    where
+        F: FnMut(P) -> T,
+    {
+        SgHttpRoute {
+            route_name: self.route_name,
+            hostnames: self.hostnames,
+            plugins: self.plugins.into_iter().map(&mut f).collect(),
+            rules: self.rules.into_iter().map(|rule| rule.map_plugins(&mut f)).collect(),
+            priority: self.priority,
+        }
+    }
+}
+
+impl<P> Default for SgHttpRoute<P> {
+    fn default() -> Self {
+        Self {
+            route_name: Default::default(),
+            hostnames: Default::default(),
+            plugins: Default::default(),
+            rules: Default::default(),
+            priority: 1,
+        }
+    }
+}
+
+/// HTTPRouteRule defines semantics for matching an HTTP request based on conditions (matches), processing it (filters), and forwarding the request to an API object
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+#[serde(default)]
+pub struct SgHttpRouteRule<P = PluginInstanceId> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
+    pub matches: Option<Vec<SgHttpRouteMatch>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// Filters define the filters that are applied to requests that match this rule.
+    pub plugins: Vec<P>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// BackendRefs defines the backend(s) where matching requests should be sent.
+    pub backends: Vec<SgBackendRef<P>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Timeout define the timeout for requests that match this rule.
+    pub timeout_ms: Option<u32>,
+}
+
+impl<P> SgHttpRouteRule<P> {
+    pub fn map_plugins<F, T>(self, mut f: F) -> SgHttpRouteRule<T>
+    where
+        F: FnMut(P) -> T,
+    {
+        SgHttpRouteRule {
+            matches: self.matches,
+            plugins: self.plugins.into_iter().map(&mut f).collect(),
+            backends: self.backends.into_iter().map(|backend| backend.map_plugins(&mut f)).collect(),
+            timeout_ms: self.timeout_ms,
+        }
+    }
+}
+
+impl<P> Default for SgHttpRouteRule<P> {
+    fn default() -> Self {
+        Self {
+            matches: Default::default(),
+            plugins: Default::default(),
+            backends: Default::default(),
+            timeout_ms: Default::default(),
+        }
+    }
+}
+
+/// BackendRef defines how a HTTPRoute should forward an HTTP request.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+#[serde(default)]
+pub struct SgBackendRef<P = PluginInstanceId> {
+    // #[serde(flatten)]
+    pub host: BackendHost,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Port specifies the destination port number to use for this resource.
+    pub port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Timeout specifies the timeout for requests forwarded to the referenced backend.
+    pub timeout_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    // Protocol specifies the protocol used to talk to the referenced backend.
+    pub protocol: Option<SgBackendProtocol>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Weight specifies the proportion of requests forwarded to the referenced backend.
+    /// This is computed as weight/(sum of all weights in this BackendRefs list).
+    /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
+    /// Weight is not a percentage and the sum of weights does not need to equal 100.
+    pub weight: Option<u16>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// plugins define the filters that are applied to backend that match this hostnames.
+    ///
+    /// # Notice!
+    /// this field is ordered, the first plugin will be the outermost plugin.
+    pub plugins: Vec<P>,
+}
+
+impl<P> SgBackendRef<P> {
+    pub fn map_plugins<F, T>(self, f: F) -> SgBackendRef<T>
+    where
+        F: FnMut(P) -> T,
+    {
+        SgBackendRef {
+            host: self.host,
+            port: self.port,
+            timeout_ms: self.timeout_ms,
+            protocol: self.protocol,
+            weight: self.weight,
+            plugins: self.plugins.into_iter().map(f).collect(),
+        }
+    }
+}
+
+impl<P> Default for SgBackendRef<P> {
+    fn default() -> Self {
+        Self {
+            host: Default::default(),
+            port: Default::default(),
+            timeout_ms: Default::default(),
+            protocol: Default::default(),
+            weight: Default::default(),
+            plugins: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+pub struct K8sServiceData {
+    pub name: String,
+    #[serde(alias = "ns")]
+    pub namespace: Option<String>,
+}
+
+impl Display for K8sServiceData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.namespace {
+            Some(ref ns) => write!(f, "{}.{}", self.name, ns),
+            None => write!(f, "{}.{}", self.name, DEFAULT_NAMESPACE),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+#[serde(tag = "kind")]
+pub enum BackendHost {
+    Host { host: String },
+    K8sService(K8sServiceData),
+    File { path: String },
+}
+
+impl Display for BackendHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Host { host } => write!(f, "{}", host),
+            Self::K8sService(k8s_service) => write!(f, "{}", k8s_service),
+            Self::File { path } => write!(f, "{}", path),
+        }
+    }
+}
+
+impl Default for BackendHost {
+    fn default() -> Self {
+        Self::Host { host: String::default() }
+    }
+}
+
+impl<P> SgBackendRef<P> {
+    pub fn get_host(&self) -> String {
+        self.host.to_string()
+    }
+}

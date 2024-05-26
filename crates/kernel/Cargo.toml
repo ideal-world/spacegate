@@ -1,0 +1,75 @@
+[package]
+name = "spacegate-kernel"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../../README.md"
+
+
+[lib]
+name = "spacegate_kernel"
+path = "src/lib.rs"
+
+[features]
+reload = []
+ext-redis = ["spacegate-ext-redis"]
+
+[dependencies]
+# http
+hyper = { workspace = true }
+http-body-util = { workspace = true }
+tower-layer = { workspace = true }
+pin-project-lite = { workspace = true }
+hyper-util = { workspace = true, features = [
+  "server-auto",
+  "client-legacy",
+  "tokio",
+] }
+mime_guess = "2"
+
+# log
+tracing = { workspace = true }
+
+# runtime
+tokio = { workspace = true, features = ["net", "time", "macros", "fs"] }
+tokio-util = { workspace = true }
+
+# time
+chrono = { workspace = true }
+
+# future
+futures-util = { workspace = true }
+
+# Tls
+hyper-rustls = { workspace = true, features = ["http1", "http2"] }
+rustls-pemfile = { workspace = true }
+tokio-rustls = { workspace = true }
+
+# utils
+rand = { version = "0" }
+regex = { workspace = true }
+
+# ext-redis
+spacegate-ext-redis = {  workspace = true, optional = true }
+
+
+[dev-dependencies]
+tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
+axum = { workspace = true, features = ["multipart"] }
+axum-server = { version = "0.6", features = ["tls-rustls"] }
+md5 = { version = "0.7.0" }
+reqwest = { version = "0.12", features = ["multipart", "stream"] }
+tokio-tungstenite = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[[test]]
+name = "test_h2"
+path = "tests/test_h2.rs"
+required-features = ["axum/http2"]

@@ -1,0 +1,32 @@
+[package]
+name = "spacegate-model"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+ext-k8s = ["k8s-openapi", "k8s-gateway-api", "kube", "schemars", "chrono"]
+ext-axum = ["spacegate-ext-axum"]
+ext-redis = ["spacegate-ext-redis"]
+typegen = ["ts-rs"]
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+spacegate-ext-redis = {  workspace = true, optional = true }
+spacegate-ext-axum = {  workspace = true, optional = true }
+k8s-openapi = { workspace = true, optional = true }
+k8s-gateway-api = { workspace = true, optional = true }
+kube = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+ts-rs = { version = "8", optional = true, features = ["serde-json-impl"] }

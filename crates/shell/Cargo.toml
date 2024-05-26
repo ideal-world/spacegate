@@ -1,0 +1,83 @@
+[package]
+name = "spacegate-shell"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../../README.md"
+
+[lib]
+name = "spacegate_shell"
+path = "src/lib.rs"
+
+[features]
+ext-redis = ["spacegate-ext-redis", "spacegate-plugin/redis"]
+ext-axum = [
+  "spacegate-ext-axum",
+  "spacegate-plugin/axum",
+  "spacegate-config/axum",
+]
+cache = [
+  "spacegate-plugin/cache",
+  "spacegate-ext-redis",
+  "spacegate-config/redis",
+]
+fs = ["spacegate-config/fs"]
+k8s = [
+  "cache",
+  "spacegate-plugin/rewrite",
+  "spacegate-plugin/header-modifier",
+  "spacegate-plugin/redirect",
+  "spacegate-config/k8s",
+]
+plugin-all = ["spacegate-plugin/full"]
+plugin-cache = ["spacegate-plugin/cache"]
+plugin-limit = ["spacegate-plugin/limit"]
+plugin-header-modifier = ["spacegate-plugin/header-modifier"]
+plugin-inject = ["spacegate-plugin/inject"]
+plugin-redirect = ["spacegate-plugin/redirect"]
+plugin-retry = ["spacegate-plugin/retry"]
+plugin-rewrite = ["spacegate-plugin/rewrite"]
+plugin-maintenance = ["spacegate-plugin/maintenance"]
+# plugin-decompression = ["spacegate-plugin/decompression"]
+plugin-status = ["spacegate-plugin/status"]
+plugin-dylib = ["spacegate-plugin/dylib"]
+
+[dependencies]
+spacegate-kernel = { workspace = true, features = ["reload"] }
+spacegate-plugin = { workspace = true, features = ["schema"] }
+spacegate-config = { workspace = true }
+spacegate-ext-redis = { workspace = true, optional = true }
+spacegate-ext-axum = { workspace = true, optional = true }
+regex = { workspace = true }
+futures-util.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+hyper.workspace = true
+rustls-pemfile.workspace = true
+tokio-rustls.workspace = true
+tokio-util = { workspace = true, features = ["io"] }
+
+[dev-dependencies]
+reqwest = { workspace = true }
+tracing-subscriber = { workspace = true }
+criterion = { version = "0.5", features = ["async_tokio"] }
+testcontainers-modules = { workspace = true, features = ["redis"] }
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+# [[bench]]
+# name = "cache_sliding_window_benchmark"
+# required-features = ["cache"]
+# harness = false
+
+# [[bench]]
+# name = "local_sliding_window_benchmark"
+# harness = false

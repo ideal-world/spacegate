@@ -1,0 +1,76 @@
+[package]
+name = "spacegate-config"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../../README.md"
+
+[lib]
+name = "spacegate_config"
+path = "src/lib.rs"
+
+[features]
+default = ["fs"]
+full = ["fs", "redis", "k8s"]
+axum = ["spacegate-model/ext-axum"]
+fs = ["notify"]
+redis = ["dep:redis", "deadpool-redis", "lru"]
+k8s = [
+  "kube",
+  "k8s-openapi",
+  "k8s-gateway-api",
+  "schemars",
+  "spacegate-model/ext-k8s",
+  "rand",
+]
+[dependencies]
+spacegate-model = {  workspace = true }
+serde_regex = { workspace = true }
+regex = { workspace = true }
+tokio = { workspace = true, features = ["fs", "signal"] }
+serde.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
+toml = { workspace = true, features = ["preserve_order"] }
+tracing = { workspace = true }
+futures-util = { workspace = true }
+hyper.workspace = true
+hyper-rustls.workspace = true
+rustls-pemfile.workspace = true
+tokio-rustls.workspace = true
+ipnet = { workspace = true, features = ["serde"] }
+
+bytes = { workspace = true }
+
+kube = { workspace = true, optional = true }
+k8s-openapi = { workspace = true, optional = true }
+k8s-gateway-api = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+lazy_static.workspace = true
+
+notify = { workspace = true, features = ["macos_kqueue"], optional = true }
+
+chrono = { version = "0.4" }
+
+redis = { version = "0.24", features = [
+  "tokio-comp",
+  "tokio-native-tls-comp",
+], optional = true }
+deadpool-redis = { version = "0.14", optional = true }
+lru = { version = "0.12.0", optional = true }
+rand = { version = "0", optional = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }
+tracing-subscriber = { workspace = true }
+criterion = { version = "0.5", features = ["async_tokio"] }
+testcontainers-modules = { workspace = true }
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
