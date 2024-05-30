@@ -117,6 +117,9 @@ pub struct SgBackendRef<P = PluginInstanceId> {
     // Protocol specifies the protocol used to talk to the referenced backend.
     pub protocol: Option<SgBackendProtocol>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Downgrade HTTP2 connections, it is useful when the backend does not support HTTP2.
+    pub downgrade_http2: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Weight specifies the proportion of requests forwarded to the referenced backend.
     /// This is computed as weight/(sum of all weights in this BackendRefs list).
     /// For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
@@ -140,6 +143,7 @@ impl<P> SgBackendRef<P> {
             port: self.port,
             timeout_ms: self.timeout_ms,
             protocol: self.protocol,
+            downgrade_http2: self.downgrade_http2,
             weight: self.weight,
             plugins: self.plugins.into_iter().map(f).collect(),
         }
@@ -152,6 +156,7 @@ impl<P> Default for SgBackendRef<P> {
             host: Default::default(),
             port: Default::default(),
             timeout_ms: Default::default(),
+            downgrade_http2: Default::default(),
             protocol: Default::default(),
             weight: Default::default(),
             plugins: Default::default(),
