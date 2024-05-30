@@ -12,3 +12,7 @@ mod x_request_id;
 pub use x_request_id::{x_request_id, Snowflake, XRequestIdAlgo};
 mod parse_host;
 pub use parse_host::HostAndPort;
+mod h2_downgrade;
+pub use h2_downgrade::h2_downgrade;
+mod dump;
+pub use dump::dump;

@@ -1,5 +1,7 @@
 use std::{fmt::Debug, path::PathBuf, time::Duration};
 
+use hyper::Version;
+
 use crate::BoxLayer;
 
 use super::{match_request::HttpRouteMatch, Backend, BalancePolicyEnum, HttpBackend, HttpRoute, HttpRouteRule};
@@ -175,6 +177,7 @@ pub struct HttpBackendKindBuilder {
     pub host: Option<String>,
     pub port: Option<u16>,
     pub schema: Option<String>,
+    pub version: Option<Version>,
 }
 
 impl BackendKindBuilder for HttpBackendKindBuilder {
@@ -183,6 +186,7 @@ impl BackendKindBuilder for HttpBackendKindBuilder {
             host: self.host,
             port: self.port,
             schema: self.schema,
+            version: self.version,
         }
     }
 }
@@ -232,6 +236,13 @@ impl HttpBackendBuilder<HttpBackendKindBuilder> {
     pub fn schema(mut self, schema: impl Into<String>) -> Self {
         self.backend = HttpBackendKindBuilder {
             schema: Some(schema.into()),
+            ..self.backend
+        };
+        self
+    }
+    pub fn version(mut self, version: Version) -> Self {
+        self.backend = HttpBackendKindBuilder {
+            version: Some(version),
             ..self.backend
         };
         self

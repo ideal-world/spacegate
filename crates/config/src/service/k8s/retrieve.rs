@@ -161,6 +161,17 @@ impl Retrieve for K8s {
 }
 
 impl K8s {
+    pub(crate) const HTTP2_KEY: &'static str = "http2";
+    pub(crate) const HTTP2_ENABLE: &'static str = "true";
+    // query is http2 enabled?
+    fn retrieve_http2_config(tls_config: &k8s_gateway_api::GatewayTlsConfig) -> bool {
+        if let Some(options) = &tls_config.options {
+            if let Some(Self::HTTP2_ENABLE) = options.get(Self::HTTP2_KEY).map(String::as_str) {
+                return true;
+            }
+        }
+        false
+    }
     async fn kube_gateway_2_sg_gateway(&self, gateway_obj: Gateway) -> BoxResult<SgGateway> {
         let gateway_name = gateway_obj.name_any();
         let plugins = self
@@ -269,6 +280,7 @@ impl K8s {
                                                             mode: tls_config.mode.clone().into(),
                                                             key: String::from_utf8(tls_key.0.clone()).expect("[SG.Config] Gateway tls secret [tls.key] is not valid utf8"),
                                                             cert: String::from_utf8(tls_crt.0.clone()).expect("[SG.Config] Gateway tls secret [tls.cert] is not valid utf8"),
+                                                            http2: Self::retrieve_http2_config(tls_config),
                                                         })
                                                     } else {
                                                         tracing::warn!("[SG.Config] Gateway [spec.listener.protocol=https] tls.key is empty");

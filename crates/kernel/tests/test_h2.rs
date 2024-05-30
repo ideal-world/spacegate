@@ -6,7 +6,7 @@ use std::{
 };
 
 use axum_server::tls_rustls::RustlsConfig;
-use hyper::{client, Request};
+use hyper::{client, Request, Version};
 use spacegate_kernel::{
     backend_service::{get_http_backend_service, http_backend_service},
     listener::SgListen,
