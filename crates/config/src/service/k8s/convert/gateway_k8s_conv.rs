@@ -5,7 +5,7 @@ use k8s_openapi::{api::core::v1::Secret, ByteString};
 use kube::{api::ObjectMeta, ResourceExt};
 use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, PluginInstanceId};
 
-use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, SgGateway, SgParameters};
+use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, service::k8s::K8s, SgGateway, SgParameters};
 
 use super::ToTarget;
 pub(crate) trait SgGatewayConv {
@@ -62,7 +62,7 @@ impl SgGatewayConv for SgGateway {
                                         namespace: Some(namespace.to_string()),
                                         ..Default::default()
                                     }]),
-                                    options: None,
+                                    options: Some(BTreeMap::from([(K8s::HTTP2_KEY.to_string(), tls.http2.to_string())])),
                                 })
                             }
                             _ => None,

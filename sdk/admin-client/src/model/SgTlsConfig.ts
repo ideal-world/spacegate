@@ -4,4 +4,4 @@ import type { SgTlsMode } from "./SgTlsMode";
 /**
  * GatewayTLSConfig describes a TLS configuration.
  */
-export type SgTlsConfig = { mode: SgTlsMode, key: string, cert: string, };
+export type SgTlsConfig = { mode: SgTlsMode, key: string, cert: string, http2: boolean, };
