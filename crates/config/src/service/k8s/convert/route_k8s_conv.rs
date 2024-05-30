@@ -418,6 +418,7 @@ impl SgBackendRefConv for SgBackendRef {
                 weight: self.weight,
                 timeout_ms: self.timeout_ms,
                 inner: backend_inner_ref,
+                downgrade_http2: todo!("http2 protocol switch support"),
             }),
             filters: Some(self.plugins.into_iter().filter_map(|f| f.to_http_route_filter()).collect()),
         }
@@ -458,6 +459,7 @@ impl SgBackendRefConv for SgBackendRef {
                     protocol,
                     weight: backend.weight,
                     plugins: ext_plugins.into_iter().filter_map(PluginInstanceId::from_http_route_filter).collect(),
+                    downgrade_http2: todo!(),
                 })
             })
             .transpose()
