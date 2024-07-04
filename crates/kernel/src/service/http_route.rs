@@ -175,7 +175,7 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
     type Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>;
 
     fn call(&self, mut req: Request<SgBody>) -> Self::Future {
-        let mut req = match self.backend.as_ref() {
+        let req = match self.backend.as_ref() {
             Backend::Http {
                 host: None,
                 port: None,
@@ -183,7 +183,7 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
                 version: None,
             }
             | Backend::File { .. } => req,
-            Backend::Http { host, port, schema, .. } => {
+            Backend::Http { host, port, schema, version } => {
                 if let Some(ref host) = host {
                     if let Some(reflect) = req.extensions_mut().get_mut::<Reflect>() {
                         reflect.insert(BackendHost::new(host.clone()));
@@ -213,6 +213,9 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
                         tracing::error!("Failed to build uri: {}", e);
                     }
                 }
+                if let Some(version) = version {
+                    *req.version_mut() = *version;
+                };
                 req
             }
         };
@@ -221,12 +224,7 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
         Box::pin(async move {
             unsafe {
                 let mut response = match backend.as_ref() {
-                    Backend::Http { version, .. } => {
-                        if let Some(version) = version {
-                            *req.version_mut() = *version;
-                        };
-                        http_backend_service(req).await.unwrap_unchecked()
-                    }
+                    Backend::Http { .. } => http_backend_service(req).await.unwrap_unchecked(),
                     Backend::File { path } => static_file_service(req, path).await,
                 };
                 response.extensions_mut().insert(crate::extension::FromBackend::new());

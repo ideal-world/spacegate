@@ -246,7 +246,7 @@ impl K8s {
 
         if !plugin_ids.is_empty() {
             let mut filter_vec = String::new();
-            plugin_ids.clone().into_iter().for_each(|id| filter_vec.push_str(&format!("plugin:{{id:{}}},", id.to_string())));
+            plugin_ids.clone().into_iter().for_each(|id| filter_vec.push_str(&format!("plugin:{{id:{}}},", id)));
             tracing::trace!("[SG.Common] {namespace}.{kind}.{name} filter found: {}", filter_vec.trim_end_matches(','));
         }
 

@@ -6,6 +6,7 @@ use std::{
 
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
 
+use hyper::Version;
 use spacegate_config::{BackendHost, Config, ConfigItem};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
@@ -91,6 +92,11 @@ fn collect_http_route(
                             } else {
                                 builder.build()
                             };
+                            if backend.downgrade_http2.is_some() {
+                                if let spacegate_kernel::service::http_route::Backend::Http { version, .. } = &mut layer.backend {
+                                    version.replace(Version::HTTP_11);
+                                }
+                            }
                             global_batch_mount_plugin(plugins, &mut layer, mount_index);
                             Result::<_, BoxError>::Ok(layer)
                         })

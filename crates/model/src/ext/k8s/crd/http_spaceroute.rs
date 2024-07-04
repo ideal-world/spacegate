@@ -267,7 +267,7 @@ impl From<HttpRoute> for HttpSpaceroute {
                                                 namespace: backend_ref.inner.namespace,
                                                 port: backend_ref.inner.port,
                                             },
-                                            downgrade_http2: todo!("support h2 downgrade"),
+                                            downgrade_http2: None,
                                         }),
                                         filters: http_backend_ref.filters,
                                     })
