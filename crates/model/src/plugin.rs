@@ -16,7 +16,7 @@ pub mod gatewayapi_support_filter;
 
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
-#[serde(tag = "kind", content = "content", rename_all = "lowercase")]
+#[serde(tag = "kind",  rename_all = "lowercase")]
 pub enum PluginInstanceName {
     Anon {
         uid: String,
@@ -67,13 +67,13 @@ impl From<String> for PluginInstanceName {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct PluginInstanceId {
     pub code: Cow<'static, str>,
-    // #[serde(flatten)]
+    #[serde(flatten)]
     pub name: PluginInstanceName,
 }
 
-impl ToString for PluginInstanceId {
-    fn to_string(&self) -> String {
-        format!("{}-{}", self.code, self.name)
+impl std::fmt::Display for PluginInstanceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.code, self.name)
     }
 }
 
@@ -342,7 +342,7 @@ mod test {
 
     #[test]
     fn test_parse_id() {
-        let json = r#"{"code": "header-modifier", "kind": "named", "name": "hello"}"#;
+        let json = r#"{"code": "header-modifier", "kind" : "named", "name" : "hello" }"#;
         let id: PluginInstanceId = serde_json::from_str(json).expect("fail to deserialize");
         println!("{id:?}");
     }

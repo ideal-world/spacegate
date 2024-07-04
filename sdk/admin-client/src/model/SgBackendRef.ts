@@ -13,6 +13,10 @@ port: number | null,
  */
 timeout_ms: number | null, protocol: SgBackendProtocol | null, 
 /**
+ * Downgrade HTTP2 connections, it is useful when the backend does not support HTTP2.
+ */
+downgrade_http2: boolean | null, 
+/**
  * Weight specifies the proportion of requests forwarded to the referenced backend.
  * This is computed as weight/(sum of all weights in this BackendRefs list).
  * For non-zero values, there may be some epsilon from the exact proportion defined here depending on the precision an implementation supports.
