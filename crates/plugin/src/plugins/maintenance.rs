@@ -2,7 +2,6 @@ use hyper::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 use hyper::{Request, Response, StatusCode};
 use ipnet::IpNet;
 use spacegate_kernel::extension::PeerAddr;
-
 use spacegate_kernel::helper_layers::function::Inner;
 use spacegate_kernel::BoxError;
 use spacegate_kernel::SgBody;
@@ -18,10 +17,16 @@ use crate::{Plugin, PluginError};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct MaintenancePluginConfig {
+    /// enable time range
     enabled_time_range: Option<Vec<Range<NaiveTime>>>,
+    /// exclude ip range
     exclude_ip_range: Option<Vec<String>>,
+    /// maintenance page title
     title: String,
+    /// maintenance message
     msg: String,
+    /// return code 307 to redirect to a specified path
+    redirect: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +34,8 @@ pub struct MaintenancePlugin {
     enabled_time_range: Option<Vec<Range<NaiveTime>>>,
     title: String,
     msg: String,
+    // redirect path and query
+    redirect: Option<String>,
     exclude_ip_range: Option<Vec<IpNet>>,
 }
 
@@ -69,6 +76,7 @@ impl Default for MaintenancePluginConfig {
         Self {
             enabled_time_range: None,
             exclude_ip_range: None,
+            redirect: None,
             title: "System Maintenance".to_string(),
             msg: "We apologize for the inconvenience, but we are currently performing system maintenance. We will be back to normal shortly./n Thank you for your patience, understanding, and support.".to_string(),
         }
@@ -84,6 +92,7 @@ impl Plugin for MaintenancePlugin {
     }
     fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
         let plugin_config: MaintenancePluginConfig = serde_json::from_value(config.spec)?;
+
         let exclude_ip_range = plugin_config
             .exclude_ip_range
             .as_ref()
@@ -93,6 +102,7 @@ impl Plugin for MaintenancePlugin {
             title: plugin_config.title.clone(),
             msg: plugin_config.msg.clone(),
             exclude_ip_range,
+            redirect: plugin_config.redirect,
         };
         Ok(plugin)
     }
@@ -126,7 +136,7 @@ impl Plugin for MaintenancePlugin {
                 ContentType::Other
             };
 
-            let resp = match content_type {
+            let mut resp = match content_type {
                 ContentType::Html => {
                     let title = self.title.clone();
                     let msg = self.msg.clone().replace("/n", "<br>");
@@ -187,10 +197,20 @@ impl Plugin for MaintenancePlugin {
                     .body(SgBody::full(format!("<h1>{}</h1>", self.title)))
                     .map_err(PluginError::internal_error::<MaintenancePlugin>)?,
             };
+            if let Some(ref redirect) = self.redirect {
+                resp.headers_mut().insert("Location", HeaderValue::from_str(redirect)?);
+                *resp.status_mut() = StatusCode::TEMPORARY_REDIRECT;
+            }
             Ok(resp)
         } else {
             Ok(inner.call(req).await)
         }
+    }
+
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        use crate::PluginSchemaExt;
+        Some(Self::schema())
     }
 }
 
