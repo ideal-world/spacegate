@@ -139,7 +139,7 @@ impl Plugin for MaintenancePlugin {
             let mut resp = match content_type {
                 ContentType::Html => {
                     let title = self.title.clone();
-                    let msg = self.msg.clone().replace("/n", "<br>");
+                    let msg = self.msg.clone().replace('\n', "<br>");
                     let body = format!(
                         r##"<!DOCTYPE html>
                     <html>
@@ -175,7 +175,6 @@ impl Plugin for MaintenancePlugin {
                         <br>
                             <p>{msg}</p>
                         </div>
-                    </body>
                     </body>
                     </html>
                     "##
