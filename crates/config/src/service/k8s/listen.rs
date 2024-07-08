@@ -1,4 +1,8 @@
-use std::{collections::HashMap, task::ready};
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    task::ready,
+};
 
 use futures_util::{pin_mut, TryStreamExt};
 use k8s_gateway_api::{Gateway, HttpRoute};
@@ -10,10 +14,10 @@ use kube::{
 use spacegate_model::{
     constants,
     ext::k8s::crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter},
-    BoxResult, Config,
+    BoxResult, Config, PluginInstanceId,
 };
 
-use crate::service::{ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve as _};
+use crate::service::{k8s::convert::filter_k8s_conv::PluginIdConv, ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve as _};
 
 use super::K8s;
 
@@ -219,20 +223,40 @@ impl CreateListener for K8s {
         //watch sgfilter
         tokio::task::spawn(async move {
             let mut uid_version_map = HashMap::new();
+            let target_digest_map: HashMap<String, u64> = HashMap::new();
             let ew = watcher::watcher(sg_filter_api, watcher::Config::default()).touched_objects();
             pin_mut!(ew);
             while let Some(filter) = ew.try_next().await.unwrap_or_default() {
+                let name_any = filter.name_any();
                 if filter.spec.filters.iter().any(|inner_filter| move_filter_codes_names.contains(&(inner_filter.code.clone().into(), inner_filter.name.clone().into())))
-                    && !uid_version_map.contains_key(&filter.name_any())
+                    && !uid_version_map.contains_key(&name_any)
                 {
-                    uid_version_map.insert(filter.name_any(), filter.resource_version());
+                    uid_version_map.insert(name_any.clone(), filter.resource_version());
                     continue;
                 }
-                if uid_version_map.get(&filter.name_any()) == Some(&filter.resource_version()) {
+                if uid_version_map.get(&name_any) == Some(&filter.resource_version()) {
                     continue;
                 }
-                if filter.spec.target_refs.is_empty() {
-                    continue;
+
+                for p in &filter.spec.filters {
+                    if p.enable {
+                        let id = PluginInstanceId::extract_from_filter(p, &name_any);
+                        move_evt_tx.send((ConfigType::Plugin { id }, ConfigEventType::Update)).expect("send event error");
+                    }
+                }
+
+                let digest = {
+                    let mut hasher = std::hash::DefaultHasher::new();
+                    filter.spec.target_refs.hash(&mut hasher);
+                    hasher.finish()
+                };
+                match target_digest_map.get(&name_any) {
+                    Some(d) if *d == digest => continue,
+                    _ => {
+                        if filter.spec.target_refs.is_empty() {
+                            continue;
+                        }
+                    }
                 }
 
                 for target_ref in filter.spec.target_refs {

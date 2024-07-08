@@ -96,3 +96,8 @@ regex.workspace = true
 name = "export_schema"
 path = "tests/export_schema.rs"
 required-features = ["schema", "cache"]
+
+[[test]]
+name = "test_hot_update"
+path = "tests/test_hot_update.rs"
+required-features = ["maintenance"]

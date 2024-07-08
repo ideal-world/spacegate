@@ -36,6 +36,15 @@ pub(crate) trait PluginIdConv {
     /// can be ues in gateway and route level
     async fn remove_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()>;
 
+    fn extract_from_filter(filter: &K8sSgFilterSpecFilter, default_name: &str) -> PluginInstanceId {
+        let code = filter.code.clone().into();
+        let name = filter.name.clone().unwrap_or(default_name.to_string());
+        PluginInstanceId {
+            code,
+            name: PluginInstanceName::Named { name },
+        }
+    }
+
     // TODO remove
     // mix of [SgRouteFilter::to_singe_filter] and [SgRouteFilter::to_http_route_filter]
     // PluginInstanceId can be converted into `SgRouteFilter` or `HttpRouteFilter`
@@ -60,7 +69,6 @@ impl PluginIdConv for PluginInstanceId {
             PluginInstanceName::Mono => None,
         }
     }
-
     // TODO remove
     // fn from_http_route_filter(route_filter: HttpRouteFilter) -> BoxResult<PluginConfig> {
     //     let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> BoxResult<PluginConfig> {
@@ -206,12 +214,7 @@ impl PluginConfigConv for PluginConfig {
     fn from_first_filter_obj(filter_obj: SgFilter) -> Option<PluginConfig> {
         let filter_name = filter_obj.name_any();
         filter_obj.spec.filters.into_iter().find(|f| f.enable).map(|f| PluginConfig {
-            id: PluginInstanceId {
-                code: f.code.into(),
-                name: PluginInstanceName::Named {
-                    name: f.name.unwrap_or(filter_name.clone()),
-                },
-            },
+            id: PluginInstanceId::extract_from_filter(&f, &filter_name),
             spec: f.config,
         })
     }
