@@ -100,7 +100,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
   release-docker:
-    if: startsWith(github.ref, 'refs/tags/')
+    # if: startsWith(github.ref, 'refs/tags/')
     needs: [check]
     runs-on: ubuntu-latest
     steps:
@@ -140,7 +140,7 @@ jobs:
           dockerfile: resource/docker/spacegate-admin-server/Dockerfile
           registry: ghcr.io
           image: spacegate-admin-server
-          tags: ${{ github.ref_name }}
+          tags: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || github.sha  }}
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
 
@@ -151,6 +151,6 @@ jobs:
           dockerfile: resource/docker/spacegate-admin-server/Dockerfile
           registry: docker.io
           image: ecfront/spacegate-admin-server
-          tags: ${{ github.ref_name }}
+          tags: ${{ (startsWith(github.ref, 'refs/tags/') && github.ref_name) || github.sha }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
