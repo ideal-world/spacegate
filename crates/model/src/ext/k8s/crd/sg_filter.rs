@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
 use serde::{Deserialize, Serialize};
 
@@ -25,7 +25,7 @@ pub struct K8sSgFilterSpecFilter {
     pub config: Value,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecTargetRef {
     /// # FilterTarget Kind
@@ -39,6 +39,14 @@ pub struct K8sSgFilterSpecTargetRef {
     pub name: String,
     /// if namespace is None, use SgFilter's namespace
     pub namespace: Option<String>,
+}
+
+impl Hash for K8sSgFilterSpecTargetRef {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.kind.hash(state);
+        self.name.hash(state);
+        self.namespace.as_deref().unwrap_or("").hash(state);
+    }
 }
 
 impl PartialEq for K8sSgFilterSpecTargetRef {
