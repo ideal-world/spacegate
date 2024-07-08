@@ -197,6 +197,9 @@ impl Plugin for MaintenancePlugin {
                     .map_err(PluginError::internal_error::<MaintenancePlugin>)?,
             };
             if let Some(ref redirect) = self.redirect {
+                if req.uri().path() == redirect {
+                    return Ok(inner.call(req).await);
+                }
                 resp.headers_mut().insert("Location", HeaderValue::from_str(redirect)?);
                 *resp.status_mut() = StatusCode::TEMPORARY_REDIRECT;
             }
