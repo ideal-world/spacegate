@@ -168,7 +168,8 @@ impl PluginIdConv for PluginInstanceId {
                 filter.spec.target_refs.retain(|t| !t.eq(&target));
 
                 if filter.spec.target_refs.is_empty() {
-                    filter_api.delete(&filter.name_any(), &DeleteParams::default()).await?;
+                    // bug: we shouldn't delete plugin here
+                    // filter_api.delete(&filter.name_any(), &DeleteParams::default()).await?;
                 } else {
                     filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
                 }
