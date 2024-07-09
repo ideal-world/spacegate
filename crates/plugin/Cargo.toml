@@ -28,6 +28,7 @@ redirect = ["url"]
 retry = []
 rewrite = []
 set-version = []
+set-scheme = []
 maintenance = ["ipnet", "chrono/serde"]
 # decompression = ["tower-http/decompression-full"]
 status = ["hyper-util"]
@@ -41,6 +42,7 @@ full = [
     "rewrite",
     "maintenance",
     "set-version",
+    "set-scheme",
     # "decompression",
     "status",
 ]
