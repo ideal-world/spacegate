@@ -17,8 +17,8 @@ pub mod rewrite;
 // #[cfg(feature = "status")]
 // pub mod status;
 
-#[cfg(feature = "set-version")]
-pub mod set_version;
 #[cfg(feature = "set-scheme")]
 pub mod set_scheme;
+#[cfg(feature = "set-version")]
+pub mod set_version;
 pub mod static_resource;
