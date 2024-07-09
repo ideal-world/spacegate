@@ -229,6 +229,8 @@ impl PluginRepository {
         self.register::<plugins::decompression::DecompressionPlugin>();
         #[cfg(feature = "set-version")]
         self.register::<plugins::set_version::SetVersionPlugin>();
+        #[cfg(feature = "set-scheme")]
+        self.register::<plugins::set_scheme::SetSchemePlugin>();
         #[cfg(feature = "redis")]
         {
             self.register::<ext::redis::plugins::redis_count::RedisCountPlugin>();
