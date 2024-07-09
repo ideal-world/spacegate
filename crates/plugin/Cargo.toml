@@ -27,6 +27,7 @@ inject = []
 redirect = ["url"]
 retry = []
 rewrite = []
+set-version = []
 maintenance = ["ipnet", "chrono/serde"]
 # decompression = ["tower-http/decompression-full"]
 status = ["hyper-util"]
@@ -39,6 +40,7 @@ full = [
     "retry",
     "rewrite",
     "maintenance",
+    "set-version",
     # "decompression",
     "status",
 ]
