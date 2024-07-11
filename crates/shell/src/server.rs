@@ -209,7 +209,7 @@ impl RunningSgGateway {
         global_store.remove(gateway_name.as_ref())
     }
 
-    pub async fn global_update(gateway_name: impl AsRef<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<(), BoxError> {
+    pub fn global_update(gateway_name: impl AsRef<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<(), BoxError> {
         let gateway_name = gateway_name.as_ref();
         let service = create_router_service(gateway_name.to_string().into(), http_routes)?;
         let reloader = {
@@ -222,7 +222,7 @@ impl RunningSgGateway {
                 return Ok(());
             }
         };
-        reloader.reload(service).await;
+        reloader.reload(service);
         Ok(())
     }
     /// Start a gateway from plugins and http_routes

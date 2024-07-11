@@ -58,6 +58,7 @@ regex = { workspace = true }
 
 # ext-redis
 spacegate-ext-redis = {  workspace = true, optional = true }
+crossbeam-utils = "0.8"
 
 
 [dev-dependencies]
