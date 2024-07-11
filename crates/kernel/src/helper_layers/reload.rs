@@ -1,7 +1,6 @@
 use std::sync::{Arc, OnceLock};
 
-use futures_util::future::BoxFuture;
-use tokio::sync::RwLock;
+use crossbeam_utils::sync::ShardedLock;
 use tower_layer::Layer;
 
 #[derive(Default, Debug, Clone)]
@@ -16,7 +15,7 @@ where
     type Service = Reload<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        let inner = Arc::new(RwLock::new(inner));
+        let inner = Arc::new(ShardedLock::new(inner));
         self.reloader.setup(inner.clone());
         Reload { service: inner }
     }
@@ -27,12 +26,12 @@ pub struct Reload<S>
 where
     S: Send,
 {
-    pub(crate) service: Arc<RwLock<S>>,
+    pub(crate) service: Arc<ShardedLock<S>>,
 }
 
 #[derive(Debug)]
 pub struct Reloader<S> {
-    pub service: Arc<OnceLock<Arc<RwLock<S>>>>,
+    pub service: Arc<OnceLock<Arc<ShardedLock<S>>>>,
 }
 
 impl<S> Default for Reloader<S> {
@@ -48,14 +47,14 @@ impl<S> Clone for Reloader<S> {
 }
 
 impl<S> Reloader<S> {
-    pub fn setup(&self, service: Arc<RwLock<S>>) {
+    pub fn setup(&self, service: Arc<ShardedLock<S>>) {
         if self.service.set(service).is_err() {
             tracing::warn!("reloader already settled");
         }
     }
-    pub async fn reload(&self, service: S) {
+    pub fn reload(&self, service: S) {
         if let Some(wg) = self.service.get() {
-            let mut wg = wg.write().await;
+            let mut wg = wg.write().expect("should never be poisoned");
             *wg = service;
         } else {
             tracing::warn!("reloader not initialized");
@@ -76,15 +75,13 @@ where
 
     type Error = S::Error;
 
-    type Future = BoxFuture<'static, Result<S::Response, S::Error>>;
+    type Future = <S as hyper::service::Service<Request>>::Future;
 
     fn call(&self, req: Request) -> Self::Future {
         let service = self.service.clone();
-        Box::pin(async move {
-            let rg = service.read_owned().await;
-            let fut = rg.call(req);
-            drop(rg);
-            fut.await
-        })
+        let rg = service.read().expect("should never be posisoned");
+        let fut = rg.call(req);
+        drop(rg);
+        fut
     }
 }

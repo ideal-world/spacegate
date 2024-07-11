@@ -116,7 +116,7 @@ async fn handler<C: Retrieve>(event: (ConfigType, ConfigEventType), config: &C, 
         (ConfigType::Route { gateway_name, name }, _) => {
             let routes = config.retrieve_config_item_all_routes(&gateway_name).await?;
             tracing::info!("[SG.Config] route {name} modified", name = name);
-            if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes).await {
+            if let Err(e) = RunningSgGateway::global_update(&gateway_name, routes) {
                 tracing::error!("[SG.Config] route {name} modified failed: {e}", name = name, e = e);
             }
         }
