@@ -302,9 +302,14 @@ mod test {
             tokio::spawn(async move { println!("{method} // {uri} // {server:?}") });
             inner.call(req).await
         }
+        async fn empty_custom_handler(req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
+            inner.call(req).await
+        }
         let boxed_layer3 = BoxLayer::new(FnLayer::new_handler(custom_handler));
+        let boxed_layer_empty = BoxLayer::new(FnLayer::new_handler(empty_custom_handler));
         drop(boxed_layer);
         drop(boxed_layer2);
         drop(boxed_layer3);
+        drop(boxed_layer_empty);
     }
 }
