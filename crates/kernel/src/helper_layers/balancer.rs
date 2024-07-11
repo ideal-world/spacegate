@@ -2,7 +2,7 @@ pub mod ip_hash;
 pub use ip_hash::IpHash;
 pub mod random;
 pub use random::Random;
-
+#[derive(Debug, Clone, Default)]
 pub struct Balancer<P, S> {
     pub policy: P,
     pub instances: Vec<S>,

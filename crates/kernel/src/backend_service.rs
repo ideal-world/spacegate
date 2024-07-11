@@ -56,6 +56,7 @@ impl hyper::service::Service<Request<SgBody>> for ArcHyperService {
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
+    #[inline]
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         Box::pin(self.shared.call(req))
     }
@@ -117,10 +118,13 @@ pub async fn http_backend_service(req: Request<SgBody>) -> Result<Response<SgBod
     }
 }
 
+#[inline]
 pub fn get_http_backend_service() -> ArcHyperService {
     ArcHyperService::new(hyper::service::service_fn(http_backend_service))
 }
 
+#[cold]
+#[inline]
 pub fn get_echo_service() -> ArcHyperService {
     ArcHyperService::new(hyper::service::service_fn(echo::echo))
 }

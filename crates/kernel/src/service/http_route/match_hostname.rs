@@ -121,6 +121,7 @@ impl<T> HostnameTree<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct HostnameTreeIter<'a, T> {
     ipv4: std::collections::btree_map::Values<'a, Ipv4Addr, T>,
     ipv6: std::collections::btree_map::Values<'a, Ipv6Addr, T>,
@@ -145,6 +146,7 @@ impl<'a, T: 'a> Iterator for HostnameTreeIter<'a, T> {
     }
 }
 
+#[derive(Debug)]
 pub struct HostnameTreeIterMut<'a, T> {
     ipv4: std::collections::btree_map::ValuesMut<'a, Ipv4Addr, T>,
     ipv6: std::collections::btree_map::ValuesMut<'a, Ipv6Addr, T>,
@@ -178,6 +180,7 @@ pub struct HostnameMatcherNode<T> {
     else_node: Option<Box<HostnameMatcherNode<T>>>,
 }
 
+#[derive(Debug)]
 pub struct HostnameMatcherNodeIter<'a, T: 'a> {
     data: std::option::Iter<'a, T>,
     children: std::collections::btree_map::Values<'a, String, HostnameMatcherNode<T>>,
@@ -201,6 +204,7 @@ impl<'a, T: 'a> Iterator for HostnameMatcherNodeIter<'a, T> {
     }
 }
 
+#[derive(Debug)]
 pub struct HostnameMatcherNodeIterMut<'a, T: 'a> {
     data: std::option::IterMut<'a, T>,
     children: std::collections::btree_map::ValuesMut<'a, String, HostnameMatcherNode<T>>,

@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{Gateway, HttpRouterService};
-
+#[derive(Debug)]
 pub struct GatewayBuilder {
     pub gateway_name: Arc<str>,
     pub http_routers: HashMap<String, HttpRoute>,

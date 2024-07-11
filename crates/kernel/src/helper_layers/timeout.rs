@@ -5,7 +5,7 @@ use futures_util::Future;
 use hyper::{Request, Response};
 use tokio::time::Sleep;
 use tower_layer::Layer;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TimeoutLayer {
     /// timeout duration
     pub timeout: Duration,
@@ -24,7 +24,7 @@ impl<S> Layer<S> for TimeoutLayer {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Timeout<S> {
     inner: S,
     timeout: Duration,

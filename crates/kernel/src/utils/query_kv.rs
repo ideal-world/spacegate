@@ -11,6 +11,7 @@
 /// assert_eq!(iter.next(), Some(("c", None)));
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct QueryKvIter<'a> {
     inner: &'a str,
 }

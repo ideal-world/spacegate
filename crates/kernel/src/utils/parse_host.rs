@@ -1,9 +1,11 @@
+#[derive(Debug)]
 pub struct HostAndPort<'a> {
     pub host: &'a [u8],
     pub port: Option<&'a [u8]>,
 }
 
 impl<'a> HostAndPort<'a> {
+    #[inline]
     pub fn host_end_with(&self, suffix: &[u8]) -> bool {
         self.host.ends_with(suffix)
     }

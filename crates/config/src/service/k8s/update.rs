@@ -36,16 +36,20 @@ impl Update for K8s {
         gateway_api.replace(gateway_name, &PostParams::default(), &gateway).await?;
 
         let secret_api: Api<Secret> = self.get_namespace_api();
-        if let Some(old_secret) = old_gateway.1 {
-            if let Some(mut secret) = secret {
-                secret.metadata.resource_version = old_secret.resource_version();
-                secret_api.replace(&secret.name_any(), &PostParams::default(), &secret).await?;
-            } else {
-                secret_api.delete(&old_secret.name_any(), &DeleteParams::default()).await?;
-            }
-        } else if let Some(secret) = secret {
+        if let Some(secret) = secret {
             secret_api.create(&PostParams::default(), &secret).await?;
         }
+        // just create it!
+        // if let Some(old_secret) = old_gateway.1 {
+        //     if let Some(mut secret) = secret {
+        //         secret.metadata.resource_version = old_secret.resource_version();
+        //         secret_api.replace(&secret.name_any(), &PostParams::default(), &secret).await?;
+        //     } else {
+        //         secret_api.delete(&old_secret.name_any(), &DeleteParams::default()).await?;
+        //     }
+        // } else if let Some(secret) = secret {
+        //     secret_api.create(&PostParams::default(), &secret).await?;
+        // }
 
         self.update_plugin_ids_changes(old_gateway.2, update_plugin_ids, gateway.to_target_ref()).await?;
         Ok(())
