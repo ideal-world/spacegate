@@ -28,7 +28,7 @@ where
         MapRequest { map: self.map.clone(), inner }
     }
 }
-
+#[derive(Debug)]
 pub struct MapRequest<F, S> {
     map: F,
     inner: S,

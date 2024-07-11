@@ -11,6 +11,15 @@ where
     services: Arc<[S]>,
 }
 
+impl<I, S> std::fmt::Debug for RandomPick<I, S>
+where
+    I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RandomPick").finish()
+    }
+}
+
 impl<I, S> RandomPick<I, S>
 where
     I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd + Clone + Default + for<'a> std::ops::AddAssign<&'a I>,

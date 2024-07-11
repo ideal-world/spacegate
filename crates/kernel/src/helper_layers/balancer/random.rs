@@ -1,13 +1,21 @@
 use rand::distributions::Distribution;
 
 use super::BalancePolicy;
-
 /// A policy that selects an instance randomly.
 pub struct Random<I>
 where
     I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd,
 {
     picker: rand::distributions::WeightedIndex<I>,
+}
+
+impl<I> std::fmt::Debug for Random<I>
+where
+    I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Random").finish()
+    }
 }
 
 impl<I> Random<I>

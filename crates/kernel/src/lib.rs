@@ -2,8 +2,14 @@
 //!
 //! This crate provides the core functionality of spacegate.
 
-#![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo)]
-#![warn(clippy::missing_errors_doc, clippy::indexing_slicing)]
+#![deny(clippy::unwrap_used, clippy::dbg_macro, clippy::unimplemented, clippy::todo, clippy::missing_safety_doc)]
+#![warn(
+    clippy::missing_errors_doc,
+    clippy::indexing_slicing,
+    clippy::inline_always,
+    clippy::fn_params_excessive_bools,
+    missing_debug_implementations
+)]
 /// https services, ws services, and static file services.
 pub mod backend_service;
 /// a boxed body

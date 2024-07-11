@@ -1,8 +1,5 @@
 use k8s_gateway_api::{HttpRouteFilter, LocalObjectReference};
-use kube::{
-    api::{DeleteParams, PostParams},
-    Api, ResourceExt,
-};
+use kube::{api::PostParams, Api, ResourceExt};
 use spacegate_model::{constants::SG_FILTER_KIND, ext::k8s::crd::sg_filter::SgFilter};
 
 use crate::{

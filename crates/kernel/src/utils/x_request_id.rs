@@ -35,6 +35,7 @@ pub async fn x_request_id<A: XRequestIdAlgo>(mut request: Request<SgBody>, inner
 /// - 42: timestamp
 /// - 10: machine id
 /// - 12: increment id
+#[derive(Debug, Default, Clone)]
 pub struct Snowflake;
 
 impl XRequestIdAlgo for Snowflake {

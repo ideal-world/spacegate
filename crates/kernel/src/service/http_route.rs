@@ -94,7 +94,7 @@ impl HttpRouteRule {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HttpRouteRuleService {
     pub service: ArcHyperService,
 }
@@ -151,7 +151,7 @@ pub enum Backend {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HttpBackendService {
     pub backend: Arc<Backend>,
 }

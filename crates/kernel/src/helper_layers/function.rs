@@ -17,11 +17,12 @@ impl<T> FnLayerMethod for Arc<T>
 where
     T: FnLayerMethod + std::marker::Sync,
 {
+    #[inline]
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
         self.as_ref().call(req, inner).await
     }
 }
-
+#[derive(Debug)]
 pub struct Handler<H, T, Fut> {
     handler: H,
     marker: std::marker::PhantomData<fn(T) -> Fut>,
@@ -54,6 +55,7 @@ where
     H: handler::HandlerFn<T, Fut> + Send + Clone + 'static,
     Fut: Future<Output = Response<SgBody>> + Send + 'static,
 {
+    #[inline]
     fn call(&self, req: Request<SgBody>, inner: Inner) -> impl Future<Output = Response<SgBody>> + Send {
         (self.handler).apply(req, inner)
     }
@@ -104,6 +106,7 @@ where
     F: Fn(Request<SgBody>, Inner) -> Fut + Send + Sync + Clone + 'static,
     Fut: Future<Output = Response<SgBody>> + Send + 'static,
 {
+    #[inline]
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Response<SgBody> {
         (self.f)(req, inner).await
     }
@@ -201,6 +204,7 @@ where
 
     type Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>;
 
+    #[inline]
     fn call(&self, req: Request<SgBody>) -> Self::Future {
         let next = Inner { inner: self.inner.clone() };
         let method = self.m.clone();
@@ -209,20 +213,25 @@ where
 }
 
 /// A shared hyper service wrapper
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Inner {
     inner: ArcHyperService,
 }
 
 impl Inner {
+    #[inline]
     pub fn new(inner: ArcHyperService) -> Self {
         Inner { inner }
     }
+
     /// Call the inner service and get the response
+    #[inline]
     pub async fn call(self, req: Request<SgBody>) -> Response<SgBody> {
         // just infallible
         unsafe { self.inner.call(req).await.unwrap_unchecked() }
     }
+
+    #[inline]
     /// Unwrap the inner service
     pub fn into_inner(self) -> ArcHyperService {
         self.inner

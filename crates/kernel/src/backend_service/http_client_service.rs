@@ -77,6 +77,7 @@ pub fn get_client() -> HttpClient {
     ClientRepo::global().get_default()
 }
 
+#[derive(Debug)]
 pub struct ClientRepo {
     default: HttpClient,
     repo: Mutex<HashMap<String, HttpClient>>,
@@ -121,7 +122,7 @@ impl ClientRepo {
         GLOBAL.get_mut().expect("global not set").set_default(client);
     }
 }
-
+#[derive(Debug)]
 pub struct SgHttpClientConfig {
     pub tls_config: rustls::ClientConfig,
 }
