@@ -23,6 +23,12 @@ impl Plugin for SetSchemePlugin {
         let (mut parts, body) = req.into_parts();
         let mut p = parts.uri.into_parts();
         p.scheme = Some(self.scheme.clone());
+        if p.authority.is_none() {
+            p.authority = Some(hyper::http::uri::Authority::from_static(""));
+        }
+        if p.path_and_query.is_none() {
+            p.path_and_query = Some(hyper::http::uri::PathAndQuery::from_static("/"));
+        }
         let uri = hyper::Uri::from_parts(p)?;
         parts.uri = uri;
         let req = Request::from_parts(parts, body);
