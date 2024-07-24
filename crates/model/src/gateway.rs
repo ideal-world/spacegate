@@ -147,7 +147,7 @@ pub struct SgTlsConfig {
     pub mode: SgTlsMode,
     pub key: String,
     pub cert: String,
-    pub http2: bool,
+    pub http2: Option<bool>,
 }
 
 #[derive(Debug, Serialize, PartialEq, Deserialize, Clone, Default, Eq, Copy)]
