@@ -65,7 +65,7 @@ pub use spacegate_model::{plugin_meta, PluginAttributes, PluginConfig, PluginIns
 /// ```
 pub trait Plugin: Any + Sized + Send + Sync {
     /// Plugin code, it should be unique repository-wise.
-    /// 
+    ///
     /// It's **recommended** to use a **kebab-case** string, witch would make k8s happy.
     const CODE: &'static str;
     /// is this plugin mono instance
