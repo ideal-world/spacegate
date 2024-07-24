@@ -38,8 +38,10 @@ impl SgGatewayConv for SgGateway {
                         tls: match l.protocol {
                             crate::SgProtocolConfig::Http => None,
                             crate::SgProtocolConfig::Https { tls } => {
+                                let key = tls.key.trim().as_bytes();
+                                let cert = tls.key.trim().as_bytes();
                                 let mut hasher = std::hash::DefaultHasher::new();
-                                hasher.write(tls.key.as_bytes());
+                                hasher.write(key);
                                 let name = format!("{:016x}", hasher.finish());
                                 secret = Some(Secret {
                                     metadata: ObjectMeta {
@@ -49,8 +51,8 @@ impl SgGatewayConv for SgGateway {
                                     },
                                     type_: Some("kubernetes.io/tls".to_string()),
                                     data: Some(BTreeMap::from([
-                                        ("tls.key".to_string(), ByteString(tls.key.into_bytes())),
-                                        ("tls.crt".to_string(), ByteString(tls.cert.into_bytes())),
+                                        ("tls.key".to_string(), ByteString(key.to_vec())),
+                                        ("tls.crt".to_string(), ByteString(cert.to_vec())),
                                     ])),
                                     ..Default::default()
                                 });
@@ -62,7 +64,7 @@ impl SgGatewayConv for SgGateway {
                                         namespace: Some(namespace.to_string()),
                                         ..Default::default()
                                     }]),
-                                    options: Some(BTreeMap::from([(K8s::HTTP2_KEY.to_string(), tls.http2.to_string())])),
+                                    options: Some(BTreeMap::from([(K8s::HTTP2_KEY.to_string(), tls.http2.unwrap_or_default().to_string())])),
                                 })
                             }
                             _ => None,

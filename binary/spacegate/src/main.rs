@@ -44,6 +44,10 @@ fn main() -> Result<(), BoxError> {
             args::Config::K8s(ns) => spacegate_shell::startup_k8s(Some(ns.as_ref())).await,
             #[cfg(feature = "redis")]
             args::Config::Redis(url) => spacegate_shell::startup_redis(url).await,
+            args::Config::Static(s) => {
+                let config = spacegate_shell::plugin::serde_json::from_reader(std::fs::File::open(s)?)?;
+                spacegate_shell::startup_static(config).await
+            }
         }
     })
 }

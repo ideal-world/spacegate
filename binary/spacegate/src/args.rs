@@ -10,6 +10,7 @@ pub enum Config {
     K8s(String),
     #[cfg(feature = "redis")]
     Redis(String),
+    Static(PathBuf),
 }
 
 impl FromStr for Config {
@@ -47,6 +48,7 @@ impl FromStr for Config {
                         Err(format!("config backend kind {} not enabled, please select a correct build", kind))
                     }
                 }
+                "static" => Ok(Config::Static(PathBuf::from(resource))),
                 _ => Err(format!("unknown config backend kind: {}", kind)),
             }
         } else {
@@ -64,6 +66,7 @@ impl std::fmt::Display for Config {
             Config::K8s(ns) => write!(f, "k8s:{}", ns),
             #[cfg(feature = "redis")]
             Config::Redis(url) => write!(f, "redis:{}", url),
+            Config::Static(path) => write!(f, "static:{}", path.to_string_lossy()),
         }
     }
 }
