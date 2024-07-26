@@ -107,6 +107,14 @@ where
         Box::pin(async move {
             let mut resp = service.call(req).await.expect("infallible");
             with_length_or_chunked(&mut resp);
+            let status = resp.status();
+            if status.is_server_error() {
+                tracing::warn!(status = ?status, headers = ?resp.headers(), "server error response");
+            } else if status.is_client_error() {
+                tracing::debug!(status = ?status, headers = ?resp.headers(), "client error response");
+            } else if status.is_success() {
+                tracing::trace!(status = ?status, headers = ?resp.headers(), "success response");
+            }
             tracing::trace!(latency = ?enter_time.elapsed(), "request finished");
             Ok(resp)
         })
