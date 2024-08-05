@@ -12,6 +12,8 @@ pub use backend_host::*;
 mod enter_time;
 pub use enter_time::*;
 mod request_id;
+pub use defer::*;
+mod defer;
 /// FromBackend is a marker type to indicate that the response is from backend.
 #[derive(Debug, Clone, Copy)]
 pub struct FromBackend {

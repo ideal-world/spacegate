@@ -5,7 +5,7 @@ use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 use crate::{
     backend_service::{get_http_backend_service, http_backend_service, static_file_service::static_file_service, ArcHyperService},
-    extension::{BackendHost, Reflect},
+    extension::{BackendHost, Defer, Reflect},
     helper_layers::balancer::{self, Balancer},
     utils::{fold_box_layers::fold_layers, schema_port::port_to_schema},
     BoxLayer, SgBody,
@@ -220,6 +220,11 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
             }
         };
         let backend = self.backend.clone();
+        let req = if let Some(defer) = req.extensions().get::<Defer>().cloned() {
+            defer.apply(req)
+        } else {
+            req
+        };
         tracing::trace!(elapsed = ?req.extensions().get::<crate::extension::EnterTime>().map(crate::extension::EnterTime::elapsed), "enter backend {backend:?}");
         Box::pin(async move {
             unsafe {
