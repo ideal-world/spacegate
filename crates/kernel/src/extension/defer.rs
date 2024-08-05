@@ -8,7 +8,7 @@ use crate::SgRequest;
 /// It's a hole, don't abuse it pls.
 #[derive(Clone, Default)]
 pub struct Defer {
-    mappers: Arc<Mutex<Vec<Box<dyn Fn(SgRequest) -> SgRequest + Send >>>>,
+    mappers: Arc<Mutex<Vec<Box<dyn Fn(SgRequest) -> SgRequest + Send>>>>,
 }
 
 impl Debug for Defer {
@@ -18,7 +18,7 @@ impl Debug for Defer {
 }
 
 impl Defer {
-    pub fn push_back(&self, f: impl Fn(SgRequest) -> SgRequest+ Send  + 'static) {
+    pub fn push_back(&self, f: impl Fn(SgRequest) -> SgRequest + Send + 'static) {
         let mut g = self.mappers.lock().expect("never poisoned");
         g.push(Box::new(f))
     }
