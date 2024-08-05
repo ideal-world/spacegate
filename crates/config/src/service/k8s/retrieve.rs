@@ -280,7 +280,7 @@ impl K8s {
                                                             mode: tls_config.mode.clone().into(),
                                                             key: String::from_utf8(tls_key.0.clone()).expect("[SG.Config] Gateway tls secret [tls.key] is not valid utf8"),
                                                             cert: String::from_utf8(tls_crt.0.clone()).expect("[SG.Config] Gateway tls secret [tls.cert] is not valid utf8"),
-                                                            http2: Self::retrieve_http2_config(tls_config),
+                                                            http2: Some(Self::retrieve_http2_config(tls_config)),
                                                         })
                                                     } else {
                                                         tracing::warn!("[SG.Config] Gateway [spec.listener.protocol=https] tls.key is empty");
