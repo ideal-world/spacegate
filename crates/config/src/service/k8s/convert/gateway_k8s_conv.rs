@@ -39,7 +39,7 @@ impl SgGatewayConv for SgGateway {
                             crate::SgProtocolConfig::Http => None,
                             crate::SgProtocolConfig::Https { tls } => {
                                 let key = tls.key.trim().as_bytes();
-                                let cert = tls.key.trim().as_bytes();
+                                let cert = tls.cert.trim().as_bytes();
                                 let mut hasher = std::hash::DefaultHasher::new();
                                 hasher.write(key);
                                 let name = format!("{:016x}", hasher.finish());
