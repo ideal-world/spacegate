@@ -59,7 +59,7 @@ async fn test_hot_update() -> Result<(), BoxError> {
     })?;
     let req = Request::get("/").extension(PeerAddr(mock_addr)).body(SgBody::empty()).unwrap();
     let resp = svc.call(req).await?;
-    
+
     assert_eq!(resp.status(), 307);
     let dumped = resp.into_body().dump().await?;
     let body = dumped.get_dumped().expect("body dumped");
