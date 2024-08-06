@@ -109,7 +109,7 @@ impl Plugin for MaintenancePlugin {
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
         let Some(peer_id) = req.extensions().get::<PeerAddr>() else {
             return Ok(PluginError::status::<Self, { crate::error::code::NOT_IMPLEMENTED }>(
-                "missing peer addr info, it's an implemention error and please contact the maintener.",
+                "missing peer addr info, it's an implementation error and please contact the maintainer.",
             )
             .into());
         };

@@ -138,7 +138,7 @@ where
         let service = HyperServiceAdapter::new(service, peer_addr);
         let conn_result = if let Some(tls_cfg) = tls_cfg {
             let connector = tokio_rustls::TlsAcceptor::from(tls_cfg);
-            let Ok(accepted) = connector.accept(stream).await.inspect_err(|e| tracing::warn!("[Sg.Listen] Tls connect error: {:?}", e)) else {
+            let Ok(accepted) = connector.accept(stream).await.inspect_err(|e| tracing::warn!("[Sg.Listen] Tls connect error: {}", e)) else {
                 return;
             };
             let io = TokioIo::new(accepted);
