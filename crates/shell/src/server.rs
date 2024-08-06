@@ -283,12 +283,14 @@ impl RunningSgGateway {
                                 .expect("fail to build tls config")
                                 .with_no_client_auth();
                             let mut tls_server_cfg = if let Some(ref host_name) = listener.hostname {
+                                info!("Using SNI resolver");
                                 let mut resolver = rustls::server::ResolvesServerCertUsingSni::new();
                                 let signed_key = provider.key_provider.load_private_key(key)?;
                                 let ck = rustls::sign::CertifiedKey::new(certs, signed_key);
                                 resolver.add(host_name, ck)?;
                                 builder.with_cert_resolver(Arc::new(resolver))
                             } else {
+                                info!("Using single cert");
                                 builder.with_single_cert(certs, key)?
                             };
                             tls_server_cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
