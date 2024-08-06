@@ -90,10 +90,11 @@ impl Update for K8s {
         if let Some(filter) = filter {
             let filter_api: Api<SgFilter> = self.get_namespace_api();
             if let Some(old_filter) = filter_api.get_opt(&filter.name).await? {
+                let name = &old_filter.name_any();
                 let mut update_filter: SgFilter = filter.into();
                 update_filter.metadata.resource_version = old_filter.resource_version();
-
-                filter_api.replace(&old_filter.name_any(), &PostParams::default(), &update_filter).await?;
+                update_filter.spec.target_refs = old_filter.spec.target_refs;
+                filter_api.replace(name, &PostParams::default(), &update_filter).await?;
             } else {
                 return Err(format!("raw filter {id:?} not found").into());
             };
