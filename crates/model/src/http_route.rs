@@ -148,6 +148,10 @@ impl<P> SgBackendRef<P> {
             plugins: self.plugins.into_iter().map(f).collect(),
         }
     }
+
+    pub fn get_host(&self) -> String {
+        self.host.to_string()
+    }
 }
 
 impl<P> Default for SgBackendRef<P> {
@@ -203,11 +207,5 @@ impl Display for BackendHost {
 impl Default for BackendHost {
     fn default() -> Self {
         Self::Host { host: String::default() }
-    }
-}
-
-impl<P> SgBackendRef<P> {
-    pub fn get_host(&self) -> String {
-        self.host.to_string()
     }
 }
