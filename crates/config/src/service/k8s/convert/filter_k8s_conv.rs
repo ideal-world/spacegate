@@ -41,11 +41,6 @@ pub(crate) trait PluginIdConv {
             name: PluginInstanceName::Named { name },
         }
     }
-
-    // TODO remove
-    // mix of [SgRouteFilter::to_singe_filter] and [SgRouteFilter::to_http_route_filter]
-    // PluginInstanceId can be converted into `SgRouteFilter` or `HttpRouteFilter`
-    // async fn to_route_filter_or_add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> Option<HttpRouteFilter>;
 }
 
 impl PluginIdConv for PluginInstanceId {
@@ -66,86 +61,6 @@ impl PluginIdConv for PluginInstanceId {
             PluginInstanceName::Mono => None,
         }
     }
-    // TODO remove
-    // fn from_http_route_filter(route_filter: HttpRouteFilter) -> BoxResult<PluginConfig> {
-    //     let process_header_modifier = |header_modifier: HttpRequestHeaderFilter, modifier_kind: SgFilterHeaderModifierKind| -> BoxResult<PluginConfig> {
-    //         let mut sg_sets = HashMap::new();
-    //         if let Some(adds) = header_modifier.add {
-    //             for add in adds {
-    //                 sg_sets.insert(add.name, add.value);
-    //             }
-    //         }
-    //         if let Some(sets) = header_modifier.set {
-    //             for set in sets {
-    //                 sg_sets.insert(set.name, set.value);
-    //             }
-    //         }
-
-    //         Ok(PluginConfig {
-    //             id: PluginInstanceId {
-    //                 code: SG_FILTER_HEADER_MODIFIER_CODE.into(),
-    //                 name: PluginInstanceName::Mono {},
-    //             },
-    //             spec: serde_json::to_value(SgFilterHeaderModifier {
-    //                 kind: modifier_kind,
-    //                 sets: if sg_sets.is_empty() { None } else { Some(sg_sets) },
-    //                 remove: header_modifier.remove,
-    //             })?,
-    //         })
-    //     };
-    //     let sg_filter = match route_filter {
-    //         k8s_gateway_api::HttpRouteFilter::RequestHeaderModifier { request_header_modifier } => {
-    //             process_header_modifier(request_header_modifier, SgFilterHeaderModifierKind::Request)?
-    //         }
-    //         k8s_gateway_api::HttpRouteFilter::ResponseHeaderModifier { response_header_modifier } => {
-    //             process_header_modifier(response_header_modifier, SgFilterHeaderModifierKind::Response)?
-    //         }
-    //         k8s_gateway_api::HttpRouteFilter::RequestRedirect { request_redirect } => PluginConfig {
-    //             id: PluginInstanceId {
-    //                 code: SG_FILTER_REDIRECT_CODE.into(),
-    //                 name: PluginInstanceName::Mono {},
-    //             },
-    //             spec: serde_json::to_value(SgFilterRedirect {
-    //                 scheme: request_redirect.scheme,
-    //                 hostname: request_redirect.hostname,
-    //                 path: request_redirect.path.map(|path| match path {
-    //                     k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
-    //                         kind: SgHttpPathModifierType::ReplaceFullPath,
-    //                         value: replace_full_path,
-    //                     },
-    //                     k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
-    //                         kind: SgHttpPathModifierType::ReplacePrefixMatch,
-    //                         value: replace_prefix_match,
-    //                     },
-    //                 }),
-    //                 port: request_redirect.port,
-    //                 status_code: request_redirect.status_code,
-    //             })?,
-    //         },
-    //         k8s_gateway_api::HttpRouteFilter::URLRewrite { url_rewrite } => PluginConfig {
-    //             id: PluginInstanceId {
-    //                 code: SG_FILTER_REWRITE_CODE.into(),
-    //                 name: PluginInstanceName::Mono {},
-    //             },
-    //             spec: serde_json::to_value(SgFilterRewrite {
-    //                 hostname: url_rewrite.hostname,
-    //                 path: url_rewrite.path.map(|path| match path {
-    //                     k8s_gateway_api::HttpPathModifier::ReplaceFullPath { replace_full_path } => SgHttpPathModifier {
-    //                         kind: SgHttpPathModifierType::ReplaceFullPath,
-    //                         value: replace_full_path,
-    //                     },
-    //                     k8s_gateway_api::HttpPathModifier::ReplacePrefixMatch { replace_prefix_match } => SgHttpPathModifier {
-    //                         kind: SgHttpPathModifierType::ReplacePrefixMatch,
-    //                         value: replace_prefix_match,
-    //                     },
-    //                 }),
-    //             })?,
-    //         },
-    //         k8s_gateway_api::HttpRouteFilter::RequestMirror { .. } => return Err("[SG.Common] HttpRoute [spec.rules.filters.type=RequestMirror] not supported yet".into()),
-    //         k8s_gateway_api::HttpRouteFilter::ExtensionRef { .. } => return Err("[SG.Common] HttpRoute [spec.rules.filters.type=ExtensionRef] not supported yet".into()),
-    //     };
-    //     Ok(sg_filter)
-    // }
 
     async fn add_filter_target(&self, target: K8sSgFilterSpecTargetRef, client: &K8s) -> BoxResult<()> {
         let filter_api: Api<SgFilter> = client.get_namespace_api();
