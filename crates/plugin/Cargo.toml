@@ -56,7 +56,6 @@ tracing = { workspace = true }
 hyper = { workspace = true }
 http-body-util = { workspace = true }
 tower-layer = { workspace = true }
-rustls = { workspace = true }
 pin-project-lite = { workspace = true }
 hyper-util = { workspace = true, optional = true }
 # serde

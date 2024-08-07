@@ -63,7 +63,6 @@ tracing = { version = "0" }
 chrono = { version = "0.4" }
 
 # Http
-rustls = { version = "0.21.0" }
 hyper = { version = "1", features = ["full"] }
 http-body-util = { version = "0" }
 hyper-util = { version = "0" }
@@ -89,9 +88,9 @@ testcontainers-modules = { version = "0.3" }
 bytes = { version = "1" }
 
 # Tls
-hyper-rustls = { version = "0.26" }
+hyper-rustls = { version = "0.27", features = ["ring"] }
 rustls-pemfile = "2"
-tokio-rustls = { version = "0.25" }
+tokio-rustls = { version = "0.26" }
 
 # regex
 regex = { version = "1" }

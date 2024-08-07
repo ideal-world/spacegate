@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
@@ -15,7 +15,6 @@ use spacegate_kernel::{
     ArcHyperService, BoxError,
 };
 use spacegate_plugin::{mount::MountPointIndex, PluginRepository};
-use std::sync::Arc;
 use std::time::Duration;
 use std::vec::Vec;
 use tokio::time::timeout;
@@ -294,6 +293,8 @@ impl RunningSgGateway {
                                 builder.with_single_cert(certs, key)?
                             };
                             tls_server_cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
+                            tls_server_cfg.ignore_client_order = true;
+                            tls_server_cfg.enable_secret_extraction = true;
                             tls_cfg.replace(tls_server_cfg);
                         } else {
                             error!("[SG.Server] Can not found a valid Tls private key");
