@@ -79,12 +79,7 @@ impl PluginIdConv for PluginInstanceId {
             if filter.spec.target_refs.iter().any(|t| t.eq(&target)) {
                 filter.spec.target_refs.retain(|t| !t.eq(&target));
 
-                if filter.spec.target_refs.is_empty() {
-                    // bug: we shouldn't delete plugin here
-                    // filter_api.delete(&filter.name_any(), &DeleteParams::default()).await?;
-                } else {
-                    filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
-                }
+                filter_api.replace(&filter.name_any(), &PostParams::default(), &filter).await?;
             };
         }
         Ok(())
