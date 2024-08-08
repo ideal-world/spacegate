@@ -276,14 +276,12 @@ impl RunningSgGateway {
                         });
                         if let Some(key) = key {
                             info!("[SG.Server] using cert key {key:?}");
-                            let provider: Arc<_> = rustls::crypto::ring::default_provider().into();
-                            let builder = rustls::ServerConfig::builder_with_provider(provider.clone())
-                                .with_safe_default_protocol_versions()
-                                .expect("fail to build tls config")
-                                .with_no_client_auth();
+                            let _ = rustls::crypto::ring::default_provider().install_default();
+                            let builder = rustls::ServerConfig::builder().with_no_client_auth();
                             let mut tls_server_cfg = if let Some(ref host_name) = listener.hostname {
                                 info!("Using SNI resolver");
                                 let mut resolver = rustls::server::ResolvesServerCertUsingSni::new();
+                                let provider = rustls::crypto::CryptoProvider::get_default().expect("should installed");
                                 let signed_key = provider.key_provider.load_private_key(key)?;
                                 let ck = rustls::sign::CertifiedKey::new(certs, signed_key);
                                 resolver.add(host_name, ck)?;
