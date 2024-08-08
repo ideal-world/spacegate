@@ -88,7 +88,7 @@ testcontainers-modules = { version = "0.3" }
 bytes = { version = "1" }
 
 # Tls
-hyper-rustls = { version = "0.27", features = ["ring"] }
+hyper-rustls = { version = "0.27", no-default-features = true, features = ["ring", "http2", "http1", "tls12", "native-tokio"] }
 rustls-pemfile = "2"
 tokio-rustls = { version = "0.26" }
 
