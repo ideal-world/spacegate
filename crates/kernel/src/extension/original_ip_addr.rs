@@ -11,6 +11,12 @@ use crate::Extract;
 /// If peer addr is not settled, it will panic when there's no original ip information from headers.
 pub struct OriginalIpAddr(IpAddr);
 
+impl OriginalIpAddr {
+    pub fn into_inner(self) -> IpAddr {
+        self.0
+    }
+}
+
 impl std::ops::Deref for OriginalIpAddr {
     type Target = IpAddr;
 
