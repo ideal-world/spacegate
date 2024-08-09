@@ -4,10 +4,10 @@ use crate::Extract;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 /// Extract original ip address from request
-/// 
+///
 /// # Panics
 /// ⚠ **WARNING** ⚠
-/// 
+///
 /// If peer addr is not settled, it will panic when there's no original ip information from headers.
 pub struct OriginalIpAddr(IpAddr);
 
