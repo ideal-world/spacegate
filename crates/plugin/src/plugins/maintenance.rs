@@ -1,10 +1,10 @@
 use hyper::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 use hyper::{Request, Response, StatusCode};
 use ipnet::IpNet;
-use spacegate_kernel::extension::PeerAddr;
+use spacegate_kernel::extension::OriginalIpAddr;
 use spacegate_kernel::helper_layers::function::Inner;
-use spacegate_kernel::BoxError;
 use spacegate_kernel::SgBody;
+use spacegate_kernel::{BoxError, SgRequestExt};
 use std::net::IpAddr;
 use std::ops::Range;
 
@@ -107,14 +107,9 @@ impl Plugin for MaintenancePlugin {
         Ok(plugin)
     }
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
-        let Some(peer_id) = req.extensions().get::<PeerAddr>() else {
-            return Ok(PluginError::status::<Self, { crate::error::code::NOT_IMPLEMENTED }>(
-                "missing peer addr info, it's an implementation error and please contact the maintainer.",
-            )
-            .into());
-        };
+        let original_ip = req.extract::<OriginalIpAddr>();
 
-        if self.check_by_now() && !self.check_ip(&peer_id.0.ip()) {
+        if self.check_by_now() && !self.check_ip(&original_ip) {
             // let content_types = req.headers().get(CONTENT_TYPE).map(|content_type| content_type.to_str().unwrap_or("").split(','));
             let accept_types = req.headers().get(ACCEPT).map(|accept| accept.to_str().unwrap_or("").split(','));
 
