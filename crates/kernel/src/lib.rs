@@ -55,6 +55,9 @@ pub trait SgRequestExt {
     #[cfg(feature = "ext-redis")]
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
     fn extract<M: Extract>(&self) -> M;
+    fn defer_call<F>(&mut self, f: F)
+    where
+        F: FnOnce(SgRequest) -> SgRequest + Send + 'static;
 }
 
 impl SgRequestExt for SgRequest {
@@ -90,6 +93,14 @@ impl SgRequestExt for SgRequest {
     /// Extract a value from the request.
     fn extract<M: Extract>(&self) -> M {
         M::extract(self)
+    }
+
+    fn defer_call<F>(&mut self, f: F)
+    where
+        F: FnOnce(SgRequest) -> SgRequest + Send + 'static,
+    {
+        let defer = self.extensions_mut().get_or_insert_default::<extension::Defer>();
+        defer.push_back(f);
     }
 }
 

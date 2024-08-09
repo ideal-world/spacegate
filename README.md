@@ -67,7 +67,7 @@ Just and put the `.so` file under the plugin folder and configure it.
 You can use `spacegate-kernel` or `spacegate-shell`. The The former one is relatively low-level, while the latter integrates plugins and configuration systems.
 ### Use `spacegate-shell`
 ```toml
-spacegate-shell = { git="https://github.com/ideal-world/spacegate", branch="dev" }
+spacegate-shell = { git="https://github.com/ideal-world/spacegate" }
 ```
 Start up by a config change listener
 ```rust
@@ -89,7 +89,7 @@ spacegate_shell::startup_redis("redis://my-redis").await;
 
 ### Use `spacegate-kernel`
 ```toml
-spacegate-kernel = { git="https://github.com/ideal-world/spacegate", branch="dev" }
+spacegate-kernel = { git="https://github.com/ideal-world/spacegate" }
 ```
 Create a listener and a gateway service
 ```rust
