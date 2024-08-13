@@ -8,6 +8,7 @@ use std::{
     str::FromStr,
 };
 
+use base64::Engine;
 use clap::Parser;
 use serde_json::Value;
 use spacegate_config::BoxError;
@@ -47,7 +48,7 @@ impl FromStr for Base64Decoded {
     type Err = BoxError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        base64::decode(s).map_err(Into::into).map(Base64Decoded)
+        base64::engine::general_purpose::STANDARD.decode(s).map_err(Into::into).map(Base64Decoded)
     }
 }
 
