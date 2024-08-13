@@ -44,6 +44,7 @@ async fn gateway() {
         .build();
     let cert = include_bytes!("test_https/.cert");
     let key = include_bytes!("test_https/.key");
+    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
     let tls_config = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(
