@@ -66,6 +66,7 @@ impl ServerCertVerifier for NoCertificateVerification {
 
 fn get_rustls_config_dangerous() -> rustls::ClientConfig {
     let store = rustls::RootCertStore::empty();
+    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
     let mut config = rustls::ClientConfig::builder().with_root_certificates(store).with_no_client_auth();
     // completely disable cert-verification
     let mut dangerous_config = rustls::ClientConfig::dangerous(&mut config);
