@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     task::ready,
 };
@@ -13,7 +13,10 @@ use kube::{
 };
 use spacegate_model::{
     constants,
-    ext::k8s::crd::{http_spaceroute::HttpSpaceroute, sg_filter::SgFilter},
+    ext::k8s::crd::{
+        http_spaceroute::HttpSpaceroute,
+        sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
+    },
     BoxResult, Config, PluginInstanceId,
 };
 
@@ -223,7 +226,8 @@ impl CreateListener for K8s {
         //watch sgfilter
         tokio::task::spawn(async move {
             let mut uid_version_map = HashMap::new();
-            let target_digest_map: HashMap<String, u64> = HashMap::new();
+            let mut target_digest_map: HashMap<String, u64> = HashMap::new();
+            let mut target_ref_map: HashMap<String, Vec<K8sSgFilterSpecTargetRef>> = HashMap::new();
             let ew = watcher::watcher(sg_filter_api, watcher::Config::default()).touched_objects();
             pin_mut!(ew);
             while let Some(filter) = ew.try_next().await.unwrap_or_default() {
@@ -254,15 +258,27 @@ impl CreateListener for K8s {
                     Some(d) if *d == digest => continue,
                     _ => {
                         if filter.spec.target_refs.is_empty() {
-                            continue;
+                            if target_ref_map.get(&name_any).is_none() {
+                                continue;
+                            }
                         }
+                        target_digest_map.insert(name_any.clone(), digest);
                     }
                 }
 
-                for target_ref in filter.spec.target_refs {
+                let update_set: HashSet<_> = filter.spec.target_refs.iter().collect();
+                let old_set: HashSet<_> = target_ref_map.get(&name_any).map(|old| old.into_iter().collect()).unwrap_or_default();
+
+                let add_vec: Vec<_> = update_set.difference(&old_set).collect();
+                let mut delete_vec: Vec<_> = old_set.difference(&update_set).collect();
+
+                let mut updated_vec = add_vec;
+                updated_vec.append(&mut delete_vec);
+
+                for target_ref in updated_vec {
                     match target_ref.kind.as_str() {
                         "Gateway" => {
-                            move_evt_tx.send((ConfigType::Gateway { name: target_ref.name }, ConfigEventType::Update)).expect("send event error");
+                            move_evt_tx.send((ConfigType::Gateway { name: target_ref.name.clone() }, ConfigEventType::Update)).expect("send event error");
                         }
                         "HTTPRoute" | "HTTPSpaceroute" => {
                             let target_route: Option<HttpSpaceroute> = if let Ok(Some(http_route)) = http_spaceroute_api.get_opt(&target_ref.name).await {
@@ -277,7 +293,7 @@ impl CreateListener for K8s {
                                     .send((
                                         ConfigType::Route {
                                             gateway_name: target_route.get_gateway_name(&move_namespace),
-                                            name: target_ref.name,
+                                            name: target_ref.name.clone(),
                                         },
                                         ConfigEventType::Update,
                                     ))
@@ -286,6 +302,11 @@ impl CreateListener for K8s {
                         }
                         _ => {}
                     }
+                }
+                if filter.spec.target_refs.is_empty() {
+                    target_ref_map.remove(&name_any);
+                } else {
+                    target_ref_map.insert(name_any, filter.spec.target_refs);
                 }
             }
         });
