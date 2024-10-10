@@ -16,6 +16,8 @@ pub use defer::*;
 mod defer;
 pub use original_ip_addr::*;
 mod original_ip_addr;
+pub use is_east_west_traffic::*;
+mod is_east_west_traffic;
 /// FromBackend is a marker type to indicate that the response is from backend.
 #[derive(Debug, Clone, Copy)]
 pub struct FromBackend {
