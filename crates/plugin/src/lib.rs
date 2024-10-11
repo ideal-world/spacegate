@@ -240,6 +240,7 @@ impl PluginRepository {
             self.register::<ext::redis::plugins::redis_time_range::RedisTimeRangePlugin>();
             self.register::<ext::redis::plugins::redis_dynamic_route::RedisDynamicRoutePlugin>();
         }
+        self.register::<plugins::east_west_traffic_white_list::EastWestTrafficWhiteListPlugin>();
     }
 
     /// create a new empty repository
