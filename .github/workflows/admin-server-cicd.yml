@@ -5,6 +5,7 @@ on:
     paths:
       - 'binary/admin-server/**'
       - 'crates/config/**'
+      - 'crates/plugin/**'
       - 'Cargo.toml'
       - '.github/workflows/admin-server-cicd.yml'
 
