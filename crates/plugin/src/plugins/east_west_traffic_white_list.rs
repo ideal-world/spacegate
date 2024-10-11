@@ -44,6 +44,12 @@ impl EastWestTrafficWhiteListPlugin {
 impl Plugin for EastWestTrafficWhiteListPlugin {
     const CODE: &'static str = "east-west-traffic-white-list";
 
+    #[cfg(feature = "schema")]
+    fn schema_opt() -> Option<schemars::schema::RootSchema> {
+        use crate::PluginSchemaExt;
+        Some(Self::schema())
+    }
+
     fn create(plugin_config: spacegate_model::PluginConfig) -> Result<Self, spacegate_kernel::BoxError> {
         let plugin_config = serde_json::from_value::<EastWestTrafficWhiteListConfig>(plugin_config.spec)?;
         return Ok(plugin_config.into());
