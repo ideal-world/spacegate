@@ -70,8 +70,8 @@ hyper-util = { version = "0" }
 # ws
 tokio-tungstenite = { version = "0" }
 tower-layer = { version = "0.3" }
-tower-http = { version = "0.5" }
-tower = { version = "0.4" }
+tower-http = { version = "0.6" }
+tower = { version = "0.5" }
 
 # K8s
 kube = { version = "0.85", features = ["runtime", "derive"] }
@@ -108,4 +108,4 @@ ipnet = { version = "2" }
 notify = { version = "6.1.1" }
 
 # web-server
-axum = "0.7.5"
+axum = "0.7.6"

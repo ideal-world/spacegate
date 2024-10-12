@@ -134,6 +134,18 @@ where
         tls_cfg: Option<Arc<rustls::ServerConfig>>,
         service: S,
     ) {
+        // identify protocol
+        let mut protocol_buffer = [0; 8];
+        let Ok(_) = stream.peek(&mut protocol_buffer).await else {
+            return
+        };
+        if protocol_buffer.starts_with(b"SSH-") {
+            // stream is ssh
+        } else if protocol_buffer.starts_with(b"\x16\x03") {
+            // stream is http
+        } else {
+            // otherwise stream is http
+        }
         tracing::debug!("[Sg.Listen] Accepted connection");
         let service = HyperServiceAdapter::new(service, peer_addr);
         let conn_result = if let Some(tls_cfg) = tls_cfg {
