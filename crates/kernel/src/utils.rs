@@ -16,3 +16,5 @@ mod h2_downgrade;
 pub use h2_downgrade::h2_downgrade;
 mod dump;
 pub use dump::dump;
+mod path;
+pub use path::PathIter;
