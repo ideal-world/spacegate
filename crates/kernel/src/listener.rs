@@ -136,9 +136,7 @@ where
     ) {
         // identify protocol
         let mut protocol_buffer = [0; 8];
-        let Ok(_) = stream.peek(&mut protocol_buffer).await else {
-            return
-        };
+        let Ok(_) = stream.peek(&mut protocol_buffer).await else { return };
         if protocol_buffer.starts_with(b"SSH-") {
             // stream is ssh
         } else if protocol_buffer.starts_with(b"\x16\x03") {
