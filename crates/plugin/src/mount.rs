@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::{
     service::{
-        gateway::Gateway,
+        http_gateway::Gateway,
         http_route::{HttpBackend, HttpRoute, HttpRouteRule},
     },
     BoxError,

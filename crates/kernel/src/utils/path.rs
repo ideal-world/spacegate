@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct PathIter<'a> {
     inner: std::str::Split<'a, char>,
 }

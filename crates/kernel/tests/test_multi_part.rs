@@ -7,8 +7,9 @@ use reqwest::{
 use spacegate_kernel::{
     listener::SgListen,
     service::{
-        gateway,
+        http_gateway,
         http_route::{HttpBackend, HttpRoute, HttpRouteRule},
+        Http,
     },
 };
 use tokio::fs::File;
@@ -29,14 +30,15 @@ async fn test_multi_part() {
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::Gateway::builder("test_multi_part")
+    let gateway = http_gateway::Gateway::builder("test_multi_part")
         .http_routers([(
             "test_upload".to_string(),
             HttpRoute::builder().rule(HttpRouteRule::builder().match_all().backend(HttpBackend::builder().host("[::]").port(9003).build()).build()).build(),
         )])
         .build();
     let addr = SocketAddr::from_str("[::]:9002").expect("invalid host");
-    let listener = SgListen::new(addr, gateway.as_service(), cancel);
+    let listener = SgListen::new(addr, cancel).with_service(Http::new(gateway.as_service()));
+
     listener.listen().await.expect("fail to listen");
 }
 

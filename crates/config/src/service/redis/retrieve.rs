@@ -21,12 +21,12 @@ where
     }
 
     async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> BoxResult<Option<crate::model::SgHttpRoute>> {
-        let http_route_config: Option<String> = self.get_con().await?.hget(&format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name), route_name).await?;
+        let http_route_config: Option<String> = self.get_con().await?.hget(format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name), route_name).await?;
         http_route_config.map(|config| self.format.de::<SgHttpRoute>(config.as_bytes()).map_err(|e| format!("[SG.Config] Route Config parse error {}", e).into())).transpose()
     }
 
     async fn retrieve_config_item_route_names(&self, name: &str) -> BoxResult<Vec<String>> {
-        let http_route_configs: HashMap<String, String> = self.get_con().await?.hgetall(&format!("{CONF_HTTP_ROUTE_KEY}{}", name)).await?;
+        let http_route_configs: HashMap<String, String> = self.get_con().await?.hgetall(format!("{CONF_HTTP_ROUTE_KEY}{}", name)).await?;
 
         Ok(http_route_configs.into_keys().collect())
     }
