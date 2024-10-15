@@ -18,7 +18,11 @@ path = "src/lib.rs"
 
 [features]
 cache = ["redis"]
-redis = ["spacegate-kernel/ext-redis", "spacegate-model/ext-redis", "spacegate-ext-redis"]
+redis = [
+  "spacegate-kernel/ext-redis",
+  "spacegate-model/ext-redis",
+  "spacegate-ext-redis",
+]
 axum = ["spacegate-ext-axum", "spacegate-model/ext-axum"]
 dylib = ["libloading"]
 limit = ["cache"]
@@ -32,26 +36,28 @@ set-scheme = []
 maintenance = ["ipnet", "chrono/serde"]
 # decompression = ["tower-http/decompression-full"]
 status = ["hyper-util"]
+east-west-traffic-white-list = ["ipnet"]
 full = [
-    "cache",
-    "limit",
-    "header-modifier",
-    "inject",
-    "redirect",
-    "retry",
-    "rewrite",
-    "maintenance",
-    "set-version",
-    "set-scheme",
-    # "decompression",
-    "status",
+  "cache",
+  "limit",
+  "header-modifier",
+  "inject",
+  "redirect",
+  "retry",
+  "rewrite",
+  "maintenance",
+  "set-version",
+  "set-scheme",
+  # "decompression",
+  "status",
+  "east-west-traffic-white-list",
 ]
 schema = ["schemars", "schemars/chrono"]
 
 [dependencies]
 libloading = { version = "0.8", optional = true }
 spacegate-model = { workspace = true }
-spacegate-kernel = {  workspace = true }
+spacegate-kernel = { workspace = true }
 tracing = { workspace = true }
 hyper = { workspace = true }
 http-body-util = { workspace = true }
@@ -75,20 +81,20 @@ chrono = { workspace = true }
 url = { version = "2", optional = true }
 
 # cache
-spacegate-ext-redis = {  workspace = true, optional = true }
+spacegate-ext-redis = { workspace = true, optional = true }
 spacegate-ext-axum = { workspace = true, optional = true }
 
 # rt
-tokio = { workspace = true, features = ["rt", "fs", "time", "net"]}
+tokio = { workspace = true, features = ["rt", "fs", "time", "net"] }
 arc-swap = "1"
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
 async-compression = { version = "0.4", features = [
-    "tokio",
-    "gzip",
-    "deflate",
-    "brotli",
+  "tokio",
+  "gzip",
+  "deflate",
+  "brotli",
 ] }
 testcontainers = "0.15.0"
 testcontainers-modules = { workspace = true, features = ["redis"] }

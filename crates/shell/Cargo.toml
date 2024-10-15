@@ -49,6 +49,9 @@ plugin-maintenance = ["spacegate-plugin/maintenance"]
 plugin-status = ["spacegate-plugin/status"]
 plugin-dylib = ["spacegate-plugin/dylib"]
 plugin-set-version = ["spacegate-plugin/set-version"]
+plugin-east-west-traffic-white-list = [
+  "spacegate-plugin/east-west-traffic-white-list",
+]
 
 [dependencies]
 spacegate-kernel = { workspace = true, features = ["reload"] }

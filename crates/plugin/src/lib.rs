@@ -240,6 +240,7 @@ impl PluginRepository {
             self.register::<ext::redis::plugins::redis_time_range::RedisTimeRangePlugin>();
             self.register::<ext::redis::plugins::redis_dynamic_route::RedisDynamicRoutePlugin>();
         }
+        #[cfg(feature = "east-west-traffic-white-list")]
         self.register::<plugins::east_west_traffic_white_list::EastWestTrafficWhiteListPlugin>();
     }
 
