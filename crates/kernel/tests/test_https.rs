@@ -3,7 +3,7 @@ use std::{net::SocketAddr, str::FromStr, time::Duration};
 use spacegate_kernel::{
     listener::SgListen,
     service::{
-        gateway,
+        http_gateway,
         http_route::{match_request::HttpPathMatchRewrite, HttpBackend, HttpRoute, HttpRouteRule},
     },
 };
@@ -28,7 +28,7 @@ async fn test_https() {
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::Gateway::builder("test_multi_part")
+    let gateway = http_gateway::Gateway::builder("test_multi_part")
         .http_routers([(
             "test_upload".to_string(),
             HttpRoute::builder()
@@ -52,8 +52,8 @@ async fn gateway() {
             rustls_pemfile::private_key(&mut key.as_slice()).ok().flatten().expect("fail to get key"),
         )
         .expect("fail to build tls config");
-    let http_listener = SgListen::new(SocketAddr::from_str("[::]:9080").expect("invalid host"), gateway.as_service(), cancel.child_token());
-    let https_listener = SgListen::new(SocketAddr::from_str("[::]:9443").expect("invalid host"), gateway.as_service(), cancel.child_token()).with_tls_config(tls_config);
+    let http_listener = SgListen::new(SocketAddr::from_str("[::]:9080").expect("invalid host"), cancel.child_token()).with_service(gateway.as_service().http());
+    let https_listener = SgListen::new(SocketAddr::from_str("[::]:9443").expect("invalid host"), cancel.child_token()).with_service(gateway.as_service().https(tls_config));
     let task = tokio::spawn(async move {
         http_listener.listen().await.expect("fail to listen");
     });

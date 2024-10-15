@@ -64,7 +64,7 @@ crossbeam-utils = "0.8"
 [dev-dependencies]
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
 axum = { workspace = true, features = ["multipart"] }
-axum-server = { version = "0.6", features = ["tls-rustls"] }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
 md5 = { version = "0.7.0" }
 reqwest = { version = "0.12", features = ["multipart", "stream"] }
 tokio-tungstenite = { workspace = true }
