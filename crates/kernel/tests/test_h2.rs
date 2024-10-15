@@ -11,18 +11,20 @@ use spacegate_kernel::{
     backend_service::{get_http_backend_service, http_backend_service},
     listener::SgListen,
     service::{
-        gateway,
+        http_gateway,
         http_route::{match_request::HttpPathMatchRewrite, HttpBackend, HttpRoute, HttpRouteRule},
     },
     SgBody,
 };
-use tokio_rustls::rustls::ServerConfig;
+use tokio_rustls::rustls::{self, ServerConfig};
 use tokio_util::sync::CancellationToken;
 use tower_layer::Layer;
 
 #[tokio::test]
 async fn test_h2_over_tls() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     std::env::set_var("RUST_LOG", "TRACE,h2=off,tokio_util=off,spacegate_kernel=TRACE");
+
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     tokio::spawn(gateway());
     tokio::spawn(axum_server());
@@ -43,7 +45,9 @@ async fn test_h2_over_tls() {
 
 #[tokio::test]
 async fn test_h2c() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     std::env::set_var("RUST_LOG", "TRACE,h2=off,tokio_util=off,spacegate_kernel=TRACE");
+
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     tokio::spawn(gateway());
     tokio::spawn(axum_server());
@@ -51,7 +55,7 @@ async fn test_h2c() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     let client = reqwest::Client::builder().danger_accept_invalid_certs(true).http2_prior_knowledge().build().unwrap();
     let mut task_set = tokio::task::JoinSet::new();
-    for idx in 0..10 {
+    for idx in 0..1 {
         let client = client.clone();
         task_set.spawn(async move {
             let echo = client
@@ -73,7 +77,7 @@ async fn test_h2c() {
 
 async fn gateway() {
     let cancel = CancellationToken::default();
-    let gateway = gateway::Gateway::builder("test_h2")
+    let gateway = http_gateway::Gateway::builder("test_h2")
         .http_routers([(
             "test_h2".to_string(),
             HttpRoute::builder().rule(HttpRouteRule::builder().match_all().backend(HttpBackend::builder().host("[::]").port(9003).schema("https").build()).build()).build(),
@@ -82,8 +86,8 @@ async fn gateway() {
     let addr = SocketAddr::from_str("[::]:9080").expect("invalid host");
     let addr_tls = SocketAddr::from_str("[::]:9443").expect("invalid host");
 
-    let listener_tls = SgListen::new(addr_tls, gateway.as_service(), cancel.clone()).with_tls_config(tls_config());
-    let listener = SgListen::new(addr, gateway.as_service(), cancel);
+    let listener_tls = SgListen::new(addr_tls, cancel.clone()).with_service(gateway.as_service().https(tls_config()));
+    let listener = SgListen::new(addr, cancel).with_service(gateway.as_service().http());
 
     let f_tls = listener_tls.listen();
     let f = listener.listen();

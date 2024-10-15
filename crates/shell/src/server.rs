@@ -11,7 +11,7 @@ use spacegate_config::{BackendHost, Config, ConfigItem};
 use spacegate_kernel::{
     helper_layers::reload::Reloader,
     listener::SgListen,
-    service::gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
+    service::http_gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
     ArcHyperService, BoxError,
 };
 use spacegate_plugin::{mount::MountPointIndex, PluginRepository};
@@ -123,7 +123,7 @@ pub(crate) fn create_service(item: ConfigItem, reloader: Reloader<HttpRouterServ
     let http_routes = item.routes;
     let routes = collect_http_route(gateway_name.clone(), http_routes)?;
     let plugins = item.gateway.plugins.clone();
-    let mut builder = spacegate_kernel::service::gateway::Gateway::builder(gateway_name.clone());
+    let mut builder = spacegate_kernel::service::http_gateway::Gateway::builder(gateway_name.clone());
     if let Some(enable) = item.gateway.parameters.enable_x_request_id {
         builder = builder.x_request_id(enable);
     }
@@ -249,11 +249,11 @@ impl RunningSgGateway {
         }
 
         let gateway_name: Arc<str> = Arc::from(gateway.name.to_string());
-        let mut listens: Vec<SgListen<ArcHyperService>> = Vec::new();
+        let mut listens: Vec<SgListen> = Vec::new();
         for listener in &gateway.listeners {
             let ip = listener.ip.unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
             let addr = SocketAddr::new(ip, listener.port);
-            let mut tls_cfg = None;
+            let mut listen = SgListen::new(addr, cancel_token.child_token());
             if let SgProtocolConfig::Https { ref tls } = listener.protocol {
                 tracing::debug!("[SG.Server] Tls is init...mode:{:?}", tls.mode);
                 if SgTlsMode::Terminate == tls.mode {
@@ -293,17 +293,14 @@ impl RunningSgGateway {
                             tls_server_cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
                             tls_server_cfg.ignore_client_order = true;
                             tls_server_cfg.enable_secret_extraction = true;
-                            tls_cfg.replace(tls_server_cfg);
+                            listen.add_service(service.clone().https(tls_server_cfg))
                         } else {
                             error!("[SG.Server] Can not found a valid Tls private key");
                         }
                     };
                 }
-            }
-            let mut listen = SgListen::new(addr, service.clone(), cancel_token.child_token());
-
-            if let Some(tls_cfg) = tls_cfg {
-                listen = listen.with_tls_config(tls_cfg);
+            } else {
+                listen.add_service(service.clone().http());
             }
             listens.push(listen)
         }
