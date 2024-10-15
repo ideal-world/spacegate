@@ -11,25 +11,28 @@ use crate::{service::TcpService, BoxError, BoxResult};
 pub struct SgListen {
     pub socket_addr: SocketAddr,
     pub services: Vec<Arc<dyn TcpService>>,
-    pub cancel_token: CancellationToken,
     pub listener_id: String,
+    cancel_token: CancellationToken,
 }
 
 impl std::fmt::Debug for SgListen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SgListen").field("socket_addr", &self.socket_addr).field("listener_id", &self.listener_id).finish_non_exhaustive()
+        f.debug_struct("SgListen")
+            .field("socket_addr", &self.socket_addr)
+            .field("listener_id", &self.listener_id)
+            .field("services", &self.services.iter().map(|s| s.protocol_name()).collect::<Vec<_>>())
+            .finish_non_exhaustive()
     }
 }
 
 impl SgListen {
     /// we only have 65535 ports for a console, so it's a safe size
     pub fn new(socket_addr: SocketAddr, cancel_token: CancellationToken) -> Self {
-        let listener_id = format!("{socket_addr}");
         Self {
             socket_addr,
             services: Vec::new(),
             cancel_token,
-            listener_id,
+            listener_id: Default::default(),
         }
     }
 
@@ -50,10 +53,23 @@ impl SgListen {
     pub fn extend_services(&mut self, services: Vec<Arc<dyn TcpService>>) {
         self.services.extend(services);
     }
+
+    pub fn with_listener_id(mut self, listener_id: impl Into<String>) -> Self {
+        self.listener_id = listener_id.into();
+        self
+    }
 }
 
 impl SgListen {
-    #[instrument()]
+    /// Spawn the listener on the tokio runtime.
+    ///
+    /// It's a shortcut for `tokio::spawn(listener.listen())`.
+    pub fn spawn(self) -> tokio::task::JoinHandle<Result<(), BoxError>> {
+        tokio::spawn(self.listen())
+    }
+
+    /// Listen on the socket address.
+    #[instrument(skip(self), fields(bind=%self.socket_addr))]
     pub async fn listen(self) -> Result<(), BoxError> {
         tracing::debug!("start binding...");
         let listener = tokio::net::TcpListener::bind(self.socket_addr).await?;

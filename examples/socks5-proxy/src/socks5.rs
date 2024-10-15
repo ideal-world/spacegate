@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use futures_util::future::BoxFuture;
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
@@ -6,7 +7,14 @@ use tokio::{
 };
 
 use spacegate_kernel::service::TcpService;
+use tracing::instrument;
 pub struct Socks5 {}
+
+impl Socks5 {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Socks5Method(u8);
 
@@ -50,9 +58,8 @@ const REP_CONNECTION_REFUSED: u8 = 0x05;
 const REP_TTL_EXPIRED: u8 = 0x06;
 const REP_COMMAND_NOT_SUPPORTED: u8 = 0x07;
 const REP_ADDRESS_TYPE_NOT_SUPPORTED: u8 = 0x08;
-
+#[derive(Debug)]
 pub struct Socks5Stream<S> {
-    bind: std::net::SocketAddr,
     stream: TcpStream,
     state: S,
 }
@@ -65,6 +72,7 @@ pub struct WantRequest {}
 pub struct Finished {}
 
 impl Socks5Stream<WantHandshake> {
+    #[instrument(skip(self))]
     pub async fn handshake(mut self) -> io::Result<Socks5Stream<WantRequest>> {
         let mut buf = [0u8; 2];
         self.stream.read_exact(&mut buf).await?;
@@ -72,16 +80,17 @@ impl Socks5Stream<WantHandshake> {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid SOCKS version"));
         }
         let methods_count = buf[1] as usize;
+        tracing::debug!(methods_count);
         let mut methods = vec![0u8; methods_count];
         self.stream.read_exact(&mut methods).await?;
+        tracing::debug!(?methods);
         if !methods.contains(&Socks5Method::NO_AUTH.into_inner()) {
             self.stream.write_all(&[SOCKS5_VERSION, Socks5Method::NO_ACCEPTABLE_METHODS.into_inner()]).await?;
             return Err(io::Error::new(io::ErrorKind::PermissionDenied, "No acceptable methods"));
         }
         self.stream.write_all(&[SOCKS5_VERSION, Socks5Method::NO_AUTH.into_inner()]).await?;
-
+        tracing::debug!("Handshake done");
         Ok(Socks5Stream {
-            bind: self.bind,
             stream: self.stream,
             state: WantRequest {},
         })
@@ -89,7 +98,7 @@ impl Socks5Stream<WantHandshake> {
 }
 
 impl Socks5Stream<WantRequest> {
-    pub async fn relay(mut self) -> io::Result<Socks5Stream<Finished>> {
+    pub async fn handle_request(mut self) -> io::Result<Socks5Stream<Finished>> {
         let mut buf = [0u8; 4];
         self.stream.read_exact(&mut buf).await?;
         let [ver, cmd, _, atyp] = buf;
@@ -99,7 +108,6 @@ impl Socks5Stream<WantRequest> {
         if cmd != CMD_CONNECT {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Expect CONNECT command"));
         }
-
         let remote = match atyp {
             ATYP_IPV4 => {
                 // IPv4
@@ -129,7 +137,7 @@ impl Socks5Stream<WantRequest> {
         if let Ok(addr) = remote {
             match TcpStream::connect(addr).await {
                 Ok(mut target_stream) => {
-                    match self.bind {
+                    match self.stream.local_addr()? {
                         std::net::SocketAddr::V4(bind_addr) => {
                             self.stream.write_all(&[SOCKS5_VERSION, REP_SUCCEEDED, 0x00, ATYP_IPV4]).await?;
                             self.stream.write_all(&bind_addr.ip().octets()).await?;
@@ -141,9 +149,10 @@ impl Socks5Stream<WantRequest> {
                             self.stream.write_u16(addr.port()).await?;
                         }
                     }
-                    tokio::io::copy_bidirectional(&mut self.stream, &mut target_stream).await?;
+                    tracing::debug!(?addr, "Relay established");
+                    let (upload, download) = tokio::io::copy_bidirectional(&mut self.stream, &mut target_stream).await?;
+                    tracing::debug!(upload, download, "Relay finished");
                     Ok(Socks5Stream {
-                        bind: self.bind,
                         stream: self.stream,
                         state: Finished {},
                     })
@@ -170,16 +179,11 @@ impl TcpService for Socks5 {
     fn sniff_peek_size(&self) -> usize {
         1
     }
-    fn handle(&self, stream: TcpStream, peer: std::net::SocketAddr) -> BoxFuture<'static, spacegate_kernel::BoxResult<()>> {
+    fn handle(&self, stream: TcpStream, _peer: std::net::SocketAddr) -> BoxFuture<'static, spacegate_kernel::BoxResult<()>> {
         Box::pin(async move {
-            let bind = peer;
-            let handshake = Socks5Stream {
-                bind,
-                stream,
-                state: WantHandshake {},
-            };
+            let handshake = Socks5Stream { stream, state: WantHandshake {} };
             let request = handshake.handshake().await?;
-            request.relay().await?;
+            request.handle_request().await?;
             Ok(())
         })
     }
