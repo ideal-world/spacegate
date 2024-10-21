@@ -70,9 +70,9 @@ impl Default for Config {
         Self {
             gateways: Default::default(),
             plugins: Default::default(),
-            #[cfg(feature = "axum")]
+            #[cfg(feature = "ext-axum")]
             api_port: Some(crate::constants::DEFAULT_API_PORT),
-            #[cfg(not(feature = "axum"))]
+            #[cfg(not(feature = "ext-axum"))]
             api_port: None,
         }
     }

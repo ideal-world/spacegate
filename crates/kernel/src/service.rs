@@ -107,8 +107,8 @@ impl TcpService for Https {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct HyperServiceAdapter<S>
+#[derive(Clone, Debug)]
+pub struct HyperServiceAdapter<S>
 where
     S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
@@ -116,6 +116,7 @@ where
     service: S,
     peer: SocketAddr,
 }
+
 impl<S> HyperServiceAdapter<S>
 where
     S: hyper::service::Service<Request<SgBody>, Error = Infallible, Response = Response<SgBody>> + Clone + Send + 'static,
@@ -148,6 +149,7 @@ where
         let service = self.service.clone();
         let mut req = req.map(SgBody::new);
         let mut reflect = Reflect::default();
+        let method = req.method().clone();
         reflect.insert(enter_time);
         req.extensions_mut().insert(reflect);
         req.extensions_mut().insert(PeerAddr(self.peer));
@@ -155,7 +157,9 @@ where
 
         Box::pin(async move {
             let mut resp = service.call(req).await.expect("infallible");
-            with_length_or_chunked(&mut resp);
+            if method != hyper::Method::CONNECT {
+                with_length_or_chunked(&mut resp);
+            }
             let status = resp.status();
             if status.is_server_error() {
                 tracing::warn!(status = ?status, headers = ?resp.headers(), "server error response");
