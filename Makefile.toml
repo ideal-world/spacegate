@@ -1,7 +1,7 @@
 # ref: https://sagiegurari.github.io/cargo-make/
 [env]
 # DOCKER_REPO = "ecfront"
-CARGO_MAKE_PROJECT_VERSION = "0.2.0-alpha.1"
+CARGO_MAKE_PROJECT_VERSION = "0.2.0-alpha.2"
 
 [tasks.format]
 workspace = true
