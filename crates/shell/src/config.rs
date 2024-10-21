@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::net::SocketAddr;
 
 use crate::server::RunningSgGateway;
 use futures_util::{Stream, StreamExt};
@@ -45,7 +44,7 @@ where
         spacegate_plugin::ext::axum::register_plugin_routes().await;
         server.set_cancellation(shutdown_signal.child_token()).await;
         if let Some(port) = init_config.api_port {
-            server.set_bind(SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), port)).await;
+            server.set_bind(std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), port)).await;
         }
         server.start().await?;
         info!("Web server started.");
