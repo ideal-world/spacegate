@@ -1,5 +1,4 @@
 use hyper::{header::HeaderName, Request};
-use serde::{Deserialize, Serialize};
 use spacegate_kernel::{extension::MatchedSgRouter, service::http_route::match_request::HttpPathMatchRewrite, SgBody};
 
 pub mod redis_count;
@@ -24,7 +23,7 @@ fn redis_format_key(req: &Request<SgBody>, matched: &MatchedSgRouter, header: &H
 }
 
 #[cfg(feature = "axum")]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MatchSpecifier {
     /// None for Any
     pub method: Option<String>,
