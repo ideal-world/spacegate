@@ -31,7 +31,7 @@ authors = [
 ]
 description = "A library-first, lightweight, high-performance, cloud-native supported API gateway"
 keywords = ["http", "gateway", "proxy", "websocket", "kubernates"]
-categories = ["gateway", "web-programming", "kubernetes", "api"]
+categories = ["web-programming"]
 homepage = "https://github.com/ideal-world/spacegate"
 documentation = "https://docs.rs/spacegate/"
 repository = "https://github.com/ideal-world/spacegate"
