@@ -17,10 +17,10 @@ pub mod rewrite;
 // #[cfg(feature = "status")]
 // pub mod status;
 
+#[cfg(feature = "east-west-traffic-white-list")]
+pub mod east_west_traffic_white_list;
 #[cfg(feature = "set-scheme")]
 pub mod set_scheme;
 #[cfg(feature = "set-version")]
 pub mod set_version;
 pub mod static_resource;
-#[cfg(feature = "east-west-traffic-white-list")]
-pub mod east_west_traffic_white_list;
