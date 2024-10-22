@@ -1,5 +1,7 @@
 use std::net::IpAddr;
 
+#[cfg(feature = "schema")]
+use crate::schema;
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use spacegate_kernel::{
@@ -7,7 +9,7 @@ use spacegate_kernel::{
     SgRequestExt as _,
 };
 
-use crate::{schema, Plugin};
+use crate::Plugin;
 
 #[cfg(feature = "schema")]
 schema!(EastWestTrafficWhiteListPlugin, EastWestTrafficWhiteListConfig);
@@ -26,7 +28,7 @@ pub struct EastWestTrafficWhiteListPlugin {
 impl From<EastWestTrafficWhiteListConfig> for EastWestTrafficWhiteListPlugin {
     fn from(value: EastWestTrafficWhiteListConfig) -> Self {
         let mut ip_list = vec![];
-        let nets: Vec<IpNet> = value.ip_list.iter().filter_map(|p| p.parse().or(p.parse::<IpAddr>().map(IpNet::from)).map_err(|e| {}).ok()).collect();
+        let nets: Vec<IpNet> = value.ip_list.iter().filter_map(|p| p.parse().or(p.parse::<IpAddr>().map(IpNet::from)).map_err(|_e| {}).ok()).collect();
         for net in IpNet::aggregate(&nets) {
             ip_list.push(net)
         }
@@ -52,7 +54,7 @@ impl Plugin for EastWestTrafficWhiteListPlugin {
 
     fn create(plugin_config: spacegate_model::PluginConfig) -> Result<Self, spacegate_kernel::BoxError> {
         let plugin_config = serde_json::from_value::<EastWestTrafficWhiteListConfig>(plugin_config.spec)?;
-        return Ok(plugin_config.into());
+        Ok(plugin_config.into())
     }
 
     async fn call(
