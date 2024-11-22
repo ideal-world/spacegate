@@ -1,6 +1,6 @@
 use std::{net::IpAddr, str::FromStr};
 
-use crate::Extract;
+use crate::{extractor::OptionalExtract, Extract, SgRequestExt};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 /// Extract original ip address from request
@@ -9,7 +9,7 @@ use crate::Extract;
 /// ⚠ **WARNING** ⚠
 ///
 /// If peer addr is not settled, it will panic when there's no original ip information from headers.
-pub struct OriginalIpAddr(IpAddr);
+pub struct OriginalIpAddr(pub IpAddr);
 
 impl OriginalIpAddr {
     pub fn into_inner(self) -> IpAddr {
@@ -24,9 +24,11 @@ impl std::ops::Deref for OriginalIpAddr {
         &self.0
     }
 }
-
-impl Extract for OriginalIpAddr {
-    fn extract(req: &hyper::Request<crate::SgBody>) -> Self {
+impl OptionalExtract for OriginalIpAddr {
+    fn extract(req: &hyper::Request<crate::SgBody>) -> Option<Self> {
+        if let Some(ip) = req.extensions().get::<OriginalIpAddr>().cloned() {
+            return Some(ip);
+        }
         const X_FORWARDED_FOR: &str = "x-forwarded-for";
         const X_REAL_IP: &str = "x-real-ip";
         fn header_to_ip(header: &hyper::header::HeaderValue) -> Option<IpAddr> {
@@ -39,7 +41,14 @@ impl Extract for OriginalIpAddr {
             .get(X_REAL_IP)
             .and_then(header_to_ip)
             .or_else(|| req.headers().get_all(X_FORWARDED_FOR).iter().next().and_then(header_to_ip))
-            .unwrap_or_else(|| req.extensions().get::<crate::extension::PeerAddr>().expect("peer id should be settled").0.ip());
-        Self(ip)
+            .or_else(|| req.extensions().get::<crate::extension::PeerAddr>().map(|peer| peer.0.ip()))?;
+        Some(Self(ip))
+    }
+}
+impl Extract for OriginalIpAddr {
+    /// # Panics
+    /// if peer addr is not settled, it will panic when there's no original ip information from headers.
+    fn extract(req: &hyper::Request<crate::SgBody>) -> Self {
+        req.extract::<Option<OriginalIpAddr>>().expect("peer addr is not settled")
     }
 }

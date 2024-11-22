@@ -11,6 +11,7 @@ use crate::helper_layers::map_future::MapFuture;
 use crate::utils::x_forwarded_for;
 use crate::BoxError;
 use crate::SgBody;
+use crate::SgRequest;
 use crate::SgResponse;
 use crate::SgResponseExt;
 
@@ -18,14 +19,18 @@ pub mod echo;
 pub mod http_client_service;
 pub mod static_file_service;
 pub mod ws_client_service;
-pub trait SharedHyperService<R>: hyper::service::Service<R> + Send + Sync + 'static {}
+pub trait SharedHyperService:
+    hyper::service::Service<SgRequest, Response = SgResponse, Error = Infallible, Future = BoxFuture<'static, Result<SgResponse, Infallible>>> + Send + Sync + 'static
+{
+}
 
-impl<R, T> SharedHyperService<R> for T where T: hyper::service::Service<R> + Send + Sync + 'static {}
+impl<T> SharedHyperService for T where
+    T: hyper::service::Service<SgRequest, Response = SgResponse, Error = Infallible, Future = BoxFuture<'static, Result<SgResponse, Infallible>>> + Send + Sync + 'static
+{
+}
 /// a service that can be shared between threads
 pub struct ArcHyperService {
-    pub shared: Arc<
-        dyn SharedHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible, Future = BoxFuture<'static, Result<Response<SgBody>, Infallible>>> + Send + Sync,
-    >,
+    pub shared: Arc<dyn SharedHyperService>,
 }
 
 impl std::fmt::Debug for ArcHyperService {
@@ -43,7 +48,7 @@ impl Clone for ArcHyperService {
 impl ArcHyperService {
     pub fn new<T>(service: T) -> Self
     where
-        T: SharedHyperService<Request<SgBody>, Response = Response<SgBody>, Error = Infallible> + Send + Sync + 'static,
+        T: hyper::service::Service<SgRequest, Response = SgResponse, Error = Infallible> + Send + Sync + 'static,
         T::Future: Future<Output = Result<Response<SgBody>, Infallible>> + 'static + Send,
     {
         let map_fut = MapFuture::new(service, |fut| Box::pin(fut) as _);

@@ -15,6 +15,7 @@ use crate::Plugin;
 /// let x = result.map_err(PluginError::internal_error::<MyPlugin>);
 /// ```
 /// 3. Convert it into a response
+///
 /// Just use [`Response<SgBody>::from`].
 #[derive(Debug)]
 pub struct PluginError<E> {

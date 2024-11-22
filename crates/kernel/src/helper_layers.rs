@@ -21,3 +21,6 @@ pub mod timeout;
 
 /// Balancer layer
 pub mod balancer;
+
+/// Inject data into request
+pub mod injector;

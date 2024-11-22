@@ -19,3 +19,5 @@ mod dump;
 pub use dump::dump;
 mod path;
 pub use path::PathIter;
+mod auth;
+pub use auth::{basic::Basic, bearer::Bearer, Authorization};
