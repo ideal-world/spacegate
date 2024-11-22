@@ -59,6 +59,9 @@ lazy_static = { version = "1.4" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = { version = "0" }
 
+# Encode
+base64 = { version = "0.22" }
+
 
 # Time
 chrono = { version = "0.4" }

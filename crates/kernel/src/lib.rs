@@ -18,8 +18,11 @@ pub mod body;
 pub mod extension;
 /// extractors for request
 pub mod extractor;
+
 /// helper layers
 pub mod helper_layers;
+/// injectors for reqeust
+pub mod injector;
 /// tcp listener
 pub mod listener;
 /// gateway service
@@ -32,9 +35,11 @@ pub use body::SgBody;
 use extension::Reflect;
 pub use extractor::Extract;
 use hyper::{body::Bytes, Request, Response, StatusCode};
+use injector::Inject;
 use std::{convert::Infallible, fmt};
 pub use tokio_util::sync::CancellationToken;
 pub use tower_layer::Layer;
+use utils::{PathIter, QueryKvIter};
 
 use tower_layer::layer_fn;
 
@@ -55,9 +60,14 @@ pub trait SgRequestExt {
     #[cfg(feature = "ext-redis")]
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
     fn extract<M: Extract>(&self) -> M;
+    /// # Errors
+    /// If the injection fails.
+    fn inject<I: Inject>(&mut self, i: &I) -> BoxResult<()>;
     fn defer_call<F>(&mut self, f: F)
     where
         F: FnOnce(SgRequest) -> SgRequest + Send + 'static;
+    fn path_iter(&self) -> PathIter;
+    fn query_kv_iter(&self) -> Option<QueryKvIter>;
 }
 
 impl SgRequestExt for SgRequest {
@@ -95,6 +105,10 @@ impl SgRequestExt for SgRequest {
         M::extract(self)
     }
 
+    fn inject<I: Inject>(&mut self, i: &I) -> BoxResult<()> {
+        i.inject(self)
+    }
+
     fn defer_call<F>(&mut self, f: F)
     where
         F: FnOnce(SgRequest) -> SgRequest + Send + 'static,
@@ -102,11 +116,20 @@ impl SgRequestExt for SgRequest {
         let defer = self.extensions_mut().get_or_insert_default::<extension::Defer>();
         defer.push_back(f);
     }
+
+    fn path_iter(&self) -> PathIter {
+        PathIter::new(self.uri().path())
+    }
+
+    fn query_kv_iter(&self) -> Option<QueryKvIter> {
+        self.uri().query().map(QueryKvIter::new)
+    }
 }
 
 /// Provides extension methods for [`Response`](hyper::Response).
 pub trait SgResponseExt {
     fn with_code_message(code: StatusCode, message: impl Into<Bytes>) -> Self;
+    fn with_code_empty(code: StatusCode) -> Self;
     fn bad_gateway<E: std::error::Error>(e: E) -> Self
     where
         Self: Sized,
@@ -121,6 +144,12 @@ pub trait SgResponseExt {
 impl SgResponseExt for Response<SgBody> {
     fn with_code_message(code: StatusCode, message: impl Into<Bytes>) -> Self {
         let body = SgBody::full(message);
+        let mut resp = Response::builder().status(code).body(body).expect("response builder error");
+        resp.extensions_mut().insert(Reflect::new());
+        resp
+    }
+    fn with_code_empty(code: StatusCode) -> Self {
+        let body = SgBody::empty();
         let mut resp = Response::builder().status(code).body(body).expect("response builder error");
         resp.extensions_mut().insert(Reflect::new());
         resp

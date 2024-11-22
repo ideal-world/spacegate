@@ -154,7 +154,6 @@ where
         req.extensions_mut().insert(reflect);
         req.extensions_mut().insert(PeerAddr(self.peer));
         req.extensions_mut().insert(enter_time);
-
         Box::pin(async move {
             let mut resp = service.call(req).await.expect("infallible");
             if method != hyper::Method::CONNECT {

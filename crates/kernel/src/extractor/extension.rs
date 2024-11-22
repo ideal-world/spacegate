@@ -1,20 +1,6 @@
 use hyper::Request;
 
-use crate::{Extract, SgBody};
-
-/// Just extract and attach the extension to the request
-#[derive(Debug, Clone)]
-pub struct Extension<E>(E);
-
-impl<E> Extension<E> {
-    pub fn new(e: E) -> Self {
-        Self(e)
-    }
-
-    pub fn into_inner(self) -> E {
-        self.0
-    }
-}
+use crate::{extension::Extension, Extract, SgBody};
 
 impl<E> Extract for Option<Extension<E>>
 where
@@ -31,9 +17,9 @@ where
 {
     fn extract(req: &Request<SgBody>) -> Self {
         if let Some(ext) = req.extensions().get::<Extension<E>>() {
-            Self(Some(ext.0.clone()))
+            Self::new(Some(ext.inner().clone()))
         } else {
-            Self(None)
+            Self::new(None)
         }
     }
 }

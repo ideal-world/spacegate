@@ -20,7 +20,7 @@ path = "src/lib.rs"
 [features]
 reload = []
 ext-redis = ["spacegate-ext-redis"]
-
+ipnet = ["dep:ipnet"]
 [dependencies]
 # http
 hyper = { workspace = true }
@@ -60,7 +60,10 @@ regex = { workspace = true }
 spacegate-ext-redis = {  workspace = true, optional = true }
 crossbeam-utils = "0.8"
 
+# codec
+base64 = { workspace = true }
 
+ipnet  = { workspace = true, optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
 axum = { workspace = true, features = ["multipart"] }

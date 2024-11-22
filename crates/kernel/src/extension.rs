@@ -18,6 +18,23 @@ pub use original_ip_addr::*;
 mod original_ip_addr;
 pub use is_east_west_traffic::*;
 mod is_east_west_traffic;
+pub mod user_group;
+/// Just extract and attach the extension to the request
+#[derive(Debug, Clone)]
+pub struct Extension<E>(E);
+
+impl<E> Extension<E> {
+    pub const fn new(e: E) -> Self {
+        Self(e)
+    }
+
+    pub fn into_inner(self) -> E {
+        self.0
+    }
+    pub const fn inner(&self) -> &E {
+        &self.0
+    }
+}
 /// FromBackend is a marker type to indicate that the response is from backend.
 #[derive(Debug, Clone, Copy)]
 pub struct FromBackend {
