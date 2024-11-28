@@ -69,10 +69,11 @@ metadata:
   name: spacegate
   namespace: spacegate
 ---
-kind: ClusterRole
+kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: spacegate
+  namespace: spacegate
 rules:
   - apiGroups:
       - ""
@@ -126,16 +127,17 @@ rules:
       - list
       - watch
 ---
-kind: ClusterRoleBinding
+kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: spacegate
+  namespace: spacegate
 subjects:
   - kind: ServiceAccount
     name: spacegate
     namespace: spacegate
 roleRef:
-  kind: ClusterRole
+  kind: Role
   name: spacegate
   apiGroup: rbac.authorization.k8s.io
 ---
