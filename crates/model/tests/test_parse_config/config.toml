@@ -1,0 +1,39 @@
+[gateways]
+[gateways.default]
+[gateways.default.gateway]
+name = "default"
+parameters = { redis_url = "redis://test", enable_x_request_id = true }
+[[gateways.default.gateway.listeners]]
+name = "https"
+port = 443
+ip = "0.0.0.0"
+hostname = "spacegate.dev"
+[gateways.default.gateway.listeners.protocol]
+type = "https"
+[gateways.default.gateway.listeners.protocol.tls]
+key = """
+test key
+"""
+cert = """
+test cert
+"""
+mode = "Terminate"
+
+[gateways.default.routes]
+[gateways.default.routes.route-a]
+route_name = "route-a"
+priority = 200
+plugins = [{ code = "test", kind = "named", name = "plugin-a" }]
+[[gateways.default.routes.route-a.rules]]
+matches = [{ path = { kind = "Prefix", value = "/route-a" } }]
+[[gateways.default.routes.route-a.rules.backends]]
+host = { kind = "Host", host = "backend-a" }
+port = 8080
+
+
+[plugins]
+[plugins.test-n-plugin-a]
+code = "test"
+kind = "named"
+name = "plugin-a"
+spec = { key = "value" }
