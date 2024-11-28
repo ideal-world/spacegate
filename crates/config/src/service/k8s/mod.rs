@@ -88,7 +88,7 @@ impl K8s {
         gateway_class_api.replace_status(name, &kube::api::PostParams::default(), serde_json::to_vec(&gateway_class)?).await?;
         Ok(())
     }
-    
+
     #[allow(unused, reason = "gateway permission")]
     pub(crate) async fn reject_gateway_class(&self, name: &str) -> BoxResult<()> {
         let condition = Condition {
