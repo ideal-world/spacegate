@@ -101,7 +101,7 @@ rules:
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
-      - gatewayclasses
+      # - gatewayclasses
       - gateways
       - httproutes
     verbs:
@@ -113,7 +113,7 @@ rules:
     resources:
       - httproutes/status
       - gateways/status
-      - gatewayclasses/status
+      # - gatewayclasses/status
     verbs:
       - get
       - update
