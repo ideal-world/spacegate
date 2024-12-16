@@ -257,17 +257,15 @@ impl CreateListener for K8s {
                 match target_digest_map.get(&name_any) {
                     Some(d) if *d == digest => continue,
                     _ => {
-                        if filter.spec.target_refs.is_empty() {
-                            if target_ref_map.get(&name_any).is_none() {
-                                continue;
-                            }
+                        if filter.spec.target_refs.is_empty() && !target_ref_map.contains_key(&name_any) {
+                            continue;
                         }
                         target_digest_map.insert(name_any.clone(), digest);
                     }
                 }
 
                 let update_set: HashSet<_> = filter.spec.target_refs.iter().collect();
-                let old_set: HashSet<_> = target_ref_map.get(&name_any).map(|old| old.into_iter().collect()).unwrap_or_default();
+                let old_set: HashSet<_> = target_ref_map.get(&name_any).map(|old| old.iter().collect()).unwrap_or_default();
 
                 let add_vec: Vec<_> = update_set.difference(&old_set).collect();
                 let mut delete_vec: Vec<_> = old_set.difference(&update_set).collect();
