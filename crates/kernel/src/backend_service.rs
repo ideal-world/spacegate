@@ -45,6 +45,7 @@ impl Clone for ArcHyperService {
     }
 }
 
+
 impl ArcHyperService {
     pub fn new<T>(service: T) -> Self
     where
@@ -53,6 +54,9 @@ impl ArcHyperService {
     {
         let map_fut = MapFuture::new(service, |fut| Box::pin(fut) as _);
         Self { shared: Arc::new(map_fut) }
+    }
+    pub fn from_shared(shared: impl Into<Arc<dyn SharedHyperService>>) -> Self {
+        Self { shared: shared.into() }
     }
 }
 

@@ -145,9 +145,18 @@ impl HttpClient {
             inner: Client::builder(TokioExecutor::new()).build(HttpsConnectorBuilder::new().with_tls_config(tls_config).https_or_http().enable_http1().enable_http2().build()),
         }
     }
+    pub fn new_h1_only(tls_config: rustls::ClientConfig) -> Self {
+        HttpClient {
+            inner: Client::builder(TokioExecutor::new()).build(HttpsConnectorBuilder::new().with_tls_config(tls_config).https_or_http().enable_http1().build()),
+        }
+    }
     pub fn new_dangerous() -> Self {
         let config = get_rustls_config_dangerous();
         Self::new(config)
+    }
+    pub fn new_dangerous_h1_only() -> Self {
+        let config = get_rustls_config_dangerous();
+        Self::new_h1_only(config)
     }
     pub async fn request(&mut self, mut req: Request<SgBody>) -> Response<SgBody> {
         let reflect = req.extensions_mut().remove::<Reflect>();
