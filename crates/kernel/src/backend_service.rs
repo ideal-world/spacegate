@@ -45,7 +45,6 @@ impl Clone for ArcHyperService {
     }
 }
 
-
 impl ArcHyperService {
     pub fn new<T>(service: T) -> Self
     where
