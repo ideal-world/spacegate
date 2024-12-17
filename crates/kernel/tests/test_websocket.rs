@@ -21,7 +21,7 @@ async fn test_ws() {
     let (mut ws_sender, mut ws_receiver) = stream.split();
     for idx in 0..10 {
         let text_msg = idx.to_string();
-        ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(text_msg.clone())).await.expect("fail to send");
+        ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(text_msg.clone().into())).await.expect("fail to send");
         let msg = ws_receiver.next().await.unwrap().unwrap();
         assert_eq!(text_msg, msg.to_text().expect("fail to get text"));
     }

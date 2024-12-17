@@ -189,7 +189,12 @@ There are a lot of API gateway products out there, but they are mostly in the fo
 
 This project is based on the ``Rust`` language and uses ``hyper`` as the base network library. The goal is to: **provide a library-first, lightweight, high-performance, cloud-native supported API gateway** .
 
+# Examples
 
+- [MITM Proxy](./examples/mitm-proxy/): Modify the proxied request.
+- [Socks5 Proxy](./examples/socks5-proxy/): Handle other tcp protocol like socks5.
+- [SayHello Plugin](./examples/sayhello/): A plugin add a hello header to request, in dynamic lib style.
+- [Simple Gateway](./examples/local-simple/): A simple gateway based on spacegate-shell.
 
 # 📦 Components
 
