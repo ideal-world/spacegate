@@ -108,7 +108,7 @@ pub trait Plugin: Any + Sized + Send + Sync {
 /// Firstly, a [`PluginInstance`] will be created when the plugin is loading.
 ///
 /// Then, a [`BoxLayer`] will be created when the plugin is being mounted to a certain mount point.
-/// 
+///
 /// [`PluginDefinitionObject`] -> [`PluginDefinitionObject::make_instance`] -> [`PluginInstance`]
 /// -> [`PluginInstance::make`] -> [`BoxLayer`]
 ///
