@@ -8,11 +8,15 @@ use spacegate_kernel::{
     SgBody,
 };
 
+/// It's a three-layer pointer.
+/// The first layer is an Arc, which makes it reuseable;
+/// The second layer is an ArcSwap, which makes it mutable;
+/// And the third layer is a Box, which allocates the function on the heap.
 #[derive(Clone)]
 pub struct PluginFunction {
     f: Arc<ArcSwap<InnerBoxPf>>,
 }
-
+/// A pointer to a heap allocated Plugin Function
 pub(crate) type InnerBoxPf = Box<dyn Fn(Request<SgBody>, Inner) -> BoxFuture<'static, Response<SgBody>> + Send + Sync + 'static>;
 impl PluginFunction {
     pub fn new(f: InnerBoxPf) -> Self {

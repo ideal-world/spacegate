@@ -14,8 +14,11 @@ use spacegate_model::PluginConfig;
 use crate::mount::{MountPoint, MountPointIndex};
 
 pub struct PluginInstance {
+    /// Raw config
     pub config: PluginConfig,
+    /// The mount points of this plugin instance, just for display and debug
     pub mount_points: HashMap<MountPointIndex, DropTracer>,
+    /// The hooks of this plugin instance
     pub hooks: PluginInstanceHooks,
     pub plugin_function: crate::layer::PluginFunction,
 }
