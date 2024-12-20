@@ -256,6 +256,7 @@ impl FromIterator<(PluginInstanceId, Value)> for PluginInstanceMap {
     }
 }
 
+/// Plugin meta information
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct PluginMetaData {

@@ -104,12 +104,25 @@ pub trait Plugin: Any + Sized + Send + Sync {
 }
 
 /// Plugin Trait Object
+///
+/// Firstly, a [`PluginInstance`] will be created when the plugin is loading.
+///
+/// Then, a [`BoxLayer`] will be created when the plugin is being mounted to a certain mount point.
+/// 
+/// [`PluginDefinitionObject`] -> [`PluginDefinitionObject::make_instance`] -> [`PluginInstance`]
+/// -> [`PluginInstance::make`] -> [`BoxLayer`]
+///
 pub struct PluginDefinitionObject {
+    /// should this plugin be a singleton?
     pub mono: bool,
+    /// Plugin code
     pub code: Cow<'static, str>,
+    /// Plugin meta data, which is just for display and debug information
     pub meta: PluginMetaData,
+    /// Plugin config json schema
     #[cfg(feature = "schema")]
     pub schema: Option<schemars::schema::RootSchema>,
+    /// Plugin Function maker
     pub make_pf: Box<MakePfMethod>,
 }
 
@@ -142,6 +155,7 @@ impl PluginDefinitionObject {
             meta: self.meta.clone(),
         }
     }
+    /// Make a plugin trait object from [`Plugin`] Trait
     pub fn from_trait<P: Plugin>() -> Self {
         let constructor = move |config: PluginConfig| {
             let plugin = Arc::new(P::create(config)?);
@@ -176,6 +190,16 @@ impl PluginDefinitionObject {
     pub(crate) fn make_pf(&self, config: PluginConfig) -> Result<InnerBoxPf, BoxError> {
         (self.make_pf)(config)
     }
+    pub(crate) fn make_instance(&self, config: PluginConfig) -> Result<PluginInstance, BoxError> {
+        let pf = PluginFunction::new(self.make_pf(config.clone())?);
+        let instance = PluginInstance {
+            config,
+            plugin_function: pf,
+            mount_points: Default::default(),
+            hooks: Default::default(),
+        };
+        Ok(instance)
+    }
 }
 
 #[cfg(feature = "schema")]
@@ -183,6 +207,7 @@ pub trait PluginSchemaExt {
     fn schema() -> schemars::schema::RootSchema;
 }
 
+/// Plugin function maker, which received a [`PluginConfig`] and return a [`InnerBoxPf`]
 pub type MakePfMethod = dyn Fn(PluginConfig) -> Result<InnerBoxPf, BoxError> + Send + Sync + 'static;
 
 /// # Plugin Repository
@@ -284,13 +309,7 @@ impl PluginRepository {
             let new_inner_pf = attr.make_pf(config)?;
             instance.plugin_function.swap(new_inner_pf);
         } else {
-            let pf = PluginFunction::new(attr.make_pf(config.clone())?);
-            let instance = PluginInstance {
-                config,
-                plugin_function: pf,
-                mount_points: Default::default(),
-                hooks: Default::default(),
-            };
+            let instance = attr.make_instance(config)?;
             instance.after_create()?;
             instances.insert(id, instance);
         }
@@ -339,6 +358,7 @@ impl PluginRepository {
         map.values().map(PluginDefinitionObject::attr).collect()
     }
 
+    /// Get a snapshot for repository plugins
     pub fn repo_snapshot(&self) -> HashMap<String, PluginRepoSnapshot> {
         let plugins = self.plugins.read().expect("SgPluginRepository register error");
         plugins
@@ -357,7 +377,6 @@ impl PluginRepository {
                 )
             })
             .collect()
-        // self.instances.map
     }
 }
 
