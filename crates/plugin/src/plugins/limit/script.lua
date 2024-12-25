@@ -5,9 +5,14 @@ end
 if current_count > tonumber(ARGV[1]) then
     local last_refresh_time = tonumber(redis.call('get', KEYS[2]));
     if last_refresh_time + tonumber(ARGV[2]) > tonumber(ARGV[3]) then
-        return 0;
+        if current_count == tonumber(ARGV[1]) + 1 then
+            return 1;
+        else 
+            return 0;
+        end
     end
     redis.call('set', KEYS[1], '1')
     redis.call('set', KEYS[2], ARGV[3]);
 end
-return 1;
+
+return 2;

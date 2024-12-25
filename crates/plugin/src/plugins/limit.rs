@@ -1,4 +1,5 @@
 use std::{
+    net::IpAddr,
     sync::{Arc, OnceLock},
     time::SystemTime,
 };
@@ -6,21 +7,51 @@ use std::{
 use hyper::{Request, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 
-use spacegate_kernel::{helper_layers::function::Inner, BoxError, SgBody, SgRequestExt, SgResponseExt};
+use serde_json::Value;
+use spacegate_kernel::{extension::OriginalIpAddr, helper_layers::function::Inner, BoxError, SgBody, SgRequestExt, SgResponseExt};
 
 use crate::Plugin;
 use spacegate_ext_redis::redis::Script;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct RateLimitPlugin {
+pub struct RateLimitPluginConfig {
+    /// Maximum number of requests, default is 100
     pub max_request_number: Option<u64>,
+    /// Time window in milliseconds, default is 1000ms
     pub time_window_ms: Option<u64>,
-    pub id: String,
+
+    pub report_ext: Value,
 }
 
+#[derive(Debug, Clone)]
+pub struct RateLimitPlugin {
+    pub max_request_number: u64,
+    pub time_window_ms: u64,
+    pub report_ext: Arc<Value>,
+    pub id: Arc<str>,
+}
+
+impl RateLimitPlugin {
+    pub fn report(&self, rising_edge: bool, original_ip_addr: IpAddr) -> RateLimitReport {
+        RateLimitReport {
+            rising_edge,
+            original_ip_addr,
+            plugin: self.clone(),
+        }
+    }
+}
+
+const DEFAULT_TIME_WINDOW_MS: u64 = 1000;
+const DEFAULT_MAX_REQUEST_NUMBER: u64 = 100;
 const CONF_LIMIT_KEY: &str = "sg:plugin:filter:limit:";
 
+#[derive(Debug, Clone)]
+pub struct RateLimitReport {
+    pub rising_edge: bool,
+    pub original_ip_addr: IpAddr,
+    pub plugin: RateLimitPlugin,
+}
 /// Flow limit script
 ///
 /// # Arguments
@@ -68,19 +99,6 @@ pub fn script() -> &'static Script {
 
 impl RateLimitPlugin {}
 
-#[derive(Debug, Clone)]
-pub struct RateLimitFilter {
-    pub config: Arc<RateLimitPlugin>,
-}
-
-// impl AsyncFilter for RateLimitFilter {
-//     type Future = Pin<Box<dyn Future<Output = Result<Request<SgBody>, Response<SgBody>>> + Send + 'static>>;
-//     fn filter(&self, req: Request<SgBody>) -> Self::Future {
-//         let config = self.config.clone();
-//         Box::pin(async move { config.req_filter(req).await })
-//     }
-// }
-
 impl Plugin for RateLimitPlugin {
     const CODE: &'static str = "limit";
     fn meta() -> spacegate_model::PluginMetaData {
@@ -90,30 +108,41 @@ impl Plugin for RateLimitPlugin {
     }
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
         let id = &self.id;
-        if let Some(max_request_number) = &self.max_request_number {
-            let mut conn = req.get_redis_client_by_gateway_name().ok_or("missing gateway name")?.get_conn().await;
-            let result: &bool = &script()
-                // counter key
-                .key(format!("{CONF_LIMIT_KEY}{id}"))
-                // last counter reset timestamp key
-                .key(format!("{CONF_LIMIT_KEY}{id}_ts"))
-                // maximum number of request
-                .arg(max_request_number)
-                // time window
-                .arg(self.time_window_ms.unwrap_or(1000))
-                // current timestamp
-                .arg(SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("invalid system time: before unix epoch").as_millis() as u64)
-                .invoke_async(&mut conn)
-                .await?;
+        let ip = req.extract::<OriginalIpAddr>().to_canonical();
+        let mut conn = req.get_redis_client_by_gateway_name().ok_or("missing gateway name")?.get_conn().await;
 
-            if !result {
-                return Ok(Response::<SgBody>::with_code_message(StatusCode::TOO_MANY_REQUESTS, "[SG.Filter.Limit] too many requests"));
-            }
+        const EXCEEDED: i32 = 0;
+        const RISING_EDGE: i32 = 1;
+        let result: i32 = script()
+            // counter key
+            .key(format!("{CONF_LIMIT_KEY}{id}:{ip}"))
+            // last counter reset timestamp key
+            .key(format!("{CONF_LIMIT_KEY}{id}:{ip}_ts"))
+            // maximum number of request
+            .arg(self.max_request_number)
+            // time window
+            .arg(self.time_window_ms)
+            // current timestamp
+            .arg(SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("invalid system time: before unix epoch").as_millis() as u64)
+            .invoke_async(&mut conn)
+            .await?;
+
+        if result == EXCEEDED || result == RISING_EDGE {
+            let mut response = Response::<SgBody>::with_code_message(StatusCode::TOO_MANY_REQUESTS, "[SG.Filter.Limit] too many requests");
+            response.extensions_mut().insert(self.report(result == RISING_EDGE, ip));
+            return Ok(response);
         }
         Ok(inner.call(req).await)
     }
     fn create(config: crate::PluginConfig) -> Result<Self, BoxError> {
-        Ok(serde_json::from_value(config.spec)?)
+        let spec = serde_json::from_value::<RateLimitPluginConfig>(config.spec)?;
+        let id = config.id.to_string();
+        Ok(Self {
+            max_request_number: spec.max_request_number.unwrap_or(DEFAULT_MAX_REQUEST_NUMBER),
+            time_window_ms: spec.time_window_ms.unwrap_or(DEFAULT_TIME_WINDOW_MS),
+            report_ext: Arc::new(spec.report_ext),
+            id: Arc::from(id),
+        })
     }
     #[cfg(feature = "schema")]
     fn schema_opt() -> Option<schemars::schema::RootSchema> {
@@ -123,4 +152,4 @@ impl Plugin for RateLimitPlugin {
 }
 
 #[cfg(feature = "schema")]
-crate::schema! { RateLimitPlugin, RateLimitPlugin }
+crate::schema! { RateLimitPlugin, RateLimitPluginConfig }
