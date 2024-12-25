@@ -1,3 +1,5 @@
+// a read only stream reader with some side effect.
+pub mod observer;
 use crate::BoxError;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::{Body, Bytes};

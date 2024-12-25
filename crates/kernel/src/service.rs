@@ -156,7 +156,7 @@ where
         req.extensions_mut().insert(enter_time);
         Box::pin(async move {
             let mut resp = service.call(req).await.expect("infallible");
-            if method != hyper::Method::CONNECT {
+            if method != hyper::Method::HEAD && method != hyper::Method::OPTIONS && method != hyper::Method::CONNECT {
                 with_length_or_chunked(&mut resp);
             }
             let status = resp.status();
