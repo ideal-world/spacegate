@@ -1,5 +1,4 @@
 mod reflect;
-use hyper::http::Extensions;
 pub use reflect::*;
 mod gateway_name;
 pub use gateway_name::*;
@@ -17,11 +16,13 @@ mod defer;
 pub use original_ip_addr::*;
 mod original_ip_addr;
 pub use is_east_west_traffic::*;
+
+use crate::{extractor::OptionalExtract, injector::Inject};
 mod is_east_west_traffic;
 pub mod user_group;
 /// Just extract and attach the extension to the request
 #[derive(Debug, Clone)]
-pub struct Extension<E>(E);
+pub struct Extension<E>(pub E);
 
 impl<E> Extension<E> {
     pub const fn new(e: E) -> Self {
@@ -35,6 +36,20 @@ impl<E> Extension<E> {
         &self.0
     }
 }
+
+impl<E: Clone + Send + Sync + 'static> Inject for Extension<E> {
+    fn inject(&self, req: &mut hyper::Request<crate::SgBody>) -> crate::BoxResult<()> {
+        req.extensions_mut().insert(self.0.clone());
+        Ok(())
+    }
+}
+
+impl<E: Clone + Send + Sync + 'static> OptionalExtract for Extension<E> {
+    fn extract(req: &hyper::Request<crate::SgBody>) -> Option<Self> {
+        req.extensions().get::<E>().map(|e| Self(e.clone()))
+    }
+}
+
 /// FromBackend is a marker type to indicate that the response is from backend.
 #[derive(Debug, Clone, Copy)]
 pub struct FromBackend {
@@ -47,35 +62,5 @@ impl FromBackend {
     /// **Ensure** the response is from the **real backend**, do not cheat on users of this type.
     pub const unsafe fn new() -> Self {
         Self { _priv: () }
-    }
-}
-
-pub trait ExtensionPack: Sized {
-    fn insert(self, ext: &mut Extensions) -> Option<Self>
-    where
-        Self: Clone + Send + Sync + 'static,
-    {
-        ext.insert::<Self>(self)
-    }
-
-    fn get(ext: &Extensions) -> Option<&Self>
-    where
-        Self: Send + Sync + 'static,
-    {
-        ext.get::<Self>()
-    }
-
-    fn get_mut(ext: &mut Extensions) -> Option<&mut Self>
-    where
-        Self: Send + Sync + 'static,
-    {
-        ext.get_mut::<Self>()
-    }
-
-    fn remove(ext: &mut Extensions) -> Option<Self>
-    where
-        Self: Send + Sync + 'static,
-    {
-        ext.remove::<Self>()
     }
 }

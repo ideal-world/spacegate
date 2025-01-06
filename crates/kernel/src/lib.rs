@@ -34,6 +34,7 @@ pub use backend_service::ArcHyperService;
 pub use body::SgBody;
 use extension::Reflect;
 pub use extractor::Extract;
+use extractor::OptionalExtract;
 use hyper::{body::Bytes, Request, Response, StatusCode};
 use injector::Inject;
 use std::{convert::Infallible, fmt};
@@ -60,6 +61,7 @@ pub trait SgRequestExt {
     #[cfg(feature = "ext-redis")]
     fn get_redis_client_by_gateway_name(&self) -> Option<spacegate_ext_redis::RedisClient>;
     fn extract<M: Extract>(&self) -> M;
+    fn try_extract<M: OptionalExtract>(&self) -> Option<M>;
     /// # Errors
     /// If the injection fails.
     fn inject<I: Inject>(&mut self, i: &I) -> BoxResult<()>;
@@ -105,10 +107,17 @@ impl SgRequestExt for SgRequest {
         M::extract(self)
     }
 
+    /// Try to extract a value from the request.
+    fn try_extract<M: OptionalExtract>(&self) -> Option<M> {
+        OptionalExtract::extract(self)
+    }
+
+    /// Inject some data into the request.
     fn inject<I: Inject>(&mut self, i: &I) -> BoxResult<()> {
         i.inject(self)
     }
 
+    /// Defer a call to the request. The call will be executed before the request has been sent to the backend.
     fn defer_call<F>(&mut self, f: F)
     where
         F: FnOnce(SgRequest) -> SgRequest + Send + 'static,

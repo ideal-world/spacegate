@@ -24,7 +24,7 @@ impl<S: State> Observer<S> {
         Self { state: Some(state), inner }
     }
     pub fn to_sg_body(self) -> SgBody {
-        SgBody::new_boxed_error(self)
+        SgBody::new(self)
     }
 }
 impl<S> Body for Observer<S>
