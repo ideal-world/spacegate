@@ -144,7 +144,7 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
                 if let Some(indices) = hostname_tree.get_mut(hostname) {
                     indices.push(idx_with_priority)
                 } else {
-                    hostname_tree.set("*", vec![idx_with_priority]);
+                    hostname_tree.set(hostname, vec![idx_with_priority]);
                 }
             }
         }
