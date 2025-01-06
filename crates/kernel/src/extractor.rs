@@ -1,7 +1,6 @@
 use hyper::Request;
 
 use crate::SgBody;
-mod extension;
 use hyper::http;
 /// a marker is some information that can be attached to a request and can be extracted from a request.
 pub trait Extract: Sized + Send + Sync {
@@ -17,6 +16,12 @@ impl Extract for http::uri::Uri {
 impl Extract for http::method::Method {
     fn extract(req: &Request<SgBody>) -> Self {
         req.method().clone()
+    }
+}
+
+impl Extract for http::Version {
+    fn extract(req: &Request<SgBody>) -> Self {
+        req.version()
     }
 }
 

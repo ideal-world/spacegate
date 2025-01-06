@@ -11,7 +11,11 @@ impl<'a> HostAndPort<'a> {
     }
     #[allow(clippy::indexing_slicing)]
     pub fn from_header(host: &'a hyper::http::HeaderValue) -> Self {
-        let bytes = host.as_bytes();
+        Self::from_bytes(host.as_bytes())
+    }
+    #[allow(clippy::indexing_slicing)]
+    pub fn from_bytes(host: &'a [u8]) -> Self {
+        let bytes = host;
         let mut comma_token_pos = None;
 
         for (idx, byte) in bytes.iter().enumerate().rev() {

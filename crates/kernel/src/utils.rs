@@ -21,3 +21,5 @@ mod path;
 pub use path::PathIter;
 mod auth;
 pub use auth::{basic::Basic, bearer::Bearer, Authorization};
+mod str_extract;
+pub use str_extract::{StrExtractorKind, StrExtractorPartsKind};

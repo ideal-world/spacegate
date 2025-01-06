@@ -28,21 +28,23 @@ impl Body for SgBody {
         let mut pinned = std::pin::pin!(&mut self.body);
         pinned.as_mut().poll_frame(cx)
     }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> hyper::body::SizeHint {
+        self.body.size_hint()
+    }
 }
 
 impl SgBody {
     pub fn new<E>(body: impl Body<Data = Bytes, Error = E> + Send + Sync + 'static) -> Self
     where
-        E: std::error::Error + Send + Sync + 'static,
+        E: Into<BoxError> + 'static,
     {
         Self {
-            body: BoxBody::new(body.map_err(BoxError::from)),
-            dump: None,
-        }
-    }
-    pub fn new_boxed_error(body: impl Body<Data = Bytes, Error = BoxError> + Send + Sync + 'static) -> Self {
-        Self {
-            body: BoxBody::new(body),
+            body: BoxBody::new(body.map_err(E::into)),
             dump: None,
         }
     }
