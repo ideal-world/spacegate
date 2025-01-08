@@ -37,7 +37,7 @@ pub use extractor::Extract;
 use extractor::OptionalExtract;
 use hyper::{body::Bytes, Request, Response, StatusCode};
 use injector::Inject;
-use std::{convert::Infallible, fmt};
+use std::{convert::Infallible, fmt, ops::Deref};
 pub use tokio_util::sync::CancellationToken;
 pub use tower_layer::Layer;
 use utils::{PathIter, QueryKvIter};
@@ -148,6 +148,7 @@ pub trait SgResponseExt {
         let message = if let Some(src) = src { format!("{}:\n {}", message, src) } else { message };
         Self::with_code_message(StatusCode::BAD_GATEWAY, message)
     }
+    fn inherit_reflect(&mut self, req: &SgRequest);
 }
 
 impl SgResponseExt for Response<SgBody> {
@@ -162,6 +163,11 @@ impl SgResponseExt for Response<SgBody> {
         let mut resp = Response::builder().status(code).body(body).expect("response builder error");
         resp.extensions_mut().insert(Reflect::new());
         resp
+    }
+    fn inherit_reflect(&mut self, req: &SgRequest) {
+        if let Some(reflect) = req.extensions().get::<Reflect>() {
+            self.extensions_mut().extend(reflect.deref().clone());
+        }
     }
 }
 

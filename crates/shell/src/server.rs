@@ -129,7 +129,7 @@ pub(crate) fn create_service(item: ConfigItem, reloader: Reloader<HttpRouterServ
     }
     let mut layer = builder.http_routers(routes).http_route_reloader(reloader).build();
     global_batch_mount_plugin(plugins, &mut layer, MountPointIndex::Gateway { gateway: gateway_name });
-    let service = ArcHyperService::new(layer.as_service());
+    let service = layer.as_service();
     Ok(service)
 }
 
