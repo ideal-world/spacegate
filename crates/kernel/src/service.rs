@@ -149,16 +149,16 @@ where
         let service = self.service.clone();
         let mut req = req.map(SgBody::new);
         let mut reflect = Reflect::default();
-        let method = req.method().clone();
+        // let method = req.method().clone();
         reflect.insert(enter_time);
         req.extensions_mut().insert(reflect);
         req.extensions_mut().insert(PeerAddr(self.peer));
         req.extensions_mut().insert(enter_time);
         Box::pin(async move {
-            let mut resp = service.call(req).await.expect("infallible");
-            if method != hyper::Method::HEAD && method != hyper::Method::OPTIONS && method != hyper::Method::CONNECT {
-                with_length_or_chunked(&mut resp);
-            }
+            let resp = service.call(req).await.expect("infallible");
+            // if method != hyper::Method::HEAD && method != hyper::Method::OPTIONS && method != hyper::Method::CONNECT {
+            //     with_length_or_chunked(&mut resp);
+            // }
             let status = resp.status();
             if status.is_server_error() {
                 tracing::warn!(status = ?status, headers = ?resp.headers(), "server error response");
