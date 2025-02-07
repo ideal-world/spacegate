@@ -61,6 +61,12 @@ impl GlobalAxumServer {
         wg.bind = socket_addr;
     }
 
+    /// Get the bind address of the server.
+    pub async fn get_bind(&self) -> SocketAddr {
+        let wg = self.0.read().await;
+        wg.bind
+    }
+
     /// Set the cancellation token for the server.
     pub async fn set_cancellation(&self, token: CancellationToken) {
         let mut wg = self.0.write().await;
