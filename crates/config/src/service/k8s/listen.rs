@@ -19,6 +19,7 @@ use spacegate_model::{
     },
     BoxResult, Config, PluginInstanceId,
 };
+use tracing::debug;
 
 use crate::service::{k8s::convert::filter_k8s_conv::PluginIdConv, ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve as _};
 
@@ -254,10 +255,12 @@ impl CreateListener for K8s {
                     filter.spec.target_refs.hash(&mut hasher);
                     hasher.finish()
                 };
+                debug!("filter {} - new digest: {}, old digest: {:?}", name_any, digest, target_digest_map.get(&name_any));
                 match target_digest_map.get(&name_any) {
                     Some(d) if *d == digest => continue,
                     _ => {
                         if filter.spec.target_refs.is_empty() && !target_ref_map.contains_key(&name_any) {
+                            debug!("skip empty target_refs for filter {}", name_any);
                             continue;
                         }
                         target_digest_map.insert(name_any.clone(), digest);
@@ -273,6 +276,7 @@ impl CreateListener for K8s {
                 let mut updated_vec = add_vec;
                 updated_vec.append(&mut delete_vec);
 
+                debug!("target_refs changes - update_set: {:?}, old_set: {:?}, updated_vec: {:?}", update_set, old_set, updated_vec);
                 for target_ref in updated_vec {
                     match target_ref.kind.as_str() {
                         "Gateway" => {
