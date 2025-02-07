@@ -14,10 +14,10 @@ mod unix {
         F: ConfigFormat + Clone + Send + Sync + 'static,
     {
         const CONFIG_LISTENER_NAME: &'static str = "file";
-
-        async fn create_listener(&self) -> Result<(Config, Box<dyn Listen>), Box<dyn std::error::Error + Sync + Send + 'static>> {
+        type Listener = FsListener;
+        async fn create_listener(&self) -> Result<(Config, Self::Listener), Box<dyn std::error::Error + Sync + Send + 'static>> {
             let config = self.retrieve_config().await?;
-            Ok((config, Box::new(FsListener::new(self.clone())?)))
+            Ok((config, FsListener::new(self.clone())?))
         }
     }
 
@@ -35,7 +35,7 @@ mod unix {
     impl Listen for FsListener {
         fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<ListenEvent, BoxError>> {
             if ready!(self.signal.poll_recv(cx)).is_some() {
-                std::task::Poll::Ready(Ok((ConfigType::Global, ConfigEventType::Update)))
+                std::task::Poll::Ready(Ok((ConfigType::Global, ConfigEventType::Update).into()))
             } else {
                 std::task::Poll::Pending
             }

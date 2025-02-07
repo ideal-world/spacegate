@@ -13,10 +13,10 @@ use tracing::info;
 pub(crate) mod matches_convert;
 pub mod plugin_filter_dto;
 
-pub struct ListenerWrapper(Box<dyn Listen>);
+pub struct ListenerWrapper<L: Listen>(L);
 
-impl Stream for ListenerWrapper {
-    type Item = (ConfigType, ConfigEventType);
+impl<L: Listen> Stream for ListenerWrapper<L> {
+    type Item = ListenEvent;
 
     fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
         self.0.poll_next(cx).map_err(|e| tracing::error!("[SG.Config] listening gateway error: {e}")).map(Result::ok)
@@ -30,27 +30,26 @@ where
 {
     let (init_config, listener) = config.create_listener().await?;
     #[cfg(feature = "ext-axum")]
-    {
-        use spacegate_ext_axum::axum;
+    let listener = {
+        use crate::ext_features::axum::{shell_routers, App};
+        use spacegate_ext_axum::axum::Extension;
         info!("Starting web server...");
         let server = spacegate_ext_axum::GlobalAxumServer::default();
-        server
-            .modify_router(|router| {
-                router.route("/health", axum::routing::get(axum::Json(true))).fallback(axum::routing::any(axum::response::Html(axum::body::Bytes::from_static(include_bytes!(
-                    "./config/web-server-index.html"
-                )))))
-            })
-            .await;
+        let (listen_event_tx, listen_event_rx) = tokio::sync::mpsc::channel(64);
+        server.modify_router(move |router| shell_routers(router).layer(Extension(App { listen_event_tx }))).await;
         spacegate_plugin::ext::axum::register_plugin_routes().await;
         server.set_cancellation(shutdown_signal.child_token()).await;
         if let Some(port) = init_config.api_port {
             server.set_bind(std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), port)).await;
         }
+        let server_addr = server.get_bind().await;
         server.start().await?;
-        info!("Web server started.");
-    }
-    RunningSgGateway::global_init(init_config, shutdown_signal.clone()).await;
+
+        info!(%server_addr, "Web server started.");
+        listener.join(listen_event_rx)
+    };
     let mut listener = ListenerWrapper(listener);
+    RunningSgGateway::global_init(init_config, shutdown_signal.clone()).await;
     info!("[SG.Config] Entering listening");
     let mut local_queue = VecDeque::new();
     let gateway_shutdown_signal = shutdown_signal.child_token();
@@ -85,8 +84,8 @@ where
     }
 }
 
-async fn handler<C: Retrieve>(event: (ConfigType, ConfigEventType), config: &C, gateway_shutdown_signal: &CancellationToken) -> Result<(), BoxError> {
-    match event {
+async fn handler<C: Retrieve>(event: ListenEvent, config: &C, gateway_shutdown_signal: &CancellationToken) -> Result<(), BoxError> {
+    match (event.config, event.r#type) {
         (ConfigType::Gateway { name }, ConfigEventType::Create) => {
             if let Some(config) = config.retrieve_config_item(&name).await? {
                 tracing::info!("[SG.Config] gateway {name} created", name = name);

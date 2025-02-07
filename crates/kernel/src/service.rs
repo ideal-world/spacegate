@@ -8,7 +8,6 @@ use tokio_rustls::rustls;
 
 use crate::{
     extension::{EnterTime, PeerAddr, Reflect},
-    utils::with_length_or_chunked,
     ArcHyperService, BoxResult, SgBody,
 };
 

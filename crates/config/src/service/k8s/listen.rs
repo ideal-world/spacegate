@@ -98,8 +98,8 @@ impl K8s {
 
 impl CreateListener for K8s {
     const CONFIG_LISTENER_NAME: &'static str = "k8s";
-
-    async fn create_listener(&self) -> BoxResult<(Config, Box<dyn Listen>)> {
+    type Listener = K8sListener;
+    async fn create_listener(&self) -> BoxResult<(Config, Self::Listener)> {
         let (evt_tx, evt_rx) = tokio::sync::mpsc::unbounded_channel();
 
         // self.reject_gateway_class(constants::GATEWAY_CLASS_NAME).await?;
@@ -311,14 +311,14 @@ impl CreateListener for K8s {
 
         let listener = K8sListener { rx: evt_rx };
 
-        Ok((config, Box::new(listener)))
+        Ok((config, listener))
     }
 }
 
 impl Listen for K8sListener {
     fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<BoxResult<ListenEvent>> {
         if let Some(next) = ready!(self.rx.poll_recv(cx)) {
-            std::task::Poll::Ready(Ok(next))
+            std::task::Poll::Ready(Ok(next.into()))
         } else {
             std::task::Poll::Pending
         }

@@ -52,6 +52,8 @@ pub mod extension;
 /// Spacegate service creation
 pub mod server;
 
+/// Extended features
+pub mod ext_features;
 #[cfg(feature = "ext-axum")]
 pub use spacegate_ext_axum as ext_axum;
 #[cfg(feature = "ext-redis")]
@@ -68,10 +70,22 @@ pub async fn startup_file(conf_dir: impl AsRef<std::path::Path>) -> Result<(), B
 #[cfg(feature = "k8s")]
 /// # Startup the gateway by k8s resource
 /// The `namespace` is the k8s namespace.
-/// If the `namespace` is None, it will use the default namespace.
+/// If the `namespace` is None, it will read from the file `/var/run/secrets/kubernetes.io/serviceaccount/namespace`.
 pub async fn startup_k8s(namespace: Option<&str>) -> Result<(), BoxError> {
     use spacegate_config::service::k8s::K8s;
-    let namespace = namespace.unwrap_or("default");
+    fn k8s_namespace_from_file() -> &'static str {
+        static NAMESPACE: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+        NAMESPACE.get_or_init(|| {
+            let ns = std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+                .expect("failed to read namespace from file, is this program running in a k8s pod?")
+                .trim()
+                .to_string()
+                .leak();
+            ns
+        })
+    }
+
+    let namespace = namespace.unwrap_or_else(|| k8s_namespace_from_file());
     let config = K8s::with_default_client(namespace).await?;
     startup(config).await
 }

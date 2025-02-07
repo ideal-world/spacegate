@@ -14,6 +14,7 @@ pub mod redis;
 use std::{collections::BTreeMap, error::Error, fmt::Display, str::FromStr};
 
 use futures_util::Future;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use spacegate_model::*;
 
@@ -141,6 +142,7 @@ pub trait Retrieve: Sync + Send {
     fn retrieve_plugins_by_code(&self, code: &str) -> impl Future<Output = Result<Vec<PluginConfig>, BoxError>> + Send;
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConfigEventType {
     Create,
     Update,
@@ -169,6 +171,8 @@ impl Display for ConfigEventType {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value")]
 pub enum ConfigType {
     Gateway {
         name: String,
@@ -218,7 +222,8 @@ impl FromStr for ConfigType {
 
 pub trait CreateListener {
     const CONFIG_LISTENER_NAME: &'static str;
-    fn create_listener(&self) -> impl Future<Output = Result<(Config, Box<dyn Listen>), Box<dyn Error + Sync + Send + 'static>>> + Send;
+    type Listener: Listen;
+    fn create_listener(&self) -> impl Future<Output = Result<(Config, Self::Listener), Box<dyn Error + Sync + Send + 'static>>> + Send;
 }
 
 pub trait Discovery {
@@ -227,8 +232,56 @@ pub trait Discovery {
         std::future::ready(Ok(vec![]))
     }
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListenEvent {
+    pub r#type: ConfigEventType,
+    pub config: ConfigType,
+}
 
-pub type ListenEvent = (ConfigType, ConfigEventType);
+impl From<(ConfigType, ConfigEventType)> for ListenEvent {
+    fn from((config, r#type): (ConfigType, ConfigEventType)) -> Self {
+        Self { r#type, config }
+    }
+}
+
 pub trait Listen: Unpin {
     fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<ListenEvent, BoxError>>;
+}
+
+pub trait ListenExt: Listen {
+    fn join<L1>(self, l1: L1) -> Joint<Self, L1>
+    where
+        L1: Listen,
+        Self: Sized,
+    {
+        Joint { l0: self, l1 }
+    }
+}
+
+impl<T: Listen> ListenExt for T {}
+
+pub struct Joint<L0, L1> {
+    l0: L0,
+    l1: L1,
+}
+
+impl<L0, L1> Listen for Joint<L0, L1>
+where
+    L0: Listen,
+    L1: Listen,
+{
+    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<ListenEvent, BoxError>> {
+        // l0 has higher priority
+        let l0 = self.l0.poll_next(cx);
+        if l0.is_ready() {
+            return l0;
+        }
+        self.l1.poll_next(cx)
+    }
+}
+
+impl Listen for tokio::sync::mpsc::Receiver<ListenEvent> {
+    fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<ListenEvent, BoxError>> {
+        self.poll_recv(cx).map(|r| r.ok_or("channel closed".into()))
+    }
 }
