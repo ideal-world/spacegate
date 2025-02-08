@@ -1,17 +1,17 @@
-use rand::distributions::Distribution;
+use rand::distr::Distribution;
 
 use super::BalancePolicy;
 /// A policy that selects an instance randomly.
 pub struct Random<I>
 where
-    I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd,
+    I: rand::distr::uniform::SampleUniform + std::cmp::PartialOrd,
 {
-    picker: rand::distributions::WeightedIndex<I>,
+    picker: rand::distr::weighted::WeightedIndex<I>,
 }
 
 impl<I> std::fmt::Debug for Random<I>
 where
-    I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd,
+    I: rand::distr::uniform::SampleUniform + std::cmp::PartialOrd,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Random").finish()
@@ -20,18 +20,18 @@ where
 
 impl<I> Random<I>
 where
-    I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd + Clone + Default + for<'a> std::ops::AddAssign<&'a I>,
+    I: rand::distr::uniform::SampleUniform + std::cmp::PartialOrd + Clone + Default + for<'a> std::ops::AddAssign<&'a I> + rand::distr::weighted::Weight,
 {
     pub fn new(weights: impl IntoIterator<Item = I>) -> Self {
         Self {
-            picker: rand::distributions::WeightedIndex::new(weights).expect("invalid weights"),
+            picker: rand::distr::weighted::WeightedIndex::new(weights).expect("invalid weights"),
         }
     }
 }
 
 impl<I, S, R> BalancePolicy<S, R> for Random<I>
 where
-    I: rand::distributions::uniform::SampleUniform + std::cmp::PartialOrd,
+    I: rand::distr::uniform::SampleUniform + std::cmp::PartialOrd,
 {
     fn pick<'s>(&self, instances: &'s [S], _req: &R) -> Option<&'s S> {
         if instances.is_empty() {
