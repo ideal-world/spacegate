@@ -199,5 +199,5 @@ fn convert_openssl_key_to_rustls_signing_key(pkey: &PKey<openssl::pkey::Private>
 fn convert_openssl_cert_to_rustls_cert(cert: &X509) -> Result<CertificateDer<'static>, Box<dyn std::error::Error>> {
     // 将证书转换为 DER 格式
     let cert_der = cert.to_der()?;
-    Ok(CertificateDer::from_slice(&cert_der).into_owned())
+    Ok(CertificateDer::from(cert_der).into_owned())
 }
