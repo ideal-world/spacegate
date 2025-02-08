@@ -324,7 +324,7 @@ impl Listen for K8sListener {
         if let Some(next) = ready!(self.rx.poll_recv(cx)) {
             std::task::Poll::Ready(Ok(next.into()))
         } else {
-            std::task::Poll::Pending
+            std::task::Poll::Ready(Err("k8s event listener sender shutdown".into()))
         }
     }
 }

@@ -66,7 +66,10 @@ where
                 }
                 event = listener.next() => {
                     match event {
-                        Some(event) => event,
+                        Some(event) => {
+                            tracing::debug!(?event, "received event from listener");
+                            event
+                        },
                         None => {
                             tracing::info!("[SG.Config] config event stream end");
                             tracing::info!("[SG.Config] config listener {CONFIG_LISTENER_NAME} shutdown", CONFIG_LISTENER_NAME = C::CONFIG_LISTENER_NAME);
@@ -78,8 +81,8 @@ where
             }
         };
 
-        if let Err(e) = handler(event, &config, &gateway_shutdown_signal).await {
-            tracing::error!("[SG.Config] handle event failed: {e}", e = e);
+        if let Err(error) = handler(event, &config, &gateway_shutdown_signal).await {
+            tracing::error!(%error, "[SG.Config] handle event failed");
         }
     }
 }
