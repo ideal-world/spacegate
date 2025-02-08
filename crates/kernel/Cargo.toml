@@ -53,17 +53,17 @@ rustls-pemfile = { workspace = true }
 tokio-rustls = { workspace = true }
 
 # utils
-rand = { version = "0" }
+rand = { workspace = true }
 regex = { workspace = true }
 
 # ext-redis
-spacegate-ext-redis = {  workspace = true, optional = true }
+spacegate-ext-redis = { workspace = true, optional = true }
 crossbeam-utils = "0.8"
 
 # codec
 base64 = { workspace = true }
 
-ipnet  = { workspace = true, optional = true }
+ipnet = { workspace = true, optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
 axum = { workspace = true, features = ["multipart"] }
