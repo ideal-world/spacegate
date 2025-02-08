@@ -13,7 +13,7 @@ pub fn shell_routers(router: Router) -> Router {
 }
 
 pub fn control_routes() -> Router {
-    Router::new().route("push_event", post(event))
+    Router::new().route("/push_event", post(event))
 }
 
 pub struct HttpEventListener {}
