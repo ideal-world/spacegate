@@ -134,7 +134,13 @@ mod test {
             )
             .await
             .expect("fail to set");
-        let _: () = conn.set("sg:plugin:redis-time-range:test:*:op-res:ak-pass", format!("{current_year}-01-01T00:00:00-08:00,{next_year}-01-01T00:00:00-08:00")).await.expect("fail to set");
+        let _: () = conn
+            .set(
+                "sg:plugin:redis-time-range:test:*:op-res:ak-pass",
+                format!("{current_year}-01-01T00:00:00-08:00,{next_year}-01-01T00:00:00-08:00"),
+            )
+            .await
+            .expect("fail to set");
         let inner = Inner::new(get_echo_service());
         {
             let req = Request::builder()
