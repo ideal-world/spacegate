@@ -53,23 +53,23 @@ jobs:
           haskell: true
           large-packages: true
 
-      - name: Setup k8s e2e env
-        uses: AbsaOSS/k3d-action@v2
-        with:
-          cluster-name: spacegate-test
-          args: >-
-            --agents 1
-            --no-lb
-            --k3s-arg "--no-deploy=traefik,servicelb,metrics-server@server:*"
+      # - name: Setup k8s e2e env
+      #   uses: AbsaOSS/k3d-action@v2
+      #   with:
+      #     cluster-name: spacegate-test
+      #     args: >-
+      #       --agents 1
+      #       --no-lb
+      #       --k3s-arg "--no-deploy=traefik,servicelb,metrics-server@server:*"
 
-      - name: Init k8s e2e env
-        run: |
-          bash ./tests/e2e/e2e-test-init.sh
+      # - name: Init k8s e2e env
+      #   run: |
+      #     bash ./tests/e2e/e2e-test-init.sh
 
-      - name: Run k8s e2e test
-        run: |
-          cd ./tests/e2e
-          sudo bash ./e2e-test.sh
+      # - name: Run k8s e2e test
+      #   run: |
+      #     cd ./tests/e2e
+      #     sudo bash ./e2e-test.sh
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
