@@ -91,6 +91,7 @@ crate::schema!(RedisTimeRangePlugin, RedisTimeRangeConfig);
 #[cfg(test)]
 mod test {
     use super::*;
+    use chrono::Datelike;
     use hyper::header::AUTHORIZATION;
     use serde_json::json;
     use spacegate_kernel::{
@@ -101,7 +102,7 @@ mod test {
 
     use tracing_subscriber::EnvFilter;
     #[tokio::test]
-    async fn test_op_res_count_limit() {
+    async fn test_op_res_time_limit() {
         const GW_NAME: &str = "REDIS-TIME-RANGE-TEST";
         std::env::set_var("RUST_LOG", "trace");
         tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
@@ -123,14 +124,17 @@ mod test {
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");
         let mut conn = client.get_conn().await;
+        let current_year = chrono::Utc::now().year();
+        let next_year = current_year + 1;
+        let next_next_year = next_year + 1;
         let _: () = conn
             .set(
                 "sg:plugin:redis-time-range:test:*:op-res:ak-not-pass",
-                "2025-01-01T00:00:00-08:00,2026-01-01T00:00:00-08:00",
+                format!("{next_year}-01-01T00:00:00-08:00,{next_next_year}-01-01T00:00:00-08:00"),
             )
             .await
             .expect("fail to set");
-        let _: () = conn.set("sg:plugin:redis-time-range:test:*:op-res:ak-pass", "2024-01-01T00:00:00-08:00,2025-01-01T00:00:00-08:00").await.expect("fail to set");
+        let _: () = conn.set("sg:plugin:redis-time-range:test:*:op-res:ak-pass", format!("{current_year}-01-01T00:00:00-08:00,{next_year}-01-01T00:00:00-08:00")).await.expect("fail to set");
         let inner = Inner::new(get_echo_service());
         {
             let req = Request::builder()
