@@ -128,7 +128,7 @@ impl Policy for RetryPolicy {
                 BackOff::Fixed => self.config.base_interval,
                 BackOff::Exponential => self.config.base_interval * 2u64.pow(self.times as u32),
                 BackOff::Random => {
-                    let mut rng = rand::thread_rng();
+                    let mut rng = rand::rng();
                     rng.gen_range(self.config.base_interval..self.config.max_interval)
                 }
             };

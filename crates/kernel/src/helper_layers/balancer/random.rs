@@ -39,7 +39,7 @@ where
         } else if instances.len() == 1 {
             instances.first()
         } else {
-            let index = self.picker.sample(&mut rand::thread_rng());
+            let index = self.picker.sample(&mut rand::rng());
             instances.get(index)
         }
     }

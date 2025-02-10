@@ -49,7 +49,7 @@ where
         if self.services.len() == 1 {
             self.services[0].call(req)
         } else {
-            let index = self.picker.sample(&mut rand::thread_rng());
+            let index = self.picker.sample(&mut rand::rng());
             self.services[index].call(req)
         }
     }
