@@ -55,7 +55,7 @@ impl Discovery for K8s {
         if pods.is_empty() {
             return Ok(None);
         }
-        let index = rand::thread_rng().gen_range(0..pods.len());
+        let index = rand::rng().random_range(0..pods.len());
         let rand_pod = pods.get(index).expect("pods should not be empty");
         if let Some(host_ip) = rand_pod.status.clone().and_then(|s| s.host_ip) {
             return Ok(Some(format!("{host_ip}:{}", spacegate_model::constants::DEFAULT_API_PORT)));

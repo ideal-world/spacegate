@@ -31,9 +31,9 @@ pub struct RedisCountPlugin {
 async fn redis_call(mut conn: Connection, count_key: String) -> Result<bool, RedisError> {
     let count_cumulative_key = format!("{count_key}:cumulative-count");
     if !conn.exists(&count_cumulative_key).await? {
-        conn.set(&count_cumulative_key, 1).await?;
+        let _: () = conn.set(&count_cumulative_key, 1).await?;
     } else {
-        conn.incr(&count_cumulative_key, 1).await?;
+        let _: () = conn.incr(&count_cumulative_key, 1).await?;
     }
     let count_cumulative: u32 = conn.get(&count_cumulative_key).await?;
     let count: u32 = conn.get(&count_key).await.unwrap_or(u32::MAX);

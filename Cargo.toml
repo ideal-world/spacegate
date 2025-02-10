@@ -10,7 +10,7 @@ members = [
   "crates/shell",
   "examples/sayhello",
   "examples/socks5-proxy",
-  "examples/mitm-proxy",
+  "examples/mitm-proxy", 
 ]
 resolver = "2"
 [profile.release]
