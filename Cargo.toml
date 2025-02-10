@@ -93,7 +93,7 @@ testcontainers-modules = { version = "0.3" }
 bytes = { version = "1" }
 
 # Tls
-hyper-rustls = { version = "0.27", no-default-features = true, features = [
+hyper-rustls = { version = "0.27", default-features = false, features = [
   "ring",
   "http2",
   "http1",
@@ -119,6 +119,6 @@ ipnet = { version = "2" }
 notify = { version = "6.1.1" }
 
 # web-server
-axum = "0.8"
+axum = "0.8.1"
 
 rand = { version = "0.9" }

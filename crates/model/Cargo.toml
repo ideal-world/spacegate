@@ -34,4 +34,4 @@ typeshare = "1.0.3"
 
 
 [dev-dependencies]
-toml = { version = "0.8", workspace = true }
+toml = { workspace = true }
