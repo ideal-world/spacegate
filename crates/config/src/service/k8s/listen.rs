@@ -114,6 +114,19 @@ impl CreateListener for K8s {
 
         let move_gateway_names = config.gateways.clone().into_values().map(|item| item.gateway.name).collect::<Vec<_>>();
         let move_evt_tx = evt_tx.clone();
+        #[cfg(unix)]
+        {
+            let move_evt_tx = move_evt_tx.clone();
+            if let Ok(mut hangup_signal_listen) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+                tokio::task::spawn(async move {
+                    tracing::info!("start hangup signal listening");
+                    loop {
+                        hangup_signal_listen.recv().await;
+                        move_evt_tx.send((ConfigType::Global, ConfigEventType::Update)).expect("send event error");
+                    }
+                });
+            }
+        }
         tokio::task::spawn(async move {
             let mut gateway_uid_version_map = HashMap::new();
 
