@@ -61,8 +61,8 @@ where
     B: Discovery + Send + Sync + 'static,
 {
     Router::new()
-        .route("/schema/:plugin_code", get(get_schema_by_code::<B>))
+        .route("/schema/{plugin_code}", get(get_schema_by_code::<B>))
         .route("/list", get(get_list::<B>))
         .route("/attr-all", get(get_attr_all::<B>))
-        .route("/attr/:plugin_code", get(get_attr::<B>))
+        .route("/attr/{plugin_code}", get(get_attr::<B>))
 }
