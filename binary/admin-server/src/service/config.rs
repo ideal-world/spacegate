@@ -184,17 +184,17 @@ where
             "/item",
             Router::new()
                 .route(
-                    "/:name",
+                    "/{name}",
                     get(get_config_item::<B>).post(post_config_item::<B>).put(put_config_item::<B>).delete(delete_config_item::<B>),
                 )
                 .route(
-                    "/:name/route/item/:route",
+                    "/{name}/route/item/{route}",
                     get(get_config_item_route::<B>).post(post_config_item_route::<B>).put(put_config_item_route::<B>).delete(delete_config_item_route::<B>),
                 )
-                .route("/:name/route/all", get(get_config_item_all_routes::<B>).delete(delete_config_item_all_routes))
-                .route("/:name/route/names", get(get_config_item_route_names::<B>))
+                .route("/{name}/route/all", get(get_config_item_all_routes::<B>).delete(delete_config_item_all_routes))
+                .route("/{name}/route/names", get(get_config_item_route_names::<B>))
                 .route(
-                    "/:name/gateway",
+                    "/{name}/gateway",
                     get(get_config_item_gateway::<B>).post(post_config_item_gateway::<B>).put(put_config_item_gateway::<B>).delete(delete_config_item_gateway::<B>),
                 ),
         )
@@ -203,5 +203,5 @@ where
             get(get_config_plugin).delete(delete_config_plugin).put(put_config_plugin).post(post_config_plugin),
         )
         .route("/plugin-all", get(get_config_all_plugin))
-        .route("/plugins/:code", get(get_config_plugins_by_code))
+        .route("/plugins/{code}", get(get_config_plugins_by_code))
 }

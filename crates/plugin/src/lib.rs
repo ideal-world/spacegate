@@ -252,8 +252,8 @@ impl PluginRepository {
         self.register::<plugins::maintenance::MaintenancePlugin>();
         // #[cfg(feature = "status")]
         // self.register::<plugins::status::StatusPlugin>();
-        #[cfg(feature = "decompression")]
-        self.register::<plugins::decompression::DecompressionPlugin>();
+        // #[cfg(feature = "decompression")]
+        // self.register::<plugins::decompression::DecompressionPlugin>();
         #[cfg(feature = "set-version")]
         self.register::<plugins::set_version::SetVersionPlugin>();
         #[cfg(feature = "set-scheme")]

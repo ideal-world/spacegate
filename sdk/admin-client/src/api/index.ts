@@ -1,7 +1,6 @@
 import axios, { AxiosResponse, AxiosInstance, AxiosError } from 'axios'
 import { BackendHost, Config, ConfigItem, PluginAttributes, SgGateway, SgHttpRoute } from '../model'
 import { PluginConfig } from '../model/PluginConfig'
-import { PluginInstanceName } from '../model/PluginInstanceName'
 import { PluginInstanceId } from '../model/PluginInstanceId'
 export * from 'axios'
 const Client = {
@@ -252,14 +251,27 @@ export async function authLogin(ak: string, sk: string): Promise<AxiosResponse> 
                         instance
 **********************************************/
 
-export async function discoveryInstanceHealth(): Promise<AxiosResponse<Map<string, boolean>>> {
-    return getClient().axiosInstance.get(`/discovery/instance-health`)
+export async function discoveryInstanceHealth(): Promise<AxiosResponse<Record<string, boolean>>> {
+    return getClient().axiosInstance.get(`/discovery/instance/health`)
 }
 
-export async function discoveryInstance(): Promise<AxiosResponse<Array<string>>> {
-    return getClient().axiosInstance.get(`/discovery/instance`)
+export async function discoveryInstanceList(): Promise<AxiosResponse<Array<string>>> {
+    return getClient().axiosInstance.get(`/discovery/instance/list`)
+}
+
+
+export async function discoveryInstanceReloadGlobal(instance: string): Promise<AxiosResponse> {
+    return getClient().axiosInstance.get(`/discovery/instance/reload/global?instance=${instance}`)
+}
+
+export async function discoveryInstanceReloadGateway(instance: string, gateway: string): Promise<AxiosResponse> {
+    return getClient().axiosInstance.get(`/discovery/instance/reload/gateway?instance=${instance}&gateway=${gateway}`)
+}
+
+export async function discoveryInstanceReloadRoute(instance: string, gateway: string, route: string): Promise<AxiosResponse> {
+    return getClient().axiosInstance.get(`/discovery/instance/reload/route?instance=${instance}&route=${route}&gateway=${gateway}`)
 }
 
 export async function discoveryBackends(): Promise<AxiosResponse<Array<BackendHost>>> {
-    return getClient().axiosInstance.get(`/discovery/backends`)
+    return getClient().axiosInstance.get(`/discovery/backends/`)
 }
