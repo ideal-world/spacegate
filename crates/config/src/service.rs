@@ -225,9 +225,12 @@ pub trait CreateListener {
     type Listener: Listen;
     fn create_listener(&self) -> impl Future<Output = Result<(Config, Self::Listener), Box<dyn Error + Sync + Send + 'static>>> + Send;
 }
-
-pub trait Discovery {
-    fn api_url(&self) -> impl Future<Output = Result<Option<String>, BoxError>> + Send;
+pub trait Instance: Send + Sync {
+    fn id(&self) -> &str;
+    fn api_url(&self) -> &str;
+}
+pub trait Discovery: 'static {
+    fn instances(&self) -> impl Future<Output = Result<Vec<impl Instance>, BoxError>> + Send;
     fn backends(&self) -> impl Future<Output = Result<Vec<BackendHost>, BoxError>> + Send {
         std::future::ready(Ok(vec![]))
     }

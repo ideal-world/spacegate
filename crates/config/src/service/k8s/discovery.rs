@@ -4,15 +4,26 @@ use k8s_openapi::api::{
     core::v1::{Pod, Service},
 };
 use kube::{api::ListParams, Api, ResourceExt};
-use rand::Rng as _;
-use spacegate_model::{BackendHost, BoxResult, K8sServiceData};
+use spacegate_model::{constants::DEFAULT_API_PORT, BackendHost, BoxResult, K8sServiceData};
 
-use crate::service::Discovery;
+use crate::service::{Discovery, Instance};
 
 use super::K8s;
 
+pub struct K8sGatewayInstance {
+    name: String,
+    uri: String,
+}
+impl Instance for K8sGatewayInstance {
+    fn api_url(&self) -> &str {
+        &self.uri
+    }
+    fn id(&self) -> &str {
+        &self.name
+    }
+}
 impl Discovery for K8s {
-    async fn api_url(&self) -> BoxResult<Option<String>> {
+    async fn instances(&self) -> BoxResult<Vec<impl Instance>> {
         let gateway_class_api: Api<GatewayClass> = self.get_all_api();
 
         let instance = if let Some(mut gateway_class) = gateway_class_api.get_opt(spacegate_model::constants::GATEWAY_CLASS_NAME).await? {
@@ -42,25 +53,27 @@ impl Discovery for K8s {
         };
 
         let pods = pod_api.list(&ListParams::default()).await?;
-        let mut pods = pods.items;
-        pods.retain(|p| {
-            for owner_ref in p.owner_references() {
-                if owner_ref.uid == ds_instance.uid().unwrap_or_default() && owner_ref.name == ds_instance.name_any() {
-                    return true;
-                }
-            }
-            false
-        });
+        let pods = pods.items;
+        let instance_list = pods
+            .into_iter()
+            .filter_map(|p| {
+                let ip = p.status.as_ref().and_then(|s| s.host_ip.as_ref())?;
+                let port = DEFAULT_API_PORT;
+                for owner_ref in p.owner_references() {
+                    let instance_name = ds_instance.name_any();
 
-        if pods.is_empty() {
-            return Ok(None);
-        }
-        let index = rand::rng().random_range(0..pods.len());
-        let rand_pod = pods.get(index).expect("pods should not be empty");
-        if let Some(host_ip) = rand_pod.status.clone().and_then(|s| s.host_ip) {
-            return Ok(Some(format!("{host_ip}:{}", spacegate_model::constants::DEFAULT_API_PORT)));
-        };
-        Ok(None)
+                    if owner_ref.uid == ds_instance.uid().unwrap_or_default() && owner_ref.name == instance_name {
+                        return Some(K8sGatewayInstance {
+                            name: instance_name,
+                            uri: format!("{ip}:{port}"),
+                        });
+                    }
+                }
+                None
+            })
+            .collect();
+
+        Ok(instance_list)
     }
 
     async fn backends(&self) -> BoxResult<Vec<BackendHost>> {
