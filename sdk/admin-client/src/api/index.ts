@@ -252,10 +252,14 @@ export async function authLogin(ak: string, sk: string): Promise<AxiosResponse> 
                         instance
 **********************************************/
 
-export async function instanceHealth(): Promise<AxiosResponse<boolean>> {
-    return getClient().axiosInstance.get(`/instance/health`)
+export async function discoveryInstanceHealth(): Promise<AxiosResponse<Map<string, boolean>>> {
+    return getClient().axiosInstance.get(`/discovery/instance-health`)
 }
 
-export async function instanceBackends(): Promise<AxiosResponse<Array<BackendHost>>> {
-    return getClient().axiosInstance.get(`/instance/backends`)
+export async function discoveryInstance(): Promise<AxiosResponse<Array<string>>> {
+    return getClient().axiosInstance.get(`/discovery/instance`)
+}
+
+export async function discoveryBackends(): Promise<AxiosResponse<Array<BackendHost>>> {
+    return getClient().axiosInstance.get(`/discovery/backends`)
 }

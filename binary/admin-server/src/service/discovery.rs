@@ -1,11 +1,15 @@
 use std::{
+    collections::HashMap,
     sync::{Arc, OnceLock},
     time::Duration,
 };
 
 use axum::{extract::State, routing::get, Json, Router};
 use serde_json::Value;
-use spacegate_config::{service::Discovery, BackendHost, BoxError, PluginAttributes};
+use spacegate_config::{
+    service::{Discovery, Instance},
+    BackendHost, BoxError, PluginAttributes,
+};
 use tokio::{sync::RwLock, time::Instant};
 
 use crate::{error::InternalError, state::AppState};
@@ -32,25 +36,21 @@ async fn get_health_cache() -> Option<bool> {
     }
 }
 
-pub trait Instance: Send + Sync + 'static {
-    fn api_url(&self) -> &str;
-    fn timeout(&self) -> Duration;
+pub struct InstanceApi<'i, I: Instance> {
+    pub instance: &'i I,
+    timeout: Duration,
 }
 
-impl Instance for String {
-    fn api_url(&self) -> &str {
-        self
+impl<'i, I: Instance> InstanceApi<'i, I> {
+    pub fn new(instance: &'i I) -> Self {
+        Self {
+            instance,
+            timeout: DEFAULT_TIMEOUT,
+        }
     }
-
-    fn timeout(&self) -> Duration {
-        DEFAULT_TIMEOUT
-    }
-}
-
-impl dyn Instance {
     /// get api url
     pub fn url(&self, path: &str) -> String {
-        format!("http://{base}/{path}", base = self.api_url(), path = path.trim_start_matches('/'))
+        format!("http://{base}/{path}", base = self.instance.api_url(), path = path.trim_start_matches('/'))
     }
     /// check server health
     pub async fn health(&self) -> bool {
@@ -59,7 +59,7 @@ impl dyn Instance {
         } else {
             use reqwest::Client;
             let client = Client::default();
-            let timeout = self.timeout();
+            let timeout = DEFAULT_TIMEOUT;
             let health = client.get(self.url("/health")).timeout(timeout).send().await.is_ok_and(|x| x.status().is_success());
             set_health_cache(health).await;
             health
@@ -68,8 +68,8 @@ impl dyn Instance {
 
     pub async fn schema(&self, plugin_code: &str) -> Result<Option<Value>, BoxError> {
         let resp = reqwest::Client::new()
-            .get(format!("http://{base}/plugin-schema?code={plugin_code}", base = self.api_url()))
-            .timeout(self.timeout())
+            .get(format!("http://{base}/plugin-schema?code={plugin_code}", base = self.instance.api_url()))
+            .timeout(self.timeout)
             .send()
             .await?
             .json::<Option<Value>>()
@@ -78,20 +78,28 @@ impl dyn Instance {
     }
 
     pub async fn plugin_list(&self) -> Result<Vec<PluginAttributes>, BoxError> {
-        let attrs =
-            reqwest::Client::new().get(format!("http://{base}/plugin-list", base = self.api_url())).timeout(self.timeout()).send().await?.json::<Vec<PluginAttributes>>().await?;
+        let attrs = reqwest::Client::new()
+            .get(format!("http://{base}/plugin-list", base = self.instance.api_url()))
+            .timeout(self.timeout)
+            .send()
+            .await?
+            .json::<Vec<PluginAttributes>>()
+            .await?;
         Ok(attrs)
     }
 }
-
-async fn health<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<bool>, InternalError> {
-    if let Some(remote) = backend.api_url().await.map_err(InternalError)? {
-        Ok(Json(<dyn Instance>::health(&remote).await))
-    } else {
-        Ok(Json(false))
+async fn instance_health<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<HashMap<String, bool>>, InternalError> {
+    let api = backend.instances().await.map_err(InternalError)?;
+    let mut healths = HashMap::new();
+    for instance in api {
+        healths.insert(instance.id().to_string(), InstanceApi::new(&instance).health().await);
     }
+    Ok(Json(healths))
 }
-
+async fn instance<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<String>>, InternalError> {
+    let api = backend.instances().await.map_err(InternalError)?.into_iter().map(|instance| instance.id().to_owned()).collect();
+    Ok(Json(api))
+}
 async fn backends<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<BackendHost>>, InternalError> {
     backend.backends().await.map(Json).map_err(InternalError)
 }
@@ -100,5 +108,5 @@ pub fn router<B>() -> axum::Router<AppState<B>>
 where
     B: Discovery + Send + Sync + 'static,
 {
-    Router::new().route("/health", get(health::<B>)).route("/backends", get(backends::<B>))
+    Router::new().route("/instance-health", get(instance_health::<B>)).route("/instance", get(instance::<B>)).route("/backends", get(backends::<B>))
 }

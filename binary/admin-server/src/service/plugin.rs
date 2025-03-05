@@ -1,8 +1,6 @@
-use std::{collections::HashMap, sync::OnceLock, time::Duration};
-
 use crate::{
     error::InternalError,
-    service::instance::Instance,
+    service::discovery::InstanceApi,
     state::{self, AppState},
 };
 use axum::{
@@ -11,7 +9,9 @@ use axum::{
     Json, Router,
 };
 use serde_json::Value;
+use spacegate_config::service::Instance;
 use spacegate_config::{service::Discovery, BoxError, PluginAttributes};
+use std::{collections::HashMap, sync::OnceLock, time::Duration};
 use tokio::{sync::RwLock, time::Instant};
 use tracing::info;
 
@@ -24,9 +24,9 @@ async fn sync_attr_cache<B: Discovery>(backend: &B, refresh: bool) -> Result<(),
     if next_sync.elapsed() != Duration::ZERO || refresh {
         drop(next_sync);
         let mut cache = ATTR_CACHE.get_or_init(Default::default).write().await;
-        if let Some(remote) = backend.api_url().await? {
-            info!("refresh plugin attr from: {}", remote);
-            let attrs = <dyn Instance>::plugin_list(&remote).await?;
+        if let Some(remote) = backend.instances().await?.into_iter().next() {
+            info!("refresh plugin attr from: {}", remote.id());
+            let attrs = InstanceApi::new(&remote).plugin_list().await?;
             cache.clear();
             cache.extend(attrs.into_iter().map(|attr| (attr.code.to_string(), attr)));
         };
@@ -37,8 +37,8 @@ async fn sync_attr_cache<B: Discovery>(backend: &B, refresh: bool) -> Result<(),
 }
 
 async fn get_schema_by_code<B: Discovery>(Path(plugin_code): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Option<Value>>, InternalError> {
-    if let Some(remote) = backend.api_url().await.map_err(InternalError)? {
-        <dyn Instance>::schema(&remote, &plugin_code).await.map(Json).map_err(InternalError)
+    if let Some(remote) = backend.instances().await.map_err(InternalError)?.into_iter().next() {
+        InstanceApi::new(&remote).schema(&plugin_code).await.map(Json).map_err(InternalError)
     } else {
         Ok(Json(None))
     }

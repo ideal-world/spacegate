@@ -1,12 +1,31 @@
 use spacegate_model::BackendHost;
 
-use crate::service::{config_format::ConfigFormat, Discovery};
+use crate::service::{config_format::ConfigFormat, Discovery, Instance};
 
 use super::Fs;
+pub struct LocalGateway {
+    uri: String,
+}
 
-impl<F: ConfigFormat + Send + Sync> Discovery for Fs<F> {
-    async fn api_url(&self) -> Result<Option<String>, spacegate_model::BoxError> {
-        self.retrieve_cached(|c| c.api_port.map(|p| format!("localhost:{}", p))).await
+impl LocalGateway {
+    pub fn new(port: u16) -> Self {
+        Self {
+            uri: format!("localhost:{}", port),
+        }
+    }
+}
+
+impl Instance for LocalGateway {
+    fn api_url(&self) -> &str {
+        &self.uri
+    }
+    fn id(&self) -> &str {
+        "local"
+    }
+}
+impl<F: ConfigFormat + Send + Sync + 'static> Discovery for Fs<F> {
+    async fn instances(&self) -> Result<Vec<impl Instance>, spacegate_model::BoxError> {
+        self.retrieve_cached(|c| c.api_port.map(LocalGateway::new).into_iter().collect()).await
     }
     #[cfg(target_os = "linux")]
     async fn backends(&self) -> Result<Vec<BackendHost>, spacegate_model::BoxError> {

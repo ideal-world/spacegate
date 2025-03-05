@@ -28,7 +28,7 @@ pub struct Args {
     #[arg(short='H', env, long, default_value_t = DEFAULT_HOST)]
     pub host: IpAddr,
     /// the config backend you choose
-
+    ///
     /// see [`ConfigBackend`]
     #[arg(short, long, env)]
     #[cfg_attr(target_family = "unix", arg(default_value = "file:/etc/spacegate"))]
