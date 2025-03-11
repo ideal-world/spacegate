@@ -261,15 +261,15 @@ export async function discoveryInstanceList(): Promise<AxiosResponse<Array<strin
 
 
 export async function discoveryInstanceReloadGlobal(instance: string): Promise<AxiosResponse> {
-    return getClient().axiosInstance.get(`/discovery/instance/reload/global?instance=${instance}`)
+    return getClient().axiosInstance.post(`/discovery/instance/reload/global?instance=${instance}`)
 }
 
 export async function discoveryInstanceReloadGateway(instance: string, gateway: string): Promise<AxiosResponse> {
-    return getClient().axiosInstance.get(`/discovery/instance/reload/gateway?instance=${instance}&gateway=${gateway}`)
+    return getClient().axiosInstance.post(`/discovery/instance/reload/gateway?instance=${instance}&gateway=${gateway}`)
 }
 
 export async function discoveryInstanceReloadRoute(instance: string, gateway: string, route: string): Promise<AxiosResponse> {
-    return getClient().axiosInstance.get(`/discovery/instance/reload/route?instance=${instance}&route=${route}&gateway=${gateway}`)
+    return getClient().axiosInstance.post(`/discovery/instance/reload/route?instance=${instance}&route=${route}&gateway=${gateway}`)
 }
 
 export async function discoveryBackends(): Promise<AxiosResponse<Array<BackendHost>>> {

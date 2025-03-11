@@ -6,7 +6,7 @@ use std::{
 
 use axum::{
     extract::{Query, State},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
@@ -221,7 +221,7 @@ where
             "/instance",
             Router::new().route("/health", get(instance_health::<B>)).route("/list", get(instance_list::<B>)).nest(
                 "/reload",
-                Router::new().route("/gateway", get(reload_gateway::<B>)).route("/global", get(reload_global::<B>)).route("/route", get(reload_route::<B>)),
+                Router::new().route("/gateway", post(reload_gateway::<B>)).route("/global", post(reload_global::<B>)).route("/route", post(reload_route::<B>)),
             ),
         )
         .route("/backends", get(backends::<B>))
