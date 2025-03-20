@@ -72,9 +72,9 @@
 
     ```
     cd ../../../
-    kubectl apply -f ./kernel/res/namespace.yaml
-    kubectl apply -f ./kernel/res/gatewayclass.yaml
-    kubectl apply -f ./kernel/res/spacegate-gateway.yaml
+    kubectl apply -f ./resource/kube-manifests/namespace.yaml
+    kubectl apply -f ./resource/kube-manifests/gatewayclass.yaml
+    kubectl apply -f ./resource/kube-manifests/spacegate-gateway.yaml
     ```
 
 1. Confirm the spacegate resources is running in `spacegate` namespace:
