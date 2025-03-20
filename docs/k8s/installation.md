@@ -34,19 +34,19 @@ This guide walks you through how to install Spacegate Kubernetes Gateway on a ge
 1. Create the spacegate Namespace:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/kernel/res/namespace.yaml
+    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/resource/kube-manifests/namespace.yaml
     ```
 
 1. Create the GatewayClass resource:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/kernel/res/gatewayclass.yaml
+    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/resource/kube-manifests/gatewayclass.yaml
     ```
 
 1. Deploy the Spacegate Kubernetes Gateway:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/kernel/res/spacegate-gateway.yaml
+    kubectl apply -f https://raw.githubusercontent.com/ideal-world/spacegate/master/resource/kube-manifests/spacegate-gateway.yaml
     ```
 
 1. Confirm the Spacegate Kubernetes Gateway is running in `spacegate` namespace:
