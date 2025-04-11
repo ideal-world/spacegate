@@ -24,7 +24,7 @@ rpath = false
 strip = true
 
 [workspace.package]
-version = "0.2.0-alpha.3"
+version = "0.2.0-alpha.4"
 authors = [
   "gudaoxuri <i@sunisle.org>",
   "4t145 <u4t145@163.com>",
@@ -41,13 +41,13 @@ license = "MIT/Apache-2.0"
 rust-version = "1.76"
 
 [workspace.dependencies]
-spacegate-kernel = { version = "0.2.0-alpha.3", path = "./crates/kernel" }
-spacegate-plugin = { version = "0.2.0-alpha.3", path = "./crates/plugin" }
-spacegate-config = { version = "0.2.0-alpha.3", path = "./crates/config" }
-spacegate-model = { version = "0.2.0-alpha.3", path = "./crates/model" }
-spacegate-shell = { version = "0.2.0-alpha.3", path = "./crates/shell" }
-spacegate-ext-axum = { version = "0.2.0-alpha.3", path = "./crates/extension/axum" }
-spacegate-ext-redis = { version = "0.2.0-alpha.3", path = "./crates/extension/redis" }
+spacegate-kernel = { version = "0.2.0-alpha.4", path = "./crates/kernel" }
+spacegate-plugin = { version = "0.2.0-alpha.4", path = "./crates/plugin" }
+spacegate-config = { version = "0.2.0-alpha.4", path = "./crates/config" }
+spacegate-model = { version = "0.2.0-alpha.4", path = "./crates/model" }
+spacegate-shell = { version = "0.2.0-alpha.4", path = "./crates/shell" }
+spacegate-ext-axum = { version = "0.2.0-alpha.4", path = "./crates/extension/axum" }
+spacegate-ext-redis = { version = "0.2.0-alpha.4", path = "./crates/extension/redis" }
 
 
 # runtime

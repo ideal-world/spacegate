@@ -24,7 +24,7 @@ Do NOT use in production environment!**
 ## Use spacegate in k8s
 ### Install for kubernetes
 ```shell
-kubectl apply -f https://github.com/ideal-world/spacegate/releases/download/0.2.0-alpha.3/spacegate-0.2.0-alpha.3.yaml
+kubectl apply -f https://github.com/ideal-world/spacegate/releases/download/0.2.0-alpha.4/spacegate-0.2.0-alpha.4.yaml
 ```
 ### Open spacegate admin web,and enjoy!
 
