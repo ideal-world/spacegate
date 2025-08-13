@@ -33,9 +33,8 @@ pub struct RateLimitPlugin {
 }
 
 impl RateLimitPlugin {
-    pub fn report(&self, rising_edge: bool, original_ip_addr: IpAddr) -> RateLimitReport {
+    pub fn report(&self, original_ip_addr: IpAddr) -> RateLimitReport {
         RateLimitReport {
-            rising_edge,
             original_ip_addr,
             plugin: self.clone(),
         }
@@ -48,7 +47,6 @@ const CONF_LIMIT_KEY: &str = "sg:plugin:filter:limit:";
 
 #[derive(Debug, Clone)]
 pub struct RateLimitReport {
-    pub rising_edge: bool,
     pub original_ip_addr: IpAddr,
     pub plugin: RateLimitPlugin,
 }
@@ -112,7 +110,6 @@ impl Plugin for RateLimitPlugin {
         let mut conn = req.get_redis_client_by_gateway_name().ok_or("missing gateway name")?.get_conn().await;
 
         const EXCEEDED: i32 = 0;
-        const RISING_EDGE: i32 = 1;
         let result: i32 = script()
             // counter key
             .key(format!("{CONF_LIMIT_KEY}{id}:{ip}"))
@@ -127,9 +124,9 @@ impl Plugin for RateLimitPlugin {
             .invoke_async(&mut conn)
             .await?;
 
-        if result == EXCEEDED || result == RISING_EDGE {
+        if result == EXCEEDED {
             let mut response = Response::<SgBody>::with_code_message(StatusCode::TOO_MANY_REQUESTS, "[SG.Filter.Limit] too many requests");
-            response.extensions_mut().insert(self.report(result == RISING_EDGE, ip));
+            response.extensions_mut().insert(self.report( ip));
             return Ok(response);
         }
         Ok(inner.call(req).await)

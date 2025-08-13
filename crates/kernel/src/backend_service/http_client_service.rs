@@ -10,7 +10,7 @@ use hyper_util::{
 };
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock, RwLock},
     time::Duration,
 };
 use tokio_rustls::rustls::{self, client::danger::ServerCertVerifier, SignatureScheme};
@@ -75,7 +75,7 @@ fn get_rustls_config_dangerous() -> rustls::ClientConfig {
 }
 
 pub fn get_client() -> HttpClient {
-    ClientRepo::global().get_default()
+    ClientRepo::global().read().expect("failed to read global client repo").get_default()
 }
 
 #[derive(Debug)]
@@ -95,7 +95,7 @@ impl Default for ClientRepo {
     }
 }
 
-static mut GLOBAL: OnceLock<ClientRepo> = OnceLock::new();
+static GLOBAL: OnceLock<Arc<RwLock<ClientRepo>>> = OnceLock::new();
 impl ClientRepo {
     pub fn get(&self, code: &str) -> Option<HttpClient> {
         self.repo.lock().expect("failed to lock client repo").get(code).cloned()
@@ -112,15 +112,13 @@ impl ClientRepo {
     pub fn set_default(&mut self, client: HttpClient) {
         self.default = client;
     }
-    pub fn global() -> &'static Self {
-        unsafe { std::ptr::addr_of!(GLOBAL).cast_mut().as_mut().expect("invalid static global client repo") }.get_or_init(Default::default)
+    pub fn global() -> Arc<RwLock<Self>> {
+        GLOBAL.get_or_init(|| Arc::new(RwLock::new(ClientRepo::default()))).clone()
     }
 
-    /// # Safety
-    /// This function is not thread safe, it should be called before any other thread is spawned.
-    pub unsafe fn set_global_default(client: HttpClient) {
-        GLOBAL.get_or_init(Default::default);
-        GLOBAL.get_mut().expect("global not set").set_default(client);
+    pub fn set_global_default(client: HttpClient) {
+        let global = Self::global();
+        global.write().expect("failed to write global client repo").set_default(client);
     }
 }
 #[derive(Debug)]
