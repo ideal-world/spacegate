@@ -8,6 +8,7 @@ on:
       - 'crates/plugin/**'
       - 'Cargo.toml'
       - '.github/workflows/admin-server-cicd.yml'
+  workflow_dispatch:
 
 env:
   ARTIFACT_DIR: release-artifacts
