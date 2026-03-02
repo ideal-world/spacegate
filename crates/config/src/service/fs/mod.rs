@@ -61,11 +61,12 @@ where
         // collect plugin
         if let Ok(mut plugin_dir) = tokio::fs::read_dir(self.plugin_dir()).await.inspect_err(|e| tracing::debug!("fail to read plugin dir {e}")) {
             while let Some(entry) = plugin_dir.next_entry().await? {
-                let Ok(file_name) = entry.file_name().into_string() else {
+                let path = entry.path();
+                let Some(file_stem) = path.file_stem().and_then(OsStr::to_str) else {
                     continue;
                 };
-                let plugin_id = PluginInstanceId::from_file_stem(&file_name);
-                let spec: serde_json::Value = self.format.de(&tokio::fs::read(entry.path()).await?)?;
+                let plugin_id = PluginInstanceId::from_file_stem(file_stem);
+                let spec: serde_json::Value = self.format.de(&tokio::fs::read(&path).await?)?;
                 config.plugins.insert(plugin_id, spec);
             }
         };
@@ -224,7 +225,8 @@ where
 
     pub fn plugin_path(&self, id: &PluginInstanceId) -> PathBuf {
         let file_stem = id.as_file_stem();
-        self.plugin_dir().join(file_stem).with_extension(self.format.extension())
+        let ext = self.format.extension().to_str().unwrap_or("json");
+        self.plugin_dir().join(format!("{}.{}", file_stem, ext))
     }
     pub fn extract_gateway_name_from_route_dir(&self, path: &Path) -> Option<String> {
         if path.extension()? == OsStr::from_bytes(ROUTE_DIR.as_bytes()) {
