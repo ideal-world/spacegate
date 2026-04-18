@@ -233,11 +233,15 @@ impl RunningSgGateway {
         {
             if let Some(url) = &config_item.gateway.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
-                // builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
-                // builder_ext.insert(spacegate_kernel::extension::GatewayName(config.gateway.name.clone().into()));
-                // Initialize cache instances
-                tracing::trace!("Initialize cache client...url:{url}");
-                spacegate_ext_redis::RedisClientRepo::global().add(&config_item.gateway.name, url.as_ref());
+                // Initialize cache instances. Avoid logging the raw URL because it may contain credentials.
+                tracing::trace!(gateway = %config_item.gateway.name, "Initialize cache client");
+                match spacegate_ext_redis::RedisClient::new(url.as_ref()) {
+                    Ok(client) => spacegate_ext_redis::RedisClientRepo::global().add(&config_item.gateway.name, client),
+                    Err(e) => {
+                        tracing::error!(gateway = %config_item.gateway.name, error = %e, "failed to initialize redis client");
+                        return Err(Box::new(e));
+                    }
+                }
             }
         }
         tracing::info!("[SG.Server] start gateway");

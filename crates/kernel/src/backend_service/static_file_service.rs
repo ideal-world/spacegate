@@ -1,4 +1,4 @@
-use std::{fs::Metadata, os::unix::fs::MetadataExt, path::Path};
+use std::{fs::Metadata, path::Path};
 
 use chrono::{DateTime, Utc};
 use hyper::{
@@ -34,7 +34,9 @@ fn predict(headers: &HeaderMap, last_modified: Option<DateTime<Utc>>) -> Option<
 
 // temporary implementation
 pub fn cache_policy(metadata: &Metadata) -> bool {
-    let size = metadata.size();
+    // `Metadata::len` is cross-platform (Unix, Windows, WASI) — prefer it
+    // over the Unix-only `MetadataExt::size` to keep the kernel portable.
+    let size = metadata.len();
     // cache file less than 1MB
     size < (1 << 20)
 }

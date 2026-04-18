@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::RwLock};
 
-pub use deadpool_redis::{Connection, Manager, Pool};
+pub use deadpool_redis::{Connection, Manager, Pool, PoolError};
 pub use redis;
-use redis::RedisResult;
 
 /// Wrapper for pooled Redis client.
 #[derive(Clone)]
@@ -19,20 +18,31 @@ impl std::fmt::Debug for RedisClient {
 
 impl RedisClient {
     /// Create a new Redis client from connect url.
-    pub fn new(url: impl AsRef<str>) -> RedisResult<Self> {
+    ///
+    /// # Errors
+    /// Returns an error if the url cannot be parsed or the pool builder fails.
+    pub fn new(url: impl AsRef<str>) -> Result<Self, PoolError> {
         let url = url.as_ref();
-        let redis_conn_pool = Pool::builder(Manager::new(url)?).build().expect("Failed to create Redis pool");
+        let manager = Manager::new(url).map_err(PoolError::Backend)?;
+        let redis_conn_pool =
+            Pool::builder(manager).build().map_err(|e| PoolError::Backend(redis::RedisError::from((redis::ErrorKind::ClientError, "pool build failed", e.to_string()))))?;
         Ok(Self { redis_conn_pool })
     }
     /// Get a connection from the pool.
-    pub async fn get_conn(&self) -> Connection {
-        self.redis_conn_pool.get().await.unwrap()
+    ///
+    /// # Errors
+    /// Returns an error if the pool is closed, exhausted (timeout), or the
+    /// underlying Redis connection fails.
+    pub async fn get_conn(&self) -> Result<Connection, PoolError> {
+        self.redis_conn_pool.get().await
     }
 }
 
-impl From<&str> for RedisClient {
-    fn from(url: &str) -> Self {
-        Self::new(url).expect("Failed to create Redis client")
+impl TryFrom<&str> for RedisClient {
+    type Error = PoolError;
+
+    fn try_from(url: &str) -> Result<Self, Self::Error> {
+        Self::new(url)
     }
 }
 
@@ -55,8 +65,8 @@ impl RedisClientRepo {
     }
 
     /// Add a Redis client to the repository.
-    pub fn add(&self, name: impl Into<String>, client: impl Into<RedisClient>) {
-        self.repos.write().expect("poisoned global redis client repo").insert(name.into(), client.into());
+    pub fn add(&self, name: impl Into<String>, client: RedisClient) {
+        self.repos.write().expect("poisoned global redis client repo").insert(name.into(), client);
     }
 
     /// Get a Redis client from the repository by its name.
