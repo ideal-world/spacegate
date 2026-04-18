@@ -167,14 +167,14 @@
 
 ## 四、遗留项与后续建议
 
-| 级别 | 项                                                             | 建议处理 |
-| ---- | -------------------------------------------------------------- | -------- |
-| P1   | `crates/config` fs feature Windows 不兼容                      | 专项重构 PR：抽象 `OsStrExt` 使用，使用 `NamedPipe` 或 HTTP 本地替代 Unix Socket |
-| P2   | 多处 `unsafe` 缺少 `// SAFETY:` 注释                           | 走读后补充注释（x_request_id.rs, instance.rs 等）|
-| P2   | `crates/config`、`crates/model`、`crates/extension/*` 缺 crate 级 `//!` 文档 | 补写一段 3–5 行说明 |
-| P2   | Redis key 拼接未对请求头取值做字符白名单                       | `redis_time_range.rs` / `redis_dynamic_route.rs` 增加 `char.is_ascii_alphanumeric()` 过滤或替换规则 |
-| P2   | admin-server 登录缺速率限制 / 账户锁定                         | 加 `tower-governor` 或自研 Redis 滑窗 |
-| P3   | `crates/config/src/service/k8s/listen.rs` 10 处 mpsc `.expect` | 改为 `if let Err(_) = ... { break; }` 以完全去 panic |
+| 级别 | 项                                                                           | 建议处理                                                                                            |
+| ---- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| P1   | `crates/config` fs feature Windows 不兼容                                    | 专项重构 PR：抽象 `OsStrExt` 使用，使用 `NamedPipe` 或 HTTP 本地替代 Unix Socket                    |
+| P2   | 多处 `unsafe` 缺少 `// SAFETY:` 注释                                         | 走读后补充注释（x_request_id.rs, instance.rs 等）                                                   |
+| P2   | `crates/config`、`crates/model`、`crates/extension/*` 缺 crate 级 `//!` 文档 | 补写一段 3–5 行说明                                                                                 |
+| P2   | Redis key 拼接未对请求头取值做字符白名单                                     | `redis_time_range.rs` / `redis_dynamic_route.rs` 增加 `char.is_ascii_alphanumeric()` 过滤或替换规则 |
+| P2   | admin-server 登录缺速率限制 / 账户锁定                                       | 加 `tower-governor` 或自研 Redis 滑窗                                                               |
+| P3   | `crates/config/src/service/k8s/listen.rs` 10 处 mpsc `.expect`               | 改为 `if let Err(_) = ... { break; }` 以完全去 panic                                                |
 
 ---
 
