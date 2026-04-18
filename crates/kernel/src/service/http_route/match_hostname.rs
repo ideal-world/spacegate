@@ -52,7 +52,7 @@ impl<T> HostnameTree<T> {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn iter(&self) -> HostnameTreeIter<T> {
+    pub fn iter(&self) -> HostnameTreeIter<'_, T> {
         HostnameTreeIter {
             ipv4: self.ipv4.values(),
             ipv6: self.ipv6.values(),
@@ -60,7 +60,7 @@ impl<T> HostnameTree<T> {
             fallback: self.fallback.iter(),
         }
     }
-    pub fn iter_mut(&mut self) -> HostnameTreeIterMut<T> {
+    pub fn iter_mut(&mut self) -> HostnameTreeIterMut<'_, T> {
         HostnameTreeIterMut {
             ipv4: self.ipv4.values_mut(),
             ipv6: self.ipv6.values_mut(),
@@ -305,15 +305,31 @@ impl<T> HostnameMatcherNode<T> {
             self.data.as_ref()
         }
     }
-    pub fn get_mut_by_iter<'a, 'b, I>(&'b mut self, host: I) -> Option<&'b mut T>
+    pub fn get_mut_by_iter<'a, 'b, I>(&'b mut self, mut host: I) -> Option<&'b mut T>
     where
         I: Iterator<Item = &'a str> + Clone,
     {
-        // it's safe to do so because we don't have any other reference to self
-        self.get_by_iter(host).map(|r| unsafe {
-            let r = r as *const T as *mut T;
-            r.as_mut().expect("fail to convert ptr")
-        })
+        // Mirrors `get_by_iter` but operates on `&mut self`, so no unsafe pointer
+        // casts are needed. Splitting the children / else branches is done via
+        // `take`/owned traversal because NLL still can't see through the
+        // conditional borrow.
+        if let Some(segment) = host.next() {
+            let has_child_match = self.children.get(segment).map(|node| node.get_by_iter(host.clone()).is_some()).unwrap_or(false);
+            if has_child_match {
+                return self.children.get_mut(segment).and_then(|node| node.get_mut_by_iter(host));
+            }
+            let else_node = self.else_node.as_mut()?;
+            // Try to descend further into else_node; if not found, fall back to
+            // its own data. Use a two-step probe to keep the borrow checker happy.
+            let descend_has = else_node.get_by_iter(host.clone()).is_some();
+            if descend_has {
+                else_node.get_mut_by_iter(host)
+            } else {
+                else_node.data.as_mut()
+            }
+        } else {
+            self.data.as_mut()
+        }
     }
     pub fn get(&self, host: &str) -> Option<&T> {
         let host = host.to_ascii_lowercase();

@@ -29,20 +29,20 @@ async fn login<B>(State(AppState { secret, sk_digest, .. }): State<AppState<B>>,
         }
     }
     if let Some(sec) = secret {
+        let now_secs = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_err(InternalError::boxed)?.as_secs();
         let jwt = encode(
             &Header::default(),
             &Claims {
                 sub: "admin".to_string(),
-                exp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() + EXPIRE,
+                exp: now_secs + EXPIRE,
                 username: login.ak.to_string(),
             },
             &EncodingKey::from_secret(sec.as_ref()),
         )
         .map_err(InternalError::boxed)?;
-        response.headers_mut().insert(
-            SET_COOKIE,
-            HeaderValue::from_str(&format!("jwt={jwt}; path=/; HttpOnly; Max-Age=3600")).expect("invalid jwt"),
-        );
+        let cookie = format!("jwt={jwt}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={EXPIRE}");
+        let cookie_val = HeaderValue::from_str(&cookie).map_err(InternalError::boxed)?;
+        response.headers_mut().insert(SET_COOKIE, cookie_val);
     }
     Ok(response)
 }

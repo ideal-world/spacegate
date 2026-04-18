@@ -29,13 +29,10 @@ limit = ["cache"]
 header-modifier = []
 inject = []
 redirect = ["url"]
-retry = []
 rewrite = []
 set-version = []
 set-scheme = []
 maintenance = ["ipnet", "chrono/serde"]
-# decompression = ["tower-http/decompression-full"]
-status = ["hyper-util"]
 east-west-traffic-white-list = ["ipnet"]
 full = [
   "cache",
@@ -43,13 +40,10 @@ full = [
   "header-modifier",
   "inject",
   "redirect",
-  "retry",
   "rewrite",
   "maintenance",
   "set-version",
   "set-scheme",
-  # "decompression",
-  "status",
   "east-west-traffic-white-list",
 ]
 schema = ["schemars", "schemars/chrono"]
@@ -63,7 +57,6 @@ hyper = { workspace = true }
 http-body-util = { workspace = true }
 tower-layer = { workspace = true }
 pin-project-lite = { workspace = true }
-hyper-util = { workspace = true, optional = true }
 # serde
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

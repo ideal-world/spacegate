@@ -153,7 +153,18 @@ impl CreateListener for K8s {
 
             let ew = watcher::watcher(gateway_api.clone(), watcher::Config::default());
             pin_mut!(ew);
-            while let Some(gateway_event) = ew.try_next().await.unwrap_or_default() {
+            loop {
+                let gateway_event = match ew.try_next().await {
+                    Ok(Some(ev)) => ev,
+                    Ok(None) => {
+                        tracing::warn!("[SG.Config] gateway watcher stream closed, stopping listener");
+                        break;
+                    }
+                    Err(e) => {
+                        tracing::error!("[SG.Config] gateway watcher error: {e}; retrying");
+                        continue;
+                    }
+                };
                 match gateway_event {
                     watcher::Event::Applied(gateway) => {
                         gateway_uid_version_map = apply_event(gateway, gateway_uid_version_map);
@@ -196,7 +207,18 @@ impl CreateListener for K8s {
             let mut uid_version_map = HashMap::new();
             let ew = watcher::watcher(move_http_spaceroute_api, watcher::Config::default());
             pin_mut!(ew);
-            while let Some(http_route_event) = ew.try_next().await.unwrap_or_default() {
+            loop {
+                let http_route_event = match ew.try_next().await {
+                    Ok(Some(ev)) => ev,
+                    Ok(None) => {
+                        tracing::warn!("[SG.Config] http_spaceroute watcher stream closed, stopping listener");
+                        break;
+                    }
+                    Err(e) => {
+                        tracing::error!("[SG.Config] http_spaceroute watcher error: {e}; retrying");
+                        continue;
+                    }
+                };
                 Self::process_http_spaceroute_event(&move_evt_tx, &move_http_route_names, &move_namespace, http_route_event, &mut uid_version_map).await
             }
         });
@@ -210,7 +232,18 @@ impl CreateListener for K8s {
             let mut uid_version_map = HashMap::new();
             let ew = watcher::watcher(move_http_route_api, watcher::Config::default());
             pin_mut!(ew);
-            while let Some(http_route_event) = ew.try_next().await.unwrap_or_default() {
+            loop {
+                let http_route_event = match ew.try_next().await {
+                    Ok(Some(ev)) => ev,
+                    Ok(None) => {
+                        tracing::warn!("[SG.Config] http_route watcher stream closed, stopping listener");
+                        break;
+                    }
+                    Err(e) => {
+                        tracing::error!("[SG.Config] http_route watcher error: {e}; retrying");
+                        continue;
+                    }
+                };
                 Self::process_http_spaceroute_event(
                     &move_evt_tx,
                     &move_http_route_names,
@@ -244,7 +277,18 @@ impl CreateListener for K8s {
             let mut target_ref_map: HashMap<String, Vec<K8sSgFilterSpecTargetRef>> = HashMap::new();
             let ew = watcher::watcher(sg_filter_api, watcher::Config::default()).touched_objects();
             pin_mut!(ew);
-            while let Some(filter) = ew.try_next().await.unwrap_or_default() {
+            loop {
+                let filter = match ew.try_next().await {
+                    Ok(Some(ev)) => ev,
+                    Ok(None) => {
+                        tracing::warn!("[SG.Config] sgfilter watcher stream closed, stopping listener");
+                        break;
+                    }
+                    Err(e) => {
+                        tracing::error!("[SG.Config] sgfilter watcher error: {e}; retrying");
+                        continue;
+                    }
+                };
                 let name_any = filter.name_any();
                 if filter.spec.filters.iter().any(|inner_filter| move_filter_codes_names.contains(&(inner_filter.code.clone().into(), inner_filter.name.clone().into())))
                     && !uid_version_map.contains_key(&name_any)

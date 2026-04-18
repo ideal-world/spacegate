@@ -22,17 +22,17 @@ fn main() -> Result<(), BoxError> {
                     ext == Some("so".as_ref())
                 };
                 if path.is_file() && is_dylib {
-                    println!("loading plugin lib: {:?}", path);
+                    tracing::info!("loading plugin lib: {:?}", path);
                     let res = unsafe { spacegate_shell::plugin::PluginRepository::global().register_dylib(&path) };
                     if let Err(e) = res {
-                        eprintln!("fail to load plugin: {:?}", e);
+                        tracing::error!("fail to load plugin: {:?}", e);
                     }
                 }
             }
         }
         #[cfg(not(feature = "dylib"))]
         {
-            eprintln!("feature dylib not enabled")
+            tracing::warn!("feature dylib not enabled")
         }
     }
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().thread_name(env!("CARGO_PKG_NAME")).build().expect("fail to build runtime");

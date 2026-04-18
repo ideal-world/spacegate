@@ -31,6 +31,7 @@ schemars = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 ts-rs = { version = "8", optional = true, features = ["serde-json-impl"] }
 typeshare = "1.0.3"
+tracing.workspace = true
 
 
 [dev-dependencies]

@@ -54,7 +54,7 @@ impl<S> Reloader<S> {
     }
     pub fn reload(&self, service: S) {
         if let Some(wg) = self.service.get() {
-            let mut wg = wg.write().expect("should never be poisoned");
+            let mut wg = wg.write().unwrap_or_else(|e| e.into_inner());
             *wg = service;
         } else {
             tracing::warn!("reloader not initialized");
@@ -79,7 +79,7 @@ where
 
     fn call(&self, req: Request) -> Self::Future {
         let service = self.service.clone();
-        let rg = service.read().expect("should never be posisoned");
+        let rg = service.read().unwrap_or_else(|e| e.into_inner());
         let fut = rg.call(req);
         drop(rg);
         fut
