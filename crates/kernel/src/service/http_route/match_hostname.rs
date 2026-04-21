@@ -310,9 +310,9 @@ impl<T> HostnameMatcherNode<T> {
         I: Iterator<Item = &'a str> + Clone,
     {
         // Mirrors `get_by_iter` but operates on `&mut self`, so no unsafe pointer
-        // casts are needed. Splitting the children / else branches is done via
-        // `take`/owned traversal because NLL still can't see through the
-        // conditional borrow.
+        // casts are needed. We first probe with immutable lookups to see which
+        // branch can match, then take a mutable borrow only for that branch,
+        // because NLL still can't see through the conditional borrow.
         if let Some(segment) = host.next() {
             let has_child_match = self.children.get(segment).map(|node| node.get_by_iter(host.clone()).is_some()).unwrap_or(false);
             if has_child_match {
