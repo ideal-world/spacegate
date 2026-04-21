@@ -49,7 +49,7 @@ impl Plugin for RedisLimitPlugin {
         let Some(client) = global_repo().get(gateway_name) else {
             return Err("missing redis client".into());
         };
-        let mut conn = client.get_conn().await?;
+        let mut conn = client.try_get_conn().await?;
         let Some(matched) = req.extensions().get::<MatchedSgRouter>() else {
             return Err("missing matched router".into());
         };
@@ -104,9 +104,9 @@ mod test {
             spacegate_model::PluginInstanceName::named("test"),
         )
         .expect("invalid config");
-        global_repo().add(GW_NAME, spacegate_ext_redis::RedisClient::new(url.as_str()).expect("failed to create redis client"));
+        global_repo().add(GW_NAME, spacegate_ext_redis::RedisClient::try_new(url.as_str()).expect("failed to create redis client"));
         let client = global_repo().get(GW_NAME).expect("missing client");
-        let mut conn = client.get_conn().await.expect("failed to acquire redis connection");
+        let mut conn = client.try_get_conn().await.expect("failed to acquire redis connection");
         let _: () = conn.set(format!("sg:plugin:redis-limit:test:*:op-res:{AK}"), 3).await.expect("fail to set");
         let inner = Inner::new(get_echo_service());
         {

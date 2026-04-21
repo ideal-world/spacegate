@@ -73,7 +73,7 @@ impl Plugin for RedisTimeRangePlugin {
         let Some(key) = redis_format_key(&req, matched, &self.header) else {
             return Ok(PluginError::status::<Self, { code::UNAUTHORIZED }>(format!("missing header {}", self.header.as_str())).into());
         };
-        let pass: bool = redis_call(client.get_conn().await?, format!("{}:{}", self.prefix, key)).await?;
+        let pass: bool = redis_call(client.try_get_conn().await?, format!("{}:{}", self.prefix, key)).await?;
         if !pass {
             return Ok(PluginError::status::<RedisTimeRangePlugin, { code::FORBIDDEN }>("request cumulative count reached the limit").into());
         }
@@ -121,9 +121,9 @@ mod test {
             spacegate_model::PluginInstanceName::named("test"),
         )
         .expect("invalid config");
-        global_repo().add(GW_NAME, spacegate_ext_redis::RedisClient::new(url.as_str()).expect("failed to create redis client"));
+        global_repo().add(GW_NAME, spacegate_ext_redis::RedisClient::try_new(url.as_str()).expect("failed to create redis client"));
         let client = global_repo().get(GW_NAME).expect("missing client");
-        let mut conn = client.get_conn().await.expect("failed to acquire redis connection");
+        let mut conn = client.try_get_conn().await.expect("failed to acquire redis connection");
         let current_year = chrono::Utc::now().year();
         let next_year = current_year + 1;
         let next_next_year = next_year + 1;
