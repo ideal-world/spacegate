@@ -40,7 +40,7 @@ async fn login<B>(State(AppState { secret, sk_digest, .. }): State<AppState<B>>,
             &EncodingKey::from_secret(sec.as_ref()),
         )
         .map_err(InternalError::boxed)?;
-        let cookie = format!("jwt={jwt}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={EXPIRE}");
+        let cookie = format!("jwt={jwt}; Path=/; HttpOnly; SameSite=Strict; Max-Age={EXPIRE}");
         let cookie_val = HeaderValue::from_str(&cookie).map_err(InternalError::boxed)?;
         response.headers_mut().insert(SET_COOKIE, cookie_val);
     }
