@@ -161,7 +161,8 @@ impl CreateListener for K8s {
                         break;
                     }
                     Err(e) => {
-                        tracing::error!("[SG.Config] gateway watcher error: {e}; retrying");
+                        tracing::error!("[SG.Config] gateway watcher error: {e}; retrying after backoff");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         continue;
                     }
                 };
@@ -215,7 +216,8 @@ impl CreateListener for K8s {
                         break;
                     }
                     Err(e) => {
-                        tracing::error!("[SG.Config] http_spaceroute watcher error: {e}; retrying");
+                        tracing::error!("[SG.Config] http_spaceroute watcher error: {e}; retrying after backoff");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         continue;
                     }
                 };
@@ -240,7 +242,8 @@ impl CreateListener for K8s {
                         break;
                     }
                     Err(e) => {
-                        tracing::error!("[SG.Config] http_route watcher error: {e}; retrying");
+                        tracing::error!("[SG.Config] http_route watcher error: {e}; retrying after backoff");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         continue;
                     }
                 };
@@ -285,7 +288,8 @@ impl CreateListener for K8s {
                         break;
                     }
                     Err(e) => {
-                        tracing::error!("[SG.Config] sgfilter watcher error: {e}; retrying");
+                        tracing::error!("[SG.Config] sgfilter watcher error: {e}; retrying after backoff");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         continue;
                     }
                 };
