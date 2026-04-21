@@ -37,6 +37,7 @@ openssl = { version = "0.10" }
 # tardis = { workspace = true, features = ["console-subscriber"] }
 # tardis = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 [dev-dependencies]
 
