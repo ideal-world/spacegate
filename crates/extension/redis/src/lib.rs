@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::RwLock};
 
 pub use deadpool_redis::{Connection, Manager, Pool, PoolError};
 pub use redis;
+use redis::RedisResult;
 
 /// Wrapper for pooled Redis client.
 #[derive(Clone)]
@@ -17,32 +18,56 @@ impl std::fmt::Debug for RedisClient {
 }
 
 impl RedisClient {
+    fn build_pool(url: &str) -> Result<Pool, PoolError> {
+        let manager = Manager::new(url).map_err(PoolError::Backend)?;
+        let redis_conn_pool =
+            Pool::builder(manager).build().map_err(|e| PoolError::Backend(redis::RedisError::from((redis::ErrorKind::ClientError, "pool build failed", e.to_string()))))?;
+        Ok(redis_conn_pool)
+    }
+
+    fn pool_error_into_redis_error(error: PoolError) -> redis::RedisError {
+        match error {
+            PoolError::Backend(error) => error,
+            other => redis::RedisError::from((redis::ErrorKind::ClientError, "redis pool error", other.to_string())),
+        }
+    }
+
     /// Create a new Redis client from connect url.
     ///
     /// # Errors
     /// Returns an error if the url cannot be parsed or the pool builder fails.
-    pub fn new(url: impl AsRef<str>) -> Result<Self, PoolError> {
-        let url = url.as_ref();
-        let manager = Manager::new(url).map_err(PoolError::Backend)?;
-        let redis_conn_pool =
-            Pool::builder(manager).build().map_err(|e| PoolError::Backend(redis::RedisError::from((redis::ErrorKind::ClientError, "pool build failed", e.to_string()))))?;
+    pub fn new(url: impl AsRef<str>) -> RedisResult<Self> {
+        let redis_conn_pool = Self::build_pool(url.as_ref()).map_err(Self::pool_error_into_redis_error)?;
         Ok(Self { redis_conn_pool })
     }
+
+    /// Create a new Redis client from connect url without panicking on pool setup failures.
+    ///
+    /// # Errors
+    /// Returns an error if the url cannot be parsed or the pool builder fails.
+    pub fn try_new(url: impl AsRef<str>) -> Result<Self, PoolError> {
+        let redis_conn_pool = Self::build_pool(url.as_ref())?;
+        Ok(Self { redis_conn_pool })
+    }
+
+    /// Get a connection from the pool.
+    pub async fn get_conn(&self) -> Connection {
+        self.try_get_conn().await.expect("failed to acquire redis connection")
+    }
+
     /// Get a connection from the pool.
     ///
     /// # Errors
     /// Returns an error if the pool is closed, exhausted (timeout), or the
     /// underlying Redis connection fails.
-    pub async fn get_conn(&self) -> Result<Connection, PoolError> {
+    pub async fn try_get_conn(&self) -> Result<Connection, PoolError> {
         self.redis_conn_pool.get().await
     }
 }
 
-impl TryFrom<&str> for RedisClient {
-    type Error = PoolError;
-
-    fn try_from(url: &str) -> Result<Self, Self::Error> {
-        Self::new(url)
+impl From<&str> for RedisClient {
+    fn from(url: &str) -> Self {
+        Self::new(url).expect("Failed to create Redis client")
     }
 }
 
@@ -65,8 +90,8 @@ impl RedisClientRepo {
     }
 
     /// Add a Redis client to the repository.
-    pub fn add(&self, name: impl Into<String>, client: RedisClient) {
-        self.repos.write().expect("poisoned global redis client repo").insert(name.into(), client);
+    pub fn add(&self, name: impl Into<String>, client: impl Into<RedisClient>) {
+        self.repos.write().expect("poisoned global redis client repo").insert(name.into(), client.into());
     }
 
     /// Get a Redis client from the repository by its name.
