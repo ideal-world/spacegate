@@ -381,6 +381,24 @@ jobs:
       - name: Copy binary to workspace
         run: cp ./target/release/spacegate resource/docker/spacegate/
 
+      - name: Compute Docker tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+            tag="latest"
+          else
+            raw_tag="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            tag=$(printf '%s' "$raw_tag" | tr -cs '[:alnum:]._-' '-')
+            tag="${tag#[-.]}"
+            tag="${tag%[-.]}"
+
+            if [[ -z "$tag" ]]; then
+              tag="${GITHUB_SHA::12}"
+            fi
+          fi
+
+          echo "DOCKER_TAG=$tag" >> "$GITHUB_ENV"
+
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
@@ -388,7 +406,7 @@ jobs:
           dockerfile: resource/docker/spacegate/Dockerfile
           registry: docker.io
           image: ecfront/spacegate
-          tags: ${{ github.ref == 'refs/heads/master' && 'latest' || github.ref_name }}
+          tags: ${{ env.DOCKER_TAG }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 

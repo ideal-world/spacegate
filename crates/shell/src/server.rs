@@ -182,7 +182,10 @@ impl RunningSgGateway {
         let store = Self::global_store();
         let mut task = tokio::task::JoinSet::new();
         {
-            let mut g_store = store.lock().expect("poisoned lock");
+            let mut g_store = store.lock().unwrap_or_else(|e| {
+                tracing::warn!("[SG.Server] recovering from poisoned global gateway store lock during reset");
+                e.into_inner()
+            });
             for (_, s) in g_store.drain() {
                 task.spawn(s.shutdown());
             }
@@ -198,13 +201,19 @@ impl RunningSgGateway {
     }
     pub fn global_save(gateway_name: impl Into<String>, gateway: RunningSgGateway) {
         let global_store = Self::global_store();
-        let mut global_store = global_store.lock().expect("poisoned lock");
+        let mut global_store = global_store.lock().unwrap_or_else(|e| {
+            tracing::warn!("[SG.Server] recovering from poisoned global gateway store lock during save");
+            e.into_inner()
+        });
         global_store.insert(gateway_name.into(), gateway);
     }
 
     pub fn global_remove(gateway_name: impl AsRef<str>) -> Option<RunningSgGateway> {
         let global_store = Self::global_store();
-        let mut global_store = global_store.lock().expect("poisoned lock");
+        let mut global_store = global_store.lock().unwrap_or_else(|e| {
+            tracing::warn!("[SG.Server] recovering from poisoned global gateway store lock during remove");
+            e.into_inner()
+        });
         global_store.remove(gateway_name.as_ref())
     }
 
@@ -213,7 +222,10 @@ impl RunningSgGateway {
         let service = create_router_service(gateway_name.to_string().into(), http_routes)?;
         let reloader = {
             let store = Self::global_store();
-            let global_store = store.lock().expect("poisoned lock");
+            let global_store = store.lock().unwrap_or_else(|e| {
+                tracing::warn!("[SG.Server] recovering from poisoned global gateway store lock during update");
+                e.into_inner()
+            });
             if let Some(gw) = global_store.get(gateway_name) {
                 gw.reloader.clone()
             } else {
@@ -233,11 +245,15 @@ impl RunningSgGateway {
         {
             if let Some(url) = &config_item.gateway.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
-                // builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
-                // builder_ext.insert(spacegate_kernel::extension::GatewayName(config.gateway.name.clone().into()));
-                // Initialize cache instances
-                tracing::trace!("Initialize cache client...url:{url}");
-                spacegate_ext_redis::RedisClientRepo::global().add(&config_item.gateway.name, url.as_ref());
+                // Initialize cache instances. Avoid logging the raw URL because it may contain credentials.
+                tracing::trace!(gateway = %config_item.gateway.name, "Initialize cache client");
+                match spacegate_ext_redis::RedisClient::try_new(url.as_ref()) {
+                    Ok(client) => spacegate_ext_redis::RedisClientRepo::global().add(&config_item.gateway.name, client),
+                    Err(e) => {
+                        tracing::error!(gateway = %config_item.gateway.name, error = %e, "failed to initialize redis client");
+                        return Err(Box::new(e));
+                    }
+                }
             }
         }
         tracing::info!("[SG.Server] start gateway");

@@ -49,7 +49,7 @@ impl Plugin for RedisDynamicRoutePlugin {
             return Err(format!("missing header {}", header.as_str()).into());
         };
         let route_key = format!("{}:{}", prefix, key);
-        let mut conn = client.get_conn().await;
+        let mut conn = client.try_get_conn().await?;
         let domain: String = conn.get(route_key).await.map_err(PluginError::internal_error::<RedisDynamicRoutePlugin>)?;
         let mut uri_parts = req.uri().clone().into_parts();
         let path = req.uri().path();

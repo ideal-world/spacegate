@@ -107,7 +107,7 @@ impl Plugin for RateLimitPlugin {
     async fn call(&self, req: Request<SgBody>, inner: Inner) -> Result<Response<SgBody>, BoxError> {
         let id = &self.id;
         let ip = req.extract::<OriginalIpAddr>().to_canonical();
-        let mut conn = req.get_redis_client_by_gateway_name().ok_or("missing gateway name")?.get_conn().await;
+        let mut conn = req.get_redis_client_by_gateway_name().ok_or("missing gateway name")?.try_get_conn().await?;
 
         const EXCEEDED: i32 = 0;
         let result: i32 = script()
@@ -126,7 +126,7 @@ impl Plugin for RateLimitPlugin {
 
         if result == EXCEEDED {
             let mut response = Response::<SgBody>::with_code_message(StatusCode::TOO_MANY_REQUESTS, "[SG.Filter.Limit] too many requests");
-            response.extensions_mut().insert(self.report( ip));
+            response.extensions_mut().insert(self.report(ip));
             return Ok(response);
         }
         Ok(inner.call(req).await)

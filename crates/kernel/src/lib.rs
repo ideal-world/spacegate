@@ -68,8 +68,8 @@ pub trait SgRequestExt {
     fn defer_call<F>(&mut self, f: F)
     where
         F: FnOnce(SgRequest) -> SgRequest + Send + 'static;
-    fn path_iter(&self) -> PathIter;
-    fn query_kv_iter(&self) -> Option<QueryKvIter>;
+    fn path_iter(&self) -> PathIter<'_>;
+    fn query_kv_iter(&self) -> Option<QueryKvIter<'_>>;
 }
 
 impl SgRequestExt for SgRequest {
@@ -126,11 +126,11 @@ impl SgRequestExt for SgRequest {
         defer.push_back(f);
     }
 
-    fn path_iter(&self) -> PathIter {
+    fn path_iter(&self) -> PathIter<'_> {
         PathIter::new(self.uri().path())
     }
 
-    fn query_kv_iter(&self) -> Option<QueryKvIter> {
+    fn query_kv_iter(&self) -> Option<QueryKvIter<'_>> {
         self.uri().query().map(QueryKvIter::new)
     }
 }

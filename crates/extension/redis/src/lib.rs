@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::RwLock};
 
-pub use deadpool_redis::{Connection, Manager, Pool};
+pub use deadpool_redis::{Connection, Manager, Pool, PoolError};
 pub use redis;
 use redis::RedisResult;
 
@@ -18,15 +18,50 @@ impl std::fmt::Debug for RedisClient {
 }
 
 impl RedisClient {
+    fn build_pool(url: &str) -> Result<Pool, PoolError> {
+        let manager = Manager::new(url).map_err(PoolError::Backend)?;
+        let redis_conn_pool =
+            Pool::builder(manager).build().map_err(|e| PoolError::Backend(redis::RedisError::from((redis::ErrorKind::ClientError, "pool build failed", e.to_string()))))?;
+        Ok(redis_conn_pool)
+    }
+
+    fn pool_error_into_redis_error(error: PoolError) -> redis::RedisError {
+        match error {
+            PoolError::Backend(error) => error,
+            other => redis::RedisError::from((redis::ErrorKind::ClientError, "redis pool error", other.to_string())),
+        }
+    }
+
     /// Create a new Redis client from connect url.
+    ///
+    /// # Errors
+    /// Returns an error if the url cannot be parsed or the pool builder fails.
     pub fn new(url: impl AsRef<str>) -> RedisResult<Self> {
-        let url = url.as_ref();
-        let redis_conn_pool = Pool::builder(Manager::new(url)?).build().expect("Failed to create Redis pool");
+        let redis_conn_pool = Self::build_pool(url.as_ref()).map_err(Self::pool_error_into_redis_error)?;
         Ok(Self { redis_conn_pool })
     }
+
+    /// Create a new Redis client from connect url without panicking on pool setup failures.
+    ///
+    /// # Errors
+    /// Returns an error if the url cannot be parsed or the pool builder fails.
+    pub fn try_new(url: impl AsRef<str>) -> Result<Self, PoolError> {
+        let redis_conn_pool = Self::build_pool(url.as_ref())?;
+        Ok(Self { redis_conn_pool })
+    }
+
     /// Get a connection from the pool.
     pub async fn get_conn(&self) -> Connection {
-        self.redis_conn_pool.get().await.unwrap()
+        self.try_get_conn().await.expect("failed to acquire redis connection")
+    }
+
+    /// Get a connection from the pool.
+    ///
+    /// # Errors
+    /// Returns an error if the pool is closed, exhausted (timeout), or the
+    /// underlying Redis connection fails.
+    pub async fn try_get_conn(&self) -> Result<Connection, PoolError> {
+        self.redis_conn_pool.get().await
     }
 }
 

@@ -34,7 +34,6 @@ rewrite = []
 set-version = []
 set-scheme = []
 maintenance = ["ipnet", "chrono/serde"]
-# decompression = ["tower-http/decompression-full"]
 status = ["hyper-util"]
 east-west-traffic-white-list = ["ipnet"]
 full = [
@@ -48,7 +47,6 @@ full = [
   "maintenance",
   "set-version",
   "set-scheme",
-  # "decompression",
   "status",
   "east-west-traffic-white-list",
 ]

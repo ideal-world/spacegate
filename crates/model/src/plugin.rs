@@ -240,7 +240,7 @@ impl<'de> Deserialize<'de> for PluginInstanceMap {
             .filter_map(|(k, v)| match PluginInstanceId::parse_by_code(v.id.code.clone(), &k) {
                 Ok(id) => Some((id, v.spec)),
                 Err(e) => {
-                    eprintln!("failed to parse plugin instance id: {}", e);
+                    tracing::warn!("failed to parse plugin instance id: {}", e);
                     None
                 }
             })
