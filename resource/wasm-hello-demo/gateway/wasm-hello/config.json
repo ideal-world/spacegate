@@ -1,0 +1,23 @@
+{
+  "gateway": {
+    "name": "wasm-hello",
+    "parameters": {},
+    "listeners": [
+      {
+        "name": "http",
+        "ip": "127.0.0.1",
+        "port": 18082,
+        "protocol": {
+          "type": "http"
+        }
+      }
+    ],
+    "plugins": [
+      {
+        "code": "wasm",
+        "kind": "named",
+        "name": "hello-world"
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "url": "resource/wasm/spacegate_wasm_hello.wasm",
+  "validate_on_create": false,
+  "fail_strategy": "fail_close",
+  "plugin_name": "hello-world",
+  "plugin_root_id": "hello-world-root",
+  "plugin_vm_id": "hello-world-vm",
+  "plugin_config": {},
+  "clusters": {}
+}
