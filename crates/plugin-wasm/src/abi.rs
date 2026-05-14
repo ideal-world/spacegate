@@ -1,7 +1,8 @@
- //! proxy-wasm ABI 0.2.x 的基础类型与内存/编码工具。
+//! proxy-wasm ABI v0.2.1 的基础类型与内存/编码工具。
 //!
 //! 主要分三块：
-//! 1. `Status` / `Action` / `MapType` / `BufferType` / `StreamType` / `LogLevel` 枚举
+//! 1. `Status` / `Action` / `MapType` / `BufferType` / `StreamType` / `MetricType` / `PeerType` /
+//!    `LogLevel` 枚举（按 spec 1:1 完整覆盖）
 //! 2. `MemoryHelper`：通过 `wasmtime::Memory` 安全读写 guest 线性内存
 //! 3. `pairs`：proxy-wasm 头部 (k, v) 列表的二进制布局编解码
 //!
@@ -11,18 +12,23 @@ use crate::error::WasmHostError;
 use wasmtime::{Caller, Memory, StoreContext, StoreContextMut};
 
 // ─────────────────────────────────────────────────────────
-// 枚举：proxy-wasm 0.2.x ABI（仅列出我们用到的子集）
+// 枚举：proxy-wasm v0.2.1 spec §Types
 // ─────────────────────────────────────────────────────────
 
-/// `proxy_status_t`：所有 host fn 的返回值。
+/// `proxy_status_t`：所有 host fn 的返回值（spec 完整 10 个值）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
 pub enum Status {
     Ok = 0,
     NotFound = 1,
     BadArgument = 2,
+    SerializationFailure = 3,
+    ParseFailure = 4,
+    InvalidMemoryAccess = 6,
     Empty = 7,
+    CasMismatch = 8,
     InternalFailure = 10,
+    Unimplemented = 12,
 }
 
 impl Status {
@@ -49,91 +55,179 @@ impl Action {
     }
 }
 
-/// `proxy_map_type_t`：头部映射的来源。
-///
-/// 与 proxy-wasm-cpp-host 一致：
-/// 0 HttpRequestHeaders / 1 HttpRequestTrailers /
-/// 2 HttpResponseHeaders / 3 HttpResponseTrailers /
-/// 6 HttpCallResponseHeaders / 7 HttpCallResponseTrailers
+/// `proxy_map_type_t`：头部映射的来源（spec §Types 完整 8 个值）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MapType {
-    HttpRequestHeaders,
-    HttpRequestTrailers,
-    HttpResponseHeaders,
-    HttpResponseTrailers,
-    HttpCallResponseHeaders,
-    HttpCallResponseTrailers,
-    Unknown(i32),
+    HttpRequestHeaders = 0,
+    HttpRequestTrailers = 1,
+    HttpResponseHeaders = 2,
+    HttpResponseTrailers = 3,
+    GrpcCallInitialMetadata = 4,
+    GrpcCallTrailingMetadata = 5,
+    HttpCallResponseHeaders = 6,
+    HttpCallResponseTrailers = 7,
 }
 
 impl MapType {
-    pub fn from_i32(v: i32) -> Self {
-        match v {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
             0 => MapType::HttpRequestHeaders,
             1 => MapType::HttpRequestTrailers,
             2 => MapType::HttpResponseHeaders,
             3 => MapType::HttpResponseTrailers,
+            4 => MapType::GrpcCallInitialMetadata,
+            5 => MapType::GrpcCallTrailingMetadata,
             6 => MapType::HttpCallResponseHeaders,
             7 => MapType::HttpCallResponseTrailers,
-            other => MapType::Unknown(other),
-        }
+            _ => return None,
+        })
     }
 }
 
-/// `proxy_buffer_type_t`：缓冲区来源。
-///
-/// 0 HttpRequestBody / 1 HttpResponseBody / 4 HttpCallResponseBody /
-/// 6 VmConfiguration / 7 PluginConfiguration / 8 CallData
+/// `proxy_buffer_type_t`：缓冲区来源（spec §Types 完整 9 个值）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferType {
-    HttpRequestBody,
-    HttpResponseBody,
-    HttpCallResponseBody,
-    VmConfiguration,
-    PluginConfiguration,
-    Unknown(i32),
+    HttpRequestBody = 0,
+    HttpResponseBody = 1,
+    DownstreamData = 2,
+    UpstreamData = 3,
+    HttpCallResponseBody = 4,
+    GrpcCallMessage = 5,
+    VmConfiguration = 6,
+    PluginConfiguration = 7,
+    ForeignFunctionArguments = 8,
 }
 
 impl BufferType {
-    pub fn from_i32(v: i32) -> Self {
-        match v {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
             0 => BufferType::HttpRequestBody,
             1 => BufferType::HttpResponseBody,
+            2 => BufferType::DownstreamData,
+            3 => BufferType::UpstreamData,
             4 => BufferType::HttpCallResponseBody,
+            5 => BufferType::GrpcCallMessage,
             6 => BufferType::VmConfiguration,
             7 => BufferType::PluginConfiguration,
-            other => BufferType::Unknown(other),
-        }
+            8 => BufferType::ForeignFunctionArguments,
+            _ => return None,
+        })
     }
 }
 
 /// `proxy_stream_type_t`：`proxy_continue_stream` / `proxy_close_stream` 参数。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamType {
-    Request,
-    Response,
-    Unknown(i32),
+    HttpRequest = 0,
+    HttpResponse = 1,
+    Downstream = 2,
+    Upstream = 3,
 }
 
 impl StreamType {
-    pub fn from_i32(v: i32) -> Self {
-        match v {
-            0 => StreamType::Request,
-            1 => StreamType::Response,
-            other => StreamType::Unknown(other),
-        }
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
+            0 => StreamType::HttpRequest,
+            1 => StreamType::HttpResponse,
+            2 => StreamType::Downstream,
+            3 => StreamType::Upstream,
+            _ => return None,
+        })
+    }
+}
+
+/// `proxy_metric_type_t`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MetricType {
+    Counter = 0,
+    Gauge = 1,
+    Histogram = 2,
+}
+
+impl MetricType {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
+            0 => MetricType::Counter,
+            1 => MetricType::Gauge,
+            2 => MetricType::Histogram,
+            _ => return None,
+        })
+    }
+}
+
+/// `proxy_peer_type_t`（TCP 用，暂不调用但保留类型）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum PeerType {
+    Unknown = 0,
+    Local = 1,
+    Remote = 2,
+}
+
+/// `proxy_log_level_t`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum LogLevel {
+    Trace = 0,
+    Debug = 1,
+    Info = 2,
+    Warn = 3,
+    Error = 4,
+    Critical = 5,
+}
+
+impl LogLevel {
+    pub fn as_i32(self) -> i32 {
+        self as i32
     }
 }
 
 /// `proxy_log` 的 level（tracing 转换用）。
-pub fn log_level_to_tracing(level: i32) -> tracing::Level {
-    match level {
+pub fn log_level_to_tracing(level: i32) -> Option<tracing::Level> {
+    Some(match level {
         0 => tracing::Level::TRACE,
         1 => tracing::Level::DEBUG,
         2 => tracing::Level::INFO,
         3 => tracing::Level::WARN,
-        _ => tracing::Level::ERROR,
+        4 | 5 => tracing::Level::ERROR,
+        _ => return None,
+    })
+}
+
+/// host tracing 最大级别 → proxy_log_level_t（用于 `proxy_get_log_level`）。
+pub fn host_max_log_level() -> LogLevel {
+    if tracing::enabled!(tracing::Level::TRACE) {
+        LogLevel::Trace
+    } else if tracing::enabled!(tracing::Level::DEBUG) {
+        LogLevel::Debug
+    } else if tracing::enabled!(tracing::Level::INFO) {
+        LogLevel::Info
+    } else if tracing::enabled!(tracing::Level::WARN) {
+        LogLevel::Warn
+    } else {
+        LogLevel::Error
     }
+}
+
+// ─────────────────────────────────────────────────────────
+// WASI 常量子集
+// ─────────────────────────────────────────────────────────
+
+/// `wasi_errno_t`（spec §Types 中的子集）。
+pub mod wasi_errno {
+    pub const SUCCESS: i32 = 0;
+    pub const BADF: i32 = 8;
+    pub const FAULT: i32 = 21;
+    #[allow(dead_code)]
+    pub const INVAL: i32 = 28;
+    #[allow(dead_code)]
+    pub const NOTSUP: i32 = 58;
+}
+
+/// `wasi_fd_id_t`：stdout / stderr。
+pub mod wasi_fd {
+    pub const STDOUT: i32 = 1;
+    pub const STDERR: i32 = 2;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -191,7 +285,14 @@ impl MemoryHelper {
         Ok(())
     }
 
-    /// 写入一个 little-endian i32 到 guest 内存。
+    /// 读 little-endian u32。
+    pub fn read_u32<T>(&self, store: StoreContext<'_, T>, ptr: u32) -> Result<u32, WasmHostError> {
+        let bytes = self.read_bytes(store, ptr, 4)?;
+        let arr: [u8; 4] = bytes.as_slice().try_into().map_err(|_| WasmHostError::MemoryOob { ptr, len: 4 })?;
+        Ok(u32::from_le_bytes(arr))
+    }
+
+    /// 写入一个 little-endian u32 到 guest 内存。
     pub fn write_u32<T>(&self, store: StoreContextMut<'_, T>, ptr: u32, value: u32) -> Result<(), WasmHostError> {
         self.write_bytes(store, ptr, &value.to_le_bytes())
     }
@@ -217,7 +318,6 @@ impl MemoryHelper {
 
 pub fn encode_pairs(pairs: &[(&[u8], &[u8])]) -> Vec<u8> {
     let count = pairs.len() as u32;
-    // 估算容量：头 4 + 每对 8 + 每对 (k+1+v+1)
     let mut cap: usize = 4 + pairs.len() * 8;
     for (k, v) in pairs {
         cap += k.len() + 1 + v.len() + 1;
@@ -240,7 +340,14 @@ pub fn encode_pairs(pairs: &[(&[u8], &[u8])]) -> Vec<u8> {
 /// 解码 `proxy_set_header_map_pairs` 写入的字节流为 (key, value) 列表。
 ///
 /// 严格按编码格式校验长度；不合法直接返回 `None`，由 host 端转 BadArgument。
+/// 空 map 允许两种编码：空 buf（`size=0`）或单 `0x00` 字节（spec §Serialization）。
 pub fn decode_pairs(bytes: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+    if bytes.is_empty() {
+        return Some(Vec::new());
+    }
+    if bytes == [0u8] {
+        return Some(Vec::new());
+    }
     if bytes.len() < 4 {
         return None;
     }
@@ -264,7 +371,7 @@ pub fn decode_pairs(bytes: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
             return None;
         }
         let key = bytes[pos..pos + ks].to_vec();
-        pos += ks + 1; // skip \0
+        pos += ks + 1;
         let val = bytes[pos..pos + vs].to_vec();
         pos += vs + 1;
         out.push((key, val));
@@ -277,4 +384,19 @@ fn u32_from_slice(bytes: &[u8], pos: usize) -> Option<u32> {
     let s = bytes.get(pos..pos + 4)?;
     let arr: [u8; 4] = s.try_into().ok()?;
     Some(u32::from_le_bytes(arr))
+}
+
+/// 把 property path（`\0` 分割的多段字节流）拆成 segments。
+///
+/// spec §Serialization: "Host implementations should tolerate a NULL character at the end".
+pub fn decode_property_path(bytes: &[u8]) -> Vec<&[u8]> {
+    let trimmed = if bytes.last().copied() == Some(0) {
+        &bytes[..bytes.len() - 1]
+    } else {
+        bytes
+    };
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    trimmed.split(|b| *b == 0u8).collect()
 }

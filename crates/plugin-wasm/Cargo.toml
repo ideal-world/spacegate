@@ -40,5 +40,11 @@ bytes = { workspace = true }
 # moka 同步缓存模块（Module 编译产物按 url 缓存）
 moka = { version = "0.12", features = ["sync"] }
 
+# WASI random_get：用 OS 级 RNG（getrandom 是 rand 的底层，体积小）
+getrandom = "0.2"
+
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time"] }
+# 集成测试 mock HTTP server / inner.call mock service 需要 hyper 1 + hyper-util。
+hyper-util = { workspace = true, features = ["tokio"] }
+http-body-util = { workspace = true }
