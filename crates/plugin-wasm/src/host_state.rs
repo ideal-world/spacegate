@@ -1,13 +1,14 @@
 //! 传给 `wasmtime::Store<T>` 的宿主状态。
 //!
-//! - 顶层 `HostState` 承载：进程级 reqwest 客户端、shell 配置、序列化后的 plugin_config 字节、
+//! - 顶层 [`HostState`] 承载：进程级 reqwest 客户端、shell 配置、序列化后的 plugin_config 字节、
 //!   memory / 分配器 export、所有 HTTP 上下文、未完结的 `proxy_http_call` 句柄等。
 //! - 每个 HTTP 请求建一个 [`RequestContext`]，由 `vm.rs` 在调 `proxy_on_*` 钩子前后维护。
 //! - host fn 通过 `caller.data() / data_mut()` 读写 `HostState`，并以
-//!   `effective_context` 字段定位「当前是哪个上下文」（hai-process-mix 调
-//!   `proxy_set_effective_context` 切换）。
+//!   `effective_context` 字段定位「当前是哪个上下文」（spec §Effective context changes，
+//!   guest 通过 `proxy_set_effective_context` 切换）。
 
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -26,8 +27,10 @@ pub enum ContextStage {
     Init,
     RequestHeaders,
     RequestBody,
+    RequestTrailers,
     ResponseHeaders,
     ResponseBody,
+    ResponseTrailers,
     Log,
 }
 
@@ -53,6 +56,7 @@ pub struct LocalResponse {
 #[derive(Debug, Default)]
 pub struct HttpCallResult {
     pub status: u16,
+    pub status_message: String,
     pub headers: HeaderMap,
     pub body: Bytes,
 }
@@ -73,20 +77,35 @@ pub struct RequestContext {
     pub stage: ContextStage,
     pub request_pseudo: PseudoHeaders,
     pub request_headers: HeaderMap,
+    pub request_trailers: HeaderMap,
     pub request_body: Option<Bytes>,
     pub response_status: Option<u16>,
+    pub response_status_message: String,
     pub response_headers: HeaderMap,
+    pub response_trailers: HeaderMap,
     pub response_body: Option<Bytes>,
     /// 上次 `proxy_http_call` 回调时由 host 注入；guest 通过
     /// `get_http_call_response_*` 读它。
     pub last_call_headers: HeaderMap,
+    pub last_call_trailers: HeaderMap,
     pub last_call_body: Bytes,
     /// 最近一次 dispatch_http_call 返回的状态码（hai 用 `:status` 伪头读取）。
     pub last_call_status: u16,
+    pub last_call_status_message: String,
     /// guest 显式 `resume_http_request()` 后置 true；Vm 退出 Pause 等待循环。
     pub continue_requested: bool,
     /// guest 调 `send_local_response` 后写入；Vm 据此短路返回。
     pub local_response: Option<LocalResponse>,
+    /// HTTP 协议版本字符串（spec well-known property `request.protocol`）。
+    pub request_protocol: String,
+    /// 收到的 request body 已知字节数。
+    pub request_size: u64,
+    /// 输出的 response body 已知字节数。
+    pub response_size: u64,
+    /// 通过 `proxy_done` 显式标记的 done 阶段（spec §proxy_done / §proxy_on_done）。
+    pub done_marker: bool,
+    /// guest 上一次 `proxy_on_done` 返回值；false 表示要等 `proxy_done` 才能进 on_log/on_delete。
+    pub awaiting_done: bool,
 }
 
 /// 进程内传给 wasmtime `Store` 的状态。生命周期与一次 Vm 实例一致。
@@ -98,14 +117,15 @@ pub struct HostState {
     pub configuration: Vec<u8>,
     /// guest 导出的线性内存（vm.rs 实例化完成后填）。
     pub memory: Option<Memory>,
-    /// guest 导出 `proxy_on_memory_allocate(size) -> ptr`：host 把数据回写到 wasm 前的分配函数。
+    /// guest 导出 `proxy_on_memory_allocate(size) -> ptr` 或 deprecated `malloc(size) -> ptr`。
     pub alloc: Option<TypedFunc<u32, u32>>,
     pub root_context_id: u32,
     /// 当前 hostcall 关联的上下文 id（由 vm.rs 在每次钩子前设置，
     /// 也可被 guest 的 `proxy_set_effective_context` 覆盖）。
     pub effective_context: u32,
     pub contexts: HashMap<u32, RequestContext>,
-    /// guest 调用 `proxy_set_tick_period_milliseconds` 后存这里；Phase 1 暂不真正驱动 tick。
+    /// guest 调用 `proxy_set_tick_period_milliseconds` 后存这里。
+    /// `WasmPluginShell` 的后台 tick 任务 50ms 颗粒度地轮询本字段，到点 → `Vm::tick()`。
     pub tick_period_ms: Option<u32>,
     /// 未完结的 dispatch_http_call 句柄表。
     pub pending_calls: HashMap<u32, PendingCall>,
@@ -113,16 +133,28 @@ pub struct HostState {
     next_token: u32,
     /// host 端 reqwest 客户端：所有 dispatch_http_call 复用一个，免去握手开销。
     pub http_client: reqwest::Client,
+    /// 用户通过 `proxy_set_property` 设置的自定义属性（key = `\0` 分割的 path 字节）。
+    pub user_properties: HashMap<Vec<u8>, Vec<u8>>,
+    /// 客户端 socket 地址（spec well-known property `source.address` / `source.port`）。
+    pub source_addr: Option<SocketAddr>,
+    /// 服务端 socket 地址（spec well-known property `destination.address` / `destination.port`）。
+    pub destination_addr: Option<SocketAddr>,
+    /// 插件标识（spec well-known property `plugin_name` / `plugin_root_id` / `plugin_vm_id`）。
+    pub plugin_name: String,
+    pub plugin_root_id: String,
+    pub plugin_vm_id: String,
 }
 
 impl HostState {
     pub fn new(shell_cfg: Arc<WasmPluginShellConfig>) -> Self {
-        // 把 plugin_config 序列化成 YAML 字节，与 hai-process-mix 的 `serde_yaml::from_slice` 对齐。
         let configuration = shell_cfg.configuration_bytes();
         let http_client = reqwest::Client::builder()
             .pool_max_idle_per_host(8)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
+        let plugin_name = shell_cfg.plugin_name.clone();
+        let plugin_root_id = shell_cfg.plugin_root_id.clone();
+        let plugin_vm_id = shell_cfg.plugin_vm_id.clone();
         Self {
             shell_cfg,
             configuration,
@@ -135,6 +167,12 @@ impl HostState {
             pending_calls: HashMap::new(),
             next_token: 1,
             http_client,
+            user_properties: HashMap::new(),
+            source_addr: None,
+            destination_addr: None,
+            plugin_name,
+            plugin_root_id,
+            plugin_vm_id,
         }
     }
 

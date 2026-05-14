@@ -24,7 +24,7 @@ pub struct WasmLimits {
 pub struct WasmPluginShellConfig {
     /// `file://`、`http(s)://` 或本地路径。
     pub url: String,
-    /// 传给 guest `proxy_on_configure` 的配置：可为 JSON 对象；序列化为 YAML 字节给 hai 系插件。
+    /// 传给 guest `proxy_on_configure` 的配置：可为 JSON 对象;序列化为 YAML 字节给 hai 系插件。
     #[serde(default)]
     pub plugin_config: serde_json::Value,
     #[serde(default)]
@@ -40,6 +40,19 @@ pub struct WasmPluginShellConfig {
     /// 创建时是否尝试用占位 linker 实例化一次（尽早发现链接错误）。当前实现已弃用，保留兼容字段。
     #[serde(default = "default_validate")]
     pub validate_on_create: bool,
+    /// 暴露给 guest 的 `plugin_name` well-known property（spec §Properties §Proxy-Wasm properties）。
+    #[serde(default)]
+    pub plugin_name: String,
+    /// 暴露给 guest 的 `plugin_root_id` well-known property。
+    #[serde(default)]
+    pub plugin_root_id: String,
+    /// 暴露给 guest 的 `plugin_vm_id` well-known property；同时用于 `proxy_resolve_shared_queue`。
+    #[serde(default = "default_vm_id")]
+    pub plugin_vm_id: String,
+}
+
+fn default_vm_id() -> String {
+    "default".to_string()
 }
 
 fn default_validate() -> bool {
@@ -55,6 +68,9 @@ impl Default for WasmPluginShellConfig {
             clusters: HashMap::new(),
             limits: WasmLimits::default(),
             validate_on_create: false,
+            plugin_name: String::new(),
+            plugin_root_id: String::new(),
+            plugin_vm_id: default_vm_id(),
         }
     }
 }

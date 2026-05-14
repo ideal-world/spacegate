@@ -13,6 +13,12 @@ members = [
   "examples/socks5-proxy",
   "examples/mitm-proxy", 
 ]
+exclude = [
+  # proxy-wasm-rust-sdk guest 用作 host 集成测试参考插件，目标三元组 wasm32-wasip1，不属于主 workspace。
+  "crates/plugin-wasm/tests/spec_test_guest",
+  "crates/plugin-wasm/tests/sdk_examples_guest",
+  "crates/plugin-wasm/tests/on_tick_guest",
+]
 resolver = "2"
 [profile.release]
 codegen-units = 1
