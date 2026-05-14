@@ -1,0 +1,44 @@
+[package]
+name = "spacegate-plugin-wasm"
+version.workspace = true
+authors.workspace = true
+description = "Proxy-Wasm host integration for SpaceGate (wasmtime)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../../README.md"
+
+[lib]
+name = "spacegate_plugin_wasm"
+path = "src/lib.rs"
+
+[dependencies]
+spacegate-plugin = { workspace = true }
+spacegate-kernel = { workspace = true }
+spacegate-model = { workspace = true }
+
+wasmtime = { version = "23", default-features = true, features = ["async", "cranelift"] }
+
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+
+tracing = { workspace = true }
+thiserror = "1"
+once_cell = "1.19"
+
+# host fn: dispatch_http_call 走 reqwest 异步客户端（用 0.12 与 spacegate 的 http=1 对齐）
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# 异步驱动 + 待回填 dispatch 状态
+tokio = { workspace = true, features = ["sync", "macros", "rt"] }
+# inner.call 拿到的是 hyper Response<SgBody>，host fn 操作 header 时要用 http 类型
+hyper = { workspace = true }
+http = "1"
+http-body-util = { workspace = true }
+bytes = { workspace = true }
+
+# moka 同步缓存模块（Module 编译产物按 url 缓存）
+moka = { version = "0.12", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

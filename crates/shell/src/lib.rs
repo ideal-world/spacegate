@@ -118,6 +118,9 @@ where
 {
     info!("Spacegate Meta Info: {:?}", Meta::new());
     info!("Starting gateway...");
+    // 启用 `plugin-wasm` 时注册 `CODE = "wasm"`；注册放在 shell 而非 `spacegate-plugin`，避免与 `plugin-wasm` crate 循环依赖。
+    #[cfg(feature = "plugin-wasm")]
+    spacegate_plugin_wasm::register(spacegate_plugin::PluginRepository::global());
     config::startup_with_shutdown_signal(config, ctrl_c_cancel_token()).await
 }
 
