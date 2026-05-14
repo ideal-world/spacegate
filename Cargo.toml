@@ -5,6 +5,7 @@ members = [
   "crates/extension/*",
   "crates/kernel",
   "crates/plugin",
+  "crates/plugin-wasm",
   "crates/model",
   "crates/config",
   "crates/shell",
@@ -46,6 +47,7 @@ spacegate-plugin = { version = "0.2.0-alpha.4", path = "./crates/plugin" }
 spacegate-config = { version = "0.2.0-alpha.4", path = "./crates/config" }
 spacegate-model = { version = "0.2.0-alpha.4", path = "./crates/model" }
 spacegate-shell = { version = "0.2.0-alpha.4", path = "./crates/shell" }
+spacegate-plugin-wasm = { version = "0.2.0-alpha.4", path = "./crates/plugin-wasm" }
 spacegate-ext-axum = { version = "0.2.0-alpha.4", path = "./crates/extension/axum" }
 spacegate-ext-redis = { version = "0.2.0-alpha.4", path = "./crates/extension/redis" }
 

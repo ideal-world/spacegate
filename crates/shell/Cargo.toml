@@ -52,8 +52,10 @@ plugin-set-version = ["spacegate-plugin/set-version"]
 plugin-east-west-traffic-white-list = [
   "spacegate-plugin/east-west-traffic-white-list",
 ]
+plugin-wasm = ["dep:spacegate-plugin-wasm"]
 
 [dependencies]
+spacegate-plugin-wasm = { workspace = true, optional = true }
 spacegate-kernel = { workspace = true, features = ["reload"] }
 spacegate-plugin = { workspace = true, features = ["schema"] }
 spacegate-config = { workspace = true }
