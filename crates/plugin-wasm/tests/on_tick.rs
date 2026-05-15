@@ -9,10 +9,10 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use spacegate_model::{PluginInstanceId, PluginInstanceName};
 use spacegate_plugin::{Plugin, PluginConfig};
 use spacegate_plugin_wasm::shared::{shared_data_get, shared_data_set};
 use spacegate_plugin_wasm::WasmPluginShell;
-use spacegate_model::{PluginInstanceId, PluginInstanceName};
 
 // ─────────────────────────────────────────────────────────
 // guest .wasm 定位/构建

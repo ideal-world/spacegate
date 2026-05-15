@@ -1,5 +1,8 @@
 {
   "url": "resource/wasm/spacegate_wasm_hello.wasm",
+  "sha256": "sha256:6b9dacbcbf5a2d9de9795737aeecd434dc6b261476486803419e9d62084e651c",
+  "module_cache_key": "spacegate-wasm-hello:v1",
+  "use_cache": true,
   "validate_on_create": false,
   "fail_strategy": "fail_close",
   "plugin_name": "hello-world",

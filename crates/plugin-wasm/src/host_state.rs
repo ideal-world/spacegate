@@ -148,10 +148,7 @@ pub struct HostState {
 impl HostState {
     pub fn new(shell_cfg: Arc<WasmPluginShellConfig>) -> Self {
         let configuration = shell_cfg.configuration_bytes();
-        let http_client = reqwest::Client::builder()
-            .pool_max_idle_per_host(8)
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let http_client = reqwest::Client::builder().pool_max_idle_per_host(8).build().unwrap_or_else(|_| reqwest::Client::new());
         let plugin_name = shell_cfg.plugin_name.clone();
         let plugin_root_id = shell_cfg.plugin_root_id.clone();
         let plugin_vm_id = shell_cfg.plugin_vm_id.clone();

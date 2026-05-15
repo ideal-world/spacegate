@@ -137,10 +137,7 @@ impl GuestVm {
     }
 
     fn run_test(&mut self, scenario: u32) -> u32 {
-        let f: TypedFunc<u32, u32> = self
-            .instance
-            .get_typed_func(&mut self.store, "__run_test")
-            .expect("__run_test export");
+        let f: TypedFunc<u32, u32> = self.instance.get_typed_func(&mut self.store, "__run_test").expect("__run_test export");
         f.call(&mut self.store, scenario).expect("__run_test trap-free")
     }
 
@@ -217,12 +214,7 @@ fn proxy_wasm_spec_v0_2_1_compliance() {
     let lr = ctx.local_response.as_ref().expect("local_response written by guest");
     assert_eq!(lr.status, 418, "local_response.status");
     assert_eq!(lr.body, Bytes::from_static(b"local body"), "local_response.body");
-    let x_spec = lr
-        .headers
-        .get("x-spec")
-        .expect("x-spec header present")
-        .to_str()
-        .unwrap_or("");
+    let x_spec = lr.headers.get("x-spec").expect("x-spec header present").to_str().unwrap_or("");
     assert_eq!(x_spec, "teapot");
 
     // (20) set_tick_period 应写入 HostState.tick_period_ms

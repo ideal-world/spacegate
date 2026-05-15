@@ -19,11 +19,53 @@ pub struct WasmLimits {
     pub fuel_per_call: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OciAuthConfig {
+    /// Optional registry hint, for example `registry.cn-hangzhou.aliyuncs.com`.
+    #[serde(default)]
+    pub registry: Option<String>,
+    /// Basic-auth username used for registry token exchange or direct registry auth.
+    #[serde(default)]
+    pub username: Option<String>,
+    /// Basic-auth password used for registry token exchange or direct registry auth.
+    #[serde(default)]
+    pub password: Option<String>,
+    /// Pre-issued bearer token for registries that do not need a token challenge exchange.
+    #[serde(default)]
+    pub bearer_token: Option<String>,
+    /// Docker config `identitytoken`; treated as a bearer token by the registry client.
+    #[serde(default)]
+    pub identity_token: Option<String>,
+}
+
+fn default_use_cache() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WasmPluginShellConfig {
-    /// `file://`、`http(s)://` 或本地路径。
+    /// `file://`、`http(s)://`、OCI 镜像 URL 或本地路径。
     pub url: String,
+    /// Optional OCI registry auth. Usually populated from Higress `imagePullSecret`.
+    #[serde(default)]
+    pub oci_auth: Option<OciAuthConfig>,
+    /// 可选 SHA-256 校验值，支持裸 hex 或 `sha256:<hex>`。
+    ///
+    /// 配置该字段后，host 会在编译前校验拉取到的 wasm 字节；字段变化也会自动让模块缓存失效。
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// 可选模块缓存键。
+    ///
+    /// 默认按 `url` 加 `sha256` 复用编译产物；当远端同 URL 发布新版本且未配置 sha256 时，
+    /// 可以把这里设置成版本号/etag/digest 来强制重新拉取并编译。
+    #[serde(default)]
+    pub module_cache_key: Option<String>,
+    /// 是否复用进程内 wasm Module 缓存。
+    ///
+    /// 默认开启；关闭后每次创建/更新插件实例都会重新拉取并编译，适合开发调试。
+    #[serde(default = "default_use_cache")]
+    pub use_cache: bool,
     /// 传给 guest `proxy_on_configure` 的配置：可为 JSON 对象;序列化为 YAML 字节给 hai 系插件。
     #[serde(default)]
     pub plugin_config: serde_json::Value,
@@ -63,6 +105,10 @@ impl Default for WasmPluginShellConfig {
     fn default() -> Self {
         Self {
             url: String::new(),
+            oci_auth: None,
+            sha256: None,
+            module_cache_key: None,
+            use_cache: default_use_cache(),
             plugin_config: serde_json::Value::Null,
             fail_strategy: FailStrategy::FailOpen,
             clusters: HashMap::new(),
@@ -84,9 +130,7 @@ impl WasmPluginShellConfig {
         if self.plugin_config.is_null() {
             return Vec::new();
         }
-        serde_yaml::to_string(&self.plugin_config)
-            .unwrap_or_default()
-            .into_bytes()
+        serde_yaml::to_string(&self.plugin_config).unwrap_or_default().into_bytes()
     }
 
     /// 给定 guest 传来的 cluster 字符串，返回基础 URL（`http://host:port`）。

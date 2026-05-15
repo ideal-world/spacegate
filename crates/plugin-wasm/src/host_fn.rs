@@ -27,10 +27,7 @@ use crate::shared::{
 /// 把所有 proxy-wasm v0.2.1 host fn 注册到 linker。
 ///
 /// `dispatch_tx` 用于把异步 HTTP 调用结果发送给 Vm 状态机。
-pub fn register_all(
-    linker: &mut Linker<HostState>,
-    dispatch_tx: tokio::sync::mpsc::UnboundedSender<(u32, HttpCallResult)>,
-) -> Result<(), wasmtime::Error> {
+pub fn register_all(linker: &mut Linker<HostState>, dispatch_tx: tokio::sync::mpsc::UnboundedSender<(u32, HttpCallResult)>) -> Result<(), wasmtime::Error> {
     register_log(linker)?;
     register_clock_and_tick(linker)?;
     register_context_control(linker)?;
@@ -52,46 +49,38 @@ pub fn register_all(
 // ─────────────────────────────────────────────────────────
 
 fn register_log(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Error> {
-    linker.func_wrap(
-        "env",
-        "proxy_log",
-        |mut caller: Caller<'_, HostState>, level: i32, msg_ptr: i32, msg_size: i32| -> i32 {
-            let mem = match MemoryHelper::from_caller(&mut caller) {
-                Ok(m) => m,
-                Err(_) => return Status::InvalidMemoryAccess.as_i32(),
-            };
-            let Ok(msg) = mem.read_string_lossy(caller.as_context(), msg_ptr as u32, msg_size as u32) else {
-                return Status::InvalidMemoryAccess.as_i32();
-            };
-            let Some(lvl) = log_level_to_tracing(level) else {
-                return Status::BadArgument.as_i32();
-            };
-            match lvl {
-                tracing::Level::TRACE => tracing::trace!(target: "spacegate_plugin_wasm::guest", "{msg}"),
-                tracing::Level::DEBUG => tracing::debug!(target: "spacegate_plugin_wasm::guest", "{msg}"),
-                tracing::Level::INFO => tracing::info!(target: "spacegate_plugin_wasm::guest", "{msg}"),
-                tracing::Level::WARN => tracing::warn!(target: "spacegate_plugin_wasm::guest", "{msg}"),
-                tracing::Level::ERROR => tracing::error!(target: "spacegate_plugin_wasm::guest", "{msg}"),
-            }
-            Status::Ok.as_i32()
-        },
-    )?;
+    linker.func_wrap("env", "proxy_log", |mut caller: Caller<'_, HostState>, level: i32, msg_ptr: i32, msg_size: i32| -> i32 {
+        let mem = match MemoryHelper::from_caller(&mut caller) {
+            Ok(m) => m,
+            Err(_) => return Status::InvalidMemoryAccess.as_i32(),
+        };
+        let Ok(msg) = mem.read_string_lossy(caller.as_context(), msg_ptr as u32, msg_size as u32) else {
+            return Status::InvalidMemoryAccess.as_i32();
+        };
+        let Some(lvl) = log_level_to_tracing(level) else {
+            return Status::BadArgument.as_i32();
+        };
+        match lvl {
+            tracing::Level::TRACE => tracing::trace!(target: "spacegate_plugin_wasm::guest", "{msg}"),
+            tracing::Level::DEBUG => tracing::debug!(target: "spacegate_plugin_wasm::guest", "{msg}"),
+            tracing::Level::INFO => tracing::info!(target: "spacegate_plugin_wasm::guest", "{msg}"),
+            tracing::Level::WARN => tracing::warn!(target: "spacegate_plugin_wasm::guest", "{msg}"),
+            tracing::Level::ERROR => tracing::error!(target: "spacegate_plugin_wasm::guest", "{msg}"),
+        }
+        Status::Ok.as_i32()
+    })?;
 
-    linker.func_wrap(
-        "env",
-        "proxy_get_log_level",
-        |mut caller: Caller<'_, HostState>, return_ptr: i32| -> i32 {
-            let mem = match MemoryHelper::from_caller(&mut caller) {
-                Ok(m) => m,
-                Err(_) => return Status::InvalidMemoryAccess.as_i32(),
-            };
-            let lvl: LogLevel = host_max_log_level();
-            if mem.write_u32(caller.as_context_mut(), return_ptr as u32, lvl.as_i32() as u32).is_err() {
-                return Status::InvalidMemoryAccess.as_i32();
-            }
-            Status::Ok.as_i32()
-        },
-    )?;
+    linker.func_wrap("env", "proxy_get_log_level", |mut caller: Caller<'_, HostState>, return_ptr: i32| -> i32 {
+        let mem = match MemoryHelper::from_caller(&mut caller) {
+            Ok(m) => m,
+            Err(_) => return Status::InvalidMemoryAccess.as_i32(),
+        };
+        let lvl: LogLevel = host_max_log_level();
+        if mem.write_u32(caller.as_context_mut(), return_ptr as u32, lvl.as_i32() as u32).is_err() {
+            return Status::InvalidMemoryAccess.as_i32();
+        }
+        Status::Ok.as_i32()
+    })?;
     Ok(())
 }
 
@@ -100,49 +89,37 @@ fn register_log(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Error> {
 // ─────────────────────────────────────────────────────────
 
 fn register_clock_and_tick(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Error> {
-    linker.func_wrap(
-        "env",
-        "proxy_get_current_time_nanoseconds",
-        |mut caller: Caller<'_, HostState>, return_ptr: i32| -> i32 {
-            let mem = match MemoryHelper::from_caller(&mut caller) {
-                Ok(m) => m,
-                Err(_) => return Status::InvalidMemoryAccess.as_i32(),
-            };
-            let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
-            if mem.write_u64(caller.as_context_mut(), return_ptr as u32, nanos).is_err() {
-                return Status::InvalidMemoryAccess.as_i32();
-            }
-            Status::Ok.as_i32()
-        },
-    )?;
+    linker.func_wrap("env", "proxy_get_current_time_nanoseconds", |mut caller: Caller<'_, HostState>, return_ptr: i32| -> i32 {
+        let mem = match MemoryHelper::from_caller(&mut caller) {
+            Ok(m) => m,
+            Err(_) => return Status::InvalidMemoryAccess.as_i32(),
+        };
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+        if mem.write_u64(caller.as_context_mut(), return_ptr as u32, nanos).is_err() {
+            return Status::InvalidMemoryAccess.as_i32();
+        }
+        Status::Ok.as_i32()
+    })?;
 
-    linker.func_wrap(
-        "env",
-        "proxy_set_tick_period_milliseconds",
-        |mut caller: Caller<'_, HostState>, period: i32| -> i32 {
-            caller.data_mut().tick_period_ms = if period > 0 { Some(period as u32) } else { None };
-            Status::Ok.as_i32()
-        },
-    )?;
+    linker.func_wrap("env", "proxy_set_tick_period_milliseconds", |mut caller: Caller<'_, HostState>, period: i32| -> i32 {
+        caller.data_mut().tick_period_ms = if period > 0 { Some(period as u32) } else { None };
+        Status::Ok.as_i32()
+    })?;
     Ok(())
 }
 
 fn register_context_control(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Error> {
     // proxy_set_effective_context(context_id) -> Status
-    linker.func_wrap(
-        "env",
-        "proxy_set_effective_context",
-        |mut caller: Caller<'_, HostState>, ctx_id: i32| -> i32 {
-            let cid = ctx_id as u32;
-            let st = caller.data_mut();
-            if st.contexts.contains_key(&cid) || cid == st.root_context_id {
-                st.effective_context = cid;
-                Status::Ok.as_i32()
-            } else {
-                Status::BadArgument.as_i32()
-            }
-        },
-    )?;
+    linker.func_wrap("env", "proxy_set_effective_context", |mut caller: Caller<'_, HostState>, ctx_id: i32| -> i32 {
+        let cid = ctx_id as u32;
+        let st = caller.data_mut();
+        if st.contexts.contains_key(&cid) || cid == st.root_context_id {
+            st.effective_context = cid;
+            Status::Ok.as_i32()
+        } else {
+            Status::BadArgument.as_i32()
+        }
+    })?;
 
     // proxy_done() -> Status
     //
@@ -175,39 +152,31 @@ fn register_stream_control(linker: &mut Linker<HostState>) -> Result<(), wasmtim
     // 我们 host 端仅处理 HTTP_REQUEST/HTTP_RESPONSE 的 continue：把当前 ctx 的
     // continue_requested 置 true，Vm 状态机据此退出 await loop。Downstream/Upstream
     // 我们不接 TCP 层 → 返回 UNIMPLEMENTED（spec 允许）。
-    linker.func_wrap(
-        "env",
-        "proxy_continue_stream",
-        |mut caller: Caller<'_, HostState>, stream_type: i32| -> i32 {
-            let Some(st_kind) = StreamType::from_i32(stream_type) else {
-                return Status::BadArgument.as_i32();
-            };
-            match st_kind {
-                StreamType::HttpRequest | StreamType::HttpResponse => {
-                    let st = caller.data();
-                    let ctx_id = st.effective_context;
-                    if let Some(ctx) = caller.data_mut().contexts.get_mut(&ctx_id) {
-                        ctx.continue_requested = true;
-                    }
-                    Status::Ok.as_i32()
+    linker.func_wrap("env", "proxy_continue_stream", |mut caller: Caller<'_, HostState>, stream_type: i32| -> i32 {
+        let Some(st_kind) = StreamType::from_i32(stream_type) else {
+            return Status::BadArgument.as_i32();
+        };
+        match st_kind {
+            StreamType::HttpRequest | StreamType::HttpResponse => {
+                let st = caller.data();
+                let ctx_id = st.effective_context;
+                if let Some(ctx) = caller.data_mut().contexts.get_mut(&ctx_id) {
+                    ctx.continue_requested = true;
                 }
-                StreamType::Downstream | StreamType::Upstream => Status::Unimplemented.as_i32(),
+                Status::Ok.as_i32()
             }
-        },
-    )?;
+            StreamType::Downstream | StreamType::Upstream => Status::Unimplemented.as_i32(),
+        }
+    })?;
 
     // proxy_close_stream(stream_type) -> Status
-    linker.func_wrap(
-        "env",
-        "proxy_close_stream",
-        |_caller: Caller<'_, HostState>, stream_type: i32| -> i32 {
-            match StreamType::from_i32(stream_type) {
-                Some(StreamType::HttpRequest) | Some(StreamType::HttpResponse) => Status::Ok.as_i32(),
-                Some(StreamType::Downstream) | Some(StreamType::Upstream) => Status::Unimplemented.as_i32(),
-                None => Status::BadArgument.as_i32(),
-            }
-        },
-    )?;
+    linker.func_wrap("env", "proxy_close_stream", |_caller: Caller<'_, HostState>, stream_type: i32| -> i32 {
+        match StreamType::from_i32(stream_type) {
+            Some(StreamType::HttpRequest) | Some(StreamType::HttpResponse) => Status::Ok.as_i32(),
+            Some(StreamType::Downstream) | Some(StreamType::Upstream) => Status::Unimplemented.as_i32(),
+            None => Status::BadArgument.as_i32(),
+        }
+    })?;
     Ok(())
 }
 
@@ -232,13 +201,7 @@ fn register_buffer(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Error
     linker.func_wrap(
         "env",
         "proxy_get_buffer_bytes",
-        |mut caller: Caller<'_, HostState>,
-         buffer_type: i32,
-         start: i32,
-         max_size: i32,
-         return_data_ptr: i32,
-         return_size_ptr: i32|
-         -> i32 {
+        |mut caller: Caller<'_, HostState>, buffer_type: i32, start: i32, max_size: i32, return_data_ptr: i32, return_size_ptr: i32| -> i32 {
             let Some(buf_type) = BufferType::from_i32(buffer_type) else {
                 return Status::BadArgument.as_i32();
             };
@@ -291,13 +254,7 @@ fn register_buffer(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Error
     linker.func_wrap(
         "env",
         "proxy_set_buffer_bytes",
-        |mut caller: Caller<'_, HostState>,
-         buffer_type: i32,
-         start: i32,
-         size: i32,
-         data_ptr: i32,
-         data_size: i32|
-         -> i32 {
+        |mut caller: Caller<'_, HostState>, buffer_type: i32, start: i32, size: i32, data_ptr: i32, data_size: i32| -> i32 {
             let Some(buf_type) = BufferType::from_i32(buffer_type) else {
                 return Status::BadArgument.as_i32();
             };
@@ -430,13 +387,7 @@ fn register_headers(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
     linker.func_wrap(
         "env",
         "proxy_get_header_map_value",
-        |mut caller: Caller<'_, HostState>,
-         map_type: i32,
-         key_ptr: i32,
-         key_size: i32,
-         return_data_ptr: i32,
-         return_size_ptr: i32|
-         -> i32 {
+        |mut caller: Caller<'_, HostState>, map_type: i32, key_ptr: i32, key_size: i32, return_data_ptr: i32, return_size_ptr: i32| -> i32 {
             let Some(mt) = MapType::from_i32(map_type) else {
                 return Status::BadArgument.as_i32();
             };
@@ -464,13 +415,7 @@ fn register_headers(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
     linker.func_wrap(
         "env",
         "proxy_add_header_map_value",
-        |mut caller: Caller<'_, HostState>,
-         map_type: i32,
-         key_ptr: i32,
-         key_size: i32,
-         value_ptr: i32,
-         value_size: i32|
-         -> i32 {
+        |mut caller: Caller<'_, HostState>, map_type: i32, key_ptr: i32, key_size: i32, value_ptr: i32, value_size: i32| -> i32 {
             let Some(mt) = MapType::from_i32(map_type) else {
                 return Status::BadArgument.as_i32();
             };
@@ -494,13 +439,7 @@ fn register_headers(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
     linker.func_wrap(
         "env",
         "proxy_replace_header_map_value",
-        |mut caller: Caller<'_, HostState>,
-         map_type: i32,
-         key_ptr: i32,
-         key_size: i32,
-         value_ptr: i32,
-         value_size: i32|
-         -> i32 {
+        |mut caller: Caller<'_, HostState>, map_type: i32, key_ptr: i32, key_size: i32, value_ptr: i32, value_size: i32| -> i32 {
             let Some(mt) = MapType::from_i32(map_type) else {
                 return Status::BadArgument.as_i32();
             };
@@ -692,13 +631,7 @@ fn register_http_call(linker: &mut Linker<HostState>, dispatch_tx: tokio::sync::
                 return Status::BadArgument.as_i32();
             }
             let st = caller.data();
-            let base = st.shell_cfg.resolve_cluster(&cluster).or_else(|| {
-                if !authority.is_empty() {
-                    Some(format!("http://{authority}"))
-                } else {
-                    None
-                }
-            });
+            let base = st.shell_cfg.resolve_cluster(&cluster).or_else(|| if !authority.is_empty() { Some(format!("http://{authority}")) } else { None });
             let Some(base) = base else {
                 warn!(target: "spacegate_plugin_wasm", cluster = %cluster, "dispatch_http_call: cluster not configured");
                 return Status::BadArgument.as_i32();
@@ -786,13 +719,7 @@ fn register_shared_data_and_queue(linker: &mut Linker<HostState>) -> Result<(), 
     linker.func_wrap(
         "env",
         "proxy_get_shared_data",
-        |mut caller: Caller<'_, HostState>,
-         k_ptr: i32,
-         k_size: i32,
-         v_data_ptr: i32,
-         v_size_ptr: i32,
-         cas_ptr: i32|
-         -> i32 {
+        |mut caller: Caller<'_, HostState>, k_ptr: i32, k_size: i32, v_data_ptr: i32, v_size_ptr: i32, cas_ptr: i32| -> i32 {
             let mem = match MemoryHelper::from_caller(&mut caller) {
                 Ok(m) => m,
                 Err(_) => return Status::InvalidMemoryAccess.as_i32(),
@@ -872,13 +799,7 @@ fn register_shared_data_and_queue(linker: &mut Linker<HostState>) -> Result<(), 
     linker.func_wrap(
         "env",
         "proxy_resolve_shared_queue",
-        |mut caller: Caller<'_, HostState>,
-         vid_ptr: i32,
-         vid_size: i32,
-         n_ptr: i32,
-         n_size: i32,
-         return_qid_ptr: i32|
-         -> i32 {
+        |mut caller: Caller<'_, HostState>, vid_ptr: i32, vid_size: i32, n_ptr: i32, n_size: i32, return_qid_ptr: i32| -> i32 {
             let mem = match MemoryHelper::from_caller(&mut caller) {
                 Ok(m) => m,
                 Err(_) => return Status::InvalidMemoryAccess.as_i32(),
@@ -975,49 +896,37 @@ fn register_metrics(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
     )?;
 
     // proxy_record_metric(mid, value: u64) -> Status
-    linker.func_wrap(
-        "env",
-        "proxy_record_metric",
-        |_caller: Caller<'_, HostState>, mid: i32, value: i64| -> i32 {
-            match metric_record(mid as u32, value as u64) {
-                MetricOpResult::Ok => Status::Ok.as_i32(),
-                MetricOpResult::NotFound => Status::NotFound.as_i32(),
-                MetricOpResult::BadArgument => Status::BadArgument.as_i32(),
-            }
-        },
-    )?;
+    linker.func_wrap("env", "proxy_record_metric", |_caller: Caller<'_, HostState>, mid: i32, value: i64| -> i32 {
+        match metric_record(mid as u32, value as u64) {
+            MetricOpResult::Ok => Status::Ok.as_i32(),
+            MetricOpResult::NotFound => Status::NotFound.as_i32(),
+            MetricOpResult::BadArgument => Status::BadArgument.as_i32(),
+        }
+    })?;
 
     // proxy_increment_metric(mid, delta: i64) -> Status
-    linker.func_wrap(
-        "env",
-        "proxy_increment_metric",
-        |_caller: Caller<'_, HostState>, mid: i32, delta: i64| -> i32 {
-            match metric_increment(mid as u32, delta) {
-                MetricOpResult::Ok => Status::Ok.as_i32(),
-                MetricOpResult::NotFound => Status::NotFound.as_i32(),
-                MetricOpResult::BadArgument => Status::BadArgument.as_i32(),
-            }
-        },
-    )?;
+    linker.func_wrap("env", "proxy_increment_metric", |_caller: Caller<'_, HostState>, mid: i32, delta: i64| -> i32 {
+        match metric_increment(mid as u32, delta) {
+            MetricOpResult::Ok => Status::Ok.as_i32(),
+            MetricOpResult::NotFound => Status::NotFound.as_i32(),
+            MetricOpResult::BadArgument => Status::BadArgument.as_i32(),
+        }
+    })?;
 
     // proxy_get_metric(mid, *return_value) -> Status
-    linker.func_wrap(
-        "env",
-        "proxy_get_metric",
-        |mut caller: Caller<'_, HostState>, mid: i32, return_ptr: i32| -> i32 {
-            let Some(v) = metric_get(mid as u32) else {
-                return Status::NotFound.as_i32();
-            };
-            let mem = match MemoryHelper::from_caller(&mut caller) {
-                Ok(m) => m,
-                Err(_) => return Status::InvalidMemoryAccess.as_i32(),
-            };
-            if mem.write_u64(caller.as_context_mut(), return_ptr as u32, v).is_err() {
-                return Status::InvalidMemoryAccess.as_i32();
-            }
-            Status::Ok.as_i32()
-        },
-    )?;
+    linker.func_wrap("env", "proxy_get_metric", |mut caller: Caller<'_, HostState>, mid: i32, return_ptr: i32| -> i32 {
+        let Some(v) = metric_get(mid as u32) else {
+            return Status::NotFound.as_i32();
+        };
+        let mem = match MemoryHelper::from_caller(&mut caller) {
+            Ok(m) => m,
+            Err(_) => return Status::InvalidMemoryAccess.as_i32(),
+        };
+        if mem.write_u64(caller.as_context_mut(), return_ptr as u32, v).is_err() {
+            return Status::InvalidMemoryAccess.as_i32();
+        }
+        Status::Ok.as_i32()
+    })?;
     Ok(())
 }
 
@@ -1157,43 +1066,24 @@ fn register_grpc_unimplemented(linker: &mut Linker<HostState>) -> Result<(), was
     linker.func_wrap(
         "env",
         "proxy_grpc_call",
-        |_caller: Caller<'_, HostState>,
-         _a: i32,
-         _b: i32,
-         _c: i32,
-         _d: i32,
-         _e: i32,
-         _f: i32,
-         _g: i32,
-         _h: i32,
-         _i: i32,
-         _j: i32,
-         _k: i32,
-         _l: i32|
-         -> i32 { Status::Unimplemented.as_i32() },
+        |_caller: Caller<'_, HostState>, _a: i32, _b: i32, _c: i32, _d: i32, _e: i32, _f: i32, _g: i32, _h: i32, _i: i32, _j: i32, _k: i32, _l: i32| -> i32 {
+            Status::Unimplemented.as_i32()
+        },
     )?;
     linker.func_wrap(
         "env",
         "proxy_grpc_stream",
-        |_caller: Caller<'_, HostState>,
-         _a: i32,
-         _b: i32,
-         _c: i32,
-         _d: i32,
-         _e: i32,
-         _f: i32,
-         _g: i32,
-         _h: i32,
-         _i: i32|
-         -> i32 { Status::Unimplemented.as_i32() },
+        |_caller: Caller<'_, HostState>, _a: i32, _b: i32, _c: i32, _d: i32, _e: i32, _f: i32, _g: i32, _h: i32, _i: i32| -> i32 { Status::Unimplemented.as_i32() },
     )?;
-    linker.func_wrap("env", "proxy_grpc_cancel", |_caller: Caller<'_, HostState>, _t: i32| -> i32 { Status::Unimplemented.as_i32() })?;
-    linker.func_wrap("env", "proxy_grpc_close", |_caller: Caller<'_, HostState>, _t: i32| -> i32 { Status::Unimplemented.as_i32() })?;
-    linker.func_wrap(
-        "env",
-        "proxy_grpc_send",
-        |_caller: Caller<'_, HostState>, _t: i32, _m: i32, _ms: i32, _eos: i32| -> i32 { Status::Unimplemented.as_i32() },
-    )?;
+    linker.func_wrap("env", "proxy_grpc_cancel", |_caller: Caller<'_, HostState>, _t: i32| -> i32 {
+        Status::Unimplemented.as_i32()
+    })?;
+    linker.func_wrap("env", "proxy_grpc_close", |_caller: Caller<'_, HostState>, _t: i32| -> i32 {
+        Status::Unimplemented.as_i32()
+    })?;
+    linker.func_wrap("env", "proxy_grpc_send", |_caller: Caller<'_, HostState>, _t: i32, _m: i32, _ms: i32, _eos: i32| -> i32 {
+        Status::Unimplemented.as_i32()
+    })?;
     Ok(())
 }
 

@@ -89,7 +89,7 @@ impl Plugin for WasmPluginShell {
             "wasm plugin: create with config"
         );
         let cache = default_module_cache();
-        let module = cache.get_or_compile(cfg.url.trim()).map_err(|e| -> BoxError { format!("compile wasm: {e}").into() })?;
+        let module = cache.get_or_compile(&cfg).map_err(|e| -> BoxError { format!("compile wasm: {e}").into() })?;
         let cfg = Arc::new(cfg);
         let vm = Vm::new(&module, cfg.clone()).map_err(|e| -> BoxError { format!("Vm::new: {e}").into() })?;
         let vm = Arc::new(AsyncMutex::new(vm));
