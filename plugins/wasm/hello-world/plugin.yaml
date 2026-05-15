@@ -1,0 +1,13 @@
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: hello-world
+  namespace: spacegate
+spec:
+  url: oci://registry.example.com/spacegate/plugins/hello-world:v1
+  pluginName: hello-world
+  phase: AUTHN
+  priority: 100
+  failStrategy: FAIL_OPEN
+  defaultConfig:
+    message: hello world
