@@ -18,9 +18,9 @@ use std::sync::Arc;
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::service::service_fn;
+use hyper::Request as HyperRequest;
 use spacegate_kernel::backend_service::ArcHyperService;
 use spacegate_kernel::helper_layers::function::Inner;
-use hyper::Request as HyperRequest;
 use spacegate_kernel::{SgBody, SgRequest, SgResponse};
 use spacegate_plugin_wasm::config::WasmPluginShellConfig;
 use spacegate_plugin_wasm::engine::shared_engine;
@@ -133,12 +133,7 @@ async fn sdk_example_http_headers_hello() {
     let cfg = make_cfg(serde_json::json!({"mode": "headers"}));
     let mut vm = Vm::new(&module, cfg).expect("Vm::new");
 
-    let req = HyperRequest::builder()
-        .method("GET")
-        .uri("http://example.test/hello")
-        .header("host", "example.test")
-        .body(SgBody::empty())
-        .expect("build req");
+    let req = HyperRequest::builder().method("GET").uri("http://example.test/hello").header("host", "example.test").body(SgBody::empty()).expect("build req");
     let captured = CaptureState::default();
     let inner = make_inner(captured.clone());
     let resp = vm.process(req, inner).await.expect("process");
@@ -147,10 +142,7 @@ async fn sdk_example_http_headers_hello() {
     assert_eq!(resp.status(), 200);
     assert_eq!(body, Bytes::from_static(b"Hello, World!\n"));
     assert_eq!(resp.headers().get("hello").and_then(|v| v.to_str().ok()), Some("world"));
-    assert_eq!(
-        resp.headers().get("powered-by").and_then(|v| v.to_str().ok()),
-        Some("proxy-wasm")
-    );
+    assert_eq!(resp.headers().get("powered-by").and_then(|v| v.to_str().ok()), Some("proxy-wasm"));
     assert!(
         !captured.invoked.load(std::sync::atomic::Ordering::SeqCst),
         "inner.call must NOT be invoked for local response"
@@ -182,10 +174,7 @@ async fn sdk_example_http_headers_passthrough() {
         "on_response_headers should inject x-sdk-headers"
     );
     // echo header 应该原路回来
-    assert_eq!(
-        resp.headers().get("x-echo-foo").and_then(|v| v.to_str().ok()),
-        Some("bar")
-    );
+    assert_eq!(resp.headers().get("x-echo-foo").and_then(|v| v.to_str().ok()), Some("bar"));
 }
 
 // ─────────────────────────────────────────────────────────
@@ -210,10 +199,7 @@ async fn sdk_example_http_body_reverses_request_body() {
 
     assert_eq!(resp.status(), 200);
     // Inner 收到的应是反转后的字节，echo 回来后响应体也是它。
-    assert_eq!(
-        captured.inbound_body.lock().await.clone().expect("body captured"),
-        Bytes::from_static(b"321-cba")
-    );
+    assert_eq!(captured.inbound_body.lock().await.clone().expect("body captured"), Bytes::from_static(b"321-cba"));
     assert_eq!(body, Bytes::from_static(b"321-cba"));
 }
 
@@ -227,12 +213,7 @@ async fn sdk_example_http_config_missing_header_rejected() {
     let cfg = make_cfg(serde_json::json!({"mode": "config", "required_header": "x-token"}));
     let mut vm = Vm::new(&module, cfg).expect("Vm::new");
 
-    let req = HyperRequest::builder()
-        .method("GET")
-        .uri("http://example.test/")
-        .header("host", "example.test")
-        .body(SgBody::empty())
-        .expect("build req");
+    let req = HyperRequest::builder().method("GET").uri("http://example.test/").header("host", "example.test").body(SgBody::empty()).expect("build req");
     let captured = CaptureState::default();
     let resp = vm.process(req, make_inner(captured.clone())).await.expect("process");
     let (resp, body) = full_body(resp).await;

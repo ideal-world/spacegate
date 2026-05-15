@@ -246,9 +246,7 @@ impl MemoryHelper {
     /// 从 caller 中拿到 `memory` export 的 helper（在每个 host fn 起始处调用）。
     pub fn from_caller<T>(caller: &mut Caller<'_, T>) -> Result<Self, WasmHostError> {
         let Some(mem) = caller.get_export("memory").and_then(|e| e.into_memory()) else {
-            return Err(WasmHostError::AbiViolation(
-                "guest module has no `memory` export".to_string(),
-            ));
+            return Err(WasmHostError::AbiViolation("guest module has no `memory` export".to_string()));
         };
         Ok(Self { memory: mem })
     }
@@ -276,10 +274,7 @@ impl MemoryHelper {
         let start = ptr as usize;
         let end = start.saturating_add(data.len());
         if end > mem.len() {
-            return Err(WasmHostError::MemoryOob {
-                ptr,
-                len: data.len() as u32,
-            });
+            return Err(WasmHostError::MemoryOob { ptr, len: data.len() as u32 });
         }
         mem[start..end].copy_from_slice(data);
         Ok(())
@@ -390,11 +385,7 @@ fn u32_from_slice(bytes: &[u8], pos: usize) -> Option<u32> {
 ///
 /// spec §Serialization: "Host implementations should tolerate a NULL character at the end".
 pub fn decode_property_path(bytes: &[u8]) -> Vec<&[u8]> {
-    let trimmed = if bytes.last().copied() == Some(0) {
-        &bytes[..bytes.len() - 1]
-    } else {
-        bytes
-    };
+    let trimmed = if bytes.last().copied() == Some(0) { &bytes[..bytes.len() - 1] } else { bytes };
     if trimmed.is_empty() {
         return Vec::new();
     }

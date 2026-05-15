@@ -79,13 +79,9 @@ impl Vm {
 
         register_wasi_stubs(&mut linker)?;
 
-        let instance = linker
-            .instantiate(&mut store, module)
-            .map_err(|e| WasmHostError::Instantiate(format!("instantiate: {e}")))?;
+        let instance = linker.instantiate(&mut store, module).map_err(|e| WasmHostError::Instantiate(format!("instantiate: {e}")))?;
 
-        let memory = instance
-            .get_memory(&mut store, "memory")
-            .ok_or_else(|| WasmHostError::AbiViolation("no `memory` export".into()))?;
+        let memory = instance.get_memory(&mut store, "memory").ok_or_else(|| WasmHostError::AbiViolation("no `memory` export".into()))?;
         store.data_mut().memory = Some(memory);
         // spec §Memory management：优先 `proxy_on_memory_allocate`，否则回退 `malloc`。
         if let Ok(alloc) = instance.get_typed_func::<u32, u32>(&mut store, "proxy_on_memory_allocate") {
@@ -93,9 +89,7 @@ impl Vm {
         } else if let Ok(alloc) = instance.get_typed_func::<u32, u32>(&mut store, "malloc") {
             store.data_mut().alloc = Some(alloc);
         } else {
-            return Err(WasmHostError::AbiViolation(
-                "no memory allocator export (proxy_on_memory_allocate or malloc)".into(),
-            ));
+            return Err(WasmHostError::AbiViolation("no memory allocator export (proxy_on_memory_allocate or malloc)".into()));
         }
 
         // spec §Integration：先 `_initialize`；若不存在尝试 `_start`。
@@ -109,9 +103,8 @@ impl Vm {
             .get_typed_func::<(u32, u32), ()>(&mut store, "proxy_on_context_create")
             .map_err(|e| WasmHostError::AbiViolation(format!("get proxy_on_context_create: {e}")))?;
         let fn_on_vm_start = instance.get_typed_func::<(u32, u32), u32>(&mut store, "proxy_on_vm_start").ok();
-        let fn_on_configure = instance
-            .get_typed_func::<(u32, u32), u32>(&mut store, "proxy_on_configure")
-            .map_err(|e| WasmHostError::AbiViolation(format!("get proxy_on_configure: {e}")))?;
+        let fn_on_configure =
+            instance.get_typed_func::<(u32, u32), u32>(&mut store, "proxy_on_configure").map_err(|e| WasmHostError::AbiViolation(format!("get proxy_on_configure: {e}")))?;
         let fn_on_request_headers = instance
             .get_typed_func::<(u32, u32, u32), u32>(&mut store, "proxy_on_request_headers")
             .map_err(|e| WasmHostError::AbiViolation(format!("get proxy_on_request_headers: {e}")))?;
@@ -163,8 +156,7 @@ impl Vm {
         if let Some(ref f) = vm.fn_on_vm_start {
             vm.store.data_mut().effective_context = root_id;
             let cfg_len = vm.store.data().configuration.len() as u32;
-            let ok = f.call(&mut vm.store, (root_id, cfg_len))
-                .map_err(|e| WasmHostError::GuestTrap { hook: "on_vm_start", source: e })?;
+            let ok = f.call(&mut vm.store, (root_id, cfg_len)).map_err(|e| WasmHostError::GuestTrap { hook: "on_vm_start", source: e })?;
             if ok == 0 {
                 return Err(WasmHostError::Instantiate("guest on_vm_start returned 0 (=invalid VM configuration)".into()));
             }
@@ -173,9 +165,7 @@ impl Vm {
         let cfg_len = vm.store.data().configuration.len() as u32;
         tracing::info!(target: "spacegate_plugin_wasm", cfg_len, "calling proxy_on_configure");
         let configure_fn = vm.fn_on_configure.clone();
-        let ok = configure_fn
-            .call(&mut vm.store, (root_id, cfg_len))
-            .map_err(|e| WasmHostError::GuestTrap { hook: "on_configure", source: e })?;
+        let ok = configure_fn.call(&mut vm.store, (root_id, cfg_len)).map_err(|e| WasmHostError::GuestTrap { hook: "on_configure", source: e })?;
         if ok == 0 {
             warn!(target: "spacegate_plugin_wasm", "guest on_configure returned 0 (=invalid config)");
         }
@@ -185,8 +175,10 @@ impl Vm {
     fn create_context(&mut self, ctx_id: u32, parent_id: u32) -> Result<(), WasmHostError> {
         self.store.data_mut().effective_context = ctx_id;
         let f = self.fn_on_context_create.clone();
-        f.call(&mut self.store, (ctx_id, parent_id))
-            .map_err(|e| WasmHostError::GuestTrap { hook: "on_context_create", source: e })?;
+        f.call(&mut self.store, (ctx_id, parent_id)).map_err(|e| WasmHostError::GuestTrap {
+            hook: "on_context_create",
+            source: e,
+        })?;
         Ok(())
     }
 
@@ -206,9 +198,7 @@ impl Vm {
         let uri = parts.uri.clone();
         let version = parts.version;
         let path = uri.path_and_query().map(|p| p.to_string()).unwrap_or_else(|| "/".to_string());
-        let authority = uri.authority().map(|a| a.to_string()).unwrap_or_else(|| {
-            parts.headers.get(http::header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").to_string()
-        });
+        let authority = uri.authority().map(|a| a.to_string()).unwrap_or_else(|| parts.headers.get(http::header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").to_string());
         let scheme = uri.scheme_str().unwrap_or("http").to_string();
         let headers = parts.headers.clone();
         let pseudo = PseudoHeaders {
@@ -239,9 +229,10 @@ impl Vm {
         let num_headers = (self.store.data().contexts[&http_ctx_id].request_headers.len() + 4) as u32;
         let end_of_stream_for_headers: u32 = if want_request_body { 0 } else { 1 };
         let on_req_hdr = self.fn_on_request_headers.clone();
-        let action_raw = on_req_hdr
-            .call(&mut self.store, (http_ctx_id, num_headers, end_of_stream_for_headers))
-            .map_err(|e| WasmHostError::GuestTrap { hook: "on_request_headers", source: e })?;
+        let action_raw = on_req_hdr.call(&mut self.store, (http_ctx_id, num_headers, end_of_stream_for_headers)).map_err(|e| WasmHostError::GuestTrap {
+            hook: "on_request_headers",
+            source: e,
+        })?;
         let action = Action::from_u32(action_raw);
         debug!(target: "spacegate_plugin_wasm", http_ctx_id, ?action, "on_request_headers returned");
 
@@ -274,9 +265,10 @@ impl Vm {
                 }
             }
             let on_req_body = self.fn_on_request_body.clone().expect("guarded by want_request_body");
-            let action_raw = on_req_body
-                .call(&mut self.store, (http_ctx_id, body_size, 1))
-                .map_err(|e| WasmHostError::GuestTrap { hook: "on_request_body", source: e })?;
+            let action_raw = on_req_body.call(&mut self.store, (http_ctx_id, body_size, 1)).map_err(|e| WasmHostError::GuestTrap {
+                hook: "on_request_body",
+                source: e,
+            })?;
             if Action::from_u32(action_raw) == Action::Pause {
                 self.drive_until_continue(http_ctx_id).await?;
             }
@@ -285,13 +277,7 @@ impl Vm {
                 self.invoke_log_done_delete(http_ctx_id)?;
                 return Ok(build_local_response(local));
             }
-            let final_body = self
-                .store
-                .data()
-                .contexts
-                .get(&http_ctx_id)
-                .and_then(|c| c.request_body.clone())
-                .unwrap_or(collected);
+            let final_body = self.store.data().contexts.get(&http_ctx_id).and_then(|c| c.request_body.clone()).unwrap_or(collected);
             (None, Some(final_body))
         } else {
             (Some(body), None)
@@ -304,9 +290,10 @@ impl Vm {
                 ctx.stage = ContextStage::RequestTrailers;
                 ctx.continue_requested = false;
             }
-            let action_raw = f
-                .call(&mut self.store, (http_ctx_id, 0))
-                .map_err(|e| WasmHostError::GuestTrap { hook: "on_request_trailers", source: e })?;
+            let action_raw = f.call(&mut self.store, (http_ctx_id, 0)).map_err(|e| WasmHostError::GuestTrap {
+                hook: "on_request_trailers",
+                source: e,
+            })?;
             if Action::from_u32(action_raw) == Action::Pause {
                 self.drive_until_continue(http_ctx_id).await?;
             }
@@ -359,9 +346,10 @@ impl Vm {
         let want_response_body = self.fn_on_response_body.is_some();
         let end_of_stream_for_resp_hdr: u32 = if want_response_body { 0 } else { 1 };
         let on_resp_hdr = self.fn_on_response_headers.clone();
-        let action_raw = on_resp_hdr
-            .call(&mut self.store, (http_ctx_id, (resp_headers.len() + 1) as u32, end_of_stream_for_resp_hdr))
-            .map_err(|e| WasmHostError::GuestTrap { hook: "on_response_headers", source: e })?;
+        let action_raw = on_resp_hdr.call(&mut self.store, (http_ctx_id, (resp_headers.len() + 1) as u32, end_of_stream_for_resp_hdr)).map_err(|e| WasmHostError::GuestTrap {
+            hook: "on_response_headers",
+            source: e,
+        })?;
         if Action::from_u32(action_raw) == Action::Pause {
             self.drive_until_continue(http_ctx_id).await?;
         }
@@ -388,9 +376,10 @@ impl Vm {
                     st.effective_context = http_ctx_id;
                 }
             }
-            let action_raw = f
-                .call(&mut self.store, (http_ctx_id, body_size, 1))
-                .map_err(|e| WasmHostError::GuestTrap { hook: "on_response_body", source: e })?;
+            let action_raw = f.call(&mut self.store, (http_ctx_id, body_size, 1)).map_err(|e| WasmHostError::GuestTrap {
+                hook: "on_response_body",
+                source: e,
+            })?;
             if Action::from_u32(action_raw) == Action::Pause {
                 self.drive_until_continue(http_ctx_id).await?;
             }
@@ -408,9 +397,10 @@ impl Vm {
                 ctx.stage = ContextStage::ResponseTrailers;
                 ctx.continue_requested = false;
             }
-            let _ = f
-                .call(&mut self.store, (http_ctx_id, 0))
-                .map_err(|e| WasmHostError::GuestTrap { hook: "on_response_trailers", source: e })?;
+            let _ = f.call(&mut self.store, (http_ctx_id, 0)).map_err(|e| WasmHostError::GuestTrap {
+                hook: "on_response_trailers",
+                source: e,
+            })?;
             // guest 可能改了 response_headers → 同步回 final_headers
             if let Some(ctx) = self.store.data().contexts.get(&http_ctx_id) {
                 final_headers = ctx.response_headers.clone();
@@ -444,13 +434,7 @@ impl Vm {
             let Some((token, result)) = self.dispatch_rx.recv().await else {
                 return Err(WasmHostError::Dispatch("dispatch channel closed".to_string()));
             };
-            let source_ctx_id = self
-                .store
-                .data_mut()
-                .pending_calls
-                .remove(&token)
-                .map(|p| p.source_context_id)
-                .unwrap_or(ctx_id);
+            let source_ctx_id = self.store.data_mut().pending_calls.remove(&token).map(|p| p.source_context_id).unwrap_or(ctx_id);
             let header_count;
             let body_len;
             {
@@ -468,8 +452,10 @@ impl Vm {
             }
             debug!(target: "spacegate_plugin_wasm", token, source_ctx_id, status = result.status, body_len, "fire proxy_on_http_call_response");
             let f = self.fn_on_http_call_response.clone();
-            f.call(&mut self.store, (source_ctx_id, token, header_count, body_len, 0))
-                .map_err(|e| WasmHostError::GuestTrap { hook: "on_http_call_response", source: e })?;
+            f.call(&mut self.store, (source_ctx_id, token, header_count, body_len, 0)).map_err(|e| WasmHostError::GuestTrap {
+                hook: "on_http_call_response",
+                source: e,
+            })?;
         }
     }
 
@@ -490,14 +476,7 @@ impl Vm {
                 ctx.awaiting_done = true;
             }
             let v = f.call(&mut self.store, ctx_id).unwrap_or(1);
-            let done = v != 0
-                || self
-                    .store
-                    .data()
-                    .contexts
-                    .get(&ctx_id)
-                    .map(|c| c.done_marker)
-                    .unwrap_or(true);
+            let done = v != 0 || self.store.data().contexts.get(&ctx_id).map(|c| c.done_marker).unwrap_or(true);
             if !done {
                 warn!(
                     target: "spacegate_plugin_wasm",
@@ -526,10 +505,11 @@ impl Vm {
     ///
     /// 失败要么是 guest trap（要么后台任务自停），要么是 guest 没导出 `proxy_on_tick`——后者直接 Ok。
     pub fn tick(&mut self) -> Result<(), WasmHostError> {
-        let Some(f) = self.fn_on_tick.clone() else { return Ok(()); };
+        let Some(f) = self.fn_on_tick.clone() else {
+            return Ok(());
+        };
         self.store.data_mut().effective_context = self.root_id;
-        f.call(&mut self.store, self.root_id)
-            .map_err(|e| WasmHostError::GuestTrap { hook: "on_tick", source: e })?;
+        f.call(&mut self.store, self.root_id).map_err(|e| WasmHostError::GuestTrap { hook: "on_tick", source: e })?;
         Ok(())
     }
 }
@@ -610,7 +590,9 @@ pub fn register_wasi_stubs(linker: &mut Linker<HostState>) -> Result<(), wasmtim
             wasi_errno::SUCCESS
         },
     )?;
-    linker.func_wrap("wasi_snapshot_preview1", "environ_get", |_c: wasmtime::Caller<'_, HostState>, _a: i32, _b: i32| -> i32 { wasi_errno::SUCCESS })?;
+    linker.func_wrap("wasi_snapshot_preview1", "environ_get", |_c: wasmtime::Caller<'_, HostState>, _a: i32, _b: i32| -> i32 {
+        wasi_errno::SUCCESS
+    })?;
     linker.func_wrap(
         "wasi_snapshot_preview1",
         "environ_sizes_get",
@@ -628,7 +610,9 @@ pub fn register_wasi_stubs(linker: &mut Linker<HostState>) -> Result<(), wasmtim
             wasi_errno::SUCCESS
         },
     )?;
-    linker.func_wrap("wasi_snapshot_preview1", "args_get", |_c: wasmtime::Caller<'_, HostState>, _a: i32, _b: i32| -> i32 { wasi_errno::SUCCESS })?;
+    linker.func_wrap("wasi_snapshot_preview1", "args_get", |_c: wasmtime::Caller<'_, HostState>, _a: i32, _b: i32| -> i32 {
+        wasi_errno::SUCCESS
+    })?;
     linker.func_wrap(
         "wasi_snapshot_preview1",
         "args_sizes_get",

@@ -4,11 +4,13 @@ use std::sync::Arc;
 
 use moka::sync::Cache;
 use once_cell::sync::OnceCell;
+use sha2::{Digest, Sha256};
 use wasmtime::Module;
 
+use crate::config::WasmPluginShellConfig;
 use crate::engine::shared_engine;
 use crate::error::WasmHostError;
-use crate::fetch::fetch_wasm_bytes_sync;
+use crate::fetch::fetch_wasm_bytes_sync_with_auth;
 
 /// 进程内模块缓存（键：wasm `url` 字符串）。
 pub struct WasmModuleCache {
@@ -25,15 +27,45 @@ impl WasmModuleCache {
     }
 
     /// 拉取字节并编译；命中缓存则直接返回 `Arc<Module>`。
-    pub fn get_or_compile(&self, url: &str) -> Result<Arc<Module>, WasmHostError> {
-        let key = url.to_string();
-        if let Some(m) = self.inner.get(&key) {
-            return Ok(m);
+    pub fn get_or_compile(&self, cfg: &WasmPluginShellConfig) -> Result<Arc<Module>, WasmHostError> {
+        let key = module_cache_key(cfg);
+        if cfg.use_cache {
+            if let Some(m) = self.inner.get(&key) {
+                return Ok(m);
+            }
         }
-        let bytes = fetch_wasm_bytes_sync(url)?;
+        let bytes = fetch_wasm_bytes_sync_with_auth(cfg.url.trim(), cfg.oci_auth.as_ref())?;
+        verify_sha256(&bytes, cfg.sha256.as_deref())?;
         let m = Arc::new(Module::new(self.engine, &bytes)?);
-        self.inner.insert(key, m.clone());
+        if cfg.use_cache {
+            self.inner.insert(key, m.clone());
+        }
         Ok(m)
+    }
+}
+
+fn module_cache_key(cfg: &WasmPluginShellConfig) -> String {
+    let mut key = cfg.module_cache_key.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| cfg.url.trim()).to_string();
+    if let Some(sha256) = cfg.sha256.as_deref().filter(|s| !s.trim().is_empty()) {
+        key.push_str("#sha256=");
+        key.push_str(normalize_sha256(sha256));
+    }
+    key
+}
+
+fn normalize_sha256(s: &str) -> &str {
+    s.trim().strip_prefix("sha256:").unwrap_or_else(|| s.trim())
+}
+
+fn verify_sha256(bytes: &[u8], expected: Option<&str>) -> Result<(), WasmHostError> {
+    let Some(expected) = expected.map(normalize_sha256).filter(|s| !s.is_empty()) else {
+        return Ok(());
+    };
+    let actual = format!("{:x}", Sha256::digest(bytes));
+    if actual.eq_ignore_ascii_case(expected) {
+        Ok(())
+    } else {
+        Err(WasmHostError::Fetch(format!("sha256 mismatch: expected {expected}, actual {actual}",)))
     }
 }
 

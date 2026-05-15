@@ -172,7 +172,14 @@ pub fn metric_define(kind: MetricType, name: &str) -> u32 {
     }
     g.next_id = g.next_id.wrapping_add(1).max(1);
     let id = g.next_id;
-    g.by_id.insert(id, MetricEntry { kind, value: 0, name: name.to_string() });
+    g.by_id.insert(
+        id,
+        MetricEntry {
+            kind,
+            value: 0,
+            name: name.to_string(),
+        },
+    );
     g.by_name.insert(name.to_string(), id);
     id
 }

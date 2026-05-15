@@ -11,6 +11,24 @@ cd ../..
 cp examples/wasm-hello/target/wasm32-wasip1/release/spacegate_wasm_hello.wasm resource/wasm/spacegate_wasm_hello.wasm
 ```
 
+If you rebuild the wasm, update `resource/wasm-hello-demo/plugin/wasm.hello-world.json`
+with the new digest:
+
+```bash
+shasum -a 256 resource/wasm/spacegate_wasm_hello.wasm
+```
+
+The wasm host also supports remote loading:
+
+```json
+{
+  "url": "https://example.com/plugins/spacegate_wasm_hello.wasm",
+  "sha256": "sha256:<64-char-hex-digest>",
+  "module_cache_key": "spacegate-wasm-hello:v1",
+  "use_cache": true
+}
+```
+
 Run Spacegate with the demo config from the repository root:
 
 ```bash

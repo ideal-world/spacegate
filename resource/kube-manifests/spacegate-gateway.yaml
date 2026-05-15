@@ -126,6 +126,21 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - extensions.higress.io
+    resources:
+      - wasmplugins
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions.higress.io
+    resources:
+      - wasmplugins/status
+    verbs:
+      - get
+      - update
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

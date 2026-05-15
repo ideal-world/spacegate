@@ -90,15 +90,10 @@ async fn start_mock_server(body_byte: u8) -> SocketAddr {
             tokio::spawn(async move {
                 let svc = service_fn(move |_req: HyperRequest<hyper::body::Incoming>| async move {
                     let body = Bytes::from(vec![body_byte]);
-                    let resp = Response::builder()
-                        .status(200)
-                        .body(Full::new(body))
-                        .expect("build resp");
+                    let resp = Response::builder().status(200).body(Full::new(body)).expect("build resp");
                     Ok::<_, Infallible>(resp)
                 });
-                let _ = http1::Builder::new()
-                    .serve_connection(TokioIo::new(stream), svc)
-                    .await;
+                let _ = http1::Builder::new().serve_connection(TokioIo::new(stream), svc).await;
             });
         }
     });
