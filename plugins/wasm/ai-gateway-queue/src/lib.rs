@@ -53,8 +53,9 @@ impl RootContext for AiGatewayRoot {
         let mut cfg = AiGatewayConfig::default();
         for line in text.lines() {
             let Some((key, value)) = line.split_once(':') else { continue };
-            let value = value.trim().trim_matches(['"', '\''].as_ref());
-            match key.trim() {
+            let key = key.trim().trim_matches(['"', '\'', '{', ',', ' '].as_ref());
+            let value = value.trim().trim_matches(['"', '\'', ',', ' '].as_ref());
+            match key {
                 "service_cluster" => cfg.service_cluster = value.to_string(),
                 "service_authority" => cfg.service_authority = value.to_string(),
                 "rate_limit_path" => cfg.rate_limit_path = value.to_string(),
@@ -263,7 +264,7 @@ impl AiGatewayHttp {
 
     fn response_headers_for_client(&self) -> Vec<(String, String)> {
         let mut out = Vec::new();
-        for name in ["content-type", "x-job-id", "retry-after"] {
+        for name in ["content-type", "x-job-id", "x-queue-wait-ms", "x-gateway-job-id", "retry-after", "location"] {
             if let Some(value) = self.get_http_call_response_header(name) {
                 out.push((name.to_string(), value));
             }
