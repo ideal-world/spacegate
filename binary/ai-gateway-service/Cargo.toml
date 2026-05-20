@@ -1,0 +1,29 @@
+[package]
+name = "ai-gateway-service"
+version.workspace = true
+authors.workspace = true
+description = "External rate-limit and queue service for SpaceGate AI gateway wasm plugins"
+keywords.workspace = true
+categories.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+axum = { workspace = true, features = ["tracing", "macros"] }
+base64 = { workspace = true }
+bytes = { workspace = true }
+clap = { version = "4.5", features = ["derive", "env"] }
+futures-util = { workspace = true }
+fred = { version = "10.1.0", default-features = false, features = ["enable-rustls", "i-keys", "i-scripts", "i-streams", "subscriber-client", "transactions"] }
+http = "1"
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

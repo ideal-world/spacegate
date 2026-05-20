@@ -11,6 +11,10 @@ plugins/wasm/
     Cargo.toml
     src/lib.rs
     plugin.yaml
+  ai-gateway-queue/
+    Cargo.toml
+    src/lib.rs
+    plugin.yaml
 ```
 
 Use this directory for plugin source code. Keep compiled `.wasm` files in `resource/wasm/` for local demos, or publish them as OCI artifacts/images for Kubernetes usage.
@@ -33,6 +37,12 @@ The output for `hello-world` is:
 
 ```text
 plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_hello_world.wasm
+```
+
+The AI gateway queue plugin output is:
+
+```text
+plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm
 ```
 
 If you run commands from inside `plugins/wasm/`, the local `.cargo/config.toml` already sets the wasm target:
