@@ -31,7 +31,7 @@ sha2 = "0.10"
 # host fn: dispatch_http_call 走 reqwest 异步客户端（用 0.12 与 spacegate 的 http=1 对齐）
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 # 异步驱动 + 待回填 dispatch 状态
-tokio = { workspace = true, features = ["sync", "macros", "rt"] }
+tokio = { workspace = true, features = ["sync", "macros", "rt", "time"] }
 # inner.call 拿到的是 hyper Response<SgBody>，host fn 操作 header 时要用 http 类型
 hyper = { workspace = true }
 http = "1"

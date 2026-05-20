@@ -604,6 +604,12 @@ fn register_http_call(linker: &mut Linker<HostState>, dispatch_tx: tokio::sync::
             };
             let headers_bytes = mem.read_bytes(caller.as_context(), headers_data as u32, headers_size as u32).unwrap_or_default();
             let body = if body_size > 0 {
+                if let Some(limit) = caller.data().shell_cfg.limits.max_body_bytes {
+                    if body_size as usize > limit {
+                        warn!(target: "spacegate_plugin_wasm", body_size, limit, "dispatch_http_call: request body exceeds max_body_bytes");
+                        return Status::BadArgument.as_i32();
+                    }
+                }
                 mem.read_bytes(caller.as_context(), body_data as u32, body_size as u32).unwrap_or_default()
             } else {
                 Vec::new()
@@ -636,6 +642,17 @@ fn register_http_call(linker: &mut Linker<HostState>, dispatch_tx: tokio::sync::
                 warn!(target: "spacegate_plugin_wasm", cluster = %cluster, "dispatch_http_call: cluster not configured");
                 return Status::BadArgument.as_i32();
             };
+            if let Some(limit) = caller.data().shell_cfg.limits.max_pending_calls {
+                if caller.data().pending_calls.len() >= limit {
+                    warn!(
+                        target: "spacegate_plugin_wasm",
+                        pending_calls = caller.data().pending_calls.len(),
+                        limit,
+                        "dispatch_http_call: max_pending_calls reached"
+                    );
+                    return Status::InternalFailure.as_i32();
+                }
+            }
             let url = format!("{}{}", base.trim_end_matches('/'), path);
             let token = caller.data_mut().next_dispatch_token();
             let source_ctx = caller.data().effective_context;
@@ -647,6 +664,7 @@ fn register_http_call(linker: &mut Linker<HostState>, dispatch_tx: tokio::sync::
                 },
             );
             let client = caller.data().http_client.clone();
+            let max_body_bytes = caller.data().shell_cfg.limits.max_body_bytes;
             let timeout = Duration::from_millis(timeout_ms.max(1) as u64);
             let tx = dispatch_tx.clone();
             tokio::spawn(async move {
@@ -676,11 +694,36 @@ fn register_http_call(linker: &mut Linker<HostState>, dispatch_tx: tokio::sync::
                             }
                         }
                         let body_bytes = resp.bytes().await.unwrap_or_default();
-                        HttpCallResult {
-                            status,
-                            status_message,
-                            headers: hdrs,
-                            body: body_bytes,
+                        if let Some(limit) = max_body_bytes {
+                            if body_bytes.len() > limit {
+                                warn!(
+                                    target: "spacegate_plugin_wasm",
+                                    %url,
+                                    body_len = body_bytes.len(),
+                                    limit,
+                                    "dispatch_http_call response exceeds max_body_bytes"
+                                );
+                                HttpCallResult {
+                                    status: 0,
+                                    status_message: format!("dispatch_http_call response body too large: {} > {limit}", body_bytes.len()),
+                                    headers: HeaderMap::new(),
+                                    body: Bytes::new(),
+                                }
+                            } else {
+                                HttpCallResult {
+                                    status,
+                                    status_message,
+                                    headers: hdrs,
+                                    body: body_bytes,
+                                }
+                            }
+                        } else {
+                            HttpCallResult {
+                                status,
+                                status_message,
+                                headers: hdrs,
+                                body: body_bytes,
+                            }
                         }
                     }
                     Err(e) => {

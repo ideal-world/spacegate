@@ -11,7 +11,7 @@
 //!   allocator 优先 `proxy_on_memory_allocate`，否则回退 `malloc`。
 //! - **Logging**：`proxy_log` / `proxy_get_log_level` 完整实现（host tracing 级别映射）。
 //! - **Clocks**：`proxy_get_current_time_nanoseconds` + `wasi_snapshot_preview1.clock_time_get`。
-//! - **Timers**：`proxy_set_tick_period_milliseconds` 完整生效；`shell.rs` 起一条 50ms 颗粒度的
+//! - **Timers**：`proxy_set_tick_period_milliseconds` 完整生效；`shell.rs` 为每个 Vm 起一条 50ms 颗粒度的
 //!   后台 tokio 任务，到点 → `Vm::tick()` → guest `proxy_on_tick`。这要求 `Plugin::create`
 //!   时存在 tokio runtime（spacegate-shell 的标准启动路径）；无 runtime 时降级为不驱动。
 //! - **Randomness**：`wasi_snapshot_preview1.random_get` 走 `getrandom`（OS RNG）。
@@ -37,18 +37,26 @@
 //! - **gRPC**：按 spec 全部 `Unimplemented`。
 //! - **Foreign function**：按 spec `NotFound`（无注册表）。
 //! - **`proxy_done` / `proxy_set_effective_context`**：完整实现。
+//! - **资源隔离**：`limits.max_memory_pages` 通过 Wasmtime `ResourceLimiter` 限制线性内存增长；
+//!   `limits.fuel_per_call` 和 `limits.epoch_timeout_millis` 在每次 guest hook 前重置执行预算；
+//!   `limits.max_body_bytes` 限制 host 物化 request/response/dispatch body 的大小；
+//!   `limits.max_pending_calls` 限制单 VM 未完成 `proxy_http_call` 数。
 //!
 //! ## Guest callbacks driven by host
 //!
-//! - 启动：`_initialize`/`_start` → `proxy_on_context_create(root,0)` →
-//!   `proxy_on_vm_start` → `proxy_on_configure`（**仅一次**，由 `WasmPluginShell::create` 执行）。
+//! - 启动：每个 Vm 执行 `_initialize`/`_start` → `proxy_on_context_create(root,0)` →
+//!   `proxy_on_vm_start` → `proxy_on_configure`（由 `WasmPluginShell::create` 按 `vm_pool_size` 执行）。
 //! - 每请求：`proxy_on_context_create(http_id, root)` → `proxy_on_request_headers` →
 //!   （可选）`proxy_on_request_body` → （可选）`proxy_on_request_trailers` →
 //!   `inner.call` → `proxy_on_response_headers` → （可选）`proxy_on_response_body` →
 //!   （可选）`proxy_on_response_trailers` → `proxy_on_log` → `proxy_on_done` → `proxy_on_delete`。
-//!   `WasmPluginShell` 持有 `Arc<tokio::sync::Mutex<Vm>>`，所有请求串行经过同一 root VM
-//!   ——与 envoy/istio 的 per-worker 单线 wasm 模型一致。
-//! - 后台 `proxy_on_tick`：`shell.rs` 起 50ms 颗粒度的 tokio 任务驱动；guest 通过
+//!   `WasmPluginShell` 默认持有 1 个 `Arc<tokio::sync::Mutex<Vm>>`；配置 `vm_pool_size > 1`
+//!   后会创建多个独立 root Vm，并通过 try-lock + round-robin 调度请求。
+//!   配置 `wait_vm_pool_size > 0` 后，带 `X-RateLimit-Policy: wait` 的请求会进入单独 wait VM 池，
+//!   其余 `abandon`/`queue`/未标记请求仍进入普通 VM 池，避免长等待请求拖住普通限流路径。
+//!   每个 VM slot 会记录并输出 inflight tracing 字段；guest trap / 资源隔离错误 / dispatch 通道异常后，
+//!   shell 会在原 slot 内尝试重建 VM，避免异常 Store 长期留在池内。
+//! - 后台 `proxy_on_tick`：`shell.rs` 为每个 Vm 起 50ms 颗粒度的 tokio 任务驱动；guest 通过
 //!   `proxy_set_tick_period_milliseconds` 改周期。
 //! - 异步 `proxy_on_http_call_response`：在 Pause 状态机里 await `dispatch_rx` 后回调。
 //! - Pause/Continue：`proxy_continue_stream` 同步解除 Pause；多次 dispatch 可串联。

@@ -13,10 +13,21 @@ pub enum FailStrategy {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WasmLimits {
+    /// 单个 VM 的线性内存页数上限（1 page = 64KiB）。
     #[serde(default)]
     pub max_memory_pages: Option<u32>,
+    /// 每次 guest hook 调用前补充的 fuel；默认不配置时使用近似无限预算。
     #[serde(default)]
     pub fuel_per_call: Option<u64>,
+    /// 每次 guest hook 的 epoch 超时窗口，单位毫秒；依赖 host 的 1ms epoch ticker。
+    #[serde(default)]
+    pub epoch_timeout_millis: Option<u64>,
+    /// host 需要物化 body 时允许的最大字节数，覆盖请求 body、响应 body、dispatch 请求/响应 body。
+    #[serde(default)]
+    pub max_body_bytes: Option<usize>,
+    /// 单个 VM 同时允许的未完成 `proxy_http_call` 数量。
+    #[serde(default)]
+    pub max_pending_calls: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -40,6 +51,10 @@ pub struct OciAuthConfig {
 
 fn default_use_cache() -> bool {
     true
+}
+
+fn default_vm_pool_size() -> usize {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,6 +106,18 @@ pub struct WasmPluginShellConfig {
     /// 暴露给 guest 的 `plugin_vm_id` well-known property；同时用于 `proxy_resolve_shared_queue`。
     #[serde(default = "default_vm_id")]
     pub plugin_vm_id: String,
+    /// 同一个 wasm 插件实例内创建的 VM 数量。
+    ///
+    /// 默认 1，保持单 VM 串行语义；设置为大于 1 后，多个独立 VM 共享同一个已编译 Module，
+    /// 请求按 try-lock + round-robin 分发，用于降低长时间 `dispatch_http_call` 对后续请求的阻塞。
+    #[serde(default = "default_vm_pool_size")]
+    pub vm_pool_size: usize,
+    /// wait 策略专用 VM 池大小。
+    ///
+    /// 默认 0，表示不启用分类调度，所有请求都进入普通 VM 池。设置为大于 0 后，
+    /// 带 `X-RateLimit-Policy: wait` 的请求会进入独立 wait 池，避免长等待请求占满普通池。
+    #[serde(default)]
+    pub wait_vm_pool_size: usize,
 }
 
 fn default_vm_id() -> String {
@@ -117,11 +144,34 @@ impl Default for WasmPluginShellConfig {
             plugin_name: String::new(),
             plugin_root_id: String::new(),
             plugin_vm_id: default_vm_id(),
+            vm_pool_size: default_vm_pool_size(),
+            wait_vm_pool_size: 0,
         }
     }
 }
 
 impl WasmPluginShellConfig {
+    pub fn normalized_vm_pool_size(&self) -> usize {
+        self.vm_pool_size.clamp(1, 64)
+    }
+
+    pub fn normalized_wait_vm_pool_size(&self) -> usize {
+        self.wait_vm_pool_size.min(64)
+    }
+
+    pub fn max_memory_bytes(&self) -> Option<usize> {
+        self.limits.max_memory_pages.map(|pages| pages as usize * 64 * 1024)
+    }
+
+    pub fn guest_fuel_per_call(&self) -> u64 {
+        self.limits.fuel_per_call.unwrap_or(u64::MAX / 4).max(1)
+    }
+
+    pub fn guest_epoch_deadline_ticks(&self) -> u64 {
+        // epoch ticker 以 1ms 为一跳；默认给一个很大的窗口，相当于不主动超时。
+        self.limits.epoch_timeout_millis.unwrap_or(24 * 60 * 60 * 1000).clamp(1, 24 * 60 * 60 * 1000)
+    }
+
     /// 把 `plugin_config`（任意 JSON）转换为 hai 风格 YAML 字节流。
     ///
     /// hai-process-mix 在 `on_configure` 内是 `serde_yaml::from_slice::<PluginConfig>(&bytes)`，

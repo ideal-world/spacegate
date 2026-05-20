@@ -24,14 +24,14 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http::HeaderMap;
-use http_body_util::BodyExt;
+use http_body_util::{BodyExt, Limited};
 use spacegate_kernel::{SgBody, SgRequest, SgResponse};
 use tracing::{debug, info, warn};
 use wasmtime::{AsContext, AsContextMut, Instance, Linker, Store, TypedFunc};
 
 use crate::abi::{Action, MemoryHelper};
 use crate::config::{FailStrategy, WasmPluginShellConfig};
-use crate::engine::shared_engine;
+use crate::engine::{ensure_epoch_ticker_started, shared_engine};
 use crate::error::WasmHostError;
 use crate::host_fn::register_all;
 use crate::host_state::{ContextStage, HostState, HttpCallResult, PseudoHeaders, RequestContext};
@@ -70,9 +70,12 @@ impl Vm {
     /// `on_vm_start` / `on_configure` 全部是同步调用），所以 `WasmPluginShell::create`
     /// 这种 sync 上下文也能直接构造。
     pub fn new(module: &wasmtime::Module, shell_cfg: Arc<WasmPluginShellConfig>) -> Result<Self, WasmHostError> {
+        ensure_epoch_ticker_started();
         let engine = shared_engine();
         let host = HostState::new(shell_cfg.clone());
         let mut store: Store<HostState> = Store::new(engine, host);
+        store.limiter(|state| &mut state.resource_limiter);
+        prepare_store_for_guest_call(&mut store)?;
         let mut linker: Linker<HostState> = Linker::new(engine);
         let (dispatch_tx, dispatch_rx) = tokio::sync::mpsc::unbounded_channel::<(u32, HttpCallResult)>();
         register_all(&mut linker, dispatch_tx).map_err(|e| WasmHostError::Instantiate(format!("register host fn: {e}")))?;
@@ -82,6 +85,14 @@ impl Vm {
         let instance = linker.instantiate(&mut store, module).map_err(|e| WasmHostError::Instantiate(format!("instantiate: {e}")))?;
 
         let memory = instance.get_memory(&mut store, "memory").ok_or_else(|| WasmHostError::AbiViolation("no `memory` export".into()))?;
+        if let Some(max_pages) = shell_cfg.limits.max_memory_pages {
+            let current_pages = memory.size(&store) as u32;
+            if current_pages > max_pages {
+                return Err(WasmHostError::ResourceLimit(format!(
+                    "initial memory pages {current_pages} exceeds max_memory_pages {max_pages}"
+                )));
+            }
+        }
         store.data_mut().memory = Some(memory);
         // spec §Memory management：优先 `proxy_on_memory_allocate`，否则回退 `malloc`。
         if let Ok(alloc) = instance.get_typed_func::<u32, u32>(&mut store, "proxy_on_memory_allocate") {
@@ -94,8 +105,10 @@ impl Vm {
 
         // spec §Integration：先 `_initialize`；若不存在尝试 `_start`。
         if let Ok(init) = instance.get_typed_func::<(), ()>(&mut store, "_initialize") {
+            prepare_store_for_guest_call(&mut store)?;
             init.call(&mut store, ()).map_err(|e| WasmHostError::Instantiate(format!("_initialize: {e}")))?;
         } else if let Ok(start) = instance.get_typed_func::<(), ()>(&mut store, "_start") {
+            prepare_store_for_guest_call(&mut store)?;
             start.call(&mut store, ()).map_err(|e| WasmHostError::Instantiate(format!("_start: {e}")))?;
         }
 
@@ -156,6 +169,7 @@ impl Vm {
         if let Some(ref f) = vm.fn_on_vm_start {
             vm.store.data_mut().effective_context = root_id;
             let cfg_len = vm.store.data().configuration.len() as u32;
+            prepare_store_for_guest_call(&mut vm.store)?;
             let ok = f.call(&mut vm.store, (root_id, cfg_len)).map_err(|e| WasmHostError::GuestTrap { hook: "on_vm_start", source: e })?;
             if ok == 0 {
                 return Err(WasmHostError::Instantiate("guest on_vm_start returned 0 (=invalid VM configuration)".into()));
@@ -165,6 +179,7 @@ impl Vm {
         let cfg_len = vm.store.data().configuration.len() as u32;
         tracing::info!(target: "spacegate_plugin_wasm", cfg_len, "calling proxy_on_configure");
         let configure_fn = vm.fn_on_configure.clone();
+        prepare_store_for_guest_call(&mut vm.store)?;
         let ok = configure_fn.call(&mut vm.store, (root_id, cfg_len)).map_err(|e| WasmHostError::GuestTrap { hook: "on_configure", source: e })?;
         if ok == 0 {
             warn!(target: "spacegate_plugin_wasm", "guest on_configure returned 0 (=invalid config)");
@@ -175,6 +190,7 @@ impl Vm {
     fn create_context(&mut self, ctx_id: u32, parent_id: u32) -> Result<(), WasmHostError> {
         self.store.data_mut().effective_context = ctx_id;
         let f = self.fn_on_context_create.clone();
+        self.prepare_guest_call()?;
         f.call(&mut self.store, (ctx_id, parent_id)).map_err(|e| WasmHostError::GuestTrap {
             hook: "on_context_create",
             source: e,
@@ -229,6 +245,7 @@ impl Vm {
         let num_headers = (self.store.data().contexts[&http_ctx_id].request_headers.len() + 4) as u32;
         let end_of_stream_for_headers: u32 = if want_request_body { 0 } else { 1 };
         let on_req_hdr = self.fn_on_request_headers.clone();
+        self.prepare_guest_call()?;
         let action_raw = on_req_hdr.call(&mut self.store, (http_ctx_id, num_headers, end_of_stream_for_headers)).map_err(|e| WasmHostError::GuestTrap {
             hook: "on_request_headers",
             source: e,
@@ -249,10 +266,7 @@ impl Vm {
         // ─── on_request_body：把请求 body 物化后喂给 guest（仅当 guest 导出该 hook）───
         let (new_req_for_inner, collected_body_after_hook) = if want_request_body {
             // collect body
-            let collected = match body.collect().await {
-                Ok(c) => c.to_bytes(),
-                Err(_) => Bytes::new(),
-            };
+            let collected = collect_body_limited(body, self.store.data().shell_cfg.limits.max_body_bytes).await?;
             let body_size = collected.len() as u32;
             {
                 let st = self.store.data_mut();
@@ -265,6 +279,7 @@ impl Vm {
                 }
             }
             let on_req_body = self.fn_on_request_body.clone().expect("guarded by want_request_body");
+            self.prepare_guest_call()?;
             let action_raw = on_req_body.call(&mut self.store, (http_ctx_id, body_size, 1)).map_err(|e| WasmHostError::GuestTrap {
                 hook: "on_request_body",
                 source: e,
@@ -290,6 +305,7 @@ impl Vm {
                 ctx.stage = ContextStage::RequestTrailers;
                 ctx.continue_requested = false;
             }
+            self.prepare_guest_call()?;
             let action_raw = f.call(&mut self.store, (http_ctx_id, 0)).map_err(|e| WasmHostError::GuestTrap {
                 hook: "on_request_trailers",
                 source: e,
@@ -346,6 +362,7 @@ impl Vm {
         let want_response_body = self.fn_on_response_body.is_some();
         let end_of_stream_for_resp_hdr: u32 = if want_response_body { 0 } else { 1 };
         let on_resp_hdr = self.fn_on_response_headers.clone();
+        self.prepare_guest_call()?;
         let action_raw = on_resp_hdr.call(&mut self.store, (http_ctx_id, (resp_headers.len() + 1) as u32, end_of_stream_for_resp_hdr)).map_err(|e| WasmHostError::GuestTrap {
             hook: "on_response_headers",
             source: e,
@@ -361,10 +378,7 @@ impl Vm {
 
         // ─── on_response_body ───
         let (mut final_headers, final_body): (HeaderMap, SgBody) = if let Some(f) = self.fn_on_response_body.clone() {
-            let collected = match resp_body.collect().await {
-                Ok(c) => c.to_bytes(),
-                Err(_) => Bytes::new(),
-            };
+            let collected = collect_body_limited(resp_body, self.store.data().shell_cfg.limits.max_body_bytes).await?;
             let body_size = collected.len() as u32;
             {
                 let st = self.store.data_mut();
@@ -376,6 +390,7 @@ impl Vm {
                     st.effective_context = http_ctx_id;
                 }
             }
+            self.prepare_guest_call()?;
             let action_raw = f.call(&mut self.store, (http_ctx_id, body_size, 1)).map_err(|e| WasmHostError::GuestTrap {
                 hook: "on_response_body",
                 source: e,
@@ -397,6 +412,7 @@ impl Vm {
                 ctx.stage = ContextStage::ResponseTrailers;
                 ctx.continue_requested = false;
             }
+            self.prepare_guest_call()?;
             let _ = f.call(&mut self.store, (http_ctx_id, 0)).map_err(|e| WasmHostError::GuestTrap {
                 hook: "on_response_trailers",
                 source: e,
@@ -452,6 +468,7 @@ impl Vm {
             }
             debug!(target: "spacegate_plugin_wasm", token, source_ctx_id, status = result.status, body_len, "fire proxy_on_http_call_response");
             let f = self.fn_on_http_call_response.clone();
+            self.prepare_guest_call()?;
             f.call(&mut self.store, (source_ctx_id, token, header_count, body_len, 0)).map_err(|e| WasmHostError::GuestTrap {
                 hook: "on_http_call_response",
                 source: e,
@@ -465,6 +482,7 @@ impl Vm {
             ctx.stage = ContextStage::Log;
         }
         if let Some(f) = self.fn_on_log.clone() {
+            self.prepare_guest_call()?;
             let _ = f.call(&mut self.store, ctx_id);
         }
         if let Some(f) = self.fn_on_done.clone() {
@@ -475,6 +493,7 @@ impl Vm {
             if let Some(ctx) = self.store.data_mut().contexts.get_mut(&ctx_id) {
                 ctx.awaiting_done = true;
             }
+            self.prepare_guest_call()?;
             let v = f.call(&mut self.store, ctx_id).unwrap_or(1);
             let done = v != 0 || self.store.data().contexts.get(&ctx_id).map(|c| c.done_marker).unwrap_or(true);
             if !done {
@@ -486,6 +505,7 @@ impl Vm {
             }
         }
         if let Some(f) = self.fn_on_delete.clone() {
+            self.prepare_guest_call()?;
             let _ = f.call(&mut self.store, ctx_id);
         }
         self.store.data_mut().contexts.remove(&ctx_id);
@@ -509,8 +529,39 @@ impl Vm {
             return Ok(());
         };
         self.store.data_mut().effective_context = self.root_id;
+        self.prepare_guest_call()?;
         f.call(&mut self.store, self.root_id).map_err(|e| WasmHostError::GuestTrap { hook: "on_tick", source: e })?;
         Ok(())
+    }
+
+    fn prepare_guest_call(&mut self) -> Result<(), WasmHostError> {
+        prepare_store_for_guest_call(&mut self.store)
+    }
+}
+
+fn prepare_store_for_guest_call(store: &mut Store<HostState>) -> Result<(), WasmHostError> {
+    let fuel = store.data().shell_cfg.guest_fuel_per_call();
+    store.set_fuel(fuel).map_err(|e| WasmHostError::ResourceLimit(format!("set fuel: {e}")))?;
+    let deadline = store.data().shell_cfg.guest_epoch_deadline_ticks();
+    store.set_epoch_deadline(deadline);
+    store.epoch_deadline_trap();
+    Ok(())
+}
+
+async fn collect_body_limited(body: SgBody, limit: Option<usize>) -> Result<Bytes, WasmHostError> {
+    if let Some(limit) = limit {
+        let limited = Limited::new(body, limit);
+        let collected = limited.collect().await.map_err(|_| WasmHostError::BodyTooLarge {
+            actual: limit.saturating_add(1),
+            limit,
+        })?;
+        let bytes = collected.to_bytes();
+        if bytes.len() > limit {
+            return Err(WasmHostError::BodyTooLarge { actual: bytes.len(), limit });
+        }
+        Ok(bytes)
+    } else {
+        Ok(body.collect().await.map(|c| c.to_bytes()).unwrap_or_default())
     }
 }
 
