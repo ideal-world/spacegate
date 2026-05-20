@@ -65,9 +65,19 @@ AI_RATE_LIMIT_BURST=200
 AI_WAIT_TIMEOUT_SECS=60
 AI_WORKER_CONCURRENCY=4
 AI_MAX_BODY_BYTES=33554432
+AI_INLINE_THRESHOLD=131072
+AI_QUEUE_MAX_LEN=100000
+AI_RECLAIM_INTERVAL_SECS=30
+AI_RECLAIM_MIN_IDLE_SECS=30
 ```
 
 如果不设置 `AI_UPSTREAM_BASE_URL`，队列任务仍会写入 Redis，但不会由本地 worker 消费。
+
+本地调试如果使用 HTTP 回调地址，可以临时加上：
+
+```bash
+AI_REQUIRE_HTTPS_CALLBACK=false
+```
 
 ## SpaceGate 配置
 
@@ -122,9 +132,10 @@ AI_MAX_BODY_BYTES=33554432
 
 - `X-RateLimit-Policy`：必填，取值为 `abandon`、`queue`、`wait`
 - `X-Tenant-Id`：必填
-- `X-Callback-URL`：`queue` 场景下建议提供
+- `X-Callback-URL`：`queue` 场景下必填，默认要求 HTTPS
 - `X-Request-Timeout`：`wait` 场景下可选，单位为秒
 - `X-Model`：可选，透传给外部服务
+- `X-Queue-Priority`：可选，启用优先级队列后可传 `high` 或 `low`
 
 Header 名称大小写不敏感；`X-RateLimit-Policy` 的值请使用小写。
 
@@ -154,7 +165,7 @@ curl -i http://localhost:9080/your/api \
 curl -i http://localhost:9080/your/api \
   -H 'X-RateLimit-Policy: queue' \
   -H 'X-Tenant-Id: demo' \
-  -H 'X-Callback-URL: http://localhost:9001/callback' \
+  -H 'X-Callback-URL: https://example.com/callback' \
   -d '{"prompt":"hello"}'
 ```
 
@@ -179,6 +190,17 @@ curl -i http://localhost:9080/your/api \
 - `202`：队列已接收
 - `200`/`4xx`/`5xx`：`wait` 模式下，由外部服务返回
 - `502`：外部服务不可达或调用失败
+
+`wait` 成功响应会带 `X-Job-Id` 和 `X-Queue-Wait-Ms`；`queue` 响应会带 `X-Job-Id` 和 `Location`。
+
+## 生产化能力
+
+- Redis Stream 支持 `MAXLEN ~` 裁剪，通过 `AI_QUEUE_MAX_LEN` 控制
+- Worker 崩溃后通过 `XAUTOCLAIM` 重认领 pending job
+- 回调失败会进入 `AI_CALLBACK_RETRY_STREAM` 并由 retry worker 重试
+- 大 body 可通过 `AI_OBJECT_STORE_ENDPOINT` 卸载到对象存储，Redis Stream 中只保留 `ref`
+- 可通过 Redis key 覆盖租户限流：`ai:tenant:ratelimit:{tenant}:rps` 和 `ai:tenant:ratelimit:{tenant}:burst`
+- `/metrics` 暴露 Prometheus 文本指标
 
 ## 调试建议
 

@@ -16,6 +16,7 @@ use fred::clients::{Client as FredClient, SubscriberClient};
 use fred::prelude::*;
 use fred::types::streams::XReadResponse;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Semaphore;
 use tower_http::trace::TraceLayer;
 
 static JOB_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -64,10 +65,22 @@ struct Args {
     redis_url: String,
     #[arg(long, env = "AI_QUEUE_STREAM", default_value = "ai:jobs")]
     stream_key: String,
+    #[arg(long, env = "AI_QUEUE_HIGH_STREAM", default_value = "ai:jobs:high")]
+    high_priority_stream_key: String,
+    #[arg(long, env = "AI_QUEUE_LOW_STREAM", default_value = "ai:jobs:low")]
+    low_priority_stream_key: String,
+    #[arg(long, env = "AI_ENABLE_PRIORITY_STREAMS", default_value_t = false)]
+    enable_priority_streams: bool,
+    #[arg(long, env = "AI_QUEUE_MAX_LEN", default_value_t = 100_000)]
+    stream_max_len: u64,
     #[arg(long, env = "AI_QUEUE_GROUP", default_value = "ai-gateway-workers")]
     consumer_group: String,
     #[arg(long, env = "AI_QUEUE_CONSUMER", default_value = "ai-gateway-service")]
     consumer_name: String,
+    #[arg(long, env = "AI_CALLBACK_RETRY_STREAM", default_value = "ai:callback-retry")]
+    callback_retry_stream: String,
+    #[arg(long, env = "AI_CALLBACK_RETRY_GROUP", default_value = "ai-gateway-callbacks")]
+    callback_retry_group: String,
     #[arg(long, env = "AI_RESULT_KEY_PREFIX", default_value = "result:")]
     result_key_prefix: String,
     #[arg(long, env = "AI_RESULT_CHANNEL_PREFIX", default_value = "result:")]
@@ -78,6 +91,8 @@ struct Args {
     rate_limit_rps: u64,
     #[arg(long, env = "AI_RATE_LIMIT_BURST", default_value_t = 200)]
     rate_limit_burst: u64,
+    #[arg(long, env = "AI_TENANT_RATE_LIMIT_PREFIX", default_value = "ai:tenant:ratelimit:")]
+    tenant_rate_limit_prefix: String,
     #[arg(long, env = "AI_WAIT_TIMEOUT_SECS", default_value_t = 60)]
     wait_timeout_secs: u64,
     #[arg(long, env = "AI_WORKER_CONCURRENCY", default_value_t = 1)]
@@ -86,6 +101,24 @@ struct Args {
     upstream_base_url: Option<String>,
     #[arg(long, env = "AI_MAX_BODY_BYTES", default_value_t = 32 * 1024 * 1024)]
     max_body_bytes: usize,
+    #[arg(long, env = "AI_INLINE_THRESHOLD", default_value_t = 128 * 1024)]
+    inline_threshold: usize,
+    #[arg(long, env = "AI_BODY_READ_CONCURRENCY", default_value_t = 200)]
+    body_read_concurrency: usize,
+    #[arg(long, env = "AI_RECLAIM_INTERVAL_SECS", default_value_t = 30)]
+    reclaim_interval_secs: u64,
+    #[arg(long, env = "AI_RECLAIM_MIN_IDLE_SECS", default_value_t = 30)]
+    reclaim_min_idle_secs: u64,
+    #[arg(long, env = "AI_REQUIRE_HTTPS_CALLBACK", default_value_t = true)]
+    require_https_callback: bool,
+    #[arg(long, env = "AI_OBJECT_STORE_ENDPOINT")]
+    object_store_endpoint: Option<String>,
+    #[arg(long, env = "AI_OBJECT_STORE_BUCKET", default_value = "ai-gateway-body")]
+    object_store_bucket: String,
+    #[arg(long, env = "AI_OBJECT_STORE_PREFIX", default_value = "bodies")]
+    object_store_prefix: String,
+    #[arg(long, env = "AI_OBJECT_STORE_AUTH_HEADER")]
+    object_store_auth_header: Option<String>,
 }
 
 #[derive(Clone)]
@@ -93,6 +126,24 @@ struct AppState {
     redis: FredClient,
     http: reqwest::Client,
     cfg: Arc<Args>,
+    body_permits: Arc<Semaphore>,
+    metrics: Arc<Metrics>,
+}
+
+#[derive(Default)]
+struct Metrics {
+    rate_limited_total: AtomicU64,
+    enqueue_total: AtomicU64,
+    enqueue_queue_total: AtomicU64,
+    enqueue_wait_total: AtomicU64,
+    wait_timeout_total: AtomicU64,
+    callback_failure_total: AtomicU64,
+    callback_retry_total: AtomicU64,
+    callback_retry_success_total: AtomicU64,
+    worker_completed_total: AtomicU64,
+    worker_failed_total: AtomicU64,
+    reclaimed_total: AtomicU64,
+    object_offload_total: AtomicU64,
 }
 
 #[derive(Debug, Serialize)]
@@ -106,6 +157,7 @@ struct RateLimitResponse {
 struct EnqueueResponse {
     job_id: String,
     stream_id: String,
+    stream_key: String,
     status: &'static str,
     poll_url: String,
 }
@@ -119,6 +171,35 @@ struct StoredResult {
     body_base64: String,
     completed_at_ms: u64,
     error: Option<String>,
+}
+
+#[derive(Debug)]
+struct AcceptedJob {
+    response: EnqueueResponse,
+    created_at_ms: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum QueuePolicy {
+    Queue,
+    Wait,
+}
+
+impl QueuePolicy {
+    fn as_str(self) -> &'static str {
+        match self {
+            QueuePolicy::Queue => "queue",
+            QueuePolicy::Wait => "wait",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BodyLocation {
+    body_base64: String,
+    object_ref: String,
+    size: usize,
+    storage: &'static str,
 }
 
 #[derive(Debug)]
@@ -188,17 +269,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         redis,
         http: reqwest::Client::new(),
         cfg: Arc::new(args.clone()),
+        body_permits: Arc::new(Semaphore::new(args.body_read_concurrency.max(1))),
+        metrics: Arc::new(Metrics::default()),
     };
 
-    ensure_consumer_group(&state).await?;
+    ensure_consumer_groups(&state).await?;
     if state.cfg.upstream_base_url.is_some() {
         spawn_workers(state.clone());
+        spawn_reclaimer(state.clone());
+        spawn_callback_retry_worker(state.clone());
     } else {
         tracing::warn!("AI_UPSTREAM_BASE_URL is not set; queue jobs will be stored but no local worker will process them");
     }
 
     let app = Router::new()
         .route("/healthz", get(healthz))
+        .route("/metrics", get(metrics))
         .route("/v1/ratelimit/check", post(check_rate_limit))
         .route("/v1/queue/enqueue", post(enqueue))
         .route("/v1/queue/enqueue-and-wait", post(enqueue_and_wait))
@@ -222,6 +308,7 @@ async fn check_rate_limit(State(state): State<AppState>, headers: HeaderMap, uri
     let tenant = required_header(&headers, "x-tenant-id")?;
     let model = optional_header(&headers, "x-model").unwrap_or_else(|| "default".to_string());
     let path = optional_header(&headers, "x-original-path").unwrap_or_else(|| uri.path().to_string());
+    let (rate_limit_rps, rate_limit_burst) = tenant_rate_limit(&state, &tenant).await?;
     let key = sanitize_key(&format!("{tenant}:{model}:{path}"));
     let tokens_key = format!("ai:ratelimit:{key}:tokens");
     let ts_key = format!("ai:ratelimit:{key}:ts");
@@ -232,40 +319,40 @@ async fn check_rate_limit(State(state): State<AppState>, headers: HeaderMap, uri
         .eval(
             TOKEN_BUCKET_LUA,
             vec![tokens_key, ts_key],
-            vec![
-                state.cfg.rate_limit_rps.to_string(),
-                state.cfg.rate_limit_burst.to_string(),
-                now.to_string(),
-                "1".to_string(),
-            ],
+            vec![rate_limit_rps.to_string(), rate_limit_burst.to_string(), now.to_string(), "1".to_string()],
         )
         .await?;
 
+    let allowed = out.first().copied().unwrap_or(0) == 1;
+    if !allowed {
+        state.metrics.rate_limited_total.fetch_add(1, Ordering::Relaxed);
+    }
     Ok(Json(RateLimitResponse {
-        allowed: out.first().copied().unwrap_or(0) == 1,
+        allowed,
         remaining_tokens_milli: out.get(1).copied().unwrap_or(0),
         retry_after_ms: out.get(2).copied().unwrap_or(0),
     }))
 }
 
 async fn enqueue(State(state): State<AppState>, method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Result<impl IntoResponse, ServiceError> {
-    let accepted = enqueue_job(&state, method, uri, headers, body).await?;
-    let mut resp = (StatusCode::ACCEPTED, Json(&accepted)).into_response();
-    resp.headers_mut().insert("x-job-id", header_value(&accepted.job_id)?);
+    let accepted = enqueue_job(&state, QueuePolicy::Queue, method, uri, headers, body).await?;
+    let mut resp = (StatusCode::ACCEPTED, Json(&accepted.response)).into_response();
+    resp.headers_mut().insert("x-job-id", header_value(&accepted.response.job_id)?);
+    resp.headers_mut().insert("location", header_value(&accepted.response.poll_url)?);
     Ok(resp)
 }
 
 async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Result<Response, ServiceError> {
     let timeout_secs = optional_header(&headers, "x-request-timeout").and_then(|v| v.parse::<u64>().ok()).unwrap_or(state.cfg.wait_timeout_secs);
-    let accepted = enqueue_job(&state, method, uri, headers, body).await?;
-    let channel = result_channel(&state, &accepted.job_id);
+    let accepted = enqueue_job(&state, QueuePolicy::Wait, method, uri, headers, body).await?;
+    let channel = result_channel(&state, &accepted.response.job_id);
     let subscriber = build_subscriber_client(&state.cfg.redis_url)?;
     let _subscriber_task = subscriber.init().await?;
     subscriber.subscribe(channel.as_str()).await?;
 
-    if let Some(result) = load_result(&state, &accepted.job_id).await? {
+    if let Some(result) = load_result(&state, &accepted.response.job_id).await? {
         let _ = subscriber.quit().await;
-        return Ok(result_to_response(result)?);
+        return Ok(result_to_response(result, accepted.created_at_ms)?);
     }
 
     let mut messages = subscriber.message_rx();
@@ -281,20 +368,24 @@ async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Ur
     match wait {
         Ok(Ok(())) => {
             let _ = subscriber.quit().await;
-            if let Some(result) = load_result(&state, &accepted.job_id).await? {
-                Ok(result_to_response(result)?)
+            if let Some(result) = load_result(&state, &accepted.response.job_id).await? {
+                Ok(result_to_response(result, accepted.created_at_ms)?)
             } else {
                 Err(ServiceError::gateway_timeout(format!(
                     "job {} completed notification received but result is missing",
-                    accepted.job_id
+                    accepted.response.job_id
                 )))
             }
         }
         _ => {
             let _ = subscriber.quit().await;
+            state.metrics.wait_timeout_total.fetch_add(1, Ordering::Relaxed);
+            let waited_ms = now_ms().saturating_sub(accepted.created_at_ms);
             let body = Json(serde_json::json!({
                 "error": "timeout",
-                "job_id": accepted.job_id,
+                "job_id": accepted.response.job_id,
+                "poll_url": accepted.response.poll_url,
+                "waited_ms": waited_ms,
                 "message": "Job is still processing. Switch to queue mode with a callback for long tasks."
             }));
             Ok((StatusCode::GATEWAY_TIMEOUT, body).into_response())
@@ -309,44 +400,109 @@ async fn get_job(State(state): State<AppState>, Path(job_id): Path<String>) -> R
     }
 }
 
-async fn enqueue_job(state: &AppState, _method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Result<EnqueueResponse, ServiceError> {
+async fn metrics(State(state): State<AppState>) -> Result<Response, ServiceError> {
+    let queue_depth: i64 = state.redis.xlen(state.cfg.stream_key.as_str()).await.unwrap_or_default();
+    let high_queue_depth: i64 = state.redis.xlen(state.cfg.high_priority_stream_key.as_str()).await.unwrap_or_default();
+    let low_queue_depth: i64 = state.redis.xlen(state.cfg.low_priority_stream_key.as_str()).await.unwrap_or_default();
+    let callback_retry_depth: i64 = state.redis.xlen(state.cfg.callback_retry_stream.as_str()).await.unwrap_or_default();
+
+    let body = format!(
+        "\
+rate_limited_total {}\n\
+enqueue_total {}\n\
+enqueue_total{{policy=\"queue\"}} {}\n\
+enqueue_total{{policy=\"wait\"}} {}\n\
+wait_timeout_total {}\n\
+callback_failure_total {}\n\
+callback_retry_total {}\n\
+callback_retry_success_total {}\n\
+worker_completed_total {}\n\
+worker_failed_total {}\n\
+reclaimed_total {}\n\
+object_offload_total {}\n\
+queue_depth {}\n\
+queue_depth{{priority=\"high\"}} {}\n\
+queue_depth{{priority=\"low\"}} {}\n\
+callback_retry_depth {}\n",
+        state.metrics.rate_limited_total.load(Ordering::Relaxed),
+        state.metrics.enqueue_total.load(Ordering::Relaxed),
+        state.metrics.enqueue_queue_total.load(Ordering::Relaxed),
+        state.metrics.enqueue_wait_total.load(Ordering::Relaxed),
+        state.metrics.wait_timeout_total.load(Ordering::Relaxed),
+        state.metrics.callback_failure_total.load(Ordering::Relaxed),
+        state.metrics.callback_retry_total.load(Ordering::Relaxed),
+        state.metrics.callback_retry_success_total.load(Ordering::Relaxed),
+        state.metrics.worker_completed_total.load(Ordering::Relaxed),
+        state.metrics.worker_failed_total.load(Ordering::Relaxed),
+        state.metrics.reclaimed_total.load(Ordering::Relaxed),
+        state.metrics.object_offload_total.load(Ordering::Relaxed),
+        queue_depth,
+        high_queue_depth,
+        low_queue_depth,
+        callback_retry_depth,
+    );
+    Ok((StatusCode::OK, [("content-type", "text/plain; version=0.0.4")], body).into_response())
+}
+
+async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Result<AcceptedJob, ServiceError> {
+    let _permit = state.body_permits.acquire().await.map_err(|_| ServiceError::internal("body semaphore closed"))?;
     let job_id = new_job_id();
     let tenant_id = required_header(&headers, "x-tenant-id")?;
-    let policy = optional_header(&headers, "x-ratelimit-policy").unwrap_or_else(|| "queue".to_string());
     let model = optional_header(&headers, "x-model").unwrap_or_else(|| "default".to_string());
     let callback_url = optional_header(&headers, "x-callback-url").unwrap_or_default();
+    validate_callback_url(state, policy, &callback_url)?;
     let original_method = optional_header(&headers, "x-original-method").unwrap_or_else(|| "POST".to_string());
     let original_path = optional_header(&headers, "x-original-path").unwrap_or_else(|| uri.path().to_string());
     let request_headers = headers_to_json(&headers)?;
     let created_at = now_ms();
+    let body_ref = store_body(state, &job_id, body).await?;
+    let stream_key = stream_for_request(state, &headers);
 
     let stream_id: String = state
         .redis
         .xadd(
-            state.cfg.stream_key.as_str(),
+            stream_key.as_str(),
             false,
             None::<()>,
             "*",
             vec![
                 ("job_id", Value::String(job_id.clone().into())),
                 ("tenant_id", Value::String(tenant_id.into())),
-                ("policy", Value::String(policy.into())),
+                ("policy", Value::String(policy.as_str().into())),
                 ("model", Value::String(model.into())),
                 ("method", Value::String(original_method.into())),
                 ("path", Value::String(original_path.into())),
                 ("headers", Value::String(request_headers.into())),
-                ("body", Value::Bytes(body)),
+                ("body", Value::String(body_ref.body_base64.into())),
+                ("ref", Value::String(body_ref.object_ref.into())),
+                ("size", Value::Integer(body_ref.size as i64)),
+                ("storage", Value::String(body_ref.storage.into())),
                 ("callback_url", Value::String(callback_url.into())),
                 ("created_at", Value::Integer(created_at as i64)),
             ],
         )
         .await?;
+    trim_stream(state, &stream_key).await?;
 
-    Ok(EnqueueResponse {
-        job_id: job_id.clone(),
-        stream_id,
-        status: "queued",
-        poll_url: format!("/v1/jobs/{job_id}"),
+    state.metrics.enqueue_total.fetch_add(1, Ordering::Relaxed);
+    match policy {
+        QueuePolicy::Queue => {
+            state.metrics.enqueue_queue_total.fetch_add(1, Ordering::Relaxed);
+        }
+        QueuePolicy::Wait => {
+            state.metrics.enqueue_wait_total.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    Ok(AcceptedJob {
+        response: EnqueueResponse {
+            job_id: job_id.clone(),
+            stream_id,
+            stream_key,
+            status: "queued",
+            poll_url: format!("/v1/jobs/{job_id}"),
+        },
+        created_at_ms: created_at,
     })
 }
 
@@ -366,35 +522,40 @@ fn spawn_workers(state: AppState) {
 }
 
 async fn worker_once(state: &AppState, consumer: &str) -> Result<(), ServiceError> {
-    let reply: XReadResponse<String, String, String, Value> = state
-        .redis
-        .xreadgroup_map(
-            state.cfg.consumer_group.as_str(),
-            consumer,
-            Some(5),
-            Some(1000),
-            false,
-            vec![state.cfg.stream_key.as_str()],
-            vec![">"],
-        )
-        .await?;
-
-    for (_stream, entries) in reply {
-        for (entry_id, fields) in entries {
-            match process_job(state, entry_id.as_str(), &fields).await {
-                Ok(()) => {
-                    let _: i64 = state.redis.xack(state.cfg.stream_key.as_str(), state.cfg.consumer_group.as_str(), vec![entry_id.clone()]).await?;
-                }
-                Err(e) => {
-                    tracing::warn!(stream_id = %entry_id, error = %e.message, "job processing failed");
-                }
-            }
+    let streams = worker_streams(state);
+    for (idx, stream) in streams.iter().enumerate() {
+        let block = if idx + 1 == streams.len() { 1000 } else { 10 };
+        let processed = read_worker_stream(state, consumer, stream, block).await?;
+        if processed > 0 {
+            return Ok(());
         }
     }
     Ok(())
 }
 
-async fn process_job(state: &AppState, _stream_id: &str, fields: &HashMap<String, Value>) -> Result<(), ServiceError> {
+async fn read_worker_stream(state: &AppState, consumer: &str, stream: &str, block_ms: u64) -> Result<usize, ServiceError> {
+    let reply: XReadResponse<String, String, String, Value> =
+        state.redis.xreadgroup_map(state.cfg.consumer_group.as_str(), consumer, Some(5), Some(block_ms), false, vec![stream], vec![">"]).await?;
+
+    let mut processed = 0;
+    for (_stream, entries) in reply {
+        for (entry_id, fields) in entries {
+            match process_job(state, stream, entry_id.as_str(), &fields).await {
+                Ok(()) => {
+                    let _: i64 = state.redis.xack(stream, state.cfg.consumer_group.as_str(), vec![entry_id.clone()]).await?;
+                    processed += 1;
+                }
+                Err(e) => {
+                    tracing::warn!(stream_id = %entry_id, error = %e.message, "job processing failed");
+                    state.metrics.worker_failed_total.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+    Ok(processed)
+}
+
+async fn process_job(state: &AppState, _stream: &str, _stream_id: &str, fields: &HashMap<String, Value>) -> Result<(), ServiceError> {
     let Some(base) = state.cfg.upstream_base_url.as_deref() else {
         return Err(ServiceError::internal("upstream base URL is not configured"));
     };
@@ -403,7 +564,7 @@ async fn process_job(state: &AppState, _stream_id: &str, fields: &HashMap<String
     let path = field_string(fields, "path").unwrap_or_else(|| "/".to_string());
     let headers_json = field_string(fields, "headers").unwrap_or_else(|| "{}".to_string());
     let callback_url = field_string(fields, "callback_url").unwrap_or_default();
-    let body = field_bytes(fields, "body").unwrap_or_default();
+    let body = load_body(state, fields).await?;
     let headers: HashMap<String, String> = serde_json::from_str(&headers_json).unwrap_or_default();
 
     let url = format!("{}{}", base.trim_end_matches('/'), path);
@@ -448,24 +609,145 @@ async fn process_job(state: &AppState, _stream_id: &str, fields: &HashMap<String
 
     store_result(state, &result).await?;
     if !callback_url.is_empty() {
-        let callback_body = serde_json::json!({
-            "job_id": result.job_id,
-            "status": result.status,
-            "http_status": result.http_status,
-            "headers": result.headers,
-            "body_base64": result.body_base64,
-            "completed_at_ms": result.completed_at_ms,
-            "error": result.error,
-        });
-        if let Err(e) = state.http.post(callback_url).json(&callback_body).send().await {
-            tracing::warn!(job_id = %job_id, error = %e, "callback failed");
+        let callback_body = callback_body(&result);
+        if let Err(e) = post_callback(state, &callback_url, &job_id, &callback_body).await {
+            tracing::warn!(job_id = %job_id, error = %e.message, "callback failed");
+            state.metrics.callback_failure_total.fetch_add(1, Ordering::Relaxed);
+            enqueue_callback_retry(state, &callback_url, &job_id, &callback_body).await?;
+        }
+    }
+    state.metrics.worker_completed_total.fetch_add(1, Ordering::Relaxed);
+    Ok(())
+}
+
+fn callback_body(result: &StoredResult) -> serde_json::Value {
+    serde_json::json!({
+        "job_id": result.job_id,
+        "status": result.status,
+        "http_status": result.http_status,
+        "headers": result.headers,
+        "body_base64": result.body_base64,
+        "result": result.body_base64,
+        "completed_at_ms": result.completed_at_ms,
+        "error": result.error,
+    })
+}
+
+async fn post_callback(state: &AppState, callback_url: &str, job_id: &str, body: &serde_json::Value) -> Result<(), ServiceError> {
+    state.http.post(callback_url).header("x-gateway-job-id", job_id).json(body).send().await?.error_for_status()?;
+    Ok(())
+}
+
+async fn enqueue_callback_retry(state: &AppState, callback_url: &str, job_id: &str, body: &serde_json::Value) -> Result<(), ServiceError> {
+    let body = serde_json::to_string(body).map_err(|e| ServiceError::internal(format!("serialize callback retry: {e}")))?;
+    let _: String = state
+        .redis
+        .xadd(
+            state.cfg.callback_retry_stream.as_str(),
+            false,
+            None::<()>,
+            "*",
+            vec![
+                ("job_id", Value::String(job_id.to_string().into())),
+                ("callback_url", Value::String(callback_url.to_string().into())),
+                ("body", Value::String(body.into())),
+                ("created_at", Value::Integer(now_ms() as i64)),
+            ],
+        )
+        .await?;
+    trim_stream(state, &state.cfg.callback_retry_stream).await?;
+    state.metrics.callback_retry_total.fetch_add(1, Ordering::Relaxed);
+    Ok(())
+}
+
+fn spawn_callback_retry_worker(state: AppState) {
+    tokio::spawn(async move {
+        loop {
+            if let Err(e) = callback_retry_once(&state).await {
+                tracing::warn!(error = %e.message, "callback retry loop failed");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
+    });
+}
+
+async fn callback_retry_once(state: &AppState) -> Result<(), ServiceError> {
+    let reply: XReadResponse<String, String, String, Value> = state
+        .redis
+        .xreadgroup_map(
+            state.cfg.callback_retry_group.as_str(),
+            state.cfg.consumer_name.as_str(),
+            Some(5),
+            Some(1000),
+            false,
+            vec![state.cfg.callback_retry_stream.as_str()],
+            vec![">"],
+        )
+        .await?;
+
+    for (_stream, entries) in reply {
+        for (entry_id, fields) in entries {
+            let job_id = field_string(&fields, "job_id").unwrap_or_default();
+            let callback_url = field_string(&fields, "callback_url").unwrap_or_default();
+            let body = field_string(&fields, "body").unwrap_or_else(|| "{}".to_string());
+            let parsed = serde_json::from_str::<serde_json::Value>(&body).unwrap_or_else(|_| serde_json::json!({ "body": body }));
+            match post_callback(state, &callback_url, &job_id, &parsed).await {
+                Ok(()) => {
+                    let _: i64 = state.redis.xack(state.cfg.callback_retry_stream.as_str(), state.cfg.callback_retry_group.as_str(), vec![entry_id]).await?;
+                    state.metrics.callback_retry_success_total.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(e) => {
+                    tracing::warn!(job_id = %job_id, error = %e.message, "callback retry failed");
+                }
+            }
         }
     }
     Ok(())
 }
 
-async fn ensure_consumer_group(state: &AppState) -> Result<(), ServiceError> {
-    let res: FredResult<String> = state.redis.xgroup_create(state.cfg.stream_key.as_str(), state.cfg.consumer_group.as_str(), "$", true).await;
+fn spawn_reclaimer(state: AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(state.cfg.reclaim_interval_secs.max(1)));
+        loop {
+            interval.tick().await;
+            if let Err(e) = reclaim_once(&state).await {
+                tracing::warn!(error = %e.message, "stream reclaim failed");
+            }
+        }
+    });
+}
+
+async fn reclaim_once(state: &AppState) -> Result<(), ServiceError> {
+    let consumer = format!("{}-reclaimer", state.cfg.consumer_name);
+    let min_idle_ms = state.cfg.reclaim_min_idle_secs.saturating_mul(1000);
+    for stream in worker_streams(state) {
+        let (_cursor, entries): (String, Vec<(String, HashMap<String, Value>)>) =
+            state.redis.xautoclaim_values(stream.as_str(), state.cfg.consumer_group.as_str(), consumer.as_str(), min_idle_ms, "0-0", Some(10), false).await?;
+        for (entry_id, fields) in entries {
+            match process_job(state, stream.as_str(), entry_id.as_str(), &fields).await {
+                Ok(()) => {
+                    let _: i64 = state.redis.xack(stream.as_str(), state.cfg.consumer_group.as_str(), vec![entry_id]).await?;
+                    state.metrics.reclaimed_total.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(e) => {
+                    tracing::warn!(stream = %stream, entry_id = %entry_id, error = %e.message, "reclaimed job failed");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn ensure_consumer_groups(state: &AppState) -> Result<(), ServiceError> {
+    for stream in worker_streams(state) {
+        ensure_consumer_group(state, &stream, &state.cfg.consumer_group).await?;
+    }
+    ensure_consumer_group(state, &state.cfg.callback_retry_stream, &state.cfg.callback_retry_group).await?;
+    Ok(())
+}
+
+async fn ensure_consumer_group(state: &AppState, stream: &str, group: &str) -> Result<(), ServiceError> {
+    let res: FredResult<String> = state.redis.xgroup_create(stream, group, "$", true).await;
     match res {
         Ok(_) => Ok(()),
         Err(e) if e.to_string().contains("BUSYGROUP") => Ok(()),
@@ -488,7 +770,7 @@ async fn load_result(state: &AppState, job_id: &str) -> Result<Option<StoredResu
     raw.map(|s| serde_json::from_str(&s).map_err(|e| ServiceError::internal(format!("parse result: {e}")))).transpose()
 }
 
-fn result_to_response(result: StoredResult) -> Result<Response, ServiceError> {
+fn result_to_response(result: StoredResult, created_at_ms: u64) -> Result<Response, ServiceError> {
     let status = StatusCode::from_u16(result.http_status).unwrap_or(StatusCode::OK);
     let body = base64::engine::general_purpose::STANDARD.decode(result.body_base64).map_err(|e| ServiceError::internal(format!("decode result body: {e}")))?;
     let mut resp = (status, body).into_response();
@@ -498,7 +780,124 @@ fn result_to_response(result: StoredResult) -> Result<Response, ServiceError> {
         }
     }
     resp.headers_mut().insert("x-job-id", header_value(&result.job_id)?);
+    resp.headers_mut().insert("x-queue-wait-ms", header_value(&now_ms().saturating_sub(created_at_ms).to_string())?);
     Ok(resp)
+}
+
+async fn store_body(state: &AppState, job_id: &str, body: Bytes) -> Result<BodyLocation, ServiceError> {
+    if body.len() <= state.cfg.inline_threshold || state.cfg.object_store_endpoint.is_none() {
+        return Ok(BodyLocation {
+            body_base64: base64::engine::general_purpose::STANDARD.encode(&body),
+            object_ref: String::new(),
+            size: body.len(),
+            storage: "inline",
+        });
+    }
+
+    let object_ref = format!("{}/{}/body.bin", state.cfg.object_store_prefix.trim_matches('/'), sanitize_key(job_id));
+    let url = object_url(state, &object_ref);
+    let mut req = state.http.put(url).body(body.clone());
+    if let Some((name, value)) = object_auth_header(&state.cfg.object_store_auth_header)? {
+        req = req.header(name, value);
+    }
+    req.send().await?.error_for_status()?;
+    state.metrics.object_offload_total.fetch_add(1, Ordering::Relaxed);
+    Ok(BodyLocation {
+        body_base64: String::new(),
+        object_ref,
+        size: body.len(),
+        storage: "object",
+    })
+}
+
+async fn load_body(state: &AppState, fields: &HashMap<String, Value>) -> Result<Vec<u8>, ServiceError> {
+    let storage = field_string(fields, "storage").unwrap_or_else(|| "inline".to_string());
+    if storage == "object" {
+        let object_ref = field_string(fields, "ref").ok_or_else(|| ServiceError::bad_request("job body is missing object ref"))?;
+        let url = object_url(state, &object_ref);
+        let mut req = state.http.get(url);
+        if let Some((name, value)) = object_auth_header(&state.cfg.object_store_auth_header)? {
+            req = req.header(name, value);
+        }
+        return Ok(req.send().await?.error_for_status()?.bytes().await?.to_vec());
+    }
+
+    if let Some(body_base64) = field_string(fields, "body") {
+        return base64::engine::general_purpose::STANDARD.decode(body_base64).map_err(|e| ServiceError::bad_request(format!("decode job body: {e}")));
+    }
+    Ok(field_bytes(fields, "body").unwrap_or_default())
+}
+
+fn object_url(state: &AppState, object_ref: &str) -> String {
+    format!(
+        "{}/{}/{}",
+        state.cfg.object_store_endpoint.as_deref().unwrap_or_default().trim_end_matches('/'),
+        state.cfg.object_store_bucket.trim_matches('/'),
+        object_ref.trim_start_matches('/')
+    )
+}
+
+fn object_auth_header(raw: &Option<String>) -> Result<Option<(String, String)>, ServiceError> {
+    let Some(raw) = raw.as_deref() else {
+        return Ok(None);
+    };
+    let Some((name, value)) = raw.split_once(':') else {
+        return Err(ServiceError::bad_request("AI_OBJECT_STORE_AUTH_HEADER must be `Header-Name: value`"));
+    };
+    if HeaderName::try_from(name.trim()).is_err() || HeaderValue::from_str(value.trim()).is_err() {
+        return Err(ServiceError::bad_request("invalid object auth header"));
+    }
+    Ok(Some((name.trim().to_string(), value.trim().to_string())))
+}
+
+async fn trim_stream(state: &AppState, stream: &str) -> Result<(), ServiceError> {
+    if state.cfg.stream_max_len > 0 {
+        let _: i64 = state.redis.xtrim(stream, ("MAXLEN", "~", state.cfg.stream_max_len as i64)).await?;
+    }
+    Ok(())
+}
+
+fn stream_for_request(state: &AppState, headers: &HeaderMap) -> String {
+    if !state.cfg.enable_priority_streams {
+        return state.cfg.stream_key.clone();
+    }
+    match optional_header(headers, "x-queue-priority").as_deref() {
+        Some("high") => state.cfg.high_priority_stream_key.clone(),
+        Some("low") => state.cfg.low_priority_stream_key.clone(),
+        _ => state.cfg.stream_key.clone(),
+    }
+}
+
+fn worker_streams(state: &AppState) -> Vec<String> {
+    if state.cfg.enable_priority_streams {
+        vec![
+            state.cfg.high_priority_stream_key.clone(),
+            state.cfg.stream_key.clone(),
+            state.cfg.low_priority_stream_key.clone(),
+        ]
+    } else {
+        vec![state.cfg.stream_key.clone()]
+    }
+}
+
+fn validate_callback_url(state: &AppState, policy: QueuePolicy, callback_url: &str) -> Result<(), ServiceError> {
+    if policy == QueuePolicy::Queue && callback_url.is_empty() {
+        return Err(ServiceError::bad_request("missing required header `x-callback-url` for queue policy"));
+    }
+    if !callback_url.is_empty() && state.cfg.require_https_callback && !callback_url.starts_with("https://") {
+        return Err(ServiceError::bad_request("x-callback-url must use https"));
+    }
+    Ok(())
+}
+
+async fn tenant_rate_limit(state: &AppState, tenant: &str) -> Result<(u64, u64), ServiceError> {
+    let key = format!("{}{}", state.cfg.tenant_rate_limit_prefix, sanitize_key(tenant));
+    let rps: Option<String> = state.redis.get(format!("{key}:rps")).await.unwrap_or(None);
+    let burst: Option<String> = state.redis.get(format!("{key}:burst")).await.unwrap_or(None);
+    Ok((
+        rps.and_then(|v| v.parse().ok()).unwrap_or(state.cfg.rate_limit_rps),
+        burst.and_then(|v| v.parse().ok()).unwrap_or(state.cfg.rate_limit_burst),
+    ))
 }
 
 fn required_header(headers: &HeaderMap, name: &str) -> Result<String, ServiceError> {
