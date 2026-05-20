@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "hello-world",
+  "ai-gateway-queue",
 ]
 resolver = "2"
 
@@ -18,4 +19,3 @@ opt-level = "z"
 lto = "fat"
 strip = true
 panic = "abort"
-

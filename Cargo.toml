@@ -2,6 +2,7 @@
 members = [
   "binary/spacegate",
   "binary/admin-server",
+  "binary/ai-gateway-service",
   "crates/extension/*",
   "crates/kernel",
   "crates/plugin",

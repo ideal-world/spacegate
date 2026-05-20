@@ -1,0 +1,29 @@
+{
+  "url": "plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm",
+  "validate_on_create": false,
+  "fail_strategy": "fail_close",
+  "plugin_name": "ai-gateway-queue",
+  "plugin_root_id": "ai-gateway-queue-root",
+  "plugin_vm_id": "ai-gateway-queue-vm",
+  "vm_pool_size": 4,
+  "wait_vm_pool_size": 4,
+  "limits": {
+    "max_memory_pages": 64,
+    "fuel_per_call": 20000000,
+    "epoch_timeout_millis": 50,
+    "max_body_bytes": 33554432,
+    "max_pending_calls": 1
+  },
+  "plugin_config": {
+    "service_cluster": "ai-gateway-service",
+    "service_authority": "ai-gateway-service",
+    "rate_limit_path": "/v1/ratelimit/check",
+    "enqueue_path": "/v1/queue/enqueue",
+    "wait_path": "/v1/queue/enqueue-and-wait",
+    "service_timeout_ms": 65000,
+    "require_policy": true
+  },
+  "clusters": {
+    "ai-gateway-service": "http://127.0.0.1:18080"
+  }
+}
