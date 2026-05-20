@@ -5,20 +5,44 @@
 //! `proxy_http_call` 的异步语义通过 `tokio::spawn` + mpsc channel 实现，
 //! 不需要把整个 store 切到 async。
 //!
-//! 资源/超时限制（fuel/epoch）暂未启用：演进文档 §4.7 的"资源/Panic 隔离"
-//! 列入后续阶段；本阶段优先保证 hai-process-mix 鉴权流程跑通。
-
 use once_cell::sync::OnceCell;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use wasmtime::{Config, Engine};
 
 static ENGINE: OnceCell<Engine> = OnceCell::new();
+static EPOCH_TICKER_STARTED: AtomicBool = AtomicBool::new(false);
 
 /// 进程级单例 Engine（multi-memory 开，async 关）。
 pub fn shared_engine() -> &'static Engine {
     ENGINE.get_or_init(|| {
         let mut cfg = Config::new();
         cfg.wasm_multi_memory(true);
+        cfg.consume_fuel(true);
+        cfg.epoch_interruption(true);
         cfg.async_support(false);
         Engine::new(&cfg).expect("wasmtime Engine::new")
     })
+}
+
+/// 启动一个进程级 epoch ticker。每 1ms 递增一次 Engine epoch，配合 Store epoch deadline
+/// 给同步 guest hook 提供粗粒度墙钟超时保护。
+pub fn ensure_epoch_ticker_started() {
+    if EPOCH_TICKER_STARTED.load(Ordering::Acquire) {
+        return;
+    }
+    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        return;
+    };
+    if EPOCH_TICKER_STARTED.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+        return;
+    }
+    let engine = shared_engine().clone();
+    handle.spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(1));
+        loop {
+            interval.tick().await;
+            engine.increment_epoch();
+        }
+    });
 }

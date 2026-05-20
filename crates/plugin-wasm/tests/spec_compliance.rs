@@ -109,6 +109,7 @@ impl GuestVm {
         host.effective_context = HTTP_CONTEXT_ID;
 
         let mut store: Store<HostState> = Store::new(engine, host);
+        prepare_guest_budget(&mut store);
         let mut linker: Linker<HostState> = Linker::new(engine);
         // dispatch_tx 在本测试里不会被消费——保留 rx 不让通道关闭即可。
         let (dispatch_tx, _dispatch_rx) = tokio::sync::mpsc::unbounded_channel::<(u32, HttpCallResult)>();
@@ -128,8 +129,10 @@ impl GuestVm {
 
         // _initialize 优先（SDK 在 wasm32-wasip1 上默认导这个），回退 _start。
         if let Ok(init) = instance.get_typed_func::<(), ()>(&mut store, "_initialize") {
+            prepare_guest_budget(&mut store);
             init.call(&mut store, ()).expect("_initialize");
         } else if let Ok(start) = instance.get_typed_func::<(), ()>(&mut store, "_start") {
+            prepare_guest_budget(&mut store);
             start.call(&mut store, ()).expect("_start");
         }
 
@@ -138,12 +141,19 @@ impl GuestVm {
 
     fn run_test(&mut self, scenario: u32) -> u32 {
         let f: TypedFunc<u32, u32> = self.instance.get_typed_func(&mut self.store, "__run_test").expect("__run_test export");
+        prepare_guest_budget(&mut self.store);
         f.call(&mut self.store, scenario).expect("__run_test trap-free")
     }
 
     fn data(&self) -> &HostState {
         self.store.data()
     }
+}
+
+fn prepare_guest_budget(store: &mut Store<HostState>) {
+    store.set_fuel(u64::MAX / 4).expect("set test fuel");
+    store.set_epoch_deadline(24 * 60 * 60 * 1000);
+    store.epoch_deadline_trap();
 }
 
 // ─────────────────────────────────────────────────────────

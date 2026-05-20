@@ -16,6 +16,16 @@ pub enum WasmHostError {
     GuestTrap { hook: &'static str, source: wasmtime::Error },
     #[error("dispatch_http_call: {0}")]
     Dispatch(String),
+    #[error("body too large: {actual} bytes exceeds limit {limit} bytes")]
+    BodyTooLarge { actual: usize, limit: usize },
+    #[error("resource limit: {0}")]
+    ResourceLimit(String),
     #[error("config: {0}")]
     Config(String),
+}
+
+impl WasmHostError {
+    pub fn requires_vm_rebuild(&self) -> bool {
+        matches!(self, Self::GuestTrap { .. } | Self::Wasmtime(_) | Self::Dispatch(_) | Self::ResourceLimit(_))
+    }
 }

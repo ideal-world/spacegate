@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http::HeaderMap;
-use wasmtime::{Memory, TypedFunc};
+use wasmtime::{Memory, ResourceLimiter, TypedFunc};
 
 use crate::config::WasmPluginShellConfig;
 
@@ -68,6 +68,29 @@ pub struct PendingCall {
     #[allow(dead_code)]
     pub waker: Option<std::task::Waker>,
     pub source_context_id: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct HostResourceLimiter {
+    max_memory_bytes: Option<usize>,
+}
+
+impl HostResourceLimiter {
+    pub fn new(shell_cfg: &WasmPluginShellConfig) -> Self {
+        Self {
+            max_memory_bytes: shell_cfg.max_memory_bytes(),
+        }
+    }
+}
+
+impl ResourceLimiter for HostResourceLimiter {
+    fn memory_growing(&mut self, _current: usize, desired: usize, _maximum: Option<usize>) -> wasmtime::Result<bool> {
+        Ok(self.max_memory_bytes.map(|max| desired <= max).unwrap_or(true))
+    }
+
+    fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> wasmtime::Result<bool> {
+        Ok(true)
+    }
 }
 
 /// 单个 HTTP 请求的所有状态（请求/响应头 / body / 上次 dispatch 结果 / 本地响应 / 短路标记）。
@@ -143,6 +166,8 @@ pub struct HostState {
     pub plugin_name: String,
     pub plugin_root_id: String,
     pub plugin_vm_id: String,
+    /// Wasmtime 资源限制器：控制单 VM 线性内存增长。
+    pub resource_limiter: HostResourceLimiter,
 }
 
 impl HostState {
@@ -152,6 +177,7 @@ impl HostState {
         let plugin_name = shell_cfg.plugin_name.clone();
         let plugin_root_id = shell_cfg.plugin_root_id.clone();
         let plugin_vm_id = shell_cfg.plugin_vm_id.clone();
+        let resource_limiter = HostResourceLimiter::new(&shell_cfg);
         Self {
             shell_cfg,
             configuration,
@@ -170,6 +196,7 @@ impl HostState {
             plugin_name,
             plugin_root_id,
             plugin_vm_id,
+            resource_limiter,
         }
     }
 

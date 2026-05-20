@@ -84,11 +84,11 @@ async fn proxy_on_tick_drives_background_ticks() {
 
     // shell 内部已经 spawn 了 50ms 颗粒度的 tick 任务；
     // 期间 guest `on_vm_start` 把 period 设成 50ms。
-    // 等 300ms 至少 4 次 tick（保留调度抖动余量）。
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // 等 450ms 至少 4 次 tick（保留 CI / 本地调度抖动余量）。
+    tokio::time::sleep(Duration::from_millis(450)).await;
 
     let count = read_counter();
-    assert!(count >= 4, "expected >= 4 ticks in 300ms, got {count}");
+    assert!(count >= 4, "expected >= 4 ticks in 450ms, got {count}");
     tracing::info!("got {count} ticks");
 
     // 取一次 snapshot，drop 之后再 sleep 同等时间，断言不再继续增长（允许 1 次余量：
