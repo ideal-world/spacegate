@@ -38,11 +38,19 @@ REDIS_URL=redis://127.0.0.1/
 AI_UPSTREAM_BASE_URL=http://127.0.0.1:9000
 AI_RATE_LIMIT_RPS=100
 AI_RATE_LIMIT_BURST=200
+AI_RATE_LIMIT_COST=1
 AI_WAIT_TIMEOUT_SECS=60
 AI_WORKER_CONCURRENCY=4
 AI_MAX_BODY_BYTES=33554432
 AI_INLINE_THRESHOLD=131072
 AI_QUEUE_MAX_LEN=100000
+AI_ENABLE_PRIORITY_STREAMS=true
+AI_QUEUE_DEFAULT_PRIORITY=normal
+AI_QUEUE_HIGH_MODELS=gpt-4o,qwen-max
+AI_QUEUE_LOW_TENANTS=free
+AI_QUEUE_HIGH_WEIGHT=3
+AI_QUEUE_NORMAL_WEIGHT=1
+AI_QUEUE_LOW_WEIGHT=1
 AI_RECLAIM_INTERVAL_SECS=30
 AI_RECLAIM_MIN_IDLE_SECS=30
 AI_JOB_PROCESS_LEASE_SECS=120
@@ -74,13 +82,44 @@ CreateMultipartUpload -> UploadPart* -> CompleteMultipartUpload
 
 If any part upload or completion fails, the service sends `AbortMultipartUpload` before returning the enqueue error. The current implementation expects a MinIO/S3-compatible endpoint that accepts either unsigned requests or the configured static auth header.
 
-Priority queues are disabled by default. Enable them and send `X-Queue-Priority: high|low` to route jobs to separate streams:
+Tenant rate-limit config can be overridden without restarting the service. The service checks Redis keys from most-specific to least-specific, using JSON or CSV values:
+
+```text
+ai:tenant:ratelimit:{tenant}:model:{model}:path:{path}:policy:{policy}
+ai:tenant:ratelimit:{tenant}:model:{model}:path:{path}
+ai:tenant:ratelimit:{tenant}:model:{model}:policy:{policy}
+ai:tenant:ratelimit:{tenant}:path:{path}:policy:{policy}
+ai:tenant:ratelimit:{tenant}:model:{model}
+ai:tenant:ratelimit:{tenant}:path:{path}
+ai:tenant:ratelimit:{tenant}:policy:{policy}
+ai:tenant:ratelimit:{tenant}
+```
+
+JSON value:
+
+```json
+{"rps": 20, "burst": 40, "cost": 1}
+```
+
+CSV value:
+
+```text
+20,40,1
+```
+
+The old per-tenant keys are still supported as fallback: `ai:tenant:ratelimit:{tenant}:rps`, `:burst`, and `:cost`.
+
+Priority queues are disabled by default. Enable them and send `X-Queue-Priority: high|normal|low` to route jobs to separate streams, or configure model/tenant defaults:
 
 ```bash
 AI_ENABLE_PRIORITY_STREAMS=true
 AI_QUEUE_HIGH_STREAM=ai:jobs:high
 AI_QUEUE_LOW_STREAM=ai:jobs:low
+AI_QUEUE_HIGH_MODELS=gpt-4o,qwen-max
+AI_QUEUE_LOW_TENANTS=free
 ```
+
+Workers consume streams in weighted order. `AI_QUEUE_HIGH_WEIGHT`, `AI_QUEUE_NORMAL_WEIGHT`, and `AI_QUEUE_LOW_WEIGHT` control how often each priority stream is checked per loop.
 
 Callback failures are written to `AI_CALLBACK_RETRY_STREAM` with `attempt`, `next_attempt_at_ms`, and `last_error`. The retry worker uses exponential backoff capped by `AI_CALLBACK_RETRY_MAX_DELAY_MS`, ACKs each retry record after handling it, and moves exhausted callbacks to `AI_CALLBACK_DLQ_STREAM`. Pending Redis Stream jobs are reclaimed with `XAUTOCLAIM` according to the reclaim settings.
 

@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 proxy-wasm.workspace = true
+serde_json.workspace = true

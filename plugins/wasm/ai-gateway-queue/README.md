@@ -102,13 +102,32 @@ AI_REQUIRE_HTTPS_CALLBACK=false
     "max_pending_calls": 1
   },
   "plugin_config": {
-    "service_cluster": "ai-gateway-service",
-    "service_authority": "ai-gateway-service",
-    "rate_limit_path": "/v1/ratelimit/check",
-    "enqueue_path": "/v1/queue/enqueue",
-    "wait_path": "/v1/queue/enqueue-and-wait",
-    "service_timeout_ms": 65000,
-    "require_policy": true
+    "service": {
+      "cluster": "ai-gateway-service",
+      "authority": "ai-gateway-service",
+      "timeout_ms": 65000
+    },
+    "paths": {
+      "rate_limit": "/v1/ratelimit/check",
+      "enqueue": "/v1/queue/enqueue",
+      "wait": "/v1/queue/enqueue-and-wait"
+    },
+    "headers": {
+      "policy": "x-ratelimit-policy",
+      "tenant": "x-tenant-id",
+      "model": "x-model",
+      "priority": "x-queue-priority"
+    },
+    "policies": {
+      "require": true,
+      "default": null
+    },
+    "priority": {
+      "enabled": true,
+      "default": "normal",
+      "high_models": ["gpt-4o"],
+      "low_tenants": ["free"]
+    }
   },
   "clusters": {
     "ai-gateway-service": "http://127.0.0.1:18080"
@@ -125,6 +144,11 @@ AI_REQUIRE_HTTPS_CALLBACK=false
 - `wait_path`：入队并等待接口
 - `service_timeout_ms`：调用外部服务超时
 - `require_policy`：是否强制要求请求头携带策略
+- `headers.*`：自定义客户端侧策略、租户、模型、优先级 header；插件会转成外部服务统一使用的 `x-ratelimit-policy`、`x-tenant-id`、`x-model`、`x-queue-priority`
+- `policies.default`：未携带策略 header 时使用的默认策略；为空且 `require=true` 时会返回 `400`
+- `priority.*`：插件侧优先级推导规则，支持按模型或租户自动设置 `high` / `low`
+
+插件配置优先支持上面的结构化 JSON；旧的扁平字段仍兼容，例如 `service_cluster`、`rate_limit_path`、`tenant_header`、`default_policy`、`high_priority_models`。
 
 ## 请求头
 
@@ -196,6 +220,8 @@ curl -i http://localhost:9080/your/api \
 ## 生产化能力
 
 - Redis Stream 支持 `MAXLEN ~` 裁剪，通过 `AI_QUEUE_MAX_LEN` 控制
+- 租户限流支持按租户、模型、路由、策略多维覆盖，并支持单请求 cost
+- 优先级队列支持 header、模型、租户规则推导，并由 worker 按权重消费高/普通/低优先级 Stream
 - Worker 崩溃后通过 `XAUTOCLAIM` 重认领 pending job，并通过 Redis 处理租约避免长任务被重复执行
 - 回调失败会进入 `AI_CALLBACK_RETRY_STREAM`，按指数退避重试，超过最大次数后进入 `AI_CALLBACK_DLQ_STREAM`
 - 大 body 可通过 `AI_OBJECT_STORE_ENDPOINT` 走 S3-compatible multipart 卸载，Redis Stream 中只保留 `ref`
