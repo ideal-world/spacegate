@@ -1,7 +1,7 @@
 async fn tenant_rate_limit(state: &AppState, tenant: &str, model: &str, path: &str, policy: &str) -> Result<TenantRateLimit, ServiceError> {
     for key in tenant_rate_limit_candidate_keys(state, tenant, model, path, policy) {
         let raw: Option<String> = state.redis.get(key.as_str()).await.unwrap_or(None);
-        if let Some(limit) = raw.and_then(|raw| parse_tenant_rate_limit(&raw)) {
+        if let Some(limit) = raw.and_then(|raw| parse_stored_tenant_rate_limit(&raw).map(|stored| stored.limit)) {
             return Ok(limit);
         }
     }
@@ -34,16 +34,38 @@ fn tenant_rate_limit_candidate_keys(state: &AppState, tenant: &str, model: &str,
     ]
 }
 
-fn parse_tenant_rate_limit(raw: &str) -> Option<TenantRateLimit> {
+struct ParsedStoredTenantRateLimit {
+    limit: TenantRateLimit,
+    ttl_secs: Option<u64>,
+}
+
+fn parse_stored_tenant_rate_limit(raw: &str) -> Option<ParsedStoredTenantRateLimit> {
     let raw = raw.trim();
     if raw.is_empty() {
         return None;
     }
+    if let Ok(stored) = serde_json::from_str::<StoredTenantRateLimit>(raw) {
+        return Some(ParsedStoredTenantRateLimit {
+            limit: TenantRateLimit {
+                rps: stored.rps,
+                burst: stored.burst,
+                cost: stored.cost.max(1),
+            },
+            ttl_secs: stored.ttl_secs,
+        });
+    }
     if let Ok(mut limit) = serde_json::from_str::<TenantRateLimit>(raw) {
         limit.cost = limit.cost.max(1);
-        return Some(limit);
+        return Some(ParsedStoredTenantRateLimit { limit, ttl_secs: None });
     }
+    parse_tenant_rate_limit_csv(raw).map(|limit| ParsedStoredTenantRateLimit { limit, ttl_secs: None })
+}
 
+fn parse_tenant_rate_limit(raw: &str) -> Option<TenantRateLimit> {
+    parse_stored_tenant_rate_limit(raw).map(|stored| stored.limit)
+}
+
+fn parse_tenant_rate_limit_csv(raw: &str) -> Option<TenantRateLimit> {
     let mut parts = raw.split(',').map(str::trim);
     let rps = parts.next()?.parse().ok()?;
     let burst = parts.next()?.parse().ok()?;
@@ -63,19 +85,20 @@ async fn list_tenant_rate_limit_rules(state: &AppState, filters: &HashMap<String
         }
 
         let raw: Option<String> = state.redis.get(key.as_str()).await?;
-        let Some(limit) = raw.and_then(|raw| parse_tenant_rate_limit(&raw)) else {
+        let Some(stored) = raw.and_then(|raw| parse_stored_tenant_rate_limit(&raw)) else {
             continue;
         };
-        let Some(mut rule) = tenant_rate_limit_rule_from_key(state, &key, limit) else {
+        let Some(mut rule) = tenant_rate_limit_rule_from_key(state, &key, stored.limit, stored.ttl_secs) else {
             continue;
         };
         rule.cost = rule.cost.max(1);
         if tenant_rule_matches_filters(&rule, filters) {
-            out.push(TenantRateLimitRuleView { key, rule });
+            let ttl_remaining_secs = read_ttl_remaining_secs(state, key.as_str()).await;
+            out.push(tenant_rate_limit_rule_view(key, rule, ttl_remaining_secs));
         }
     }
 
-    out.sort_by(|a, b| tenant_rule_specificity(&b.rule).cmp(&tenant_rule_specificity(&a.rule)).then_with(|| a.key.cmp(&b.key)));
+    out.sort_by(|a, b| tenant_rule_specificity_rule(a).cmp(&tenant_rule_specificity_rule(b)).then_with(|| a.key.cmp(&b.key)));
     Ok(out)
 }
 
@@ -83,15 +106,17 @@ async fn upsert_tenant_rate_limit_rule(state: &AppState, mut rule: TenantRateLim
     validate_tenant_rate_limit_rule(&rule)?;
     rule.cost = rule.cost.max(1);
     let key = tenant_rate_limit_rule_key(state, &rule);
-    let value = serde_json::to_string(&TenantRateLimit {
+    let value = serde_json::to_string(&StoredTenantRateLimit {
         rps: rule.rps,
         burst: rule.burst,
         cost: rule.cost,
+        ttl_secs: rule.ttl_secs,
     })
     .map_err(|e| ServiceError::internal(format!("serialize tenant rate limit: {e}")))?;
-    let _: String = state.redis.set(key.as_str(), value, None, None, false).await?;
-    // TODO(v2): if rule.ttl_secs is Some, apply Redis EXPIRE/PEXPIRE here.
-    Ok(TenantRateLimitRuleView { key, rule })
+    let expiration = rule.ttl_secs.map(|ttl| Expiration::EX(ttl.max(1) as i64));
+    let _: String = state.redis.set(key.as_str(), value, expiration, None, false).await?;
+    let ttl_remaining_secs = read_ttl_remaining_secs(state, key.as_str()).await;
+    Ok(tenant_rate_limit_rule_view(key, rule, ttl_remaining_secs))
 }
 
 async fn delete_tenant_rate_limit_rule(state: &AppState, rule: TenantRateLimitRule) -> Result<u64, ServiceError> {
@@ -99,6 +124,11 @@ async fn delete_tenant_rate_limit_rule(state: &AppState, rule: TenantRateLimitRu
     let key = tenant_rate_limit_rule_key(state, &rule);
     let removed: u64 = state.redis.del(key.as_str()).await?;
     Ok(removed)
+}
+
+async fn read_ttl_remaining_secs(state: &AppState, key: &str) -> Option<i64> {
+    let ttl: i64 = state.redis.ttl(key).await.unwrap_or(-2);
+    if ttl > 0 { Some(ttl) } else { None }
 }
 
 fn tenant_rate_limit_rule_key(state: &AppState, rule: &TenantRateLimitRule) -> String {
@@ -119,7 +149,7 @@ fn tenant_rate_limit_rule_key(state: &AppState, rule: &TenantRateLimitRule) -> S
     key
 }
 
-fn tenant_rate_limit_rule_from_key(state: &AppState, key: &str, limit: TenantRateLimit) -> Option<TenantRateLimitRule> {
+fn tenant_rate_limit_rule_from_key(state: &AppState, key: &str, limit: TenantRateLimit, ttl_secs: Option<u64>) -> Option<TenantRateLimitRule> {
     let rest = key.strip_prefix(&state.cfg.tenant_rate_limit_prefix)?;
     let mut parts = rest.split(':');
     let tenant = parts.next()?.to_string();
@@ -147,7 +177,7 @@ fn tenant_rate_limit_rule_from_key(state: &AppState, key: &str, limit: TenantRat
         rps: limit.rps,
         burst: limit.burst,
         cost: limit.cost.max(1),
-        ttl_secs: None,
+        ttl_secs,
     })
 }
 
@@ -198,8 +228,8 @@ fn tenant_rule_matches_filters(rule: &TenantRateLimitRule, filters: &HashMap<Str
     true
 }
 
-fn tenant_rule_specificity(rule: &TenantRateLimitRule) -> usize {
-    usize::from(non_empty_opt(&rule.model).is_some()) + usize::from(non_empty_opt(&rule.path).is_some()) + usize::from(non_empty_opt(&rule.policy).is_some())
+fn tenant_rule_specificity_rule(view: &TenantRateLimitRuleView) -> usize {
+    usize::from(non_empty_opt(&view.model).is_some()) + usize::from(non_empty_opt(&view.path).is_some()) + usize::from(non_empty_opt(&view.policy).is_some())
 }
 
 fn is_legacy_tenant_rate_limit_key(key: &str) -> bool {

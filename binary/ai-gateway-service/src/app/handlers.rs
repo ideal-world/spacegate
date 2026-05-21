@@ -25,6 +25,14 @@ async fn check_rate_limit(State(state): State<AppState>, headers: HeaderMap, uri
     let allowed = out.first().copied().unwrap_or(0) == 1;
     if !allowed {
         state.metrics.rate_limited_total.fetch_add(1, Ordering::Relaxed);
+        inc_labeled(
+            &state.metrics,
+            format!(
+                r#"rate_limited_total{{policy="{}",tenant="{}"}}"#,
+                metrics_label(&policy),
+                metrics_label(&tenant)
+            ),
+        );
     }
     Ok(Json(RateLimitResponse {
         allowed,
@@ -112,6 +120,22 @@ async fn metrics(State(state): State<AppState>) -> Result<Response, ServiceError
     let low_pel_size = pending_size(&state, &state.cfg.low_priority_stream_key).await;
     let callback_retry_pel_size = pending_size_for_group(&state, &state.cfg.callback_retry_stream, &state.cfg.callback_retry_group).await;
 
+    let wait_total = state.metrics.wait_total.load(Ordering::Relaxed);
+    let wait_timeout_total = state.metrics.wait_timeout_total.load(Ordering::Relaxed);
+    let callback_failure_total = state.metrics.callback_failure_total.load(Ordering::Relaxed);
+    let worker_completed_total = state.metrics.worker_completed_total.load(Ordering::Relaxed);
+    let wait_timeout_rate = if wait_total > 0 {
+        wait_timeout_total as f64 / wait_total as f64
+    } else {
+        0.0
+    };
+    let callback_failure_rate = if worker_completed_total > 0 {
+        callback_failure_total as f64 / worker_completed_total as f64
+    } else {
+        0.0
+    };
+    let labeled_lines = format_labeled_lines(&state.metrics);
+
     let body = format!(
         "\
 rate_limited_total {}\n\
@@ -135,7 +159,9 @@ enqueue_body_size_bytes_bucket{{le=\"5242880\"}} {}\n\
 enqueue_body_size_bytes_bucket{{le=\"+Inf\"}} {}\n\
 wait_total {}\n\
 wait_timeout_total {}\n\
+wait_timeout_rate {:.6}\n\
 callback_failure_total {}\n\
+callback_failure_rate {:.6}\n\
 callback_retry_total {}\n\
 callback_retry_success_total {}\n\
 callback_retry_dlq_total {}\n\
@@ -163,7 +189,8 @@ pel_size{{priority=\"low\"}} {}\n\
 job_dlq_depth {}\n\
 callback_retry_depth {}\n\
 callback_retry_pel_size {}\n\
-callback_dlq_depth {}\n",
+callback_dlq_depth {}\n\
+{labeled_lines}\n",
         state.metrics.rate_limited_total.load(Ordering::Relaxed),
         state.metrics.enqueue_total.load(Ordering::Relaxed),
         state.metrics.enqueue_queue_total.load(Ordering::Relaxed),
@@ -187,7 +214,9 @@ callback_dlq_depth {}\n",
         state.metrics.body_size_count.load(Ordering::Relaxed),
         state.metrics.wait_total.load(Ordering::Relaxed),
         state.metrics.wait_timeout_total.load(Ordering::Relaxed),
+        wait_timeout_rate,
         state.metrics.callback_failure_total.load(Ordering::Relaxed),
+        callback_failure_rate,
         state.metrics.callback_retry_total.load(Ordering::Relaxed),
         state.metrics.callback_retry_success_total.load(Ordering::Relaxed),
         state.metrics.callback_retry_dlq_total.load(Ordering::Relaxed),

@@ -19,7 +19,8 @@ local last_ts = tonumber(redis.call('GET', ts_key) or now)
 local elapsed = math.max(0, now - last_ts)
 tokens = math.min(burst_milli, tokens + elapsed * rate)
 
-local ttl = math.max(1000, math.ceil((burst_milli / rate) * 2))
+-- TTL 必须显著大于典型连续判定窗口；过短会导致 key 过期后每次都回到满 burst。
+local ttl = math.max(300000, math.ceil((burst_milli / rate) * 10))
 if tokens >= cost_milli then
   tokens = tokens - cost_milli
   redis.call('SET', tokens_key, tokens, 'PX', ttl)
@@ -104,8 +105,11 @@ struct Args {
     tenant_rate_limit_prefix: String,
     #[arg(long, env = "AI_WAIT_TIMEOUT_SECS", default_value_t = 60)]
     wait_timeout_secs: u64,
-    #[arg(long, env = "AI_WORKER_CONCURRENCY", default_value_t = 1)]
+    #[arg(long, env = "AI_WORKER_CONCURRENCY", default_value_t = 10)]
     worker_concurrency: usize,
+    /// 逗号分隔的 Admin UI CORS 来源；为空则保持 permissive（本地开发）。
+    #[arg(long, env = "AI_ADMIN_CORS_ORIGINS", default_value = "")]
+    admin_cors_origins: String,
     #[arg(long, env = "AI_UPSTREAM_BASE_URL")]
     upstream_base_url: Option<String>,
     #[arg(long, env = "AI_MAX_BODY_BYTES", default_value_t = 32 * 1024 * 1024)]
@@ -138,14 +142,16 @@ struct Args {
 
 #[derive(Clone)]
 struct AppState {
+    /// 非阻塞 API 路径专用连接（准入、入队、metrics、admin）。
     redis: FredClient,
+    /// worker / reclaimer / callback-retry 专用连接，避免 BLOCK 型 XREADGROUP 占满 API 连接。
+    worker_redis: FredClient,
     http: reqwest::Client,
     cfg: Arc<Args>,
     body_permits: Arc<Semaphore>,
     metrics: Arc<Metrics>,
 }
 
-#[derive(Default)]
 struct Metrics {
     rate_limited_total: AtomicU64,
     enqueue_total: AtomicU64,
@@ -185,6 +191,54 @@ struct Metrics {
     lease_skip_total: AtomicU64,
     object_offload_total: AtomicU64,
     object_multipart_abort_total: AtomicU64,
+    /// Prometheus 带 label 的 counter（policy/tenant/model/size_bucket 等）。
+    labeled: Mutex<HashMap<String, u64>>,
+}
+
+impl Default for Metrics {
+    fn default() -> Self {
+        Self {
+            rate_limited_total: AtomicU64::new(0),
+            enqueue_total: AtomicU64::new(0),
+            enqueue_queue_total: AtomicU64::new(0),
+            enqueue_wait_total: AtomicU64::new(0),
+            enqueue_priority_high_total: AtomicU64::new(0),
+            enqueue_priority_normal_total: AtomicU64::new(0),
+            enqueue_priority_low_total: AtomicU64::new(0),
+            enqueue_latency_count: AtomicU64::new(0),
+            enqueue_latency_sum_ms: AtomicU64::new(0),
+            enqueue_latency_le_100_ms: AtomicU64::new(0),
+            enqueue_latency_le_500_ms: AtomicU64::new(0),
+            enqueue_latency_le_1000_ms: AtomicU64::new(0),
+            enqueue_latency_gt_1000_ms: AtomicU64::new(0),
+            body_size_le_10kb: AtomicU64::new(0),
+            body_size_le_128kb: AtomicU64::new(0),
+            body_size_le_5mb: AtomicU64::new(0),
+            body_size_gt_5mb: AtomicU64::new(0),
+            body_size_count: AtomicU64::new(0),
+            body_size_sum_bytes: AtomicU64::new(0),
+            wait_total: AtomicU64::new(0),
+            wait_timeout_total: AtomicU64::new(0),
+            callback_failure_total: AtomicU64::new(0),
+            callback_retry_total: AtomicU64::new(0),
+            callback_retry_success_total: AtomicU64::new(0),
+            callback_retry_dlq_total: AtomicU64::new(0),
+            worker_completed_total: AtomicU64::new(0),
+            worker_failed_total: AtomicU64::new(0),
+            worker_processing_count: AtomicU64::new(0),
+            worker_processing_sum_ms: AtomicU64::new(0),
+            worker_processing_le_1000_ms: AtomicU64::new(0),
+            worker_processing_le_5000_ms: AtomicU64::new(0),
+            worker_processing_le_30000_ms: AtomicU64::new(0),
+            worker_processing_gt_30000_ms: AtomicU64::new(0),
+            reclaimed_total: AtomicU64::new(0),
+            job_dlq_total: AtomicU64::new(0),
+            lease_skip_total: AtomicU64::new(0),
+            object_offload_total: AtomicU64::new(0),
+            object_multipart_abort_total: AtomicU64::new(0),
+            labeled: Mutex::new(HashMap::new()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -200,7 +254,10 @@ struct EnqueueResponse {
     stream_id: String,
     stream_key: String,
     status: &'static str,
+    /// 设计文档 poll 路径：`/jobs/{id}/status`
     poll_url: String,
+    /// 兼容旧客户端：`/v1/jobs/{id}`
+    status_url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -399,7 +456,17 @@ struct TenantRateLimitRule {
     burst: u64,
     #[serde(default = "default_rate_limit_cost")]
     cost: u64,
-    // TODO(v2): apply ttl_secs to the Redis key via EXPIRE/PEXPIRE when time-bound rules are enabled.
+    /// 临时配额 TTL（秒）；写入 Redis 时对 key 设置 EX。
+    #[serde(default)]
+    ttl_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct StoredTenantRateLimit {
+    rps: u64,
+    burst: u64,
+    #[serde(default = "default_rate_limit_cost")]
+    cost: u64,
     #[serde(default)]
     ttl_secs: Option<u64>,
 }
@@ -407,8 +474,20 @@ struct TenantRateLimitRule {
 #[derive(Debug, Clone, Serialize)]
 struct TenantRateLimitRuleView {
     key: String,
-    #[serde(flatten)]
-    rule: TenantRateLimitRule,
+    tenant: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    policy: Option<String>,
+    rps: u64,
+    burst: u64,
+    cost: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ttl_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ttl_remaining_secs: Option<i64>,
 }
 
 fn default_rate_limit_cost() -> u64 {

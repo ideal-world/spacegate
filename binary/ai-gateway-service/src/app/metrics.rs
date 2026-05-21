@@ -41,18 +41,41 @@ fn pending_count_from_value(value: &Value) -> i64 {
     }
 }
 
-fn observe_enqueue_latency(metrics: &Metrics, elapsed_ms: u64) {
+fn inc_labeled(metrics: &Metrics, key: impl Into<String>) {
+    let mut map = metrics.labeled.lock().unwrap_or_else(|error| error.into_inner());
+    *map.entry(key.into()).or_insert(0) += 1;
+}
+
+fn format_labeled_lines(metrics: &Metrics) -> String {
+    let map = metrics.labeled.lock().unwrap_or_else(|error| error.into_inner());
+    let mut keys: Vec<_> = map.keys().cloned().collect();
+    keys.sort();
+    keys.into_iter()
+        .filter_map(|key| map.get(&key).copied().map(|value| format!("{key} {value}")))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn observe_enqueue_latency(metrics: &Metrics, elapsed_ms: u64, policy: &str, size_bucket: &str) {
     metrics.enqueue_latency_count.fetch_add(1, Ordering::Relaxed);
     metrics.enqueue_latency_sum_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
-    if elapsed_ms <= 100 {
+    let le = if elapsed_ms <= 100 {
         metrics.enqueue_latency_le_100_ms.fetch_add(1, Ordering::Relaxed);
+        "100"
     } else if elapsed_ms <= 500 {
         metrics.enqueue_latency_le_500_ms.fetch_add(1, Ordering::Relaxed);
+        "500"
     } else if elapsed_ms <= 1000 {
         metrics.enqueue_latency_le_1000_ms.fetch_add(1, Ordering::Relaxed);
+        "1000"
     } else {
         metrics.enqueue_latency_gt_1000_ms.fetch_add(1, Ordering::Relaxed);
-    }
+        "+Inf"
+    };
+    inc_labeled(
+        metrics,
+        format!(r#"enqueue_latency_ms_bucket{{policy="{policy}",size_bucket="{size_bucket}",le="{le}"}}"#),
+    );
 }
 
 fn observe_body_size(metrics: &Metrics, size: usize) {
@@ -69,17 +92,25 @@ fn observe_body_size(metrics: &Metrics, size: usize) {
     }
 }
 
-fn observe_worker_processing(metrics: &Metrics, elapsed_ms: u64) {
+fn observe_worker_processing(metrics: &Metrics, elapsed_ms: u64, model: &str) {
     metrics.worker_processing_count.fetch_add(1, Ordering::Relaxed);
     metrics.worker_processing_sum_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
-    if elapsed_ms <= 1000 {
+    let model = metrics_label(model);
+    let le = if elapsed_ms <= 1000 {
         metrics.worker_processing_le_1000_ms.fetch_add(1, Ordering::Relaxed);
+        "1000"
     } else if elapsed_ms <= 5000 {
         metrics.worker_processing_le_5000_ms.fetch_add(1, Ordering::Relaxed);
+        "5000"
     } else if elapsed_ms <= 30_000 {
         metrics.worker_processing_le_30000_ms.fetch_add(1, Ordering::Relaxed);
+        "30000"
     } else {
         metrics.worker_processing_gt_30000_ms.fetch_add(1, Ordering::Relaxed);
-    }
+        "+Inf"
+    };
+    inc_labeled(
+        metrics,
+        format!(r#"worker_processing_time_ms_bucket{{model="{model}",le="{le}"}}"#),
+    );
 }
-

@@ -253,7 +253,9 @@ impl Vm {
         let action = Action::from_u32(action_raw);
         debug!(target: "spacegate_plugin_wasm", http_ctx_id, ?action, "on_request_headers returned");
 
-        if action == Action::Pause {
+        // Guest 可能在 headers 阶段 Pause 以等待 on_request_body（尚未 dispatch_http_call）；
+        // 此时 pending_calls 为空，不能进入 drive_until_continue，否则会永久阻塞在 dispatch_rx。
+        if action == Action::Pause && !self.store.data().pending_calls.is_empty() {
             self.drive_until_continue(http_ctx_id).await?;
         }
 
@@ -444,6 +446,10 @@ impl Vm {
                     return Ok(());
                 }
                 if ctx.continue_requested && st.pending_calls.is_empty() {
+                    return Ok(());
+                }
+                // 无 outbound call 的 Pause（例如 defer 到 body hook）不应阻塞等待 dispatch 结果。
+                if st.pending_calls.is_empty() {
                     return Ok(());
                 }
             }

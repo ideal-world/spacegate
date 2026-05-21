@@ -4,8 +4,9 @@ fn callback_body(result: &StoredResult) -> serde_json::Value {
         "status": result.status,
         "http_status": result.http_status,
         "headers": result.headers,
+        "result": decode_callback_result(&result.body_base64),
         "body_base64": result.body_base64,
-        "result": result.body_base64,
+        "completed_at": format_completed_at_rfc3339(result.completed_at_ms),
         "completed_at_ms": result.completed_at_ms,
         "error": result.error,
     })
@@ -75,18 +76,17 @@ fn spawn_callback_retry_worker(state: AppState) {
 
 async fn callback_retry_once(state: &AppState) -> Result<(), ServiceError> {
     reclaim_callback_retries(state).await?;
-    let reply: XReadResponse<String, String, String, Value> = state
-        .redis
-        .xreadgroup_map(
-            state.cfg.callback_retry_group.as_str(),
-            state.cfg.consumer_name.as_str(),
-            Some(5),
-            Some(1000),
-            false,
-            vec![state.cfg.callback_retry_stream.as_str()],
-            vec![">"],
-        )
-        .await?;
+    let reply = xreadgroup_map_or_empty(
+        &state.worker_redis,
+        state.cfg.callback_retry_group.as_str(),
+        state.cfg.consumer_name.as_str(),
+        Some(5),
+        Some(1000),
+        false,
+        vec![state.cfg.callback_retry_stream.as_str()],
+        vec![">"],
+    )
+    .await?;
 
     for (_stream, entries) in reply {
         for (entry_id, fields) in entries {
@@ -100,7 +100,7 @@ async fn reclaim_callback_retries(state: &AppState) -> Result<(), ServiceError> 
     let consumer = format!("{}-callback-reclaimer", state.cfg.consumer_name);
     let min_idle_ms = state.cfg.callback_retry_reclaim_idle_secs.saturating_mul(1000);
     let (_cursor, entries): (String, Vec<(String, HashMap<String, Value>)>) = state
-        .redis
+        .worker_redis
         .xautoclaim_values(
             state.cfg.callback_retry_stream.as_str(),
             state.cfg.callback_retry_group.as_str(),

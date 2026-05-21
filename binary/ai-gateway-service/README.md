@@ -132,3 +132,24 @@ For job processing, each entry acquires a Redis lease key before upstream execut
 - `job_dlq_depth` and `callback_dlq_depth` for exhausted jobs and callbacks.
 - `enqueue_latency_ms_*`, `enqueue_body_size_bytes_*`, `wait_total`, and `wait_timeout_total` for ingress and wait-mode health.
 - `worker_processing_time_ms_*`, `worker_completed_total`, `worker_failed_total`, `reclaimed_total`, `lease_skip_total`, and `job_dlq_total` for worker health.
+- `object_offload_total` and `object_multipart_abort_total` for large-body offload.
+
+## Body offload tests
+
+Unit tests (mock S3 multipart server, no Docker):
+
+```bash
+cargo test -p ai-gateway-service store_body_
+```
+
+MinIO end-to-end (Docker + worker roundtrip):
+
+```bash
+# 需要：Redis、mock 上游 :9000、Docker
+./tests/queue-object-store-e2e.sh
+```
+
+The script starts MinIO on `:9001` by default (avoids clashing with the mock upstream on `:9000`), launches a dedicated `ai-gateway-service` on `:18081` with `AI_OBJECT_STORE_ENDPOINT`, and verifies:
+
+- inline body below `AI_INLINE_THRESHOLD` does not increment `object_offload_total`
+- larger body is stored in MinIO and the worker completes after `load_body()` fetches it
