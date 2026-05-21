@@ -54,8 +54,17 @@ Optional object offload variables:
 AI_OBJECT_STORE_ENDPOINT=http://127.0.0.1:9000
 AI_OBJECT_STORE_BUCKET=ai-gateway-body
 AI_OBJECT_STORE_PREFIX=bodies
+AI_OBJECT_MULTIPART_PART_SIZE=5242880
 AI_OBJECT_STORE_AUTH_HEADER='Authorization: Bearer token'
 ```
+
+When `AI_OBJECT_STORE_ENDPOINT` is set and the body is larger than `AI_INLINE_THRESHOLD`, the service uses the S3-compatible multipart flow:
+
+```text
+CreateMultipartUpload -> UploadPart* -> CompleteMultipartUpload
+```
+
+If any part upload or completion fails, the service sends `AbortMultipartUpload` before returning the enqueue error. The current implementation expects a MinIO/S3-compatible endpoint that accepts either unsigned requests or the configured static auth header.
 
 Priority queues are disabled by default. Enable them and send `X-Queue-Priority: high|low` to route jobs to separate streams:
 

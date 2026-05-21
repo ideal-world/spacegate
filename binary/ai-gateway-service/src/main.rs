@@ -117,6 +117,8 @@ struct Args {
     object_store_bucket: String,
     #[arg(long, env = "AI_OBJECT_STORE_PREFIX", default_value = "bodies")]
     object_store_prefix: String,
+    #[arg(long, env = "AI_OBJECT_MULTIPART_PART_SIZE", default_value_t = 5 * 1024 * 1024)]
+    object_multipart_part_size: usize,
     #[arg(long, env = "AI_OBJECT_STORE_AUTH_HEADER")]
     object_store_auth_header: Option<String>,
 }
@@ -144,6 +146,7 @@ struct Metrics {
     worker_failed_total: AtomicU64,
     reclaimed_total: AtomicU64,
     object_offload_total: AtomicU64,
+    object_multipart_abort_total: AtomicU64,
 }
 
 #[derive(Debug, Serialize)]
@@ -200,6 +203,12 @@ struct BodyLocation {
     object_ref: String,
     size: usize,
     storage: &'static str,
+}
+
+#[derive(Debug)]
+struct CompletedPart {
+    part_number: usize,
+    etag: String,
 }
 
 #[derive(Debug)]
@@ -420,6 +429,7 @@ worker_completed_total {}\n\
 worker_failed_total {}\n\
 reclaimed_total {}\n\
 object_offload_total {}\n\
+object_multipart_abort_total {}\n\
 queue_depth {}\n\
 queue_depth{{priority=\"high\"}} {}\n\
 queue_depth{{priority=\"low\"}} {}\n\
@@ -436,6 +446,7 @@ callback_retry_depth {}\n",
         state.metrics.worker_failed_total.load(Ordering::Relaxed),
         state.metrics.reclaimed_total.load(Ordering::Relaxed),
         state.metrics.object_offload_total.load(Ordering::Relaxed),
+        state.metrics.object_multipart_abort_total.load(Ordering::Relaxed),
         queue_depth,
         high_queue_depth,
         low_queue_depth,
@@ -795,12 +806,7 @@ async fn store_body(state: &AppState, job_id: &str, body: Bytes) -> Result<BodyL
     }
 
     let object_ref = format!("{}/{}/body.bin", state.cfg.object_store_prefix.trim_matches('/'), sanitize_key(job_id));
-    let url = object_url(state, &object_ref);
-    let mut req = state.http.put(url).body(body.clone());
-    if let Some((name, value)) = object_auth_header(&state.cfg.object_store_auth_header)? {
-        req = req.header(name, value);
-    }
-    req.send().await?.error_for_status()?;
+    multipart_upload_body(state, &object_ref, body.clone()).await?;
     state.metrics.object_offload_total.fetch_add(1, Ordering::Relaxed);
     Ok(BodyLocation {
         body_base64: String::new(),
@@ -828,6 +834,96 @@ async fn load_body(state: &AppState, fields: &HashMap<String, Value>) -> Result<
     Ok(field_bytes(fields, "body").unwrap_or_default())
 }
 
+async fn multipart_upload_body(state: &AppState, object_ref: &str, body: Bytes) -> Result<(), ServiceError> {
+    let upload_id = initiate_multipart_upload(state, object_ref).await?;
+    let upload_result = async {
+        let part_size = state.cfg.object_multipart_part_size.max(5 * 1024 * 1024);
+        let mut parts = Vec::new();
+        for (idx, chunk) in body.chunks(part_size).enumerate() {
+            parts.push(upload_multipart_part(state, object_ref, &upload_id, idx + 1, chunk.to_vec()).await?);
+        }
+        complete_multipart_upload(state, object_ref, &upload_id, &parts).await
+    }
+    .await;
+
+    if let Err(err) = upload_result {
+        if let Err(abort_err) = abort_multipart_upload(state, object_ref, &upload_id).await {
+            state.metrics.object_multipart_abort_total.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(object_ref = %object_ref, upload_id = %upload_id, error = %abort_err.message, "multipart upload abort failed");
+        } else {
+            state.metrics.object_multipart_abort_total.fetch_add(1, Ordering::Relaxed);
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
+async fn initiate_multipart_upload(state: &AppState, object_ref: &str) -> Result<String, ServiceError> {
+    let url = object_url_with_query(state, object_ref, "uploads");
+    let mut req = state.http.post(url);
+    if let Some((name, value)) = object_auth_header(&state.cfg.object_store_auth_header)? {
+        req = req.header(name, value);
+    }
+    let body = req.send().await?.error_for_status()?.text().await?;
+    extract_xml_tag(&body, "UploadId").ok_or_else(|| ServiceError::internal("multipart initiate response missing UploadId"))
+}
+
+async fn upload_multipart_part(state: &AppState, object_ref: &str, upload_id: &str, part_number: usize, body: Vec<u8>) -> Result<CompletedPart, ServiceError> {
+    let query = format!("partNumber={part_number}&uploadId={}", encode_query_component(upload_id));
+    let url = object_url_with_query(state, object_ref, &query);
+    let mut req = state.http.put(url).body(body);
+    if let Some((name, value)) = object_auth_header(&state.cfg.object_store_auth_header)? {
+        req = req.header(name, value);
+    }
+    let resp = req.send().await?.error_for_status()?;
+    let etag = resp
+        .headers()
+        .get("etag")
+        .and_then(|value| value.to_str().ok())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| ServiceError::internal("multipart upload part response missing ETag"))?;
+    Ok(CompletedPart { part_number, etag })
+}
+
+async fn complete_multipart_upload(state: &AppState, object_ref: &str, upload_id: &str, parts: &[CompletedPart]) -> Result<(), ServiceError> {
+    let query = format!("uploadId={}", encode_query_component(upload_id));
+    let url = object_url_with_query(state, object_ref, &query);
+    let body = complete_multipart_xml(parts);
+    let mut req = state.http.post(url).header("content-type", "application/xml").body(body);
+    if let Some((name, value)) = object_auth_header(&state.cfg.object_store_auth_header)? {
+        req = req.header(name, value);
+    }
+    req.send().await?.error_for_status()?;
+    Ok(())
+}
+
+async fn abort_multipart_upload(state: &AppState, object_ref: &str, upload_id: &str) -> Result<(), ServiceError> {
+    let query = format!("uploadId={}", encode_query_component(upload_id));
+    let url = object_url_with_query(state, object_ref, &query);
+    let mut req = state.http.delete(url);
+    if let Some((name, value)) = object_auth_header(&state.cfg.object_store_auth_header)? {
+        req = req.header(name, value);
+    }
+    req.send().await?.error_for_status()?;
+    Ok(())
+}
+
+fn complete_multipart_xml(parts: &[CompletedPart]) -> String {
+    let mut out = String::from("<CompleteMultipartUpload>");
+    for part in parts {
+        out.push_str("<Part>");
+        out.push_str("<PartNumber>");
+        out.push_str(&part.part_number.to_string());
+        out.push_str("</PartNumber>");
+        out.push_str("<ETag>");
+        out.push_str(&xml_escape(&part.etag));
+        out.push_str("</ETag>");
+        out.push_str("</Part>");
+    }
+    out.push_str("</CompleteMultipartUpload>");
+    out
+}
+
 fn object_url(state: &AppState, object_ref: &str) -> String {
     format!(
         "{}/{}/{}",
@@ -835,6 +931,10 @@ fn object_url(state: &AppState, object_ref: &str) -> String {
         state.cfg.object_store_bucket.trim_matches('/'),
         object_ref.trim_start_matches('/')
     )
+}
+
+fn object_url_with_query(state: &AppState, object_ref: &str, query: &str) -> String {
+    format!("{}?{}", object_url(state, object_ref), query)
 }
 
 fn object_auth_header(raw: &Option<String>) -> Result<Option<(String, String)>, ServiceError> {
@@ -848,6 +948,30 @@ fn object_auth_header(raw: &Option<String>) -> Result<Option<(String, String)>, 
         return Err(ServiceError::bad_request("invalid object auth header"));
     }
     Ok(Some((name.trim().to_string(), value.trim().to_string())))
+}
+
+fn extract_xml_tag(xml: &str, tag: &str) -> Option<String> {
+    let start_tag = format!("<{tag}>");
+    let end_tag = format!("</{tag}>");
+    let start = xml.find(&start_tag)? + start_tag.len();
+    let end = xml[start..].find(&end_tag)? + start;
+    Some(xml[start..end].trim().to_string())
+}
+
+fn encode_query_component(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
+fn xml_escape(input: &str) -> String {
+    input.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
 }
 
 async fn trim_stream(state: &AppState, stream: &str) -> Result<(), ServiceError> {
@@ -977,4 +1101,37 @@ fn field_bytes(fields: &HashMap<String, Value>, key: &str) -> Option<Vec<u8>> {
         Value::String(value) => Some(value.as_bytes().to_vec()),
         _ => None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_upload_id_from_multipart_xml() {
+        let xml = "<InitiateMultipartUploadResult><UploadId>a+b/c=</UploadId></InitiateMultipartUploadResult>";
+        assert_eq!(extract_xml_tag(xml, "UploadId").as_deref(), Some("a+b/c="));
+    }
+
+    #[test]
+    fn encodes_upload_id_for_query_string() {
+        assert_eq!(encode_query_component("a+b/c="), "a%2Bb%2Fc%3D");
+    }
+
+    #[test]
+    fn builds_complete_multipart_xml_with_escaped_etags() {
+        let parts = vec![
+            CompletedPart {
+                part_number: 1,
+                etag: "\"abc&1\"".to_string(),
+            },
+            CompletedPart {
+                part_number: 2,
+                etag: "\"def\"".to_string(),
+            },
+        ];
+        let xml = complete_multipart_xml(&parts);
+        assert!(xml.contains("<PartNumber>1</PartNumber><ETag>&quot;abc&amp;1&quot;</ETag>"));
+        assert!(xml.contains("<PartNumber>2</PartNumber><ETag>&quot;def&quot;</ETag>"));
+    }
 }
