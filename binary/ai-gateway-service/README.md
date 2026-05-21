@@ -13,7 +13,7 @@ It keeps Redis, worker execution, Pub/Sub waiting, callback delivery, and result
   - Returns `{ "allowed": bool, "retry_after_ms": number }`.
 - `POST /v1/queue/enqueue`
   - Requires `X-Callback-URL` by default.
-  - Stores selected headers and either inline base64 body or an object-store reference in Redis Stream.
+  - Streams the request body, then stores either inline base64 body or an object-store reference in Redis Stream.
   - Returns `202 Accepted` with `X-Job-Id`.
 - `POST /v1/queue/enqueue-and-wait`
   - Enqueues the job and waits for the worker result via Redis Pub/Sub.
@@ -57,6 +57,8 @@ AI_OBJECT_STORE_PREFIX=bodies
 AI_OBJECT_MULTIPART_PART_SIZE=5242880
 AI_OBJECT_STORE_AUTH_HEADER='Authorization: Bearer token'
 ```
+
+Request body reading is streaming. The service accumulates only the inline buffer until `AI_INLINE_THRESHOLD`; after that it starts multipart upload and flushes parts as `AI_OBJECT_MULTIPART_PART_SIZE` chunks become available. `AI_MAX_BODY_BYTES` is enforced while reading the stream.
 
 When `AI_OBJECT_STORE_ENDPOINT` is set and the body is larger than `AI_INLINE_THRESHOLD`, the service uses the S3-compatible multipart flow:
 

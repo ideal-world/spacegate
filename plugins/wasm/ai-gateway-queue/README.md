@@ -199,6 +199,7 @@ curl -i http://localhost:9080/your/api \
 - Worker 崩溃后通过 `XAUTOCLAIM` 重认领 pending job
 - 回调失败会进入 `AI_CALLBACK_RETRY_STREAM` 并由 retry worker 重试
 - 大 body 可通过 `AI_OBJECT_STORE_ENDPOINT` 走 S3-compatible multipart 卸载，Redis Stream 中只保留 `ref`
+- `ai-gateway-service` 会流式读取请求体；当前 Wasm 插件转发到外部服务时仍受 `dispatch_http_call` 限制，会在插件侧拿到完整 body 后再发出调用
 - 可通过 Redis key 覆盖租户限流：`ai:tenant:ratelimit:{tenant}:rps` 和 `ai:tenant:ratelimit:{tenant}:burst`
 - `/metrics` 暴露 Prometheus 文本指标
 
