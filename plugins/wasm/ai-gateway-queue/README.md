@@ -198,7 +198,7 @@ curl -i http://localhost:9080/your/api \
 - Redis Stream 支持 `MAXLEN ~` 裁剪，通过 `AI_QUEUE_MAX_LEN` 控制
 - Worker 崩溃后通过 `XAUTOCLAIM` 重认领 pending job
 - 回调失败会进入 `AI_CALLBACK_RETRY_STREAM` 并由 retry worker 重试
-- 大 body 可通过 `AI_OBJECT_STORE_ENDPOINT` 卸载到对象存储，Redis Stream 中只保留 `ref`
+- 大 body 可通过 `AI_OBJECT_STORE_ENDPOINT` 走 S3-compatible multipart 卸载，Redis Stream 中只保留 `ref`
 - 可通过 Redis key 覆盖租户限流：`ai:tenant:ratelimit:{tenant}:rps` 和 `ai:tenant:ratelimit:{tenant}:burst`
 - `/metrics` 暴露 Prometheus 文本指标
 
