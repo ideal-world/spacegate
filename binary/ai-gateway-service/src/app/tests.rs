@@ -46,11 +46,11 @@ mod tests {
     #[test]
     fn observes_histogram_buckets_as_non_overlapping_counts() {
         let metrics = Metrics::default();
-        observe_enqueue_latency(&metrics, 80);
-        observe_enqueue_latency(&metrics, 800);
+        observe_enqueue_latency(&metrics, 80, "queue", "inline");
+        observe_enqueue_latency(&metrics, 800, "wait", "inline");
         observe_body_size(&metrics, 8 * 1024);
         observe_body_size(&metrics, 256 * 1024);
-        observe_worker_processing(&metrics, 2000);
+        observe_worker_processing(&metrics, 2000, "gpt-4o-mini");
 
         assert_eq!(metrics.enqueue_latency_count.load(Ordering::Relaxed), 2);
         assert_eq!(metrics.enqueue_latency_le_100_ms.load(Ordering::Relaxed), 1);
@@ -81,5 +81,89 @@ mod tests {
         assert_eq!(parse_queue_priority("medium"), Some(QueuePriority::Normal));
         assert_eq!(parse_queue_priority("low"), Some(QueuePriority::Low));
         assert_eq!(parse_queue_priority("urgent"), None);
+    }
+
+    fn test_app_state(object_store_endpoint: Option<String>, inline_threshold: usize) -> AppState {
+        let mut args = Args::parse_from(["ai-gateway-service"]);
+        args.object_store_endpoint = object_store_endpoint;
+        args.inline_threshold = inline_threshold;
+        args.max_body_bytes = 8 * 1024 * 1024;
+        args.object_store_bucket = "ai-gateway-body".to_string();
+        args.object_store_prefix = "bodies".to_string();
+        args.object_multipart_part_size = 1024;
+        let redis = build_redis_client("redis://127.0.0.1/").expect("redis client");
+        AppState {
+            redis: redis.clone(),
+            worker_redis: redis,
+            http: reqwest::Client::new(),
+            cfg: Arc::new(args),
+            body_permits: Arc::new(Semaphore::new(8)),
+            metrics: Arc::new(Metrics::default()),
+        }
+    }
+
+    async fn mock_s3_handler(method: Method, uri: Uri, body: axum::body::Bytes, stored: Arc<std::sync::Mutex<Vec<u8>>>) -> Response {
+        let query = uri.query().unwrap_or("");
+        if method == Method::POST && query == "uploads" {
+            return (
+                StatusCode::OK,
+                [(http::header::CONTENT_TYPE, "application/xml")],
+                r#"<InitiateMultipartUploadResult><UploadId>test-upload</UploadId></InitiateMultipartUploadResult>"#,
+            )
+                .into_response();
+        }
+        if method == Method::PUT && query.contains("partNumber=") {
+            stored.lock().unwrap_or_else(|e| e.into_inner()).extend_from_slice(&body);
+            return (StatusCode::OK, [(http::header::ETAG, "\"part-etag\"")]).into_response();
+        }
+        if method == Method::POST && query.contains("uploadId=") {
+            return StatusCode::OK.into_response();
+        }
+        if method == Method::GET {
+            let bytes = stored.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            return (StatusCode::OK, bytes).into_response();
+        }
+        StatusCode::NOT_FOUND.into_response()
+    }
+
+    #[tokio::test]
+    async fn store_body_keeps_small_payload_inline() {
+        let state = test_app_state(None, 16 * 1024);
+        let payload = vec![1u8; 4096];
+        let location = store_body(&state, "job-inline", Body::from(payload.clone())).await.expect("inline store");
+        assert_eq!(location.storage, "inline");
+        assert_eq!(location.size, payload.len());
+        assert!(!location.body_base64.is_empty());
+        assert_eq!(state.metrics.object_offload_total.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn store_body_offloads_large_payload_via_s3_multipart_and_load_body_roundtrips() {
+        let stored = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let stored_for_handler = stored.clone();
+        let app = Router::new().fallback(move |method: Method, uri: Uri, body: axum::body::Bytes| {
+            let stored_for_handler = stored_for_handler.clone();
+            async move { mock_s3_handler(method, uri, body, stored_for_handler).await }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind mock s3");
+        let addr = listener.local_addr().expect("mock s3 addr");
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("mock s3 serve");
+        });
+
+        let state = test_app_state(Some(format!("http://{addr}")), 1024);
+        let payload = vec![7u8; 5000];
+        let location = store_body(&state, "job-offload", Body::from(payload.clone())).await.expect("offload store");
+        assert_eq!(location.storage, "object");
+        assert_eq!(location.size, payload.len());
+        assert!(location.body_base64.is_empty());
+        assert!(location.object_ref.contains("job-offload"));
+        assert_eq!(state.metrics.object_offload_total.load(Ordering::Relaxed), 1);
+
+        let mut fields = HashMap::new();
+        fields.insert("storage".to_string(), Value::String("object".into()));
+        fields.insert("ref".to_string(), Value::String(location.object_ref.into()));
+        let loaded = load_body(&state, &fields).await.expect("load offloaded body");
+        assert_eq!(loaded, payload);
     }
 }

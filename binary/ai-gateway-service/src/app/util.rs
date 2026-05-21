@@ -89,3 +89,108 @@ fn field_u64(fields: &HashMap<String, Value>, key: &str) -> Option<u64> {
 fn field_u32(fields: &HashMap<String, Value>, key: &str) -> Option<u32> {
     field_u64(fields, key).and_then(|value| value.try_into().ok())
 }
+
+fn job_poll_url(job_id: &str) -> String {
+    format!("/jobs/{job_id}/status")
+}
+
+fn job_status_url_legacy(job_id: &str) -> String {
+    format!("/v1/jobs/{job_id}")
+}
+
+fn metrics_label(value: &str) -> String {
+    sanitize_key(value).chars().take(64).collect()
+}
+
+fn body_size_bucket(size: usize, storage: &str) -> &'static str {
+    if storage == "s3" {
+        "s3"
+    } else if size <= 10 * 1024 {
+        "inline_small"
+    } else if size <= 128 * 1024 {
+        "inline"
+    } else {
+        "inline_large"
+    }
+}
+
+fn format_completed_at_rfc3339(ms: u64) -> String {
+    let days = (ms / 86_400_000) as i64;
+    let rem_ms = ms % 86_400_000;
+    let (year, month, day) = civil_from_days(days);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
+        rem_ms / 3_600_000,
+        (rem_ms % 3_600_000) / 60_000,
+        (rem_ms % 60_000) / 1_000,
+        rem_ms % 1_000,
+    )
+}
+
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let mut y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    if m <= 2 {
+        y += 1;
+    }
+    (y, m as u32, d as u32)
+}
+
+fn decode_callback_result(body_base64: &str) -> serde_json::Value {
+    if body_base64.is_empty() {
+        return serde_json::Value::Null;
+    }
+    let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(body_base64) else {
+        return serde_json::json!({ "raw_base64": body_base64 });
+    };
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+        return value;
+    }
+    serde_json::json!({ "raw_base64": body_base64 })
+}
+
+fn tenant_rate_limit_rule_view(key: String, rule: TenantRateLimitRule, ttl_remaining_secs: Option<i64>) -> TenantRateLimitRuleView {
+    TenantRateLimitRuleView {
+        key,
+        tenant: rule.tenant,
+        model: rule.model,
+        path: rule.path,
+        policy: rule.policy,
+        rps: rule.rps,
+        burst: rule.burst,
+        cost: rule.cost,
+        ttl_secs: rule.ttl_secs,
+        ttl_remaining_secs,
+    }
+}
+
+/// Parse `XREADGROUP` into the map form used by workers.
+///
+/// Redis returns `nil` when a blocking read times out or the stream has no new entries for `>`.
+/// Without explicit handling, fred fails to convert that into `HashMap` and the worker aborts
+/// before polling the next priority stream — even when another stream already has backlog.
+async fn xreadgroup_map_or_empty(
+    redis: &FredClient,
+    group: &str,
+    consumer: &str,
+    count: Option<u64>,
+    block: Option<u64>,
+    noack: bool,
+    keys: Vec<&str>,
+    ids: Vec<&str>,
+) -> Result<XReadResponse<String, String, String, Value>, ServiceError> {
+    let value: Value = redis.xreadgroup(group, consumer, count, block, noack, keys, ids).await?;
+    if value.is_null() {
+        return Ok(HashMap::new());
+    }
+    value
+        .into_xread_response()
+        .map_err(|e| ServiceError::internal(format!("parse xreadgroup response: {e}")))
+}

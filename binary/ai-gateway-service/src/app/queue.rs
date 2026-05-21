@@ -41,7 +41,12 @@ async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri
     trim_stream(state, &stream_key).await?;
 
     state.metrics.enqueue_total.fetch_add(1, Ordering::Relaxed);
-    observe_enqueue_latency(&state.metrics, now_ms().saturating_sub(enqueue_started_at));
+    observe_enqueue_latency(
+        &state.metrics,
+        now_ms().saturating_sub(enqueue_started_at),
+        policy.as_str(),
+        body_size_bucket(body_ref.size, body_ref.storage),
+    );
     observe_body_size(&state.metrics, body_ref.size);
     match priority {
         QueuePriority::High => {
@@ -69,7 +74,8 @@ async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri
             stream_id,
             stream_key,
             status: "queued",
-            poll_url: format!("/v1/jobs/{job_id}"),
+            poll_url: job_poll_url(&job_id),
+            status_url: job_status_url_legacy(&job_id),
         },
         created_at_ms: created_at,
     })
@@ -103,8 +109,17 @@ async fn worker_once(state: &AppState, consumer: &str) -> Result<(), ServiceErro
 }
 
 async fn read_worker_stream(state: &AppState, consumer: &str, stream: &str, block_ms: u64) -> Result<usize, ServiceError> {
-    let reply: XReadResponse<String, String, String, Value> =
-        state.redis.xreadgroup_map(state.cfg.consumer_group.as_str(), consumer, Some(5), Some(block_ms), false, vec![stream], vec![">"]).await?;
+    let reply = xreadgroup_map_or_empty(
+        &state.worker_redis,
+        state.cfg.consumer_group.as_str(),
+        consumer,
+        Some(5),
+        Some(block_ms),
+        false,
+        vec![stream],
+        vec![">"],
+    )
+    .await?;
 
     let mut processed = 0;
     for (_stream, entries) in reply {
@@ -144,16 +159,17 @@ async fn process_stream_entry(state: &AppState, stream: &str, entry_id: &str, fi
     }
 
     let processing_started_at = now_ms();
+    let model = field_string(fields, "model").unwrap_or_else(|| "default".to_string());
     match process_job(state, stream, entry_id, fields).await {
         Ok(()) => {
-            observe_worker_processing(&state.metrics, now_ms().saturating_sub(processing_started_at));
+            observe_worker_processing(&state.metrics, now_ms().saturating_sub(processing_started_at), &model);
             ack_stream_entry(state, stream, entry_id).await?;
             clear_job_delivery_attempt(state, &job_id).await;
             release_job_lease(state, &job_id).await;
             Ok(true)
         }
         Err(e) => {
-            observe_worker_processing(&state.metrics, now_ms().saturating_sub(processing_started_at));
+            observe_worker_processing(&state.metrics, now_ms().saturating_sub(processing_started_at), &model);
             release_job_lease(state, &job_id).await;
             Err(e)
         }
@@ -322,7 +338,7 @@ async fn reclaim_once(state: &AppState) -> Result<(), ServiceError> {
     let min_idle_ms = state.cfg.reclaim_min_idle_secs.saturating_mul(1000);
     for stream in configured_streams(state) {
         let (_cursor, entries): (String, Vec<(String, HashMap<String, Value>)>) =
-            state.redis.xautoclaim_values(stream.as_str(), state.cfg.consumer_group.as_str(), consumer.as_str(), min_idle_ms, "0-0", Some(10), false).await?;
+            state.worker_redis.xautoclaim_values(stream.as_str(), state.cfg.consumer_group.as_str(), consumer.as_str(), min_idle_ms, "0-0", Some(10), false).await?;
         for (entry_id, fields) in entries {
             match process_stream_entry(state, stream.as_str(), entry_id.as_str(), &fields).await {
                 Ok(true) => {

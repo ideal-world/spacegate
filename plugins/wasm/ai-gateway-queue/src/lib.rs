@@ -373,14 +373,14 @@ impl AiGatewayHttp {
         if status == 200 {
             let retry_after_ms = extract_json_number(&text, "retry_after_ms").unwrap_or(1000);
             let retry_after_secs = ((retry_after_ms + 999) / 1000).max(1).to_string();
-            let retry_after_ms = retry_after_ms.to_string();
+            let body = format!(r#"{{"error":"rate_limited","retry_after_ms":{retry_after_ms}}}"#);
             let headers = [
                 ("content-type".to_string(), "application/json".to_string()),
                 ("retry-after".to_string(), retry_after_secs),
-                ("x-ratelimit-retry-after-ms".to_string(), retry_after_ms),
+                ("x-ratelimit-retry-after-ms".to_string(), retry_after_ms.to_string()),
             ];
             let headers = headers.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect::<Vec<_>>();
-            self.send_http_response(429, headers, Some(text.as_bytes()));
+            self.send_http_response(429, headers, Some(body.as_bytes()));
         } else {
             self.send_json(502, r#"{"error":"rate_limit_service_error"}"#);
         }

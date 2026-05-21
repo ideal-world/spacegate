@@ -19,8 +19,9 @@ use fred::types::ExpireOptions;
 use futures_util::StreamExt;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use tokio::sync::Semaphore;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 include!("app/types.rs");
