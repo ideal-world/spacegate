@@ -1,12 +1,14 @@
 # ai-gateway-queue
 
-`ai-gateway-queue` 是一个运行在 SpaceGate Wasm 里的 AI 网关插件，用来把请求按策略分成三种处理方式：
+`ai-gateway-queue` 是一个运行在 SpaceGate Wasm 里的 **AI 请求队列网关**插件：在入口处对 AI 请求按租户做准入判定（基于令牌桶速率），命中后按选定的队列模式把请求分流到 Redis 多优先级队列异步消化，配合回调重试和对象存储 offload 实现无损交付。
 
-- `abandon`：先做限流检查，失败直接返回
-- `queue`：进入外部队列，立即返回 `202`
-- `wait`：进入外部队列并等待结果返回
+支持三种队列模式（通过 `X-RateLimit-Policy` 请求头选择，名字保留兼容历史）：
 
-它本身不直接访问 Redis，而是通过 `dispatch_http_call` 调用外部的 `ai-gateway-service`，再由该服务去处理 Redis、队列和等待逻辑。
+- `abandon`：超额请求直接返回 429（不入队，等价于纯节流闸门）
+- `queue`：超额请求入队后立即返回 `202`，结果通过回调或轮询拿到
+- `wait`：超额请求入队后同步等待结果返回（类长轮询）
+
+插件本身不直接访问 Redis，而是通过 `dispatch_http_call` 调用外部队列后端（`ai-gateway-service`），再由该后端处理 Redis Streams、worker 消费、回调重试、结果回收等队列基础设施。
 
 ## 架构
 

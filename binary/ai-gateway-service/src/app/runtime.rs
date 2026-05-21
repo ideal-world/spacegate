@@ -28,7 +28,12 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/queue/enqueue", post(enqueue))
         .route("/v1/queue/enqueue-and-wait", post(enqueue_and_wait))
         .route("/v1/jobs/{job_id}", get(get_job))
+        .route("/v1/admin/plugins/{plugin}/schema", get(admin_plugin_schema))
+        .route("/v1/admin/plugins/{plugin}/readme", get(admin_plugin_readme))
+        .route("/v1/admin/tenant-rate-limits", get(admin_list_tenant_rate_limits).put(admin_upsert_tenant_rate_limit).delete(admin_delete_tenant_rate_limit))
         .layer(DefaultBodyLimit::max(args.max_body_bytes))
+        // TODO(v2): replace permissive CORS with authenticated admin ingress once the UI is proxied through the admin backend.
+        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

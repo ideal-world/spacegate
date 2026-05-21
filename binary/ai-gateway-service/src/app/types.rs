@@ -243,7 +243,7 @@ impl QueuePriority {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 struct TenantRateLimit {
     rps: u64,
     burst: u64,
@@ -251,8 +251,220 @@ struct TenantRateLimit {
     cost: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AiGatewayQueuePluginConfig {
+    #[serde(default)]
+    service: AiGatewayServiceConfig,
+    #[serde(default)]
+    paths: AiGatewayPathsConfig,
+    #[serde(default)]
+    headers: AiGatewayHeadersConfig,
+    #[serde(default)]
+    policies: AiGatewayPoliciesConfig,
+    #[serde(default)]
+    priority: AiGatewayPriorityConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AiGatewayServiceConfig {
+    #[serde(default = "default_service_cluster")]
+    cluster: String,
+    #[serde(default = "default_service_authority")]
+    authority: String,
+    #[serde(default = "default_service_timeout_ms")]
+    timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AiGatewayPathsConfig {
+    #[serde(default = "default_rate_limit_path")]
+    rate_limit: String,
+    #[serde(default = "default_enqueue_path")]
+    enqueue: String,
+    #[serde(default = "default_wait_path")]
+    wait: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AiGatewayHeadersConfig {
+    #[serde(default = "default_policy_header")]
+    policy: String,
+    #[serde(default = "default_tenant_header")]
+    tenant: String,
+    #[serde(default = "default_model_header")]
+    model: String,
+    #[serde(default = "default_priority_header")]
+    priority: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AiGatewayPoliciesConfig {
+    #[serde(default = "default_require_policy")]
+    require: bool,
+    #[serde(default)]
+    default: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AiGatewayPriorityConfig {
+    #[serde(default = "default_priority_enabled")]
+    enabled: bool,
+    #[serde(default = "default_priority")]
+    default: String,
+    #[serde(default)]
+    high_models: Vec<String>,
+    #[serde(default)]
+    low_models: Vec<String>,
+    #[serde(default)]
+    high_tenants: Vec<String>,
+    #[serde(default)]
+    low_tenants: Vec<String>,
+}
+
+impl Default for AiGatewayQueuePluginConfig {
+    fn default() -> Self {
+        Self {
+            service: AiGatewayServiceConfig::default(),
+            paths: AiGatewayPathsConfig::default(),
+            headers: AiGatewayHeadersConfig::default(),
+            policies: AiGatewayPoliciesConfig::default(),
+            priority: AiGatewayPriorityConfig::default(),
+        }
+    }
+}
+
+impl Default for AiGatewayServiceConfig {
+    fn default() -> Self {
+        Self {
+            cluster: default_service_cluster(),
+            authority: default_service_authority(),
+            timeout_ms: default_service_timeout_ms(),
+        }
+    }
+}
+
+impl Default for AiGatewayPathsConfig {
+    fn default() -> Self {
+        Self {
+            rate_limit: default_rate_limit_path(),
+            enqueue: default_enqueue_path(),
+            wait: default_wait_path(),
+        }
+    }
+}
+
+impl Default for AiGatewayHeadersConfig {
+    fn default() -> Self {
+        Self {
+            policy: default_policy_header(),
+            tenant: default_tenant_header(),
+            model: default_model_header(),
+            priority: default_priority_header(),
+        }
+    }
+}
+
+impl Default for AiGatewayPoliciesConfig {
+    fn default() -> Self {
+        Self {
+            require: default_require_policy(),
+            default: None,
+        }
+    }
+}
+
+impl Default for AiGatewayPriorityConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_priority_enabled(),
+            default: default_priority(),
+            high_models: Vec::new(),
+            low_models: Vec::new(),
+            high_tenants: Vec::new(),
+            low_tenants: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct TenantRateLimitRule {
+    tenant: String,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    policy: Option<String>,
+    rps: u64,
+    burst: u64,
+    #[serde(default = "default_rate_limit_cost")]
+    cost: u64,
+    // TODO(v2): apply ttl_secs to the Redis key via EXPIRE/PEXPIRE when time-bound rules are enabled.
+    #[serde(default)]
+    ttl_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TenantRateLimitRuleView {
+    key: String,
+    #[serde(flatten)]
+    rule: TenantRateLimitRule,
+}
+
 fn default_rate_limit_cost() -> u64 {
     1
+}
+
+fn default_service_cluster() -> String {
+    "ai-gateway-service".to_string()
+}
+
+fn default_service_authority() -> String {
+    "ai-gateway-service".to_string()
+}
+
+fn default_service_timeout_ms() -> u64 {
+    65_000
+}
+
+fn default_rate_limit_path() -> String {
+    "/v1/ratelimit/check".to_string()
+}
+
+fn default_enqueue_path() -> String {
+    "/v1/queue/enqueue".to_string()
+}
+
+fn default_wait_path() -> String {
+    "/v1/queue/enqueue-and-wait".to_string()
+}
+
+fn default_policy_header() -> String {
+    "x-ratelimit-policy".to_string()
+}
+
+fn default_tenant_header() -> String {
+    "x-tenant-id".to_string()
+}
+
+fn default_model_header() -> String {
+    "x-model".to_string()
+}
+
+fn default_priority_header() -> String {
+    "x-queue-priority".to_string()
+}
+
+fn default_require_policy() -> bool {
+    true
+}
+
+fn default_priority_enabled() -> bool {
+    true
+}
+
+fn default_priority() -> String {
+    "normal".to_string()
 }
 
 impl QueuePolicy {
