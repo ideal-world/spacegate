@@ -196,12 +196,12 @@ curl -i http://localhost:9080/your/api \
 ## 生产化能力
 
 - Redis Stream 支持 `MAXLEN ~` 裁剪，通过 `AI_QUEUE_MAX_LEN` 控制
-- Worker 崩溃后通过 `XAUTOCLAIM` 重认领 pending job
-- 回调失败会进入 `AI_CALLBACK_RETRY_STREAM` 并由 retry worker 重试
+- Worker 崩溃后通过 `XAUTOCLAIM` 重认领 pending job，并通过 Redis 处理租约避免长任务被重复执行
+- 回调失败会进入 `AI_CALLBACK_RETRY_STREAM`，按指数退避重试，超过最大次数后进入 `AI_CALLBACK_DLQ_STREAM`
 - 大 body 可通过 `AI_OBJECT_STORE_ENDPOINT` 走 S3-compatible multipart 卸载，Redis Stream 中只保留 `ref`
 - `ai-gateway-service` 会流式读取请求体；当前 Wasm 插件转发到外部服务时仍受 `dispatch_http_call` 限制，会在插件侧拿到完整 body 后再发出调用
 - 可通过 Redis key 覆盖租户限流：`ai:tenant:ratelimit:{tenant}:rps` 和 `ai:tenant:ratelimit:{tenant}:burst`
-- `/metrics` 暴露 Prometheus 文本指标
+- `/metrics` 暴露 Prometheus 文本指标，包含队列深度、PEL、DLQ、入队延迟、body 大小、wait 超时、回调重试和 worker 处理耗时
 
 ## 调试建议
 

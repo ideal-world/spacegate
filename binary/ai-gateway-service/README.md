@@ -21,7 +21,7 @@ It keeps Redis, worker execution, Pub/Sub waiting, callback delivery, and result
 - `GET /v1/jobs/{job_id}`
   - Returns the stored result JSON while the result key TTL is alive.
 - `GET /metrics`
-  - Returns Prometheus text metrics for queue depth, limits, callbacks, retries, and worker counters.
+  - Returns Prometheus text metrics for queue depth, PEL size, DLQ depth, enqueue latency, body size, waits, limits, callbacks, retries, object offload, and worker counters.
 
 ## Run
 
@@ -45,7 +45,13 @@ AI_INLINE_THRESHOLD=131072
 AI_QUEUE_MAX_LEN=100000
 AI_RECLAIM_INTERVAL_SECS=30
 AI_RECLAIM_MIN_IDLE_SECS=30
+AI_JOB_PROCESS_LEASE_SECS=120
+AI_JOB_MAX_DELIVERY_ATTEMPTS=5
 AI_REQUIRE_HTTPS_CALLBACK=true
+AI_CALLBACK_MAX_RETRY_ATTEMPTS=5
+AI_CALLBACK_RETRY_INITIAL_DELAY_MS=1000
+AI_CALLBACK_RETRY_MAX_DELAY_MS=60000
+AI_CALLBACK_RETRY_RECLAIM_IDLE_SECS=60
 ```
 
 Optional object offload variables:
@@ -76,4 +82,14 @@ AI_QUEUE_HIGH_STREAM=ai:jobs:high
 AI_QUEUE_LOW_STREAM=ai:jobs:low
 ```
 
-Callback failures are written to `AI_CALLBACK_RETRY_STREAM` and retried by a local retry worker. Pending Redis Stream jobs are reclaimed with `XAUTOCLAIM` according to the reclaim settings.
+Callback failures are written to `AI_CALLBACK_RETRY_STREAM` with `attempt`, `next_attempt_at_ms`, and `last_error`. The retry worker uses exponential backoff capped by `AI_CALLBACK_RETRY_MAX_DELAY_MS`, ACKs each retry record after handling it, and moves exhausted callbacks to `AI_CALLBACK_DLQ_STREAM`. Pending Redis Stream jobs are reclaimed with `XAUTOCLAIM` according to the reclaim settings.
+
+For job processing, each entry acquires a Redis lease key before upstream execution. Reclaimed entries that are already leased are skipped instead of being reprocessed, and jobs exceeding `AI_JOB_MAX_DELIVERY_ATTEMPTS` are moved to `AI_JOB_DLQ_STREAM`.
+
+`/metrics` includes the core signals needed to operate the queue:
+
+- `queue_depth`, `queue_depth{priority="high|low"}` for stream backlog.
+- `pel_size`, `pel_size{priority="high|low"}`, and `callback_retry_pel_size` for unacked pending entries.
+- `job_dlq_depth` and `callback_dlq_depth` for exhausted jobs and callbacks.
+- `enqueue_latency_ms_*`, `enqueue_body_size_bytes_*`, `wait_total`, and `wait_timeout_total` for ingress and wait-mode health.
+- `worker_processing_time_ms_*`, `worker_completed_total`, `worker_failed_total`, `reclaimed_total`, `lease_skip_total`, and `job_dlq_total` for worker health.

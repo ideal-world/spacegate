@@ -15,6 +15,7 @@ use clap::Parser;
 use fred::clients::{Client as FredClient, SubscriberClient};
 use fred::prelude::*;
 use fred::types::streams::XReadResponse;
+use fred::types::ExpireOptions;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
@@ -78,10 +79,22 @@ struct Args {
     consumer_group: String,
     #[arg(long, env = "AI_QUEUE_CONSUMER", default_value = "ai-gateway-service")]
     consumer_name: String,
+    #[arg(long, env = "AI_JOB_DLQ_STREAM", default_value = "ai:job-dlq")]
+    job_dlq_stream: String,
     #[arg(long, env = "AI_CALLBACK_RETRY_STREAM", default_value = "ai:callback-retry")]
     callback_retry_stream: String,
     #[arg(long, env = "AI_CALLBACK_RETRY_GROUP", default_value = "ai-gateway-callbacks")]
     callback_retry_group: String,
+    #[arg(long, env = "AI_CALLBACK_DLQ_STREAM", default_value = "ai:callback-dlq")]
+    callback_dlq_stream: String,
+    #[arg(long, env = "AI_CALLBACK_MAX_RETRY_ATTEMPTS", default_value_t = 5)]
+    callback_max_retry_attempts: u32,
+    #[arg(long, env = "AI_CALLBACK_RETRY_INITIAL_DELAY_MS", default_value_t = 1000)]
+    callback_retry_initial_delay_ms: u64,
+    #[arg(long, env = "AI_CALLBACK_RETRY_MAX_DELAY_MS", default_value_t = 60_000)]
+    callback_retry_max_delay_ms: u64,
+    #[arg(long, env = "AI_CALLBACK_RETRY_RECLAIM_IDLE_SECS", default_value_t = 60)]
+    callback_retry_reclaim_idle_secs: u64,
     #[arg(long, env = "AI_RESULT_KEY_PREFIX", default_value = "result:")]
     result_key_prefix: String,
     #[arg(long, env = "AI_RESULT_CHANNEL_PREFIX", default_value = "result:")]
@@ -110,6 +123,10 @@ struct Args {
     reclaim_interval_secs: u64,
     #[arg(long, env = "AI_RECLAIM_MIN_IDLE_SECS", default_value_t = 30)]
     reclaim_min_idle_secs: u64,
+    #[arg(long, env = "AI_JOB_PROCESS_LEASE_SECS", default_value_t = 120)]
+    job_process_lease_secs: u64,
+    #[arg(long, env = "AI_JOB_MAX_DELIVERY_ATTEMPTS", default_value_t = 5)]
+    job_max_delivery_attempts: u32,
     #[arg(long, env = "AI_REQUIRE_HTTPS_CALLBACK", default_value_t = true)]
     require_https_callback: bool,
     #[arg(long, env = "AI_OBJECT_STORE_ENDPOINT")]
@@ -139,13 +156,35 @@ struct Metrics {
     enqueue_total: AtomicU64,
     enqueue_queue_total: AtomicU64,
     enqueue_wait_total: AtomicU64,
+    enqueue_latency_count: AtomicU64,
+    enqueue_latency_sum_ms: AtomicU64,
+    enqueue_latency_le_100_ms: AtomicU64,
+    enqueue_latency_le_500_ms: AtomicU64,
+    enqueue_latency_le_1000_ms: AtomicU64,
+    enqueue_latency_gt_1000_ms: AtomicU64,
+    body_size_le_10kb: AtomicU64,
+    body_size_le_128kb: AtomicU64,
+    body_size_le_5mb: AtomicU64,
+    body_size_gt_5mb: AtomicU64,
+    body_size_count: AtomicU64,
+    body_size_sum_bytes: AtomicU64,
+    wait_total: AtomicU64,
     wait_timeout_total: AtomicU64,
     callback_failure_total: AtomicU64,
     callback_retry_total: AtomicU64,
     callback_retry_success_total: AtomicU64,
+    callback_retry_dlq_total: AtomicU64,
     worker_completed_total: AtomicU64,
     worker_failed_total: AtomicU64,
+    worker_processing_count: AtomicU64,
+    worker_processing_sum_ms: AtomicU64,
+    worker_processing_le_1000_ms: AtomicU64,
+    worker_processing_le_5000_ms: AtomicU64,
+    worker_processing_le_30000_ms: AtomicU64,
+    worker_processing_gt_30000_ms: AtomicU64,
     reclaimed_total: AtomicU64,
+    job_dlq_total: AtomicU64,
+    lease_skip_total: AtomicU64,
     object_offload_total: AtomicU64,
     object_multipart_abort_total: AtomicU64,
 }
@@ -361,6 +400,7 @@ async fn enqueue(State(state): State<AppState>, method: Method, uri: Uri, header
 
 async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Uri, headers: HeaderMap, body: Body) -> Result<Response, ServiceError> {
     let timeout_secs = optional_header(&headers, "x-request-timeout").and_then(|v| v.parse::<u64>().ok()).unwrap_or(state.cfg.wait_timeout_secs);
+    state.metrics.wait_total.fetch_add(1, Ordering::Relaxed);
     let accepted = enqueue_job(&state, QueuePolicy::Wait, method, uri, headers, body).await?;
     let channel = result_channel(&state, &accepted.response.job_id);
     let subscriber = build_subscriber_client(&state.cfg.redis_url)?;
@@ -421,7 +461,13 @@ async fn metrics(State(state): State<AppState>) -> Result<Response, ServiceError
     let queue_depth: i64 = state.redis.xlen(state.cfg.stream_key.as_str()).await.unwrap_or_default();
     let high_queue_depth: i64 = state.redis.xlen(state.cfg.high_priority_stream_key.as_str()).await.unwrap_or_default();
     let low_queue_depth: i64 = state.redis.xlen(state.cfg.low_priority_stream_key.as_str()).await.unwrap_or_default();
+    let job_dlq_depth: i64 = state.redis.xlen(state.cfg.job_dlq_stream.as_str()).await.unwrap_or_default();
     let callback_retry_depth: i64 = state.redis.xlen(state.cfg.callback_retry_stream.as_str()).await.unwrap_or_default();
+    let callback_dlq_depth: i64 = state.redis.xlen(state.cfg.callback_dlq_stream.as_str()).await.unwrap_or_default();
+    let pel_size = pending_size(&state, &state.cfg.stream_key).await;
+    let high_pel_size = pending_size(&state, &state.cfg.high_priority_stream_key).await;
+    let low_pel_size = pending_size(&state, &state.cfg.low_priority_stream_key).await;
+    let callback_retry_pel_size = pending_size_for_group(&state, &state.cfg.callback_retry_stream, &state.cfg.callback_retry_group).await;
 
     let body = format!(
         "\
@@ -429,41 +475,102 @@ rate_limited_total {}\n\
 enqueue_total {}\n\
 enqueue_total{{policy=\"queue\"}} {}\n\
 enqueue_total{{policy=\"wait\"}} {}\n\
+enqueue_latency_ms_count {}\n\
+enqueue_latency_ms_sum {}\n\
+enqueue_latency_ms_bucket{{le=\"100\"}} {}\n\
+enqueue_latency_ms_bucket{{le=\"500\"}} {}\n\
+enqueue_latency_ms_bucket{{le=\"1000\"}} {}\n\
+enqueue_latency_ms_bucket{{le=\"+Inf\"}} {}\n\
+enqueue_body_size_bytes_count {}\n\
+enqueue_body_size_bytes_sum {}\n\
+enqueue_body_size_bytes_bucket{{le=\"10240\"}} {}\n\
+enqueue_body_size_bytes_bucket{{le=\"131072\"}} {}\n\
+enqueue_body_size_bytes_bucket{{le=\"5242880\"}} {}\n\
+enqueue_body_size_bytes_bucket{{le=\"+Inf\"}} {}\n\
+wait_total {}\n\
 wait_timeout_total {}\n\
 callback_failure_total {}\n\
 callback_retry_total {}\n\
 callback_retry_success_total {}\n\
+callback_retry_dlq_total {}\n\
 worker_completed_total {}\n\
 worker_failed_total {}\n\
+worker_processing_time_ms_count {}\n\
+worker_processing_time_ms_sum {}\n\
+worker_processing_time_ms_bucket{{le=\"1000\"}} {}\n\
+worker_processing_time_ms_bucket{{le=\"5000\"}} {}\n\
+worker_processing_time_ms_bucket{{le=\"30000\"}} {}\n\
+worker_processing_time_ms_bucket{{le=\"+Inf\"}} {}\n\
 reclaimed_total {}\n\
+job_dlq_total {}\n\
+lease_skip_total {}\n\
 object_offload_total {}\n\
 object_multipart_abort_total {}\n\
 queue_depth {}\n\
 queue_depth{{priority=\"high\"}} {}\n\
 queue_depth{{priority=\"low\"}} {}\n\
-callback_retry_depth {}\n",
+pel_size {}\n\
+pel_size{{priority=\"high\"}} {}\n\
+pel_size{{priority=\"low\"}} {}\n\
+job_dlq_depth {}\n\
+callback_retry_depth {}\n\
+callback_retry_pel_size {}\n\
+callback_dlq_depth {}\n",
         state.metrics.rate_limited_total.load(Ordering::Relaxed),
         state.metrics.enqueue_total.load(Ordering::Relaxed),
         state.metrics.enqueue_queue_total.load(Ordering::Relaxed),
         state.metrics.enqueue_wait_total.load(Ordering::Relaxed),
+        state.metrics.enqueue_latency_count.load(Ordering::Relaxed),
+        state.metrics.enqueue_latency_sum_ms.load(Ordering::Relaxed),
+        state.metrics.enqueue_latency_le_100_ms.load(Ordering::Relaxed),
+        state.metrics.enqueue_latency_le_100_ms.load(Ordering::Relaxed) + state.metrics.enqueue_latency_le_500_ms.load(Ordering::Relaxed),
+        state.metrics.enqueue_latency_le_100_ms.load(Ordering::Relaxed)
+            + state.metrics.enqueue_latency_le_500_ms.load(Ordering::Relaxed)
+            + state.metrics.enqueue_latency_le_1000_ms.load(Ordering::Relaxed),
+        state.metrics.enqueue_latency_count.load(Ordering::Relaxed),
+        state.metrics.body_size_count.load(Ordering::Relaxed),
+        state.metrics.body_size_sum_bytes.load(Ordering::Relaxed),
+        state.metrics.body_size_le_10kb.load(Ordering::Relaxed),
+        state.metrics.body_size_le_10kb.load(Ordering::Relaxed) + state.metrics.body_size_le_128kb.load(Ordering::Relaxed),
+        state.metrics.body_size_le_10kb.load(Ordering::Relaxed) + state.metrics.body_size_le_128kb.load(Ordering::Relaxed) + state.metrics.body_size_le_5mb.load(Ordering::Relaxed),
+        state.metrics.body_size_count.load(Ordering::Relaxed),
+        state.metrics.wait_total.load(Ordering::Relaxed),
         state.metrics.wait_timeout_total.load(Ordering::Relaxed),
         state.metrics.callback_failure_total.load(Ordering::Relaxed),
         state.metrics.callback_retry_total.load(Ordering::Relaxed),
         state.metrics.callback_retry_success_total.load(Ordering::Relaxed),
+        state.metrics.callback_retry_dlq_total.load(Ordering::Relaxed),
         state.metrics.worker_completed_total.load(Ordering::Relaxed),
         state.metrics.worker_failed_total.load(Ordering::Relaxed),
+        state.metrics.worker_processing_count.load(Ordering::Relaxed),
+        state.metrics.worker_processing_sum_ms.load(Ordering::Relaxed),
+        state.metrics.worker_processing_le_1000_ms.load(Ordering::Relaxed),
+        state.metrics.worker_processing_le_1000_ms.load(Ordering::Relaxed) + state.metrics.worker_processing_le_5000_ms.load(Ordering::Relaxed),
+        state.metrics.worker_processing_le_1000_ms.load(Ordering::Relaxed)
+            + state.metrics.worker_processing_le_5000_ms.load(Ordering::Relaxed)
+            + state.metrics.worker_processing_le_30000_ms.load(Ordering::Relaxed),
+        state.metrics.worker_processing_count.load(Ordering::Relaxed),
         state.metrics.reclaimed_total.load(Ordering::Relaxed),
+        state.metrics.job_dlq_total.load(Ordering::Relaxed),
+        state.metrics.lease_skip_total.load(Ordering::Relaxed),
         state.metrics.object_offload_total.load(Ordering::Relaxed),
         state.metrics.object_multipart_abort_total.load(Ordering::Relaxed),
         queue_depth,
         high_queue_depth,
         low_queue_depth,
+        pel_size,
+        high_pel_size,
+        low_pel_size,
+        job_dlq_depth,
         callback_retry_depth,
+        callback_retry_pel_size,
+        callback_dlq_depth,
     );
     Ok((StatusCode::OK, [("content-type", "text/plain; version=0.0.4")], body).into_response())
 }
 
 async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri: Uri, headers: HeaderMap, body: Body) -> Result<AcceptedJob, ServiceError> {
+    let enqueue_started_at = now_ms();
     let _permit = state.body_permits.acquire().await.map_err(|_| ServiceError::internal("body semaphore closed"))?;
     let job_id = new_job_id();
     let tenant_id = required_header(&headers, "x-tenant-id")?;
@@ -504,6 +611,8 @@ async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri
     trim_stream(state, &stream_key).await?;
 
     state.metrics.enqueue_total.fetch_add(1, Ordering::Relaxed);
+    observe_enqueue_latency(&state.metrics, now_ms().saturating_sub(enqueue_started_at));
+    observe_body_size(&state.metrics, body_ref.size);
     match policy {
         QueuePolicy::Queue => {
             state.metrics.enqueue_queue_total.fetch_add(1, Ordering::Relaxed);
@@ -559,11 +668,11 @@ async fn read_worker_stream(state: &AppState, consumer: &str, stream: &str, bloc
     let mut processed = 0;
     for (_stream, entries) in reply {
         for (entry_id, fields) in entries {
-            match process_job(state, stream, entry_id.as_str(), &fields).await {
-                Ok(()) => {
-                    let _: i64 = state.redis.xack(stream, state.cfg.consumer_group.as_str(), vec![entry_id.clone()]).await?;
+            match process_stream_entry(state, stream, entry_id.as_str(), &fields).await {
+                Ok(true) => {
                     processed += 1;
                 }
+                Ok(false) => {}
                 Err(e) => {
                     tracing::warn!(stream_id = %entry_id, error = %e.message, "job processing failed");
                     state.metrics.worker_failed_total.fetch_add(1, Ordering::Relaxed);
@@ -572,6 +681,42 @@ async fn read_worker_stream(state: &AppState, consumer: &str, stream: &str, bloc
         }
     }
     Ok(processed)
+}
+
+async fn process_stream_entry(state: &AppState, stream: &str, entry_id: &str, fields: &HashMap<String, Value>) -> Result<bool, ServiceError> {
+    let job_id = field_string(fields, "job_id").ok_or_else(|| ServiceError::bad_request("job missing job_id"))?;
+    let lease_owner = format!("{}:{stream}:{entry_id}:{}", state.cfg.consumer_name, now_ms());
+
+    if !acquire_job_lease(state, &job_id, &lease_owner).await? {
+        state.metrics.lease_skip_total.fetch_add(1, Ordering::Relaxed);
+        tracing::info!(job_id = %job_id, stream = %stream, entry_id = %entry_id, "job is already leased; skip reclaimed duplicate");
+        return Ok(false);
+    }
+
+    let attempt = increment_job_delivery_attempt(state, &job_id).await?;
+    if attempt > state.cfg.job_max_delivery_attempts {
+        enqueue_job_dlq(state, stream, entry_id, fields, attempt, "max_delivery_attempts_exceeded").await?;
+        ack_stream_entry(state, stream, entry_id).await?;
+        release_job_lease(state, &job_id).await;
+        state.metrics.job_dlq_total.fetch_add(1, Ordering::Relaxed);
+        return Ok(true);
+    }
+
+    let processing_started_at = now_ms();
+    match process_job(state, stream, entry_id, fields).await {
+        Ok(()) => {
+            observe_worker_processing(&state.metrics, now_ms().saturating_sub(processing_started_at));
+            ack_stream_entry(state, stream, entry_id).await?;
+            clear_job_delivery_attempt(state, &job_id).await;
+            release_job_lease(state, &job_id).await;
+            Ok(true)
+        }
+        Err(e) => {
+            observe_worker_processing(&state.metrics, now_ms().saturating_sub(processing_started_at));
+            release_job_lease(state, &job_id).await;
+            Err(e)
+        }
+    }
 }
 
 async fn process_job(state: &AppState, _stream: &str, _stream_id: &str, fields: &HashMap<String, Value>) -> Result<(), ServiceError> {
@@ -632,7 +777,7 @@ async fn process_job(state: &AppState, _stream: &str, _stream_id: &str, fields: 
         if let Err(e) = post_callback(state, &callback_url, &job_id, &callback_body).await {
             tracing::warn!(job_id = %job_id, error = %e.message, "callback failed");
             state.metrics.callback_failure_total.fetch_add(1, Ordering::Relaxed);
-            enqueue_callback_retry(state, &callback_url, &job_id, &callback_body).await?;
+            enqueue_callback_retry(state, &callback_url, &job_id, &callback_body, e.message.as_str()).await?;
         }
     }
     state.metrics.worker_completed_total.fetch_add(1, Ordering::Relaxed);
@@ -657,8 +802,29 @@ async fn post_callback(state: &AppState, callback_url: &str, job_id: &str, body:
     Ok(())
 }
 
-async fn enqueue_callback_retry(state: &AppState, callback_url: &str, job_id: &str, body: &serde_json::Value) -> Result<(), ServiceError> {
+async fn enqueue_callback_retry(state: &AppState, callback_url: &str, job_id: &str, body: &serde_json::Value, last_error: &str) -> Result<(), ServiceError> {
     let body = serde_json::to_string(body).map_err(|e| ServiceError::internal(format!("serialize callback retry: {e}")))?;
+    enqueue_callback_retry_raw(
+        state,
+        callback_url,
+        job_id,
+        &body,
+        1,
+        now_ms().saturating_add(state.cfg.callback_retry_initial_delay_ms),
+        last_error,
+    )
+    .await
+}
+
+async fn enqueue_callback_retry_raw(
+    state: &AppState,
+    callback_url: &str,
+    job_id: &str,
+    body: &str,
+    attempt: u32,
+    next_attempt_at_ms: u64,
+    last_error: &str,
+) -> Result<(), ServiceError> {
     let _: String = state
         .redis
         .xadd(
@@ -669,7 +835,10 @@ async fn enqueue_callback_retry(state: &AppState, callback_url: &str, job_id: &s
             vec![
                 ("job_id", Value::String(job_id.to_string().into())),
                 ("callback_url", Value::String(callback_url.to_string().into())),
-                ("body", Value::String(body.into())),
+                ("body", Value::String(body.to_string().into())),
+                ("attempt", Value::Integer(attempt as i64)),
+                ("next_attempt_at_ms", Value::Integer(next_attempt_at_ms as i64)),
+                ("last_error", Value::String(last_error.to_string().into())),
                 ("created_at", Value::Integer(now_ms() as i64)),
             ],
         )
@@ -691,6 +860,7 @@ fn spawn_callback_retry_worker(state: AppState) {
 }
 
 async fn callback_retry_once(state: &AppState) -> Result<(), ServiceError> {
+    reclaim_callback_retries(state).await?;
     let reply: XReadResponse<String, String, String, Value> = state
         .redis
         .xreadgroup_map(
@@ -706,22 +876,184 @@ async fn callback_retry_once(state: &AppState) -> Result<(), ServiceError> {
 
     for (_stream, entries) in reply {
         for (entry_id, fields) in entries {
-            let job_id = field_string(&fields, "job_id").unwrap_or_default();
-            let callback_url = field_string(&fields, "callback_url").unwrap_or_default();
-            let body = field_string(&fields, "body").unwrap_or_else(|| "{}".to_string());
-            let parsed = serde_json::from_str::<serde_json::Value>(&body).unwrap_or_else(|_| serde_json::json!({ "body": body }));
-            match post_callback(state, &callback_url, &job_id, &parsed).await {
-                Ok(()) => {
-                    let _: i64 = state.redis.xack(state.cfg.callback_retry_stream.as_str(), state.cfg.callback_retry_group.as_str(), vec![entry_id]).await?;
-                    state.metrics.callback_retry_success_total.fetch_add(1, Ordering::Relaxed);
-                }
-                Err(e) => {
-                    tracing::warn!(job_id = %job_id, error = %e.message, "callback retry failed");
-                }
+            process_callback_retry_entry(state, entry_id.as_str(), &fields).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn reclaim_callback_retries(state: &AppState) -> Result<(), ServiceError> {
+    let consumer = format!("{}-callback-reclaimer", state.cfg.consumer_name);
+    let min_idle_ms = state.cfg.callback_retry_reclaim_idle_secs.saturating_mul(1000);
+    let (_cursor, entries): (String, Vec<(String, HashMap<String, Value>)>) = state
+        .redis
+        .xautoclaim_values(
+            state.cfg.callback_retry_stream.as_str(),
+            state.cfg.callback_retry_group.as_str(),
+            consumer.as_str(),
+            min_idle_ms,
+            "0-0",
+            Some(10),
+            false,
+        )
+        .await?;
+    for (entry_id, fields) in entries {
+        process_callback_retry_entry(state, entry_id.as_str(), &fields).await?;
+    }
+    Ok(())
+}
+
+async fn process_callback_retry_entry(state: &AppState, entry_id: &str, fields: &HashMap<String, Value>) -> Result<(), ServiceError> {
+    let job_id = field_string(fields, "job_id").unwrap_or_default();
+    let callback_url = field_string(fields, "callback_url").unwrap_or_default();
+    let body = field_string(fields, "body").unwrap_or_else(|| "{}".to_string());
+    let attempt = field_u32(fields, "attempt").unwrap_or(1);
+    let next_attempt_at_ms = field_u64(fields, "next_attempt_at_ms").unwrap_or(0);
+    let now = now_ms();
+
+    if next_attempt_at_ms > now {
+        let last_error = field_string(fields, "last_error").unwrap_or_default();
+        enqueue_callback_retry_raw(state, &callback_url, &job_id, &body, attempt, next_attempt_at_ms, &last_error).await?;
+        ack_callback_retry(state, entry_id).await?;
+        return Ok(());
+    }
+
+    let parsed = serde_json::from_str::<serde_json::Value>(&body).unwrap_or_else(|_| serde_json::json!({ "body": body }));
+    match post_callback(state, &callback_url, &job_id, &parsed).await {
+        Ok(()) => {
+            ack_callback_retry(state, entry_id).await?;
+            state.metrics.callback_retry_success_total.fetch_add(1, Ordering::Relaxed);
+        }
+        Err(e) => {
+            tracing::warn!(job_id = %job_id, attempt, error = %e.message, "callback retry failed");
+            if attempt >= state.cfg.callback_max_retry_attempts {
+                enqueue_callback_dlq(state, &callback_url, &job_id, &parsed, attempt, &e.message).await?;
+                ack_callback_retry(state, entry_id).await?;
+            } else {
+                let next_attempt = attempt.saturating_add(1);
+                let delay_ms = callback_retry_delay_ms(state.cfg.callback_retry_initial_delay_ms, state.cfg.callback_retry_max_delay_ms, next_attempt);
+                let retry_body = serde_json::to_string(&parsed).unwrap_or_else(|_| "{}".to_string());
+                enqueue_callback_retry_raw(state, &callback_url, &job_id, &retry_body, next_attempt, now.saturating_add(delay_ms), &e.message).await?;
+                ack_callback_retry(state, entry_id).await?;
             }
         }
     }
     Ok(())
+}
+
+async fn ack_callback_retry(state: &AppState, entry_id: &str) -> Result<(), ServiceError> {
+    let _: i64 = state.redis.xack(state.cfg.callback_retry_stream.as_str(), state.cfg.callback_retry_group.as_str(), vec![entry_id]).await?;
+    Ok(())
+}
+
+async fn enqueue_callback_dlq(state: &AppState, callback_url: &str, job_id: &str, body: &serde_json::Value, attempts: u32, final_error: &str) -> Result<(), ServiceError> {
+    let body = serde_json::to_string(body).map_err(|e| ServiceError::internal(format!("serialize callback dlq: {e}")))?;
+    let _: String = state
+        .redis
+        .xadd(
+            state.cfg.callback_dlq_stream.as_str(),
+            false,
+            None::<()>,
+            "*",
+            vec![
+                ("job_id", Value::String(job_id.to_string().into())),
+                ("callback_url", Value::String(callback_url.to_string().into())),
+                ("body", Value::String(body.into())),
+                ("attempts", Value::Integer(attempts as i64)),
+                ("final_error", Value::String(final_error.to_string().into())),
+                ("failed_at", Value::Integer(now_ms() as i64)),
+            ],
+        )
+        .await?;
+    trim_stream(state, &state.cfg.callback_dlq_stream).await?;
+    state.metrics.callback_retry_dlq_total.fetch_add(1, Ordering::Relaxed);
+    Ok(())
+}
+
+fn callback_retry_delay_ms(initial_delay_ms: u64, max_delay_ms: u64, attempt: u32) -> u64 {
+    let exponent = attempt.saturating_sub(1).min(16);
+    let multiplier = 1u64.checked_shl(exponent).unwrap_or(u64::MAX);
+    initial_delay_ms.saturating_mul(multiplier).min(max_delay_ms)
+}
+
+async fn acquire_job_lease(state: &AppState, job_id: &str, owner: &str) -> Result<bool, ServiceError> {
+    let key = job_lease_key(job_id);
+    let result: Option<String> = state
+        .redis
+        .set(
+            key,
+            owner,
+            Some(Expiration::EX(state.cfg.job_process_lease_secs.max(1) as i64)),
+            Some(SetOptions::NX),
+            false,
+        )
+        .await?;
+    Ok(result.is_some())
+}
+
+async fn release_job_lease(state: &AppState, job_id: &str) {
+    let _: Result<i64, _> = state.redis.del(job_lease_key(job_id)).await;
+}
+
+async fn increment_job_delivery_attempt(state: &AppState, job_id: &str) -> Result<u32, ServiceError> {
+    let key = job_attempt_key(job_id);
+    let attempt: i64 = state.redis.incr_by(key.as_str(), 1).await?;
+    let _: () = state.redis.expire(key.as_str(), state.cfg.result_ttl_secs.max(300) as i64, None::<ExpireOptions>).await?;
+    Ok(attempt.max(0) as u32)
+}
+
+async fn clear_job_delivery_attempt(state: &AppState, job_id: &str) {
+    let _: Result<i64, _> = state.redis.del(job_attempt_key(job_id)).await;
+}
+
+async fn ack_stream_entry(state: &AppState, stream: &str, entry_id: &str) -> Result<(), ServiceError> {
+    let _: i64 = state.redis.xack(stream, state.cfg.consumer_group.as_str(), vec![entry_id]).await?;
+    Ok(())
+}
+
+async fn enqueue_job_dlq(state: &AppState, stream: &str, entry_id: &str, fields: &HashMap<String, Value>, attempts: u32, reason: &str) -> Result<(), ServiceError> {
+    let job_id = field_string(fields, "job_id").unwrap_or_default();
+    let fields_json = stream_fields_to_json(fields)?;
+    let _: String = state
+        .redis
+        .xadd(
+            state.cfg.job_dlq_stream.as_str(),
+            false,
+            None::<()>,
+            "*",
+            vec![
+                ("job_id", Value::String(job_id.into())),
+                ("source_stream", Value::String(stream.to_string().into())),
+                ("source_entry_id", Value::String(entry_id.to_string().into())),
+                ("attempts", Value::Integer(attempts as i64)),
+                ("reason", Value::String(reason.to_string().into())),
+                ("fields", Value::String(fields_json.into())),
+                ("failed_at", Value::Integer(now_ms() as i64)),
+            ],
+        )
+        .await?;
+    trim_stream(state, &state.cfg.job_dlq_stream).await?;
+    Ok(())
+}
+
+fn stream_fields_to_json(fields: &HashMap<String, Value>) -> Result<String, ServiceError> {
+    let mut out = HashMap::new();
+    for (key, value) in fields {
+        if let Some(value) = field_string(fields, key) {
+            out.insert(key.clone(), value);
+        } else {
+            out.insert(key.clone(), format!("{value:?}"));
+        }
+    }
+    serde_json::to_string(&out).map_err(|e| ServiceError::internal(format!("serialize job dlq fields: {e}")))
+}
+
+fn job_lease_key(job_id: &str) -> String {
+    format!("ai:job:lease:{}", sanitize_key(job_id))
+}
+
+fn job_attempt_key(job_id: &str) -> String {
+    format!("ai:job:attempt:{}", sanitize_key(job_id))
 }
 
 fn spawn_reclaimer(state: AppState) {
@@ -743,11 +1075,11 @@ async fn reclaim_once(state: &AppState) -> Result<(), ServiceError> {
         let (_cursor, entries): (String, Vec<(String, HashMap<String, Value>)>) =
             state.redis.xautoclaim_values(stream.as_str(), state.cfg.consumer_group.as_str(), consumer.as_str(), min_idle_ms, "0-0", Some(10), false).await?;
         for (entry_id, fields) in entries {
-            match process_job(state, stream.as_str(), entry_id.as_str(), &fields).await {
-                Ok(()) => {
-                    let _: i64 = state.redis.xack(stream.as_str(), state.cfg.consumer_group.as_str(), vec![entry_id]).await?;
+            match process_stream_entry(state, stream.as_str(), entry_id.as_str(), &fields).await {
+                Ok(true) => {
                     state.metrics.reclaimed_total.fetch_add(1, Ordering::Relaxed);
                 }
+                Ok(false) => {}
                 Err(e) => {
                     tracing::warn!(stream = %stream, entry_id = %entry_id, error = %e.message, "reclaimed job failed");
                 }
@@ -1031,6 +1363,84 @@ async fn trim_stream(state: &AppState, stream: &str) -> Result<(), ServiceError>
     Ok(())
 }
 
+async fn pending_size(state: &AppState, stream: &str) -> i64 {
+    pending_size_for_group(state, stream, state.cfg.consumer_group.as_str()).await
+}
+
+async fn pending_size_for_group(state: &AppState, stream: &str, group: &str) -> i64 {
+    let raw: FredResult<Value> = state.redis.xpending(stream, group, ()).await;
+    match raw {
+        Ok(value) => pending_count_from_value(&value),
+        Err(e) => {
+            tracing::debug!(stream = %stream, group = %group, error = %e, "read stream pending size failed");
+            0
+        }
+    }
+}
+
+fn pending_count_from_value(value: &Value) -> i64 {
+    match value {
+        Value::Integer(value) => (*value).max(0),
+        Value::String(value) => value.parse::<i64>().unwrap_or(0).max(0),
+        Value::Bytes(value) => std::str::from_utf8(value).ok().and_then(|value| value.parse::<i64>().ok()).unwrap_or(0).max(0),
+        Value::Array(values) => values.first().map(pending_count_from_value).unwrap_or(0),
+        Value::Map(values) => values
+            .iter()
+            .find_map(|(key, value)| {
+                let key = key.as_str()?;
+                if key.eq_ignore_ascii_case("pending") || key.eq_ignore_ascii_case("count") {
+                    Some(pending_count_from_value(value))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0),
+        _ => 0,
+    }
+}
+
+fn observe_enqueue_latency(metrics: &Metrics, elapsed_ms: u64) {
+    metrics.enqueue_latency_count.fetch_add(1, Ordering::Relaxed);
+    metrics.enqueue_latency_sum_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
+    if elapsed_ms <= 100 {
+        metrics.enqueue_latency_le_100_ms.fetch_add(1, Ordering::Relaxed);
+    } else if elapsed_ms <= 500 {
+        metrics.enqueue_latency_le_500_ms.fetch_add(1, Ordering::Relaxed);
+    } else if elapsed_ms <= 1000 {
+        metrics.enqueue_latency_le_1000_ms.fetch_add(1, Ordering::Relaxed);
+    } else {
+        metrics.enqueue_latency_gt_1000_ms.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+fn observe_body_size(metrics: &Metrics, size: usize) {
+    metrics.body_size_count.fetch_add(1, Ordering::Relaxed);
+    metrics.body_size_sum_bytes.fetch_add(size as u64, Ordering::Relaxed);
+    if size <= 10 * 1024 {
+        metrics.body_size_le_10kb.fetch_add(1, Ordering::Relaxed);
+    } else if size <= 128 * 1024 {
+        metrics.body_size_le_128kb.fetch_add(1, Ordering::Relaxed);
+    } else if size <= 5 * 1024 * 1024 {
+        metrics.body_size_le_5mb.fetch_add(1, Ordering::Relaxed);
+    } else {
+        metrics.body_size_gt_5mb.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+fn observe_worker_processing(metrics: &Metrics, elapsed_ms: u64) {
+    metrics.worker_processing_count.fetch_add(1, Ordering::Relaxed);
+    metrics.worker_processing_sum_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
+    if elapsed_ms <= 1000 {
+        metrics.worker_processing_le_1000_ms.fetch_add(1, Ordering::Relaxed);
+    } else if elapsed_ms <= 5000 {
+        metrics.worker_processing_le_5000_ms.fetch_add(1, Ordering::Relaxed);
+    } else if elapsed_ms <= 30_000 {
+        metrics.worker_processing_le_30000_ms.fetch_add(1, Ordering::Relaxed);
+    } else {
+        metrics.worker_processing_gt_30000_ms.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 fn stream_for_request(state: &AppState, headers: &HeaderMap) -> String {
     if !state.cfg.enable_priority_streams {
         return state.cfg.stream_key.clone();
@@ -1153,6 +1563,19 @@ fn field_bytes(fields: &HashMap<String, Value>, key: &str) -> Option<Vec<u8>> {
     })
 }
 
+fn field_u64(fields: &HashMap<String, Value>, key: &str) -> Option<u64> {
+    fields.get(key).and_then(|value| match value {
+        Value::Integer(value) => (*value).try_into().ok(),
+        Value::String(value) => value.parse().ok(),
+        Value::Bytes(value) => std::str::from_utf8(value).ok().and_then(|value| value.parse().ok()),
+        _ => None,
+    })
+}
+
+fn field_u32(fields: &HashMap<String, Value>, key: &str) -> Option<u32> {
+    field_u64(fields, key).and_then(|value| value.try_into().ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1183,5 +1606,37 @@ mod tests {
         let xml = complete_multipart_xml(&parts);
         assert!(xml.contains("<PartNumber>1</PartNumber><ETag>&quot;abc&amp;1&quot;</ETag>"));
         assert!(xml.contains("<PartNumber>2</PartNumber><ETag>&quot;def&quot;</ETag>"));
+    }
+
+    #[test]
+    fn callback_retry_delay_uses_exponential_backoff_with_cap() {
+        assert_eq!(callback_retry_delay_ms(1000, 60_000, 1), 1000);
+        assert_eq!(callback_retry_delay_ms(1000, 60_000, 3), 4000);
+        assert_eq!(callback_retry_delay_ms(1000, 5000, 8), 5000);
+    }
+
+    #[test]
+    fn parses_xpending_summary_count() {
+        let value = Value::Array(vec![Value::Integer(7), Value::String("0-1".into()), Value::String("0-2".into())]);
+        assert_eq!(pending_count_from_value(&value), 7);
+    }
+
+    #[test]
+    fn observes_histogram_buckets_as_non_overlapping_counts() {
+        let metrics = Metrics::default();
+        observe_enqueue_latency(&metrics, 80);
+        observe_enqueue_latency(&metrics, 800);
+        observe_body_size(&metrics, 8 * 1024);
+        observe_body_size(&metrics, 256 * 1024);
+        observe_worker_processing(&metrics, 2000);
+
+        assert_eq!(metrics.enqueue_latency_count.load(Ordering::Relaxed), 2);
+        assert_eq!(metrics.enqueue_latency_le_100_ms.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.enqueue_latency_le_1000_ms.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.body_size_count.load(Ordering::Relaxed), 2);
+        assert_eq!(metrics.body_size_le_10kb.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.body_size_le_5mb.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.worker_processing_count.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.worker_processing_le_5000_ms.load(Ordering::Relaxed), 1);
     }
 }
