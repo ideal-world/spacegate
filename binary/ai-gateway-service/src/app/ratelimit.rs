@@ -50,3 +50,162 @@ fn parse_tenant_rate_limit(raw: &str) -> Option<TenantRateLimit> {
     let cost = parts.next().and_then(|value| value.parse().ok()).unwrap_or(1);
     Some(TenantRateLimit { rps, burst, cost: cost.max(1) })
 }
+
+async fn list_tenant_rate_limit_rules(state: &AppState, filters: &HashMap<String, String>) -> Result<Vec<TenantRateLimitRuleView>, ServiceError> {
+    let pattern = format!("{}*", state.cfg.tenant_rate_limit_prefix);
+    let mut stream = state.redis.scan_buffered(pattern, Some(100), None);
+    let mut out = Vec::new();
+
+    while let Some(key) = stream.next().await {
+        let key = key?.into_string().unwrap_or_default();
+        if is_legacy_tenant_rate_limit_key(&key) {
+            continue;
+        }
+
+        let raw: Option<String> = state.redis.get(key.as_str()).await?;
+        let Some(limit) = raw.and_then(|raw| parse_tenant_rate_limit(&raw)) else {
+            continue;
+        };
+        let Some(mut rule) = tenant_rate_limit_rule_from_key(state, &key, limit) else {
+            continue;
+        };
+        rule.cost = rule.cost.max(1);
+        if tenant_rule_matches_filters(&rule, filters) {
+            out.push(TenantRateLimitRuleView { key, rule });
+        }
+    }
+
+    out.sort_by(|a, b| tenant_rule_specificity(&b.rule).cmp(&tenant_rule_specificity(&a.rule)).then_with(|| a.key.cmp(&b.key)));
+    Ok(out)
+}
+
+async fn upsert_tenant_rate_limit_rule(state: &AppState, mut rule: TenantRateLimitRule) -> Result<TenantRateLimitRuleView, ServiceError> {
+    validate_tenant_rate_limit_rule(&rule)?;
+    rule.cost = rule.cost.max(1);
+    let key = tenant_rate_limit_rule_key(state, &rule);
+    let value = serde_json::to_string(&TenantRateLimit {
+        rps: rule.rps,
+        burst: rule.burst,
+        cost: rule.cost,
+    })
+    .map_err(|e| ServiceError::internal(format!("serialize tenant rate limit: {e}")))?;
+    let _: String = state.redis.set(key.as_str(), value, None, None, false).await?;
+    // TODO(v2): if rule.ttl_secs is Some, apply Redis EXPIRE/PEXPIRE here.
+    Ok(TenantRateLimitRuleView { key, rule })
+}
+
+async fn delete_tenant_rate_limit_rule(state: &AppState, rule: TenantRateLimitRule) -> Result<u64, ServiceError> {
+    validate_tenant_rule_dimensions(&rule)?;
+    let key = tenant_rate_limit_rule_key(state, &rule);
+    let removed: u64 = state.redis.del(key.as_str()).await?;
+    Ok(removed)
+}
+
+fn tenant_rate_limit_rule_key(state: &AppState, rule: &TenantRateLimitRule) -> String {
+    let base = format!("{}{}", state.cfg.tenant_rate_limit_prefix, sanitize_key(rule.tenant.trim()));
+    let mut key = base;
+    if let Some(model) = non_empty_opt(&rule.model) {
+        key.push_str(":model:");
+        key.push_str(&sanitize_key(model));
+    }
+    if let Some(path) = non_empty_opt(&rule.path) {
+        key.push_str(":path:");
+        key.push_str(&sanitize_key(path));
+    }
+    if let Some(policy) = non_empty_opt(&rule.policy) {
+        key.push_str(":policy:");
+        key.push_str(&sanitize_key(policy));
+    }
+    key
+}
+
+fn tenant_rate_limit_rule_from_key(state: &AppState, key: &str, limit: TenantRateLimit) -> Option<TenantRateLimitRule> {
+    let rest = key.strip_prefix(&state.cfg.tenant_rate_limit_prefix)?;
+    let mut parts = rest.split(':');
+    let tenant = parts.next()?.to_string();
+    if tenant.is_empty() {
+        return None;
+    }
+
+    let mut model = None;
+    let mut path = None;
+    let mut policy = None;
+    while let (Some(name), Some(value)) = (parts.next(), parts.next()) {
+        match name {
+            "model" => model = Some(value.to_string()),
+            "path" => path = Some(value.to_string()),
+            "policy" => policy = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    Some(TenantRateLimitRule {
+        tenant,
+        model,
+        path,
+        policy,
+        rps: limit.rps,
+        burst: limit.burst,
+        cost: limit.cost.max(1),
+        ttl_secs: None,
+    })
+}
+
+fn validate_tenant_rate_limit_rule(rule: &TenantRateLimitRule) -> Result<(), ServiceError> {
+    validate_tenant_rule_dimensions(rule)?;
+    if rule.rps == 0 {
+        return Err(ServiceError::bad_request("rps must be greater than 0"));
+    }
+    if rule.burst == 0 {
+        return Err(ServiceError::bad_request("burst must be greater than 0"));
+    }
+    if rule.cost == 0 {
+        return Err(ServiceError::bad_request("cost must be greater than 0"));
+    }
+    Ok(())
+}
+
+fn validate_tenant_rule_dimensions(rule: &TenantRateLimitRule) -> Result<(), ServiceError> {
+    if rule.tenant.trim().is_empty() {
+        return Err(ServiceError::bad_request("tenant is required"));
+    }
+    if let Some(policy) = non_empty_opt(&rule.policy) {
+        match policy {
+            "abandon" | "queue" | "wait" => {}
+            _ => return Err(ServiceError::bad_request("policy must be abandon, queue, or wait")),
+        }
+    }
+    Ok(())
+}
+
+fn tenant_rule_matches_filters(rule: &TenantRateLimitRule, filters: &HashMap<String, String>) -> bool {
+    for (name, value) in filters {
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        let matches = match name.as_str() {
+            "tenant" => rule.tenant.contains(value),
+            "model" => rule.model.as_deref().unwrap_or("").contains(value),
+            "path" => rule.path.as_deref().unwrap_or("").contains(value),
+            "policy" => rule.policy.as_deref().unwrap_or("") == value,
+            _ => true,
+        };
+        if !matches {
+            return false;
+        }
+    }
+    true
+}
+
+fn tenant_rule_specificity(rule: &TenantRateLimitRule) -> usize {
+    usize::from(non_empty_opt(&rule.model).is_some()) + usize::from(non_empty_opt(&rule.path).is_some()) + usize::from(non_empty_opt(&rule.policy).is_some())
+}
+
+fn is_legacy_tenant_rate_limit_key(key: &str) -> bool {
+    key.ends_with(":rps") || key.ends_with(":burst") || key.ends_with(":cost")
+}
+
+fn non_empty_opt(value: &Option<String>) -> Option<&str> {
+    value.as_deref().map(str::trim).filter(|value| !value.is_empty())
+}

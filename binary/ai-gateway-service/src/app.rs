@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -17,8 +17,10 @@ use fred::prelude::*;
 use fred::types::streams::XReadResponse;
 use fred::types::ExpireOptions;
 use futures_util::StreamExt;
+use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 include!("app/types.rs");
@@ -30,5 +32,6 @@ include!("app/result_store.rs");
 include!("app/object_store.rs");
 include!("app/metrics.rs");
 include!("app/ratelimit.rs");
+include!("app/admin.rs");
 include!("app/util.rs");
 include!("app/tests.rs");
