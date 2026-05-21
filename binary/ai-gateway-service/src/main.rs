@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use axum::body::Bytes;
+use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
@@ -15,6 +15,7 @@ use clap::Parser;
 use fred::clients::{Client as FredClient, SubscriberClient};
 use fred::prelude::*;
 use fred::types::streams::XReadResponse;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 use tower_http::trace::TraceLayer;
@@ -238,6 +239,13 @@ impl ServiceError {
             message: message.into(),
         }
     }
+
+    fn payload_too_large(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: message.into(),
+        }
+    }
 }
 
 impl IntoResponse for ServiceError {
@@ -343,7 +351,7 @@ async fn check_rate_limit(State(state): State<AppState>, headers: HeaderMap, uri
     }))
 }
 
-async fn enqueue(State(state): State<AppState>, method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Result<impl IntoResponse, ServiceError> {
+async fn enqueue(State(state): State<AppState>, method: Method, uri: Uri, headers: HeaderMap, body: Body) -> Result<impl IntoResponse, ServiceError> {
     let accepted = enqueue_job(&state, QueuePolicy::Queue, method, uri, headers, body).await?;
     let mut resp = (StatusCode::ACCEPTED, Json(&accepted.response)).into_response();
     resp.headers_mut().insert("x-job-id", header_value(&accepted.response.job_id)?);
@@ -351,7 +359,7 @@ async fn enqueue(State(state): State<AppState>, method: Method, uri: Uri, header
     Ok(resp)
 }
 
-async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Result<Response, ServiceError> {
+async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Uri, headers: HeaderMap, body: Body) -> Result<Response, ServiceError> {
     let timeout_secs = optional_header(&headers, "x-request-timeout").and_then(|v| v.parse::<u64>().ok()).unwrap_or(state.cfg.wait_timeout_secs);
     let accepted = enqueue_job(&state, QueuePolicy::Wait, method, uri, headers, body).await?;
     let channel = result_channel(&state, &accepted.response.job_id);
@@ -455,7 +463,7 @@ callback_retry_depth {}\n",
     Ok((StatusCode::OK, [("content-type", "text/plain; version=0.0.4")], body).into_response())
 }
 
-async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Result<AcceptedJob, ServiceError> {
+async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri: Uri, headers: HeaderMap, body: Body) -> Result<AcceptedJob, ServiceError> {
     let _permit = state.body_permits.acquire().await.map_err(|_| ServiceError::internal("body semaphore closed"))?;
     let job_id = new_job_id();
     let tenant_id = required_header(&headers, "x-tenant-id")?;
@@ -795,24 +803,80 @@ fn result_to_response(result: StoredResult, created_at_ms: u64) -> Result<Respon
     Ok(resp)
 }
 
-async fn store_body(state: &AppState, job_id: &str, body: Bytes) -> Result<BodyLocation, ServiceError> {
-    if body.len() <= state.cfg.inline_threshold || state.cfg.object_store_endpoint.is_none() {
+async fn store_body(state: &AppState, job_id: &str, body: Body) -> Result<BodyLocation, ServiceError> {
+    let object_ref = format!("{}/{}/body.bin", state.cfg.object_store_prefix.trim_matches('/'), sanitize_key(job_id));
+    let mut stream = body.into_data_stream();
+    let mut pending = Vec::new();
+    let mut total_size = 0usize;
+    let mut upload_id = None;
+    let mut parts = Vec::new();
+    let part_size = state.cfg.object_multipart_part_size.max(5 * 1024 * 1024);
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| ServiceError::bad_request(format!("read request body: {e}")))?;
+        total_size = total_size.checked_add(chunk.len()).ok_or_else(|| ServiceError::payload_too_large("request body is too large"))?;
+        if total_size > state.cfg.max_body_bytes {
+            abort_upload_if_needed(state, &object_ref, upload_id.as_deref()).await;
+            return Err(ServiceError::payload_too_large(format!("request body exceeds max size {}", state.cfg.max_body_bytes)));
+        }
+
+        if upload_id.is_none() {
+            if state.cfg.object_store_endpoint.is_some() && pending.len() + chunk.len() > state.cfg.inline_threshold {
+                pending.extend_from_slice(&chunk);
+                match initiate_multipart_upload(state, &object_ref).await {
+                    Ok(id) => upload_id = Some(id),
+                    Err(e) => return Err(e),
+                }
+            } else {
+                pending.extend_from_slice(&chunk);
+                continue;
+            }
+        } else {
+            pending.extend_from_slice(&chunk);
+        }
+
+        if let Some(upload_id) = upload_id.as_deref() {
+            while pending.len() >= part_size {
+                let part_body = pending.drain(..part_size).collect::<Vec<_>>();
+                match upload_multipart_part(state, &object_ref, upload_id, parts.len() + 1, part_body).await {
+                    Ok(part) => parts.push(part),
+                    Err(e) => {
+                        abort_upload_if_needed(state, &object_ref, Some(upload_id)).await;
+                        return Err(e);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(upload_id) = upload_id.as_deref() {
+        if !pending.is_empty() || parts.is_empty() {
+            match upload_multipart_part(state, &object_ref, upload_id, parts.len() + 1, pending).await {
+                Ok(part) => parts.push(part),
+                Err(e) => {
+                    abort_upload_if_needed(state, &object_ref, Some(upload_id)).await;
+                    return Err(e);
+                }
+            }
+        }
+        if let Err(e) = complete_multipart_upload(state, &object_ref, upload_id, &parts).await {
+            abort_upload_if_needed(state, &object_ref, Some(upload_id)).await;
+            return Err(e);
+        }
+        state.metrics.object_offload_total.fetch_add(1, Ordering::Relaxed);
         return Ok(BodyLocation {
-            body_base64: base64::engine::general_purpose::STANDARD.encode(&body),
-            object_ref: String::new(),
-            size: body.len(),
-            storage: "inline",
+            body_base64: String::new(),
+            object_ref,
+            size: total_size,
+            storage: "object",
         });
     }
 
-    let object_ref = format!("{}/{}/body.bin", state.cfg.object_store_prefix.trim_matches('/'), sanitize_key(job_id));
-    multipart_upload_body(state, &object_ref, body.clone()).await?;
-    state.metrics.object_offload_total.fetch_add(1, Ordering::Relaxed);
     Ok(BodyLocation {
-        body_base64: String::new(),
-        object_ref,
-        size: body.len(),
-        storage: "object",
+        body_base64: base64::engine::general_purpose::STANDARD.encode(&pending),
+        object_ref: String::new(),
+        size: total_size,
+        storage: "inline",
     })
 }
 
@@ -832,30 +896,6 @@ async fn load_body(state: &AppState, fields: &HashMap<String, Value>) -> Result<
         return base64::engine::general_purpose::STANDARD.decode(body_base64).map_err(|e| ServiceError::bad_request(format!("decode job body: {e}")));
     }
     Ok(field_bytes(fields, "body").unwrap_or_default())
-}
-
-async fn multipart_upload_body(state: &AppState, object_ref: &str, body: Bytes) -> Result<(), ServiceError> {
-    let upload_id = initiate_multipart_upload(state, object_ref).await?;
-    let upload_result = async {
-        let part_size = state.cfg.object_multipart_part_size.max(5 * 1024 * 1024);
-        let mut parts = Vec::new();
-        for (idx, chunk) in body.chunks(part_size).enumerate() {
-            parts.push(upload_multipart_part(state, object_ref, &upload_id, idx + 1, chunk.to_vec()).await?);
-        }
-        complete_multipart_upload(state, object_ref, &upload_id, &parts).await
-    }
-    .await;
-
-    if let Err(err) = upload_result {
-        if let Err(abort_err) = abort_multipart_upload(state, object_ref, &upload_id).await {
-            state.metrics.object_multipart_abort_total.fetch_add(1, Ordering::Relaxed);
-            tracing::warn!(object_ref = %object_ref, upload_id = %upload_id, error = %abort_err.message, "multipart upload abort failed");
-        } else {
-            state.metrics.object_multipart_abort_total.fetch_add(1, Ordering::Relaxed);
-        }
-        return Err(err);
-    }
-    Ok(())
 }
 
 async fn initiate_multipart_upload(state: &AppState, object_ref: &str) -> Result<String, ServiceError> {
@@ -906,6 +946,16 @@ async fn abort_multipart_upload(state: &AppState, object_ref: &str, upload_id: &
     }
     req.send().await?.error_for_status()?;
     Ok(())
+}
+
+async fn abort_upload_if_needed(state: &AppState, object_ref: &str, upload_id: Option<&str>) {
+    let Some(upload_id) = upload_id else {
+        return;
+    };
+    state.metrics.object_multipart_abort_total.fetch_add(1, Ordering::Relaxed);
+    if let Err(abort_err) = abort_multipart_upload(state, object_ref, upload_id).await {
+        tracing::warn!(object_ref = %object_ref, upload_id = %upload_id, error = %abort_err.message, "multipart upload abort failed");
+    }
 }
 
 fn complete_multipart_xml(parts: &[CompletedPart]) -> String {
