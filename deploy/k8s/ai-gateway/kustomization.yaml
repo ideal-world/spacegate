@@ -1,0 +1,25 @@
+# AI Gateway 队列限流插件 — K8s 一键部署（Kustomize）
+# 前置：spacegate 命名空间、GatewayClass、SpaceGate DaemonSet 已安装
+# 用法：./apply.sh
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: spacegate
+
+resources:
+  - redis.yaml
+  - mock-upstream.yaml
+  - wasm-server.yaml
+  - ai-gateway-service.yaml
+  - gateway-ai.yaml
+  - httproute-ai.yaml
+  - sgfilter-ai-gateway-queue.yaml
+  # 可选：Higress WasmPlugin（不含 clusters，生产建议用 SgFilter）
+  # - wasmplugin-ai-gateway-queue.yaml
+
+configMapGenerator:
+  - name: ai-gateway-queue-wasm
+    files:
+      - files/spacegate_plugin_ai_gateway_queue.wasm
+    options:
+      disableNameSuffixHash: true

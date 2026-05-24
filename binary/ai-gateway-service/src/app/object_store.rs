@@ -1,78 +1,98 @@
-async fn store_body(state: &AppState, job_id: &str, body: Body) -> Result<BodyLocation, ServiceError> {
+async fn store_body(state: &AppState, job_id: &str, body: Body) -> Result<BodyStoreOutcome, ServiceError> {
     let object_ref = format!("{}/{}/body.bin", state.cfg.object_store_prefix.trim_matches('/'), sanitize_key(job_id));
     let mut stream = body.into_data_stream();
     let mut pending = Vec::new();
     let mut total_size = 0usize;
-    let mut upload_id = None;
-    let mut parts = Vec::new();
     let part_size = state.cfg.object_multipart_part_size.max(5 * 1024 * 1024);
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| ServiceError::bad_request(format!("read request body: {e}")))?;
         total_size = total_size.checked_add(chunk.len()).ok_or_else(|| ServiceError::payload_too_large("request body is too large"))?;
         if total_size > state.cfg.max_body_bytes {
-            abort_upload_if_needed(state, &object_ref, upload_id.as_deref()).await;
             return Err(ServiceError::payload_too_large(format!("request body exceeds max size {}", state.cfg.max_body_bytes)));
         }
 
-        if upload_id.is_none() {
-            if state.cfg.object_store_endpoint.is_some() && pending.len() + chunk.len() > state.cfg.inline_threshold {
-                pending.extend_from_slice(&chunk);
-                match initiate_multipart_upload(state, &object_ref).await {
-                    Ok(id) => upload_id = Some(id),
-                    Err(e) => return Err(e),
-                }
-            } else {
-                pending.extend_from_slice(&chunk);
-                continue;
-            }
-        } else {
-            pending.extend_from_slice(&chunk);
+        if state.cfg.object_store_endpoint.is_none() && pending.len() + chunk.len() > state.cfg.inline_threshold {
+            return Err(ServiceError::payload_too_large(format!(
+                "request body exceeds inline threshold {} and object store is not configured",
+                state.cfg.inline_threshold
+            )));
         }
 
-        if let Some(upload_id) = upload_id.as_deref() {
+        if state.cfg.object_store_endpoint.is_some() && pending.len() + chunk.len() > state.cfg.inline_threshold {
+            pending.extend_from_slice(&chunk);
+            let upload_id = initiate_multipart_upload(state, &object_ref).await?;
+            let state = state.clone();
+            let object_ref_for_task = object_ref.clone();
+            let handle = tokio::spawn(async move {
+                finish_offload_upload(state, object_ref_for_task, upload_id, pending, stream, part_size, total_size).await
+            });
+            return Ok(BodyStoreOutcome {
+                location: BodyLocation {
+                    body_base64: String::new(),
+                    object_ref,
+                    size: total_size,
+                    storage: "object",
+                },
+                pending_upload: Some(handle),
+            });
+        }
+
+        pending.extend_from_slice(&chunk);
+    }
+
+    Ok(BodyStoreOutcome {
+        location: BodyLocation {
+            body_base64: base64::engine::general_purpose::STANDARD.encode(&pending),
+            object_ref: String::new(),
+            size: total_size,
+            storage: "inline",
+        },
+        pending_upload: None,
+    })
+}
+
+async fn finish_offload_upload(
+    state: AppState,
+    object_ref: String,
+    upload_id: String,
+    mut pending: Vec<u8>,
+    mut stream: impl futures_util::Stream<Item = Result<bytes::Bytes, axum::Error>> + Unpin,
+    part_size: usize,
+    mut total_size: usize,
+) -> Result<(), ServiceError> {
+    let mut parts = Vec::new();
+    let upload_result = async {
+        while pending.len() >= part_size {
+            let part_body = pending.drain(..part_size).collect::<Vec<_>>();
+            parts.push(upload_multipart_part(&state, &object_ref, &upload_id, parts.len() + 1, part_body).await?);
+        }
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| ServiceError::bad_request(format!("read request body: {e}")))?;
+            total_size = total_size.checked_add(chunk.len()).ok_or_else(|| ServiceError::payload_too_large("request body is too large"))?;
+            if total_size > state.cfg.max_body_bytes {
+                abort_upload_if_needed(&state, &object_ref, Some(&upload_id)).await;
+                return Err(ServiceError::payload_too_large(format!("request body exceeds max size {}", state.cfg.max_body_bytes)));
+            }
+            pending.extend_from_slice(&chunk);
             while pending.len() >= part_size {
                 let part_body = pending.drain(..part_size).collect::<Vec<_>>();
-                match upload_multipart_part(state, &object_ref, upload_id, parts.len() + 1, part_body).await {
-                    Ok(part) => parts.push(part),
-                    Err(e) => {
-                        abort_upload_if_needed(state, &object_ref, Some(upload_id)).await;
-                        return Err(e);
-                    }
-                }
+                parts.push(upload_multipart_part(&state, &object_ref, &upload_id, parts.len() + 1, part_body).await?);
             }
         }
-    }
-
-    if let Some(upload_id) = upload_id.as_deref() {
         if !pending.is_empty() || parts.is_empty() {
-            match upload_multipart_part(state, &object_ref, upload_id, parts.len() + 1, pending).await {
-                Ok(part) => parts.push(part),
-                Err(e) => {
-                    abort_upload_if_needed(state, &object_ref, Some(upload_id)).await;
-                    return Err(e);
-                }
-            }
+            parts.push(upload_multipart_part(&state, &object_ref, &upload_id, parts.len() + 1, pending).await?);
         }
-        if let Err(e) = complete_multipart_upload(state, &object_ref, upload_id, &parts).await {
-            abort_upload_if_needed(state, &object_ref, Some(upload_id)).await;
-            return Err(e);
-        }
+        complete_multipart_upload(&state, &object_ref, &upload_id, &parts).await?;
         state.metrics.object_offload_total.fetch_add(1, Ordering::Relaxed);
-        return Ok(BodyLocation {
-            body_base64: String::new(),
-            object_ref,
-            size: total_size,
-            storage: "object",
-        });
+        Ok(())
     }
+    .await;
 
-    Ok(BodyLocation {
-        body_base64: base64::engine::general_purpose::STANDARD.encode(&pending),
-        object_ref: String::new(),
-        size: total_size,
-        storage: "inline",
-    })
+    if upload_result.is_err() {
+        abort_upload_if_needed(&state, &object_ref, Some(&upload_id)).await;
+    }
+    upload_result
 }
 
 async fn load_body(state: &AppState, fields: &HashMap<String, Value>) -> Result<Vec<u8>, ServiceError> {
@@ -218,4 +238,3 @@ fn encode_query_component(input: &str) -> String {
 fn xml_escape(input: &str) -> String {
     input.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
 }
-

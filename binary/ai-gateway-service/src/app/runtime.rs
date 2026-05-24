@@ -1,11 +1,13 @@
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
 
-    let args = Args::parse();
+    let args = load_args()?;
     let redis = build_redis_client(&args.redis_url)?;
     let _redis_task = redis.init().await?;
+    check_redis_version(&redis).await?;
     let worker_redis = build_redis_client(&args.redis_url)?;
     let _worker_redis_task = worker_redis.init().await?;
+    let wait_subscriber = WaitSubscriberHub::new(&args.redis_url).await?;
     let state = AppState {
         redis,
         worker_redis,
@@ -13,6 +15,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         cfg: Arc::new(args.clone()),
         body_permits: Arc::new(Semaphore::new(args.body_read_concurrency.max(1))),
         metrics: Arc::new(Metrics::default()),
+        wait_subscriber,
     };
 
     ensure_consumer_groups(&state).await?;
@@ -24,7 +27,18 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("AI_UPSTREAM_BASE_URL is not set; queue jobs will be stored but no local worker will process them");
     }
 
-    let app = Router::new()
+    let app = build_router(state, args.max_body_bytes);
+
+    let addr = SocketAddr::new(args.host, args.port);
+    tracing::info!(%addr, "ai-gateway-service listening");
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+/// 构建 HTTP 路由，供 main 与集成测试复用。
+pub fn build_router(state: AppState, max_body_bytes: usize) -> Router {
+    Router::new()
         .route("/healthz", get(healthz))
         .route("/metrics", get(metrics))
         .route("/v1/ratelimit/check", post(check_rate_limit))
@@ -35,15 +49,25 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/admin/plugins/{plugin}/schema", get(admin_plugin_schema))
         .route("/v1/admin/plugins/{plugin}/readme", get(admin_plugin_readme))
         .route("/v1/admin/tenant-rate-limits", get(admin_list_tenant_rate_limits).put(admin_upsert_tenant_rate_limit).delete(admin_delete_tenant_rate_limit))
-        .layer(DefaultBodyLimit::max(args.max_body_bytes))
-        .layer(build_admin_cors_layer(&args))
+        .layer(DefaultBodyLimit::max(max_body_bytes))
+        .layer(build_admin_cors_layer(state.cfg.as_ref()))
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state)
+}
 
-    let addr = SocketAddr::new(args.host, args.port);
-    tracing::info!(%addr, "ai-gateway-service listening");
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+async fn check_redis_version(redis: &FredClient) -> Result<(), Box<dyn std::error::Error>> {
+    let info: String = redis.info(Some(InfoKind::Server)).await?;
+    for line in info.lines() {
+        if let Some(version) = line.strip_prefix("redis_version:") {
+            let major = version.split('.').next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+            if major < 7 {
+                return Err(format!("Redis 7+ is required, found redis_version={version}").into());
+            }
+            tracing::info!(redis_version = %version.trim(), "redis version check passed");
+            return Ok(());
+        }
+    }
+    tracing::warn!("could not parse redis_version from INFO; continuing without version check");
     Ok(())
 }
 

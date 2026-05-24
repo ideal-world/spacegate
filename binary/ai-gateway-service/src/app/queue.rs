@@ -10,44 +10,59 @@ async fn enqueue_job(state: &AppState, policy: QueuePolicy, _method: Method, uri
     let original_path = optional_header(&headers, "x-original-path").unwrap_or_else(|| uri.path().to_string());
     let request_headers = headers_to_json(&headers)?;
     let created_at = now_ms();
-    let body_ref = store_body(state, &job_id, body).await?;
+    let body_outcome = store_body(state, &job_id, body).await?;
+    let body_ref = body_outcome.location;
+    let body_size = body_ref.size;
+    let body_storage = body_ref.storage;
     let (stream_key, priority) = stream_for_request(state, &headers, &tenant_id, &model);
 
-    let stream_id: String = state
-        .redis
-        .xadd(
-            stream_key.as_str(),
-            false,
-            None::<()>,
-            "*",
-            vec![
-                ("job_id", Value::String(job_id.clone().into())),
-                ("tenant_id", Value::String(tenant_id.into())),
-                ("policy", Value::String(policy.as_str().into())),
-                ("model", Value::String(model.into())),
-                ("priority", Value::String(priority.as_str().into())),
-                ("method", Value::String(original_method.into())),
-                ("path", Value::String(original_path.into())),
-                ("headers", Value::String(request_headers.into())),
-                ("body", Value::String(body_ref.body_base64.into())),
-                ("ref", Value::String(body_ref.object_ref.into())),
-                ("size", Value::Integer(body_ref.size as i64)),
-                ("storage", Value::String(body_ref.storage.into())),
-                ("callback_url", Value::String(callback_url.into())),
-                ("created_at", Value::Integer(created_at as i64)),
-            ],
-        )
-        .await?;
-    trim_stream(state, &stream_key).await?;
+    let xadd_future = async {
+        let stream_id: String = state
+            .redis
+            .xadd(
+                stream_key.as_str(),
+                false,
+                None::<()>,
+                "*",
+                vec![
+                    ("job_id", Value::String(job_id.clone().into())),
+                    ("tenant_id", Value::String(tenant_id.into())),
+                    ("policy", Value::String(policy.as_str().into())),
+                    ("model", Value::String(model.into())),
+                    ("priority", Value::String(priority.as_str().into())),
+                    ("method", Value::String(original_method.into())),
+                    ("path", Value::String(original_path.into())),
+                    ("headers", Value::String(request_headers.into())),
+                    ("body", Value::String(body_ref.body_base64.into())),
+                    ("ref", Value::String(body_ref.object_ref.into())),
+                    ("size", Value::Integer(body_ref.size as i64)),
+                    ("storage", Value::String(body_ref.storage.into())),
+                    ("callback_url", Value::String(callback_url.into())),
+                    ("created_at", Value::Integer(created_at as i64)),
+                ],
+            )
+            .await?;
+        trim_stream(state, &stream_key).await?;
+        Ok::<String, ServiceError>(stream_id)
+    };
+
+    let stream_id = if let Some(upload) = body_outcome.pending_upload {
+        let (upload_join, stream_id_result) = tokio::join!(upload, xadd_future);
+        let upload_result = upload_join.map_err(|e| ServiceError::internal(format!("body upload task failed: {e}")))?;
+        upload_result?;
+        stream_id_result?
+    } else {
+        xadd_future.await?
+    };
 
     state.metrics.enqueue_total.fetch_add(1, Ordering::Relaxed);
     observe_enqueue_latency(
         &state.metrics,
         now_ms().saturating_sub(enqueue_started_at),
         policy.as_str(),
-        body_size_bucket(body_ref.size, body_ref.storage),
+        body_size_bucket(body_size, body_storage),
     );
-    observe_body_size(&state.metrics, body_ref.size);
+    observe_body_size(&state.metrics, body_size);
     match priority {
         QueuePriority::High => {
             state.metrics.enqueue_priority_high_total.fetch_add(1, Ordering::Relaxed);
@@ -121,18 +136,29 @@ async fn read_worker_stream(state: &AppState, consumer: &str, stream: &str, bloc
     )
     .await?;
 
-    let mut processed = 0;
+    let mut tasks = Vec::new();
     for (_stream, entries) in reply {
         for (entry_id, fields) in entries {
-            match process_stream_entry(state, stream, entry_id.as_str(), &fields).await {
-                Ok(true) => {
-                    processed += 1;
-                }
-                Ok(false) => {}
-                Err(e) => {
-                    tracing::warn!(stream_id = %entry_id, error = %e.message, "job processing failed");
-                    state.metrics.worker_failed_total.fetch_add(1, Ordering::Relaxed);
-                }
+            let state = state.clone();
+            let stream = stream.to_string();
+            tasks.push(tokio::spawn(async move {
+                process_stream_entry(&state, stream.as_str(), entry_id.as_str(), &fields).await
+            }));
+        }
+    }
+
+    let mut processed = 0;
+    for task in tasks {
+        match task.await {
+            Ok(Ok(true)) => processed += 1,
+            Ok(Ok(false)) => {}
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e.message, "job processing failed");
+                state.metrics.worker_failed_total.fetch_add(1, Ordering::Relaxed);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "worker task join failed");
+                state.metrics.worker_failed_total.fetch_add(1, Ordering::Relaxed);
             }
         }
     }

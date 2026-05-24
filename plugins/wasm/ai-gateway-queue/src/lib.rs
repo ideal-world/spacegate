@@ -5,6 +5,9 @@ use proxy_wasm::traits::*;
 use proxy_wasm::types::*;
 use serde_json::Value;
 
+mod policy;
+use policy::{contains_allowed_true, extract_json_number, normalize_policy, normalize_priority};
+
 proxy_wasm::main! {{
     proxy_wasm::set_log_level(LogLevel::Info);
     proxy_wasm::set_root_context(|_| -> Box<dyn RootContext> { Box::new(AiGatewayRoot::default()) });
@@ -171,7 +174,8 @@ impl RootContext for AiGatewayRoot {
         Some(Box::new(AiGatewayHttp {
             cfg: self.cfg.clone(),
             pending: None,
-            deferred_policy: None,
+            rate_limited_enqueue: None,
+            body_pending: false,
         }))
     }
 
@@ -189,7 +193,7 @@ enum Policy {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Pending {
-    RateLimit,
+    RateLimit { policy: Policy },
     Queue,
     Wait,
 }
@@ -197,7 +201,10 @@ enum Pending {
 struct AiGatewayHttp {
     cfg: AiGatewayConfig,
     pending: Option<(u32, Pending)>,
-    deferred_policy: Option<Policy>,
+    /// 限流拒绝后等待 request body 再入队（queue / wait）。
+    rate_limited_enqueue: Option<Policy>,
+    /// 请求体尚未读完，需在 body 回调中继续处理。
+    body_pending: bool,
 }
 
 impl Context for AiGatewayHttp {
@@ -211,7 +218,7 @@ impl Context for AiGatewayHttp {
         self.pending = None;
 
         match pending {
-            Pending::RateLimit => self.handle_rate_limit_response(body_size),
+            Pending::RateLimit { policy } => self.handle_rate_limit_response(body_size, policy),
             Pending::Queue | Pending::Wait => self.forward_service_response(body_size),
         }
     }
@@ -220,11 +227,9 @@ impl Context for AiGatewayHttp {
 impl HttpContext for AiGatewayHttp {
     fn on_http_request_headers(&mut self, _: usize, end_of_stream: bool) -> Action {
         let Some(policy) = self.request_policy() else {
-            if self.cfg.require_policy {
-                self.send_json(400, r#"{"error":"missing_or_invalid_rate_limit_policy"}"#);
-                return Action::Pause;
-            }
-            return Action::Continue;
+            // 设计文档要求 Policy 必填；仅允许 default_policy 兜底，禁止无策略 bypass。
+            self.send_json(400, r#"{"error":"missing_or_invalid_rate_limit_policy"}"#);
+            return Action::Pause;
         };
 
         if self.tenant_id().is_none() {
@@ -232,52 +237,30 @@ impl HttpContext for AiGatewayHttp {
             return Action::Pause;
         }
 
-        match policy {
-            Policy::Abandon => {
-                if self.dispatch_service_call(Pending::RateLimit, &self.cfg.rate_limit_path.clone(), None) {
-                    Action::Pause
-                } else {
-                    self.send_json(502, r#"{"error":"rate_limit_service_unavailable"}"#);
-                    Action::Pause
-                }
-            }
-            Policy::Queue | Policy::Wait => {
-                if end_of_stream {
-                    let pending = if policy == Policy::Queue { Pending::Queue } else { Pending::Wait };
-                    let path = if policy == Policy::Queue {
-                        self.cfg.enqueue_path.clone()
-                    } else {
-                        self.cfg.wait_path.clone()
-                    };
-                    if !self.dispatch_service_call(pending, &path, Some(&[])) {
-                        self.send_json(502, r#"{"error":"queue_service_unavailable"}"#);
-                    }
-                } else {
-                    self.deferred_policy = Some(policy);
-                }
-                Action::Pause
-            }
+        // 三种策略统一先走令牌桶（DOC-01/02 定稿）。
+        self.body_pending = !end_of_stream && matches!(policy, Policy::Queue | Policy::Wait);
+        if self.dispatch_service_call(Pending::RateLimit { policy }, &self.cfg.rate_limit_path.clone(), None) {
+            Action::Pause
+        } else {
+            self.send_json(502, r#"{"error":"rate_limit_service_unavailable"}"#);
+            Action::Pause
         }
     }
 
     fn on_http_request_body(&mut self, body_size: usize, end_of_stream: bool) -> Action {
-        let Some(policy) = self.deferred_policy else {
+        if !self.body_pending && self.rate_limited_enqueue.is_none() {
             return Action::Continue;
-        };
+        }
         if !end_of_stream {
             return Action::Pause;
         }
-        self.deferred_policy = None;
-        let body = self.get_http_request_body(0, body_size).unwrap_or_default();
-        let pending = if policy == Policy::Queue { Pending::Queue } else { Pending::Wait };
-        let path = if policy == Policy::Queue {
-            self.cfg.enqueue_path.clone()
-        } else {
-            self.cfg.wait_path.clone()
+        self.body_pending = false;
+
+        let Some(policy) = self.rate_limited_enqueue.take() else {
+            return Action::Continue;
         };
-        if !self.dispatch_service_call(pending, &path, Some(&body)) {
-            self.send_json(502, r#"{"error":"queue_service_unavailable"}"#);
-        }
+        let body = self.get_http_request_body(0, body_size).unwrap_or_default();
+        self.dispatch_enqueue(policy, &body);
         Action::Pause
     }
 }
@@ -305,6 +288,18 @@ impl AiGatewayHttp {
                 let _ = hostcalls::log(LogLevel::Warn, &format!("dispatch service call failed: {status:?}"));
                 false
             }
+        }
+    }
+
+    fn dispatch_enqueue(&mut self, policy: Policy, body: &[u8]) {
+        let pending = if policy == Policy::Queue { Pending::Queue } else { Pending::Wait };
+        let path = if policy == Policy::Queue {
+            self.cfg.enqueue_path.clone()
+        } else {
+            self.cfg.wait_path.clone()
+        };
+        if !self.dispatch_service_call(pending, &path, Some(body)) {
+            self.send_json(502, r#"{"error":"queue_service_unavailable"}"#);
         }
     }
 
@@ -362,28 +357,42 @@ impl AiGatewayHttp {
         normalize_priority(&self.cfg.default_priority)
     }
 
-    fn handle_rate_limit_response(&mut self, body_size: usize) {
+    fn handle_rate_limit_response(&mut self, body_size: usize, policy: Policy) {
         let status = self.service_status();
         let body = self.get_http_call_response_body(0, body_size).unwrap_or_default();
         let text = String::from_utf8_lossy(&body);
         if status == 200 && contains_allowed_true(&text) {
+            // 配额内：三种策略均直通上游。
             self.resume_http_request();
             return;
         }
         if status == 200 {
-            let retry_after_ms = extract_json_number(&text, "retry_after_ms").unwrap_or(1000);
-            let retry_after_secs = ((retry_after_ms + 999) / 1000).max(1).to_string();
-            let body = format!(r#"{{"error":"rate_limited","retry_after_ms":{retry_after_ms}}}"#);
-            let headers = [
-                ("content-type".to_string(), "application/json".to_string()),
-                ("retry-after".to_string(), retry_after_secs),
-                ("x-ratelimit-retry-after-ms".to_string(), retry_after_ms.to_string()),
-            ];
-            let headers = headers.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect::<Vec<_>>();
-            self.send_http_response(429, headers, Some(body.as_bytes()));
-        } else {
-            self.send_json(502, r#"{"error":"rate_limit_service_error"}"#);
+            match policy {
+                Policy::Abandon => self.send_rate_limited_response(&text),
+                Policy::Queue | Policy::Wait => {
+                    if self.body_pending {
+                        self.rate_limited_enqueue = Some(policy);
+                    } else {
+                        self.dispatch_enqueue(policy, &[]);
+                    }
+                }
+            }
+            return;
         }
+        self.send_json(502, r#"{"error":"rate_limit_service_error"}"#);
+    }
+
+    fn send_rate_limited_response(&self, text: &str) {
+        let retry_after_ms = extract_json_number(text, "retry_after_ms").unwrap_or(1000);
+        let retry_after_secs = ((retry_after_ms + 999) / 1000).max(1).to_string();
+        let response_body = format!(r#"{{"error":"rate_limited","retry_after_ms":{retry_after_ms}}}"#);
+        let headers = [
+            ("content-type".to_string(), "application/json".to_string()),
+            ("retry-after".to_string(), retry_after_secs),
+            ("x-ratelimit-retry-after-ms".to_string(), retry_after_ms.to_string()),
+        ];
+        let headers = headers.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect::<Vec<_>>();
+        self.send_http_response(429, headers, Some(response_body.as_bytes()));
     }
 
     fn forward_service_response(&mut self, body_size: usize) {
@@ -439,15 +448,8 @@ fn policy_name(policy: Policy) -> &'static str {
     }
 }
 
-fn contains_allowed_true(text: &str) -> bool {
-    text.contains(r#""allowed":true"#) || text.contains(r#""allowed": true"#)
-}
-
-fn extract_json_number(text: &str, key: &str) -> Option<u64> {
-    let needle = format!(r#""{key}":"#);
-    let pos = text.find(&needle)?;
-    let digits = text[pos + needle.len()..].chars().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_ascii_digit()).collect::<String>();
-    digits.parse().ok()
+fn contains_value(values: &[String], needle: &str) -> bool {
+    values.iter().any(|value| value.eq_ignore_ascii_case(needle))
 }
 
 fn value_at<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
@@ -500,28 +502,6 @@ fn normalize_header_name(value: &str, fallback: &str) -> String {
     } else {
         value
     }
-}
-
-fn normalize_policy(value: &str) -> Option<String> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "abandon" => Some("abandon".to_string()),
-        "queue" => Some("queue".to_string()),
-        "wait" => Some("wait".to_string()),
-        _ => None,
-    }
-}
-
-fn normalize_priority(value: &str) -> Option<String> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "high" => Some("high".to_string()),
-        "normal" | "default" | "medium" => Some("normal".to_string()),
-        "low" => Some("low".to_string()),
-        _ => None,
-    }
-}
-
-fn contains_value(values: &[String], needle: &str) -> bool {
-    values.iter().any(|value| value.eq_ignore_ascii_case(needle))
 }
 
 #[cfg(test)]

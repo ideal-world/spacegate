@@ -1,16 +1,10 @@
-async fn healthz() -> &'static str {
-    "ok"
-}
-
 async fn check_rate_limit(State(state): State<AppState>, headers: HeaderMap, uri: Uri) -> Result<Json<RateLimitResponse>, ServiceError> {
     let tenant = required_header(&headers, "x-tenant-id")?;
     let model = optional_header(&headers, "x-model").unwrap_or_else(|| "default".to_string());
     let path = optional_header(&headers, "x-original-path").unwrap_or_else(|| uri.path().to_string());
     let policy = optional_header(&headers, "x-ratelimit-policy").unwrap_or_else(|| "abandon".to_string());
-    let rate_limit = tenant_rate_limit(&state, &tenant, &model, &path, &policy).await?;
-    let key = sanitize_key(&format!("{tenant}:{model}:{path}"));
-    let tokens_key = format!("ai:ratelimit:{key}:tokens");
-    let ts_key = format!("ai:ratelimit:{key}:ts");
+    let rate_limit = resolve_rate_limit(&state, &tenant, &model, &path, &policy).await?;
+    let (tokens_key, ts_key) = tenant_rate_limit_keys(&tenant);
     let now = now_ms();
 
     let out: Vec<i64> = state
@@ -24,15 +18,7 @@ async fn check_rate_limit(State(state): State<AppState>, headers: HeaderMap, uri
 
     let allowed = out.first().copied().unwrap_or(0) == 1;
     if !allowed {
-        state.metrics.rate_limited_total.fetch_add(1, Ordering::Relaxed);
-        inc_labeled(
-            &state.metrics,
-            format!(
-                r#"rate_limited_total{{policy="{}",tenant="{}"}}"#,
-                metrics_label(&policy),
-                metrics_label(&tenant)
-            ),
-        );
+        record_rate_limited(&state.metrics, &policy, &tenant);
     }
     Ok(Json(RateLimitResponse {
         allowed,
@@ -54,28 +40,18 @@ async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Ur
     state.metrics.wait_total.fetch_add(1, Ordering::Relaxed);
     let accepted = enqueue_job(&state, QueuePolicy::Wait, method, uri, headers, body).await?;
     let channel = result_channel(&state, &accepted.response.job_id);
-    let subscriber = build_subscriber_client(&state.cfg.redis_url)?;
-    let _subscriber_task = subscriber.init().await?;
-    subscriber.subscribe(channel.as_str()).await?;
 
     if let Some(result) = load_result(&state, &accepted.response.job_id).await? {
-        let _ = subscriber.quit().await;
         return Ok(result_to_response(result, accepted.created_at_ms)?);
     }
 
-    let mut messages = subscriber.message_rx();
-    let wait = tokio::time::timeout(Duration::from_secs(timeout_secs), async {
-        loop {
-            let message = messages.recv().await.map_err(|e| ServiceError::internal(format!("pubsub receive: {e}")))?;
-            if &*message.channel == channel.as_str() {
-                return Ok::<(), ServiceError>(());
-            }
-        }
-    })
-    .await;
+    let wait = state
+        .wait_subscriber
+        .wait_for_channel(channel.as_str(), Duration::from_secs(timeout_secs))
+        .await;
+
     match wait {
-        Ok(Ok(())) => {
-            let _ = subscriber.quit().await;
+        Ok(()) => {
             if let Some(result) = load_result(&state, &accepted.response.job_id).await? {
                 Ok(result_to_response(result, accepted.created_at_ms)?)
             } else {
@@ -85,8 +61,7 @@ async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Ur
                 )))
             }
         }
-        _ => {
-            let _ = subscriber.quit().await;
+        Err(e) if e.status == StatusCode::GATEWAY_TIMEOUT => {
             state.metrics.wait_timeout_total.fetch_add(1, Ordering::Relaxed);
             let waited_ms = now_ms().saturating_sub(accepted.created_at_ms);
             let body = Json(serde_json::json!({
@@ -98,14 +73,27 @@ async fn enqueue_and_wait(State(state): State<AppState>, method: Method, uri: Ur
             }));
             Ok((StatusCode::GATEWAY_TIMEOUT, body).into_response())
         }
+        Err(e) => Err(e),
     }
 }
 
 async fn get_job(State(state): State<AppState>, Path(job_id): Path<String>) -> Result<Response, ServiceError> {
     match load_result(&state, &job_id).await? {
-        Some(result) => Ok(Json(result).into_response()),
+        Some(result) if result.status == "completed" => poll_result_to_response(result),
+        Some(result) => Ok(Json(serde_json::json!({
+            "job_id": result.job_id,
+            "status": result.status,
+            "http_status": result.http_status,
+            "error": result.error,
+            "completed_at": format_completed_at_rfc3339(result.completed_at_ms),
+        }))
+        .into_response()),
         None => Ok((StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "not_found", "job_id": job_id }))).into_response()),
     }
+}
+
+async fn healthz() -> &'static str {
+    "ok"
 }
 
 async fn metrics(State(state): State<AppState>) -> Result<Response, ServiceError> {

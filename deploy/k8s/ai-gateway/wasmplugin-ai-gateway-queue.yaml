@@ -1,0 +1,27 @@
+# 可选：Higress WasmPlugin 方式（defaultConfig 不含 clusters，需改用 SgFilter 或扩展 CRD 转换）
+# 默认注释掉，见 kustomization.yaml
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: ai-gateway-queue
+  labels:
+    app.kubernetes.io/name: ai-gateway-queue
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  url: http://ai-gateway-wasm/spacegate_plugin_ai_gateway_queue.wasm
+  pluginName: ai-gateway-queue
+  failStrategy: FAIL_CLOSE
+  phase: AUTHZ
+  priority: 100
+  defaultConfigDisable: true
+  matchRules:
+    - ingress:
+        - ai-api
+      config:
+        service_cluster: ai-gateway-service
+        service_authority: ai-gateway-service
+        rate_limit_path: /v1/ratelimit/check
+        enqueue_path: /v1/queue/enqueue
+        wait_path: /v1/queue/enqueue-and-wait
+        service_timeout_ms: 65000
+        require_policy: true

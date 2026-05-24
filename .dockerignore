@@ -1,3 +1,6 @@
 target
+**/target
 .git
-**/*.md
+**/.git
+.DS_Store
+**/.DS_Store

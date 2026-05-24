@@ -19,19 +19,18 @@ async fn admin_plugin_readme(Path(plugin): Path<String>) -> Result<Response, Ser
     Ok((StatusCode::OK, [("content-type", "text/markdown; charset=utf-8")], AI_GATEWAY_QUEUE_README).into_response())
 }
 
+
 async fn admin_list_tenant_rate_limits(State(state): State<AppState>, Query(filters): Query<HashMap<String, String>>) -> Result<Json<Vec<TenantRateLimitRuleView>>, ServiceError> {
-    let rules = list_tenant_rate_limit_rules(&state, &filters).await?;
-    Ok(Json(rules))
+    Ok(Json(list_tenant_rate_limit_rules(&state, &filters).await?))
 }
 
 async fn admin_upsert_tenant_rate_limit(State(state): State<AppState>, Json(rule): Json<TenantRateLimitRule>) -> Result<Json<TenantRateLimitRuleView>, ServiceError> {
-    let rule = upsert_tenant_rate_limit_rule(&state, rule).await?;
-    Ok(Json(rule))
+    Ok(Json(upsert_tenant_rate_limit_rule(&state, rule).await?))
 }
 
 async fn admin_delete_tenant_rate_limit(State(state): State<AppState>, Json(rule): Json<TenantRateLimitRule>) -> Result<Json<serde_json::Value>, ServiceError> {
     let removed = delete_tenant_rate_limit_rule(&state, rule).await?;
-    Ok(Json(serde_json::json!({ "deleted": removed })))
+    Ok(Json(serde_json::json!({ "removed": removed })))
 }
 
 fn add_ai_gateway_queue_schema_extensions(value: &mut serde_json::Value) {

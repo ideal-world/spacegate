@@ -1,0 +1,20 @@
+# /v1/* 路由到 mock 上游；Wasm 插件通过 SgFilter 挂载在本 Route 上（仅挂一次，避免双倍限流）
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: ai-api
+  labels:
+    app.kubernetes.io/name: ai-api
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  parentRefs:
+    - name: ai-gateway
+      namespace: spacegate
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/
+      backendRefs:
+        - name: ai-gateway-mock-upstream
+          port: 9000
