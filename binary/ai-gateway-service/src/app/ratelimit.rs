@@ -1,20 +1,9 @@
-async fn tenant_rate_limit(state: &AppState, tenant: &str, model: &str, path: &str, policy: &str) -> Result<TenantRateLimit, ServiceError> {
-    for key in tenant_rate_limit_candidate_keys(state, tenant, model, path, policy) {
-        let raw: Option<String> = state.redis.get(key.as_str()).await.unwrap_or(None);
-        if let Some(limit) = raw.and_then(|raw| parse_stored_tenant_rate_limit(&raw).map(|stored| stored.limit)) {
-            return Ok(limit);
-        }
+fn global_rate_limit(state: &AppState) -> TenantRateLimit {
+    TenantRateLimit {
+        rps: state.cfg.rate_limit_rps,
+        burst: state.cfg.rate_limit_burst,
+        cost: state.cfg.rate_limit_cost.max(1),
     }
-
-    let key = format!("{}{}", state.cfg.tenant_rate_limit_prefix, sanitize_key(tenant));
-    let rps: Option<String> = state.redis.get(format!("{key}:rps")).await.unwrap_or(None);
-    let burst: Option<String> = state.redis.get(format!("{key}:burst")).await.unwrap_or(None);
-    let cost: Option<String> = state.redis.get(format!("{key}:cost")).await.unwrap_or(None);
-    Ok(TenantRateLimit {
-        rps: rps.and_then(|v| v.parse().ok()).unwrap_or(state.cfg.rate_limit_rps),
-        burst: burst.and_then(|v| v.parse().ok()).unwrap_or(state.cfg.rate_limit_burst),
-        cost: cost.and_then(|v| v.parse().ok()).unwrap_or(state.cfg.rate_limit_cost).max(1),
-    })
 }
 
 fn tenant_rate_limit_candidate_keys(state: &AppState, tenant: &str, model: &str, path: &str, policy: &str) -> Vec<String> {
@@ -61,6 +50,7 @@ fn parse_stored_tenant_rate_limit(raw: &str) -> Option<ParsedStoredTenantRateLim
     parse_tenant_rate_limit_csv(raw).map(|limit| ParsedStoredTenantRateLimit { limit, ttl_secs: None })
 }
 
+#[cfg(test)]
 fn parse_tenant_rate_limit(raw: &str) -> Option<TenantRateLimit> {
     parse_stored_tenant_rate_limit(raw).map(|stored| stored.limit)
 }
@@ -71,6 +61,25 @@ fn parse_tenant_rate_limit_csv(raw: &str) -> Option<TenantRateLimit> {
     let burst = parts.next()?.parse().ok()?;
     let cost = parts.next().and_then(|value| value.parse().ok()).unwrap_or(1);
     Some(TenantRateLimit { rps, burst, cost: cost.max(1) })
+}
+
+/// 按租户规则（可含 model/path/policy 维度）解析配额，未命中则回退全局默认值。
+async fn resolve_rate_limit(state: &AppState, tenant: &str, model: &str, path: &str, policy: &str) -> Result<TenantRateLimit, ServiceError> {
+    for key in tenant_rate_limit_candidate_keys(state, tenant, model, path, policy) {
+        let raw: Option<String> = state.redis.get(key.as_str()).await?;
+        if let Some(stored) = raw.and_then(|raw| parse_stored_tenant_rate_limit(&raw)) {
+            return Ok(stored.limit);
+        }
+    }
+    Ok(global_rate_limit(state))
+}
+
+fn tenant_rate_limit_keys(tenant: &str) -> (String, String) {
+    let tenant_key = sanitize_key(tenant);
+    (
+        format!("ai:ratelimit:{tenant_key}:tokens"),
+        format!("ai:ratelimit:{tenant_key}:ts"),
+    )
 }
 
 async fn list_tenant_rate_limit_rules(state: &AppState, filters: &HashMap<String, String>) -> Result<Vec<TenantRateLimitRuleView>, ServiceError> {
@@ -238,4 +247,16 @@ fn is_legacy_tenant_rate_limit_key(key: &str) -> bool {
 
 fn non_empty_opt(value: &Option<String>) -> Option<&str> {
     value.as_deref().map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn record_rate_limited(metrics: &Metrics, policy: &str, tenant: &str) {
+    metrics.rate_limited_total.fetch_add(1, Ordering::Relaxed);
+    inc_labeled(
+        metrics,
+        format!(
+            r#"rate_limited_total{{policy="{}",tenant="{}"}}"#,
+            metrics_label(policy),
+            metrics_label(tenant)
+        ),
+    );
 }

@@ -1,0 +1,113 @@
+# ai-gateway-service 配置文件示例
+# 用法：
+#   cargo run -p ai-gateway-service -- --config config/ai-gateway-service.toml
+#   AI_GATEWAY_CONFIG=config/ai-gateway-service.toml cargo run -p ai-gateway-service
+#
+# 优先级：显式 CLI 参数 / 环境变量 > 本配置文件 > 内置默认值
+
+# ---------------------------------------------------------------------------
+# 服务监听
+# ---------------------------------------------------------------------------
+[server]
+host = "0.0.0.0"
+port = 18080
+
+# ---------------------------------------------------------------------------
+# Redis（队列、限流、结果存储的核心依赖）
+# ---------------------------------------------------------------------------
+[redis]
+# 单机示例
+url = "redis://127.0.0.1/"
+# 带密码 / 指定 DB 示例：
+# url = "redis://:your-password@redis.example.com:6379/0"
+
+# ---------------------------------------------------------------------------
+# 上游 AI 服务（Worker 消费队列后转发到此地址）
+# ---------------------------------------------------------------------------
+[upstream]
+base_url = "http://127.0.0.1:9000"
+
+# ---------------------------------------------------------------------------
+# 队列 Stream 与优先级
+# ---------------------------------------------------------------------------
+[queue]
+stream = "ai:jobs"
+high_stream = "ai:jobs:high"
+low_stream = "ai:jobs:low"
+enable_priority_streams = true
+default_priority = "normal"
+high_models = ["gpt-4o", "qwen-max"]
+low_tenants = ["free"]
+high_weight = 3
+normal_weight = 1
+low_weight = 1
+max_len = 100000
+group = "ai-gateway-workers"
+consumer = "ai-gateway-service"
+job_dlq_stream = "ai:job-dlq"
+
+# ---------------------------------------------------------------------------
+# V1 全局限流（仅 abandon 路径生效；租户差异化配额为 V2，见 README）
+# ---------------------------------------------------------------------------
+[rate_limit]
+rps = 100
+burst = 200
+cost = 1
+tenant_prefix = "ai:tenant:ratelimit:"
+
+# ---------------------------------------------------------------------------
+# Worker 与任务回收
+# ---------------------------------------------------------------------------
+[worker]
+concurrency = 10
+wait_timeout_secs = 60
+reclaim_interval_secs = 30
+reclaim_min_idle_secs = 30
+job_process_lease_secs = 120
+job_max_delivery_attempts = 5
+
+# ---------------------------------------------------------------------------
+# 回调（queue 模式）
+# ---------------------------------------------------------------------------
+[callback]
+require_https = true
+max_retry_attempts = 5
+retry_initial_delay_ms = 1000
+retry_max_delay_ms = 60000
+retry_reclaim_idle_secs = 60
+retry_stream = "ai:callback-retry"
+retry_group = "ai-gateway-callbacks"
+dlq_stream = "ai:callback-dlq"
+
+# ---------------------------------------------------------------------------
+# 结果缓存（wait 模式 / 轮询）
+# ---------------------------------------------------------------------------
+[result]
+key_prefix = "result:"
+channel_prefix = "result:"
+ttl_secs = 120
+
+# ---------------------------------------------------------------------------
+# 请求体大小限制
+# ---------------------------------------------------------------------------
+[body]
+max_bytes = 33554432       # 32 MiB
+inline_threshold = 131072  # 128 KiB 以下 inline 存 Redis
+read_concurrency = 200
+
+# ---------------------------------------------------------------------------
+# 大 Body 对象存储（可选，S3 / MinIO 兼容）
+# ---------------------------------------------------------------------------
+[object_store]
+# endpoint = "http://127.0.0.1:9000"
+bucket = "ai-gateway-body"
+prefix = "bodies"
+multipart_part_size = 5242880
+# auth_header = "Authorization: Bearer your-token"
+
+# ---------------------------------------------------------------------------
+# Admin API CORS（本地开发可留空，表示 permissive）
+# ---------------------------------------------------------------------------
+[admin]
+cors_origins = []
+# cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]

@@ -14,17 +14,19 @@ use base64::Engine;
 use clap::Parser;
 use fred::clients::{Client as FredClient, SubscriberClient};
 use fred::prelude::*;
+use fred::types::InfoKind;
 use fred::types::streams::XReadResponse;
 use fred::types::ExpireOptions;
 use futures_util::StreamExt;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tokio::sync::Semaphore;
+use tokio::sync::{oneshot, Semaphore};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 include!("app/types.rs");
+include!("app/config.rs");
 include!("app/runtime.rs");
 include!("app/handlers.rs");
 include!("app/queue.rs");
@@ -34,5 +36,12 @@ include!("app/object_store.rs");
 include!("app/metrics.rs");
 include!("app/ratelimit.rs");
 include!("app/admin.rs");
+include!("app/wait_subscriber.rs");
 include!("app/util.rs");
+
+#[cfg(feature = "test-support")]
+pub mod test_support {
+    include!("app/test_support.rs");
+}
+
 include!("app/tests.rs");

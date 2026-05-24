@@ -1,5 +1,3 @@
-static JOB_COUNTER: AtomicU64 = AtomicU64::new(1);
-
 const TOKEN_BUCKET_LUA: &str = r#"
 local tokens_key = KEYS[1]
 local ts_key = KEYS[2]
@@ -35,8 +33,7 @@ end
 "#;
 
 #[derive(Debug, Clone, Parser)]
-#[command(version, about = "External Redis-backed rate-limit and queue service for SpaceGate AI gateway")]
-struct Args {
+pub struct Args {
     #[arg(long, env = "AI_GATEWAY_SERVICE_HOST", default_value = "0.0.0.0")]
     host: IpAddr,
     #[arg(long, env = "AI_GATEWAY_SERVICE_PORT", default_value_t = 18080)]
@@ -140,8 +137,65 @@ struct Args {
     object_store_auth_header: Option<String>,
 }
 
+impl Default for Args {
+    fn default() -> Self {
+        Self {
+            host: default_host(),
+            port: default_port(),
+            redis_url: default_redis_url(),
+            stream_key: default_stream_key(),
+            high_priority_stream_key: default_high_priority_stream_key(),
+            low_priority_stream_key: default_low_priority_stream_key(),
+            enable_priority_streams: default_enable_priority_streams(),
+            queue_default_priority: default_queue_default_priority(),
+            queue_high_models: default_queue_high_models(),
+            queue_low_models: default_queue_low_models(),
+            queue_high_tenants: default_queue_high_tenants(),
+            queue_low_tenants: default_queue_low_tenants(),
+            queue_high_weight: default_queue_high_weight(),
+            queue_normal_weight: default_queue_normal_weight(),
+            queue_low_weight: default_queue_low_weight(),
+            stream_max_len: default_stream_max_len(),
+            consumer_group: default_consumer_group(),
+            consumer_name: default_consumer_name(),
+            job_dlq_stream: default_job_dlq_stream(),
+            callback_retry_stream: default_callback_retry_stream(),
+            callback_retry_group: default_callback_retry_group(),
+            callback_dlq_stream: default_callback_dlq_stream(),
+            callback_max_retry_attempts: default_callback_max_retry_attempts(),
+            callback_retry_initial_delay_ms: default_callback_retry_initial_delay_ms(),
+            callback_retry_max_delay_ms: default_callback_retry_max_delay_ms(),
+            callback_retry_reclaim_idle_secs: default_callback_retry_reclaim_idle_secs(),
+            result_key_prefix: default_result_key_prefix(),
+            result_channel_prefix: default_result_channel_prefix(),
+            result_ttl_secs: default_result_ttl_secs(),
+            rate_limit_rps: default_rate_limit_rps(),
+            rate_limit_burst: default_rate_limit_burst(),
+            rate_limit_cost: default_rate_limit_cost(),
+            tenant_rate_limit_prefix: default_tenant_rate_limit_prefix(),
+            wait_timeout_secs: default_wait_timeout_secs(),
+            worker_concurrency: default_worker_concurrency(),
+            admin_cors_origins: default_admin_cors_origins(),
+            upstream_base_url: None,
+            max_body_bytes: default_max_body_bytes(),
+            inline_threshold: default_inline_threshold(),
+            body_read_concurrency: default_body_read_concurrency(),
+            reclaim_interval_secs: default_reclaim_interval_secs(),
+            reclaim_min_idle_secs: default_reclaim_min_idle_secs(),
+            job_process_lease_secs: default_job_process_lease_secs(),
+            job_max_delivery_attempts: default_job_max_delivery_attempts(),
+            require_https_callback: default_require_https_callback(),
+            object_store_endpoint: None,
+            object_store_bucket: default_object_store_bucket(),
+            object_store_prefix: default_object_store_prefix(),
+            object_multipart_part_size: default_object_multipart_part_size(),
+            object_store_auth_header: None,
+        }
+    }
+}
+
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     /// 非阻塞 API 路径专用连接（准入、入队、metrics、admin）。
     redis: FredClient,
     /// worker / reclaimer / callback-retry 专用连接，避免 BLOCK 型 XREADGROUP 占满 API 连接。
@@ -150,6 +204,8 @@ struct AppState {
     cfg: Arc<Args>,
     body_permits: Arc<Semaphore>,
     metrics: Arc<Metrics>,
+    /// wait 模式共享 Pub/Sub 连接池。
+    wait_subscriber: Arc<WaitSubscriberHub>,
 }
 
 struct Metrics {
@@ -490,6 +546,190 @@ struct TenantRateLimitRuleView {
     ttl_remaining_secs: Option<i64>,
 }
 
+fn default_host() -> IpAddr {
+    "0.0.0.0".parse().expect("default host")
+}
+
+fn default_port() -> u16 {
+    18080
+}
+
+fn default_redis_url() -> String {
+    "redis://127.0.0.1/".to_string()
+}
+
+fn default_stream_key() -> String {
+    "ai:jobs".to_string()
+}
+
+fn default_high_priority_stream_key() -> String {
+    "ai:jobs:high".to_string()
+}
+
+fn default_low_priority_stream_key() -> String {
+    "ai:jobs:low".to_string()
+}
+
+fn default_enable_priority_streams() -> bool {
+    true
+}
+
+fn default_queue_default_priority() -> String {
+    "normal".to_string()
+}
+
+fn default_queue_high_models() -> String {
+    String::new()
+}
+
+fn default_queue_low_models() -> String {
+    String::new()
+}
+
+fn default_queue_high_tenants() -> String {
+    String::new()
+}
+
+fn default_queue_low_tenants() -> String {
+    String::new()
+}
+
+fn default_queue_high_weight() -> usize {
+    3
+}
+
+fn default_queue_normal_weight() -> usize {
+    1
+}
+
+fn default_queue_low_weight() -> usize {
+    1
+}
+
+fn default_stream_max_len() -> u64 {
+    100_000
+}
+
+fn default_consumer_group() -> String {
+    "ai-gateway-workers".to_string()
+}
+
+fn default_consumer_name() -> String {
+    "ai-gateway-service".to_string()
+}
+
+fn default_job_dlq_stream() -> String {
+    "ai:job-dlq".to_string()
+}
+
+fn default_callback_retry_stream() -> String {
+    "ai:callback-retry".to_string()
+}
+
+fn default_callback_retry_group() -> String {
+    "ai-gateway-callbacks".to_string()
+}
+
+fn default_callback_dlq_stream() -> String {
+    "ai:callback-dlq".to_string()
+}
+
+fn default_callback_max_retry_attempts() -> u32 {
+    5
+}
+
+fn default_callback_retry_initial_delay_ms() -> u64 {
+    1000
+}
+
+fn default_callback_retry_max_delay_ms() -> u64 {
+    60_000
+}
+
+fn default_callback_retry_reclaim_idle_secs() -> u64 {
+    60
+}
+
+fn default_result_key_prefix() -> String {
+    "result:".to_string()
+}
+
+fn default_result_channel_prefix() -> String {
+    "result:".to_string()
+}
+
+fn default_result_ttl_secs() -> u64 {
+    120
+}
+
+fn default_rate_limit_rps() -> u64 {
+    100
+}
+
+fn default_rate_limit_burst() -> u64 {
+    200
+}
+
+fn default_tenant_rate_limit_prefix() -> String {
+    "ai:tenant:ratelimit:".to_string()
+}
+
+fn default_wait_timeout_secs() -> u64 {
+    60
+}
+
+fn default_worker_concurrency() -> usize {
+    10
+}
+
+fn default_admin_cors_origins() -> String {
+    String::new()
+}
+
+fn default_max_body_bytes() -> usize {
+    32 * 1024 * 1024
+}
+
+fn default_inline_threshold() -> usize {
+    128 * 1024
+}
+
+fn default_body_read_concurrency() -> usize {
+    200
+}
+
+fn default_reclaim_interval_secs() -> u64 {
+    30
+}
+
+fn default_reclaim_min_idle_secs() -> u64 {
+    30
+}
+
+fn default_job_process_lease_secs() -> u64 {
+    120
+}
+
+fn default_job_max_delivery_attempts() -> u32 {
+    5
+}
+
+fn default_require_https_callback() -> bool {
+    true
+}
+
+fn default_object_store_bucket() -> String {
+    "ai-gateway-body".to_string()
+}
+
+fn default_object_store_prefix() -> String {
+    "bodies".to_string()
+}
+
+fn default_object_multipart_part_size() -> usize {
+    5 * 1024 * 1024
+}
+
 fn default_rate_limit_cost() -> u64 {
     1
 }
@@ -556,6 +796,13 @@ impl QueuePolicy {
 }
 
 #[derive(Debug)]
+struct BodyStoreOutcome {
+    location: BodyLocation,
+    /// S3 卸载上传仍在后台进行时，入队需与其并行并在返回前 join。
+    pending_upload: Option<tokio::task::JoinHandle<Result<(), ServiceError>>>,
+}
+
+#[derive(Debug)]
 struct BodyLocation {
     body_base64: String,
     object_ref: String,
@@ -600,6 +847,13 @@ impl ServiceError {
     fn payload_too_large(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: message.into(),
+        }
+    }
+
+    fn not_implemented(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::NOT_IMPLEMENTED,
             message: message.into(),
         }
     }

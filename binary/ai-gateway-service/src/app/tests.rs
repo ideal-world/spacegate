@@ -83,7 +83,7 @@ mod tests {
         assert_eq!(parse_queue_priority("urgent"), None);
     }
 
-    fn test_app_state(object_store_endpoint: Option<String>, inline_threshold: usize) -> AppState {
+    async fn test_app_state(object_store_endpoint: Option<String>, inline_threshold: usize) -> AppState {
         let mut args = Args::parse_from(["ai-gateway-service"]);
         args.object_store_endpoint = object_store_endpoint;
         args.inline_threshold = inline_threshold;
@@ -92,6 +92,7 @@ mod tests {
         args.object_store_prefix = "bodies".to_string();
         args.object_multipart_part_size = 1024;
         let redis = build_redis_client("redis://127.0.0.1/").expect("redis client");
+        let wait_subscriber = WaitSubscriberHub::new("redis://127.0.0.1/").await.expect("wait subscriber");
         AppState {
             redis: redis.clone(),
             worker_redis: redis,
@@ -99,6 +100,7 @@ mod tests {
             cfg: Arc::new(args),
             body_permits: Arc::new(Semaphore::new(8)),
             metrics: Arc::new(Metrics::default()),
+            wait_subscriber,
         }
     }
 
@@ -128,12 +130,14 @@ mod tests {
 
     #[tokio::test]
     async fn store_body_keeps_small_payload_inline() {
-        let state = test_app_state(None, 16 * 1024);
+        let state = test_app_state(None, 16 * 1024).await;
         let payload = vec![1u8; 4096];
-        let location = store_body(&state, "job-inline", Body::from(payload.clone())).await.expect("inline store");
+        let outcome = store_body(&state, "job-inline", Body::from(payload.clone())).await.expect("inline store");
+        let location = outcome.location;
         assert_eq!(location.storage, "inline");
         assert_eq!(location.size, payload.len());
         assert!(!location.body_base64.is_empty());
+        assert!(outcome.pending_upload.is_none());
         assert_eq!(state.metrics.object_offload_total.load(Ordering::Relaxed), 0);
     }
 
@@ -151,9 +155,13 @@ mod tests {
             axum::serve(listener, app).await.expect("mock s3 serve");
         });
 
-        let state = test_app_state(Some(format!("http://{addr}")), 1024);
+        let state = test_app_state(Some(format!("http://{addr}")), 1024).await;
         let payload = vec![7u8; 5000];
-        let location = store_body(&state, "job-offload", Body::from(payload.clone())).await.expect("offload store");
+        let outcome = store_body(&state, "job-offload", Body::from(payload.clone())).await.expect("offload store");
+        if let Some(upload) = outcome.pending_upload {
+            upload.await.expect("upload join").expect("upload body");
+        }
+        let location = outcome.location;
         assert_eq!(location.storage, "object");
         assert_eq!(location.size, payload.len());
         assert!(location.body_base64.is_empty());

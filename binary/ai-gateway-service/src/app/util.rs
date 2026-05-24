@@ -37,9 +37,7 @@ fn result_channel(state: &AppState, job_id: &str) -> String {
 }
 
 fn new_job_id() -> String {
-    let now = now_ms();
-    let seq = JOB_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{now:x}{seq:x}")
+    ulid::Ulid::new().to_string()
 }
 
 fn now_ms() -> u64 {
@@ -103,7 +101,7 @@ fn metrics_label(value: &str) -> String {
 }
 
 fn body_size_bucket(size: usize, storage: &str) -> &'static str {
-    if storage == "s3" {
+    if storage == "object" || storage == "s3" {
         "s3"
     } else if size <= 10 * 1024 {
         "inline_small"
@@ -154,6 +152,19 @@ fn decode_callback_result(body_base64: &str) -> serde_json::Value {
         return value;
     }
     serde_json::json!({ "raw_base64": body_base64 })
+}
+
+fn poll_result_to_response(result: StoredResult) -> Result<Response, ServiceError> {
+    let status = StatusCode::from_u16(result.http_status).unwrap_or(StatusCode::OK);
+    let body = base64::engine::general_purpose::STANDARD.decode(result.body_base64).map_err(|e| ServiceError::internal(format!("decode poll result body: {e}")))?;
+    let mut resp = (status, body).into_response();
+    for (name, value) in result.headers {
+        if let (Ok(name), Ok(value)) = (HeaderName::try_from(name.as_str()), HeaderValue::from_str(&value)) {
+            resp.headers_mut().insert(name, value);
+        }
+    }
+    resp.headers_mut().insert("x-job-id", header_value(&result.job_id)?);
+    Ok(resp)
 }
 
 fn tenant_rate_limit_rule_view(key: String, rule: TenantRateLimitRule, ttl_remaining_secs: Option<i64>) -> TenantRateLimitRuleView {

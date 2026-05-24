@@ -1,14 +1,10 @@
 fn callback_body(result: &StoredResult) -> serde_json::Value {
+    // 设计文档回调 JSON：job_id / status / result / completed_at
     serde_json::json!({
         "job_id": result.job_id,
         "status": result.status,
-        "http_status": result.http_status,
-        "headers": result.headers,
         "result": decode_callback_result(&result.body_base64),
-        "body_base64": result.body_base64,
         "completed_at": format_completed_at_rfc3339(result.completed_at_ms),
-        "completed_at_ms": result.completed_at_ms,
-        "error": result.error,
     })
 }
 

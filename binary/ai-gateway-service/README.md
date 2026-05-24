@@ -7,10 +7,10 @@ It keeps Redis, worker execution, Pub/Sub waiting, callback delivery, and result
 ## Endpoints
 
 - `POST /v1/ratelimit/check`
-  - Reads `X-Tenant-Id`, `X-Model`, and `X-Original-Path`.
-  - Runs a Redis Lua token bucket.
-  - Can override per tenant with Redis keys `ai:tenant:ratelimit:{tenant}:rps` and `ai:tenant:ratelimit:{tenant}:burst`.
-  - Returns `{ "allowed": bool, "retry_after_ms": number }`.
+  - Reads `X-Tenant-Id`, optional `X-Model`, `X-Original-Path`, and `X-RateLimit-Policy`.
+  - Runs a Redis Lua token bucket keyed by **tenant only** (`ai:ratelimit:{tenant}:tokens/ts`).
+  - Per-tenant overrides via Admin API or Redis keys under `ai:tenant:ratelimit:{tenant}[:model:...][:path:...][:policy:...]`.
+  - Returns `{ "allowed": bool, "retry_after_ms": number }`. Wasm calls this for **all** policies before enqueue or upstream passthrough.
 - `POST /v1/queue/enqueue`
   - Requires `X-Callback-URL` by default.
   - Streams the request body, then stores either inline base64 body or an object-store reference in Redis Stream.
@@ -18,8 +18,9 @@ It keeps Redis, worker execution, Pub/Sub waiting, callback delivery, and result
 - `POST /v1/queue/enqueue-and-wait`
   - Enqueues the job and waits for the worker result via Redis Pub/Sub.
   - Returns the upstream response with `X-Job-Id` and `X-Queue-Wait-Ms`, or `504`.
-- `GET /v1/jobs/{job_id}`
-  - Returns the stored result JSON while the result key TTL is alive.
+- `GET /v1/jobs/{job_id}` / `GET /jobs/{job_id}/status`
+  - When the job is completed, returns the **raw upstream HTTP response** (status, headers, body) with `X-Job-Id`.
+  - While pending or on error, returns JSON status metadata.
 - `GET /metrics`
   - Returns Prometheus text metrics for queue depth, PEL size, DLQ depth, enqueue latency, body size, waits, limits, callbacks, retries, object offload, and worker counters.
 
@@ -29,6 +30,39 @@ It keeps Redis, worker execution, Pub/Sub waiting, callback delivery, and result
 cargo run -p ai-gateway-service -- \
   --redis-url redis://127.0.0.1/ \
   --upstream-base-url http://127.0.0.1:9000
+```
+
+Or use a TOML config file (recommended for local / deployment):
+
+```bash
+cargo run -p ai-gateway-service -- --config config/ai-gateway-service.toml
+```
+
+If `--config` / `AI_GATEWAY_CONFIG` is omitted, the service looks for `ai-gateway-service.toml` in the **same directory as the executable**. For deployment, place the binary and config file together:
+
+```text
+/opt/ai-gateway/
+  ai-gateway-service          # binary
+  ai-gateway-service.toml     # auto-loaded
+```
+
+Example configs live under `config/`:
+
+- `config/ai-gateway-service.example.toml` — full reference with all sections
+- `config/ai-gateway-service.toml` — minimal local dev template
+
+Precedence: explicit CLI flags / environment variables > config file > built-in defaults.
+
+Default config discovery order:
+
+1. `--config` or `AI_GATEWAY_CONFIG`
+2. `{executable_dir}/ai-gateway-service.toml` (if the file exists)
+3. Built-in defaults only
+
+Set the config path via environment variable:
+
+```bash
+AI_GATEWAY_CONFIG=config/ai-gateway-service.toml cargo run -p ai-gateway-service
 ```
 
 Useful environment variables:
@@ -82,7 +116,13 @@ CreateMultipartUpload -> UploadPart* -> CompleteMultipartUpload
 
 If any part upload or completion fails, the service sends `AbortMultipartUpload` before returning the enqueue error. The current implementation expects a MinIO/S3-compatible endpoint that accepts either unsigned requests or the configured static auth header.
 
-Tenant rate-limit config can be overridden without restarting the service. The service checks Redis keys from most-specific to least-specific, using JSON or CSV values:
+Tenant rate-limit overrides (Admin API + Redis):
+
+```text
+GET/PUT/DELETE /v1/admin/tenant-rate-limits
+```
+
+Redis key patterns (most specific match wins; token bucket remains tenant-scoped):
 
 ```text
 ai:tenant:ratelimit:{tenant}:model:{model}:path:{path}:policy:{policy}
@@ -109,7 +149,17 @@ CSV value:
 
 The old per-tenant keys are still supported as fallback: `ai:tenant:ratelimit:{tenant}:rps`, `:burst`, and `:cost`.
 
-Priority queues are disabled by default. Enable them and send `X-Queue-Priority: high|normal|low` to route jobs to separate streams, or configure model/tenant defaults:
+Global defaults when no tenant rule matches:
+
+```bash
+AI_RATE_LIMIT_RPS=100
+AI_RATE_LIMIT_BURST=200
+AI_RATE_LIMIT_COST=1
+```
+
+The Wasm plugin invokes `/v1/ratelimit/check` for **abandon**, **queue**, and **wait** before passthrough or enqueue.
+
+Priority streams are **enabled by default** (`AI_ENABLE_PRIORITY_STREAMS=true`). Send `X-Queue-Priority: high|normal|low` to route jobs to separate streams, or configure model/tenant defaults:
 
 ```bash
 AI_ENABLE_PRIORITY_STREAMS=true
@@ -140,6 +190,24 @@ Unit tests (mock S3 multipart server, no Docker):
 
 ```bash
 cargo test -p ai-gateway-service store_body_
+```
+
+## 测试规格与集成测试
+
+完整用例规格见 [`spacegate/docs/ai-gateway-queue-test-spec.md`](../../docs/ai-gateway-queue-test-spec.md)（TC-* 编号，映射设计文档章节）。
+
+```bash
+# 单元测试（无需 Redis）
+cd spacegate && cargo test -p ai-gateway-service
+
+# Rust 集成测试（需 Redis 7+）
+./spacegate/binary/ai-gateway-service/scripts/run-integration-tests.sh
+
+# Hurl 黑盒（需 hurl + Redis + 编译 release binary）
+./spacegate/binary/ai-gateway-service/scripts/run-hurl-tests.sh
+
+# Wasm 策略纯逻辑（host 侧）
+./spacegate/binary/ai-gateway-service/scripts/run-wasm-policy-tests.sh
 ```
 
 MinIO end-to-end (Docker + worker roundtrip):

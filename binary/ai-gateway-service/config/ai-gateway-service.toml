@@ -1,0 +1,30 @@
+# 本地开发配置：按需修改 Redis / 上游 / 对象存储地址
+
+[server]
+host = "0.0.0.0"
+port = 18080
+
+[redis]
+url = "redis://127.0.0.1/"
+
+[upstream]
+base_url = "http://127.0.0.1:9000"
+
+[callback]
+require_https = false
+
+# 请求体大小：超过 inline_threshold 且配置了 object_store.endpoint 时走 MinIO/S3
+[body]
+max_bytes = 33554432       # 32 MiB，与 Wasm 插件 limits.max_body_bytes 保持一致
+inline_threshold = 131072  # 128 KiB 以下 inline 存 Redis
+read_concurrency = 200
+
+# 大 Body 对象存储（S3 / MinIO 兼容）
+# 本地 MinIO 可参考 tests/queue-object-store-e2e.sh，默认端口 9001（避免与 mock 上游 :9000 冲突）
+[object_store]
+endpoint = "http://127.0.0.1:9001"
+bucket = "ai-gateway-body"
+prefix = "bodies"
+multipart_part_size = 5242880
+# 无鉴权 MinIO 可留空；需要鉴权时使用 "Header-Name: value" 格式
+# auth_header = "Authorization: Bearer your-token"
