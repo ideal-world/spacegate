@@ -1,5 +1,5 @@
 # 仅重建 spacegate-admin-server（含插件增量写入修复）
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release -p spacegate-admin-server

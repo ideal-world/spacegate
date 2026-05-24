@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# 可选：SpaceGate + Wasm 全链路 E2E（TC-GW-*）
-# 需已编译 wasm 且 SpaceGate demo 配置就绪；默认 skip。
+# SpaceGate + Wasm 全链路 E2E（TC-GW-* / TC-GW-BODY-*）
 set -euo pipefail
-echo "TC-GW-* gateway E2E: optional — configure SpaceGate demo and run manual curl."
-echo "See spacegate/docs/ai-gateway-queue-test-spec.md section TC-GW."
-exit 0
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$DIR/run-gateway-large-body-e2e.sh" "$@"
