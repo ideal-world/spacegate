@@ -5,6 +5,7 @@
 相关文档：
 
 - 插件行为与请求头：[`plugins/wasm/ai-gateway-queue/README.md`](../plugins/wasm/ai-gateway-queue/README.md)
+- **管理界面配置指南**：[`docs/ai-gateway-queue-admin-ui-guide.md`](../docs/ai-gateway-queue-admin-ui-guide.md)
 - 测试用例规格：[`docs/ai-gateway-queue-test-spec.md`](../docs/ai-gateway-queue-test-spec.md)
 - K8s manifest 目录：[`deploy/k8s/ai-gateway/`](k8s/ai-gateway/)
 
@@ -232,6 +233,7 @@ cargo test -p ai-gateway-service --lib
 要点：
 
 - 配置目录挂载：**工作区根目录** `.docker/ai-gateway-demo/` → 容器内 `/etc/spacegate`
+- **admin-server 卷须可写**（勿 `:ro`），否则管理界面保存插件报 `Read-only file system`
 - Wasm 放在 `plugin/`（JSON）与 `plugins/`（`.wasm` 二进制），**勿**把 `.wasm` 放进 `plugin/`（会被当 JSON 解析导致 SpaceGate 启动失败）
 - macOS 上 **不能** `docker cp` 本机编译的 Mach-O 二进制进 Linux 容器，需在 Linux 环境构建镜像
 
