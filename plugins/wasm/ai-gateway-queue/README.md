@@ -85,7 +85,8 @@ AI_REQUIRE_HTTPS_CALLBACK=false
 
 可参考：
 
-`/Users/sh.zhang/Workspace/huayun/jiyan/ai-gateway-dev/spacegate/resource/ai-gateway-demo/plugin/wasm.ai-gateway-queue.json`
+- 文件模板：[`resource/ai-gateway-demo/plugin/wasm.ai-gateway-queue.json`](../../resource/ai-gateway-demo/plugin/wasm.ai-gateway-queue.json)
+- **管理界面操作步骤**：[`docs/ai-gateway-queue-admin-ui-guide.md`](../../docs/ai-gateway-queue-admin-ui-guide.md)
 
 关键配置项：
 
