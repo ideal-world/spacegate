@@ -16,7 +16,13 @@ spec:
       name: ai-gateway-queue
       enable: true
       config:
-        url: http://ai-gateway-wasm/spacegate_plugin_ai_gateway_queue.wasm
+        # Harbor OCI 制品（本地 push 脚本见 open-source/harbor/push-ai-gateway-queue.sh）
+        url: oci+http://host.docker.internal:9081/ai-gateway/ai-gateway-queue:v1.0.0
+        sha256: sha256:8e2b1d3271b7e7c44b01e96e1844e0a231896fbe21b23ba07a01f71a58b9e697
+        oci_auth:
+          registry: host.docker.internal:9081
+          username: admin
+          password: Harbor12345
         fail_strategy: fail_close
         validate_on_create: false
         plugin_name: ai-gateway-queue
