@@ -3,6 +3,9 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 pub use plugin::*;
 
+pub mod observability;
+pub use observability::*;
+
 pub mod gateway;
 pub use gateway::*;
 
@@ -62,6 +65,7 @@ pub struct Config {
     #[cfg_attr(feature = "typegen", ts(as = "crate::plugin::PluginInstanceMapTs"))]
     pub plugins: PluginInstanceMap,
     pub api_port: Option<u16>,
+    pub observability: ObservabilityConfig,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -74,6 +78,7 @@ impl Default for Config {
             api_port: Some(crate::constants::DEFAULT_API_PORT),
             #[cfg(not(feature = "ext-axum"))]
             api_port: None,
+            observability: Default::default(),
         }
     }
 }

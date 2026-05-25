@@ -15,6 +15,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, RwLock};
 
 use once_cell::sync::Lazy;
+use opentelemetry::global;
 
 use crate::abi::MetricType;
 
@@ -142,8 +143,14 @@ pub fn queue_dequeue(qid: u32) -> (QueueOpResult, Option<Vec<u8>>) {
 struct MetricEntry {
     kind: MetricType,
     value: u64,
-    #[allow(dead_code)]
-    name: String,
+    instrument: OtelMetricInstrument,
+}
+
+#[derive(Debug)]
+enum OtelMetricInstrument {
+    Counter(opentelemetry::metrics::Counter<u64>),
+    Gauge(opentelemetry::metrics::Gauge<i64>),
+    Histogram(opentelemetry::metrics::Histogram<u64>),
 }
 
 #[derive(Debug, Default)]
@@ -172,14 +179,13 @@ pub fn metric_define(kind: MetricType, name: &str) -> u32 {
     }
     g.next_id = g.next_id.wrapping_add(1).max(1);
     let id = g.next_id;
-    g.by_id.insert(
-        id,
-        MetricEntry {
-            kind,
-            value: 0,
-            name: name.to_string(),
-        },
-    );
+    let meter = global::meter("spacegate_plugin_wasm");
+    let instrument = match kind {
+        MetricType::Counter => OtelMetricInstrument::Counter(meter.u64_counter(name.to_string()).build()),
+        MetricType::Gauge => OtelMetricInstrument::Gauge(meter.i64_gauge(name.to_string()).build()),
+        MetricType::Histogram => OtelMetricInstrument::Histogram(meter.u64_histogram(name.to_string()).build()),
+    };
+    g.by_id.insert(id, MetricEntry { kind, value: 0, instrument });
     g.by_name.insert(name.to_string(), id);
     id
 }
@@ -192,6 +198,11 @@ pub fn metric_record(id: u32, value: u64) -> MetricOpResult {
     match g.by_id.get_mut(&id) {
         Some(m) => {
             m.value = value;
+            match &m.instrument {
+                OtelMetricInstrument::Counter(counter) => counter.add(value, &[]),
+                OtelMetricInstrument::Gauge(gauge) => gauge.record(value as i64, &[]),
+                OtelMetricInstrument::Histogram(histogram) => histogram.record(value, &[]),
+            }
             MetricOpResult::Ok
         }
         None => MetricOpResult::NotFound,
@@ -213,6 +224,11 @@ pub fn metric_increment(id: u32, delta: i64) -> MetricOpResult {
         m.value = m.value.saturating_add(delta as u64);
     } else {
         m.value = m.value.saturating_sub((-delta) as u64);
+    }
+    match &m.instrument {
+        OtelMetricInstrument::Counter(counter) => counter.add(delta.max(0) as u64, &[]),
+        OtelMetricInstrument::Gauge(gauge) => gauge.record(m.value as i64, &[]),
+        OtelMetricInstrument::Histogram(histogram) => histogram.record(m.value, &[]),
     }
     MetricOpResult::Ok
 }

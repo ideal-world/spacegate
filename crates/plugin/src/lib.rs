@@ -33,6 +33,21 @@ pub mod plugins;
 pub use schemars;
 pub use spacegate_model;
 pub use spacegate_model::{plugin_meta, PluginAttributes, PluginConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, PluginMetaData};
+
+pub fn set_telemetry_field(req: &SgRequest, key: impl Into<String>, value: impl ToString) -> Result<(), spacegate_kernel::observability::TelemetryError> {
+    if let Some(context) = req.extensions().get::<spacegate_kernel::observability::TelemetryContext>() {
+        context.insert_checked(key, value)?;
+    }
+    Ok(())
+}
+
+pub fn set_plugin_telemetry_field(req: &SgRequest, namespace: &str, key: &str, value: impl ToString) -> Result<(), spacegate_kernel::observability::TelemetryError> {
+    if let Some(context) = req.extensions().get::<spacegate_kernel::observability::TelemetryContext>() {
+        context.insert_namespaced(namespace, key, value)?;
+    }
+    Ok(())
+}
+
 /// # Plugin Trait
 /// It's a easy way to define a plugin through this trait.
 /// You should give a unique [`code`](Plugin::CODE) for the plugin,

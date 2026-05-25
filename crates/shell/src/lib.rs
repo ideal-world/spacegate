@@ -49,6 +49,8 @@ use tracing::{info, instrument};
 pub mod config;
 /// http extensions
 pub mod extension;
+/// OpenTelemetry initialization.
+pub mod observability;
 /// Spacegate service creation
 pub mod server;
 

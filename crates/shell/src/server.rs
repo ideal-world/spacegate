@@ -293,14 +293,14 @@ impl RunningSgGateway {
                             tls_server_cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
                             tls_server_cfg.ignore_client_order = true;
                             tls_server_cfg.enable_secret_extraction = true;
-                            listen.add_service(service.clone().https(tls_server_cfg))
+                            listen.add_service(service.clone().https_with_gateway_name(tls_server_cfg, gateway_name.clone()))
                         } else {
                             error!("[SG.Server] Can not found a valid Tls private key");
                         }
                     };
                 }
             } else {
-                listen.add_service(service.clone().http());
+                listen.add_service(service.clone().http_with_gateway_name(gateway_name.clone()));
             }
             listens.push(listen)
         }

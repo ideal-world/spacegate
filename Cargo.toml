@@ -68,6 +68,12 @@ toml = { version = "0.8", features = ["preserve_order"] }
 lazy_static = { version = "1.4" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = { version = "0" }
+tracing-opentelemetry = { version = "0.33" }
+opentelemetry = { version = "0.32" }
+opentelemetry_sdk = { version = "0.32" }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic", "http-proto", "reqwest-blocking-client"] }
+opentelemetry-appender-tracing = { version = "0.32" }
+opentelemetry-semantic-conventions = { version = "0.32" }
 
 # Encode
 base64 = { version = "0.22" }
