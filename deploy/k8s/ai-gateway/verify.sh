@@ -4,6 +4,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 NS=spacegate
 GW="http://127.0.0.1:9993/v1/chat/completions"
+PF=""
 
 pass=0
 fail=0
@@ -25,22 +26,20 @@ curl -sf "http://127.0.0.1:18080/healthz" >/dev/null 2>&1 \
   && echo "✅ ai-gateway-service /healthz（集群内）" \
   || { echo "⚠️  跳过直连 health（请 kubectl port-forward svc/ai-gateway-service 18080:18080）"; }
 
-T="k8s-verify-$RANDOM"
+T="k8s-verify-$(date +%s)"
 curl -sf -X PUT "http://127.0.0.1:18080/v1/admin/tenant-rate-limits" \
   -H 'Content-Type: application/json' \
-  -d "{\"tenant\":\"$T\",\"rps\":5,\"burst\":10}" >/dev/null 2>&1 \
-  || kubectl port-forward -n "$NS" svc/ai-gateway-service 18080:18080 >/tmp/pf.log 2>&1 &
-PF=$!
-sleep 2
+  -d "{\"tenant\":\"$T\",\"rps\":5,\"burst\":5}" >/dev/null 2>&1 \
+  || { kubectl port-forward -n "$NS" svc/ai-gateway-service 18080:18080 >/tmp/pf-18080.log 2>&1 & PF=$!; sleep 2; }
 curl -sf -X PUT "http://127.0.0.1:18080/v1/admin/tenant-rate-limits" \
   -H 'Content-Type: application/json' \
-  -d "{\"tenant\":\"$T\",\"rps\":5,\"burst\":10}" >/dev/null || true
+  -d "{\"tenant\":\"$T\",\"rps\":5,\"burst\":5}" >/dev/null || true
 
-echo "==> 网关插件（tenant=$T）"
+echo "==> 网关插件 (tenant=$T)"
 check "缺 Policy" 400 "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GW" -H "X-Tenant-Id: $T" -H 'Content-Type: application/json' -d '{}')"
 check "abandon 配额内" 200 "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GW" -H 'X-RateLimit-Policy: abandon' -H "X-Tenant-Id: $T" -H 'Content-Type: application/json' -d '{"p":1}')"
 
-for i in $(seq 1 8); do
+for i in $(seq 1 10); do
   curl -s -o /dev/null -X POST "$GW" -H 'X-RateLimit-Policy: abandon' -H "X-Tenant-Id: $T" -H 'Content-Type: application/json' -d "{\"p\":$i}" || true
 done
 check "abandon 超额" 429 "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GW" -H 'X-RateLimit-Policy: abandon' -H "X-Tenant-Id: $T" -H 'Content-Type: application/json' -d '{"p":99}')"
