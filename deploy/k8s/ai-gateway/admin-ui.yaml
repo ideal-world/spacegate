@@ -1,0 +1,165 @@
+# SpaceGate Admin UI（K8s 模式）
+# admin-server 读写 K8s 中的 Gateway / HTTPRoute / SgFilter 等
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+  labels:
+    app.kubernetes.io/part-of: ai-gateway
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: spacegate-admin
+  labels:
+    app.kubernetes.io/part-of: ai-gateway
+rules:
+  - apiGroups: [""]
+    resources: [services, pods, secrets, configmaps]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [daemonsets]
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gatewayclasses, gateways, httproutes, httproutes/status, gateways/status, gatewayclasses/status]
+    verbs: [get, list, create, update, watch, delete]
+  - apiGroups: [spacegate.idealworld.group]
+    resources: [sgfilters, httpspaceroutes, httpspaceroutes/status]
+    verbs: [get, create, update, patch, list, watch, delete]
+  - apiGroups: [extensions.higress.io]
+    resources: [wasmplugins, wasmplugins/status]
+    verbs: [get, create, update, patch, list, watch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: spacegate-admin
+  labels:
+    app.kubernetes.io/part-of: ai-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: spacegate-admin
+subjects:
+  - kind: ServiceAccount
+    name: spacegate-admin
+    namespace: spacegate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+  labels:
+    app.kubernetes.io/name: spacegate-admin
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: spacegate-admin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: spacegate-admin
+        app.kubernetes.io/part-of: ai-gateway
+    spec:
+      serviceAccountName: spacegate-admin
+      containers:
+        - name: admin-server
+          image: ai-gateway/admin-server:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - -c
+            - k8s:spacegate
+            - -p
+            - "19992"
+            - -H
+            - 0.0.0.0
+          env:
+            - name: CONFIG
+              value: k8s:spacegate
+            - name: RUST_LOG
+              value: info
+          ports:
+            - containerPort: 19992
+              name: http
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+  labels:
+    app.kubernetes.io/name: spacegate-admin
+spec:
+  selector:
+    app.kubernetes.io/name: spacegate-admin
+  ports:
+    - name: http
+      port: 19992
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway-web
+  namespace: spacegate
+  labels:
+    app.kubernetes.io/name: ai-gateway-web
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-gateway-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-gateway-web
+        app.kubernetes.io/part-of: ai-gateway
+    spec:
+      containers:
+        - name: web
+          # 与 build-images.sh 输出一致；本地构建后 kubectl set image 更新
+          image: ai-gateway/web:k8s-spa
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 9080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway-web
+  namespace: spacegate
+  labels:
+    app.kubernetes.io/name: ai-gateway-web
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: ai-gateway-web
+  ports:
+    - name: http
+      port: 9080
+      targetPort: http
