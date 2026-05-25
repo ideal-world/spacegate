@@ -99,8 +99,17 @@ where
 
     pub async fn save_config(&self, config: Config) -> Result<(), BoxError> {
         // save config
-        let Config { plugins, gateways, api_port } = config;
-        let main_config_to_save: Config = Config { api_port, ..Default::default() };
+        let Config {
+            plugins,
+            gateways,
+            api_port,
+            observability,
+        } = config;
+        let main_config_to_save: Config = Config {
+            api_port,
+            observability,
+            ..Default::default()
+        };
         let b_main_config = self.format.ser(&main_config_to_save)?;
         tokio::fs::write(self.entrance_config_path(), &b_main_config).await?;
         if !plugins.is_empty() {

@@ -2,7 +2,7 @@ use std::{fmt::Display, net::IpAddr};
 
 use serde::{Deserialize, Serialize};
 
-use super::plugin::PluginInstanceId;
+use super::{observability::ObservabilityConfig, plugin::PluginInstanceId};
 
 /// Gateway represents an instance of a service-traffic handling infrastructure
 /// by binding Listeners to a set of IP addresses.
@@ -69,6 +69,7 @@ pub struct SgParameters {
     #[serde(skip_serializing_if = "Option::is_none")]
     /// Add request id for every request
     pub enable_x_request_id: Option<bool>,
+    pub observability: ObservabilityConfig,
 }
 
 /// Listener embodies the concept of a logical endpoint where a Gateway accepts network connections.

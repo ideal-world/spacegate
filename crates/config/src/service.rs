@@ -134,6 +134,7 @@ pub trait Retrieve: Sync + Send {
                 gateways,
                 plugins: PluginInstanceMap::from_config_vec(plugins),
                 api_port: None,
+                observability: Default::default(),
             })
         }
     }

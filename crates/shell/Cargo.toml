@@ -64,6 +64,12 @@ spacegate-ext-axum = { workspace = true, optional = true }
 regex = { workspace = true }
 futures-util.workspace = true
 tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing-opentelemetry.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry-appender-tracing.workspace = true
 tokio.workspace = true
 hyper.workspace = true
 rustls-pemfile.workspace = true
@@ -72,7 +78,6 @@ tokio-util = { workspace = true, features = ["io"] }
 
 [dev-dependencies]
 reqwest = { workspace = true }
-tracing-subscriber = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio"] }
 testcontainers-modules = { workspace = true, features = ["redis"] }
 [package.metadata.docs.rs]

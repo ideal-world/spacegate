@@ -19,3 +19,134 @@ fn test_parse_config() {
         }
     }
 }
+
+#[test]
+fn observability_defaults_to_disabled() {
+    let config = Config::default();
+
+    assert!(!config.observability.enabled);
+    assert_eq!(config.observability.service_name, "spacegate");
+    assert_eq!(config.observability.otlp_endpoint, "http://localhost:4317");
+    assert!(!config.observability.traces.enabled);
+    assert!(!config.observability.metrics.enabled);
+    assert!(!config.observability.logs.enabled);
+}
+
+#[test]
+fn observability_can_be_parsed_from_config() {
+    let file = r#"
+[observability]
+enabled = true
+service_name = "spacegate-test"
+otlp_endpoint = "http://collector:4317"
+protocol = "grpc"
+
+[observability.traces]
+enabled = true
+sample_ratio = 0.5
+
+[observability.metrics]
+enabled = true
+export_interval_ms = 10000
+
+[observability.logs]
+enabled = true
+level = "warn"
+"#;
+
+    let config = toml::from_str::<Config>(file).expect("parse config");
+
+    assert!(config.observability.enabled);
+    assert_eq!(config.observability.service_name, "spacegate-test");
+    assert_eq!(config.observability.otlp_endpoint, "http://collector:4317");
+    assert_eq!(config.observability.protocol, spacegate_model::OtlpProtocol::Grpc);
+    assert!(config.observability.traces.enabled);
+    assert_eq!(config.observability.traces.sample_ratio, 0.5);
+    assert!(config.observability.metrics.enabled);
+    assert_eq!(config.observability.metrics.export_interval_ms, 10000);
+    assert!(config.observability.logs.enabled);
+    assert_eq!(config.observability.logs.level, "warn");
+}
+
+#[test]
+fn local_otel_json_config_shape_can_be_parsed() {
+    let file = r#"
+{
+  "api_port": 9876,
+  "observability": {
+    "enabled": true,
+    "service_name": "spacegate-local-otel",
+    "otlp_endpoint": "http://127.0.0.1:4317",
+    "protocol": "grpc",
+    "traces": {
+      "enabled": true,
+      "sample_ratio": 1.0
+    },
+    "metrics": {
+      "enabled": true,
+      "export_interval_ms": 5000
+    },
+    "logs": {
+      "enabled": true,
+      "level": "info"
+    }
+  },
+  "gateways": {
+    "local": {
+      "gateway": {
+        "name": "local",
+        "parameters": {
+          "enable_x_request_id": true
+        },
+        "listeners": [
+          {
+            "name": "http",
+            "ip": "0.0.0.0",
+            "port": 9000,
+            "protocol": {
+              "type": "http"
+            }
+          }
+        ]
+      },
+      "routes": {
+        "root": {
+          "route_name": "root",
+          "rules": [
+            {
+              "matches": [
+                {
+                  "path": {
+                    "kind": "Prefix",
+                    "value": "/"
+                  }
+                }
+              ],
+              "backends": [
+                {
+                  "host": {
+                    "kind": "Host",
+                    "host": "127.0.0.1"
+                  },
+                  "port": 18080,
+                  "protocol": "http",
+                  "weight": 1
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+"#;
+
+    let config = serde_json::from_str::<Config>(file).expect("parse local otel json config");
+    let gateway = config.gateways.get("local").expect("local gateway");
+
+    assert_eq!(gateway.gateway.name, "local");
+    assert_eq!(gateway.gateway.listeners.len(), 1);
+    assert_eq!(gateway.gateway.listeners[0].port, 9000);
+    assert!(gateway.routes.contains_key("root"));
+}

@@ -3,7 +3,7 @@ use std::{collections::HashMap, ops::Index, sync::Arc};
 
 use crate::{
     backend_service::ArcHyperService,
-    extension::{GatewayName, MatchedSgRouter},
+    extension::{GatewayName, MatchedSgRouter, Reflect, RouteName},
     helper_layers::{
         map_request::{add_extension::add_extension, MapRequestLayer},
         reload::Reloader,
@@ -96,6 +96,7 @@ impl Router for GatewayRouter {
                 if let Some(ref matches) = matches {
                     for m in matches.as_ref() {
                         if m.match_request(req) {
+                            insert_route_name(req, self.routers.as_ref()[*route_index].name.clone());
                             req.extensions_mut().insert(MatchedSgRouter(m.clone()));
                             tracing::trace!("matches {m:?} [{route_index},{idx1}:{_p}]");
                             if let Err(e) = m.rewrite(req) {
@@ -107,6 +108,7 @@ impl Router for GatewayRouter {
                     }
                     continue;
                 } else {
+                    insert_route_name(req, self.routers.as_ref()[*route_index].name.clone());
                     tracing::trace!("matches wildcard [{route_index},{idx1}:{_p}]");
                     return Some(index);
                 }
@@ -150,6 +152,7 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
         }
         services.push(rules_services);
         routers.push(HttpRouter {
+            name: route.name.clone().into(),
             hostnames: route.hostnames.clone().into(),
             rules: rules_router.into_iter().map(|x| x.map(|v| v.into_iter().map(Arc::new).collect::<Arc<[_]>>())).collect(),
             ext: route.ext.clone(),
@@ -168,4 +171,12 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
         },
         fallback,
     )
+}
+
+fn insert_route_name(req: &mut Request<SgBody>, name: Arc<str>) {
+    let route_name = RouteName::new(name);
+    if let Some(reflect) = req.extensions_mut().get_mut::<Reflect>() {
+        reflect.insert(route_name.clone());
+    }
+    req.extensions_mut().insert(route_name);
 }

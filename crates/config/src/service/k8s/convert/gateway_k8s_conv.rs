@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, hash::Hasher};
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference};
 use k8s_openapi::{api::core::v1::Secret, ByteString};
 use kube::{api::ObjectMeta, ResourceExt};
-use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, PluginInstanceId};
+use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, ObservabilityConfig, PluginInstanceId};
 
 use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, service::k8s::K8s, SgGateway, SgParameters};
 
@@ -81,7 +81,7 @@ impl SgGatewayConv for SgGateway {
     }
 }
 
-pub(crate) trait SgParametersConv {
+pub trait SgParametersConv {
     fn from_kube_gateway(gateway: &Gateway) -> Self;
     fn into_kube_gateway(self) -> BTreeMap<String, String>;
 }
@@ -107,18 +107,71 @@ impl SgParametersConv for SgParameters {
         if let Some(enable_x_request_id) = self.enable_x_request_id {
             ann.insert(crate::constants::GATEWAY_ANNOTATION_ENABLE_X_REQUEST_ID.to_string(), enable_x_request_id.to_string());
         }
+        if self.observability.enabled {
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_OTEL_ENABLED.to_string(), self.observability.enabled.to_string());
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_OTEL_SERVICE_NAME.to_string(), self.observability.service_name);
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_OTEL_ENDPOINT.to_string(), self.observability.otlp_endpoint);
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_OTEL_PROTOCOL.to_string(), self.observability.protocol.to_string());
+            ann.insert(
+                crate::constants::GATEWAY_ANNOTATION_OTEL_TRACES_ENABLED.to_string(),
+                self.observability.traces.enabled.to_string(),
+            );
+            ann.insert(
+                crate::constants::GATEWAY_ANNOTATION_OTEL_TRACES_SAMPLE_RATIO.to_string(),
+                self.observability.traces.sample_ratio.to_string(),
+            );
+            ann.insert(
+                crate::constants::GATEWAY_ANNOTATION_OTEL_METRICS_ENABLED.to_string(),
+                self.observability.metrics.enabled.to_string(),
+            );
+            ann.insert(
+                crate::constants::GATEWAY_ANNOTATION_OTEL_METRICS_EXPORT_INTERVAL_MS.to_string(),
+                self.observability.metrics.export_interval_ms.to_string(),
+            );
+            ann.insert(
+                crate::constants::GATEWAY_ANNOTATION_OTEL_LOGS_ENABLED.to_string(),
+                self.observability.logs.enabled.to_string(),
+            );
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_OTEL_LOGS_LEVEL.to_string(), self.observability.logs.level);
+        }
         ann
     }
 
     fn from_kube_gateway(gateway: &Gateway) -> Self {
         let gateway_annotations = gateway.metadata.annotations.clone();
         if let Some(gateway_annotations) = gateway_annotations {
+            let mut observability = ObservabilityConfig {
+                enabled: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_ENABLED).and_then(|v| v.parse::<bool>().ok()).unwrap_or_default(),
+                service_name: gateway_annotations
+                    .get(crate::constants::GATEWAY_ANNOTATION_OTEL_SERVICE_NAME)
+                    .cloned()
+                    .unwrap_or_else(|| ObservabilityConfig::default().service_name),
+                otlp_endpoint: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_ENDPOINT).cloned().unwrap_or_else(|| ObservabilityConfig::default().otlp_endpoint),
+                protocol: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_PROTOCOL).and_then(|v| v.parse().ok()).unwrap_or_default(),
+                ..Default::default()
+            };
+            observability.traces.enabled =
+                gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_TRACES_ENABLED).and_then(|v| v.parse::<bool>().ok()).unwrap_or_default();
+            observability.traces.sample_ratio = gateway_annotations
+                .get(crate::constants::GATEWAY_ANNOTATION_OTEL_TRACES_SAMPLE_RATIO)
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or_else(|| ObservabilityConfig::default().traces.sample_ratio);
+            observability.metrics.enabled =
+                gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_METRICS_ENABLED).and_then(|v| v.parse::<bool>().ok()).unwrap_or_default();
+            observability.metrics.export_interval_ms = gateway_annotations
+                .get(crate::constants::GATEWAY_ANNOTATION_OTEL_METRICS_EXPORT_INTERVAL_MS)
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or_else(|| ObservabilityConfig::default().metrics.export_interval_ms);
+            observability.logs.enabled = gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_LOGS_ENABLED).and_then(|v| v.parse::<bool>().ok()).unwrap_or_default();
+            observability.logs.level =
+                gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_LOGS_LEVEL).cloned().unwrap_or_else(|| ObservabilityConfig::default().logs.level);
             SgParameters {
                 redis_url: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string()),
                 log_level: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
                 lang: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
                 ignore_tls_verification: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
                 enable_x_request_id: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_ENABLE_X_REQUEST_ID).and_then(|v| v.parse::<bool>().ok()),
+                observability,
             }
         } else {
             SgParameters {
@@ -127,6 +180,7 @@ impl SgParametersConv for SgParameters {
                 lang: None,
                 ignore_tls_verification: None,
                 enable_x_request_id: None,
+                observability: Default::default(),
             }
         }
     }
