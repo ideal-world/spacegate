@@ -47,6 +47,112 @@ cargo build --release --target wasm32-wasip1 --manifest-path plugins/wasm/Cargo.
 plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm
 ```
 
+## 制作 OCI 制品
+
+生产环境建议将 `.wasm` 以 **OCI Artifact** 形式推送到镜像仓库（Harbor、GHCR、ACR 等），SpaceGate 通过 `oci://` / `oci+http://` URL 拉取，而不是挂载本地文件或 HTTP 分发服务。
+
+> OCI 制品是单层 Wasm 文件，用 **oras** 推送，不是 `docker build` 容器镜像。Docker Hub 通常不支持 Wasm OCI Artifact，请用 Harbor / GHCR / ACR 等。
+
+### 前置条件
+
+```bash
+# 安装 oras（OCI 推送/拉取工具）
+brew install oras
+
+# 确保已编译 wasm（见上一节「构建」）
+rustup target add wasm32-wasip1
+```
+
+### 方式一：推送到本地 Harbor（推荐联调）
+
+本地 Harbor 示例：`http://localhost:9081`，默认账号 `admin` / `Harbor12345`。
+
+**手动推送**：
+
+```bash
+WASM_DIR=plugins/wasm/target/wasm32-wasip1/release
+WASM=spacegate_plugin_ai_gateway_queue.wasm
+
+# 1. 创建 Harbor 项目（已存在可跳过）
+curl -u 'admin:Harbor12345' -X POST 'http://localhost:9081/api/v2.0/projects' \
+  -H 'Content-Type: application/json' \
+  -d '{"project_name":"ai-gateway","public":false}'
+
+# 2. 登录 Harbor（HTTP 需加 --plain-http）
+echo 'Harbor12345' | oras login localhost:9081 -u admin --password-stdin --plain-http
+
+# 3. 计算 digest（生产建议写入插件配置）
+shasum -a 256 "$WASM_DIR/$WASM"
+
+# 4. 推送 OCI Artifact
+cd "$WASM_DIR"
+oras push localhost:9081/ai-gateway/ai-gateway-queue:v1.0.0 --plain-http \
+  --artifact-type application/vnd.module.wasm.content.layer.v1+wasm \
+  "${WASM}:application/wasm"
+```
+
+推送成功后可在 Harbor UI **项目 → ai-gateway → ai-gateway-queue** 查看制品。
+
+### 方式二：推送到任意 OCI 仓库（GHCR / ACR / 私有 Harbor）
+
+在 `spacegate` 仓库根目录：
+
+```bash
+# 登录目标仓库
+oras login ghcr.io -u YOUR_USER
+
+# 使用仓库自带脚本
+REGISTRY=ghcr.io/your-org TAG=v1.0.0 ./deploy/push-wasm-oci.sh
+
+# 或从 ai-gateway-dev 工作区根目录
+REGISTRY=ghcr.io/your-org ./scripts/deploy.sh oci push
+```
+
+### 插件配置中引用 OCI
+
+SpaceGate 支持的 URL 形式：
+
+| 场景 | 示例 |
+|------|------|
+| HTTPS 仓库 | `oci://ghcr.io/your-org/ai-gateway-queue:v1.0.0` |
+| 本地 Harbor（HTTP） | `oci+http://localhost:9081/ai-gateway/ai-gateway-queue:v1.0.0` |
+| K8s 拉取宿主机 Harbor（Docker Desktop） | `oci+http://host.docker.internal:9081/ai-gateway/ai-gateway-queue:v1.0.0` |
+
+完整配置示例（含校验与私有仓库凭证）可参考工作区 `open-source/harbor/plugins/wasm.ai-gateway-queue.oci.json`（与 `ai-gateway-dev` 同级目录下的 Harbor 联调配置）：
+
+```json
+{
+  "url": "oci+http://host.docker.internal:9081/ai-gateway/ai-gateway-queue:v1.0.0",
+  "sha256": "sha256:<编译产物 shasum -a 256 输出>",
+  "oci_auth": {
+    "registry": "host.docker.internal:9081",
+    "username": "admin",
+    "password": "Harbor12345"
+  },
+  "fail_strategy": "fail_close",
+  "plugin_name": "ai-gateway-queue",
+  "plugin_config": { "...": "..." },
+  "clusters": {
+    "ai-gateway-service": "http://ai-gateway-service:18080"
+  }
+}
+```
+
+K8s **SgFilter** 中在 `spec.filters[].config` 写入上述字段即可；`clusters` 仍指向 `ai-gateway-service`（与 Wasm 存储方式无关）。
+
+### 版本更新
+
+1. 修改代码后重新 `cargo build --release --target wasm32-wasip1 ...`
+2. 用新 tag 执行 `oras push`（如 `v1.0.1`）
+3. 更新 SpaceGate 配置中的 `url` 与 `sha256`（或 `module_cache_key`）
+
+### 注意事项
+
+- **`sha256`**：建议生产开启，防止同 tag 被覆盖后加载错误版本
+- **私有仓库**：配置 `oci_auth`，或 K8s WasmPlugin 使用 `imagePullSecret`
+- **K8s 网络**：Pod 内勿用 `localhost:9081` 指宿主机 Harbor，Docker Desktop 用 `host.docker.internal:9081`
+- 更多细节见 [`deploy/README.md`](../../../deploy/README.md) 第 7 节
+
 ## 启动外部服务
 
 `ai-gateway-queue` 依赖外部服务来完成限流、入队、等待和回调。

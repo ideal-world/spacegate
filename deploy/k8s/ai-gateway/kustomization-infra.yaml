@@ -1,0 +1,22 @@
+# 基础设施栈：不含默认 HTTPRoute ai-api / SgFilter
+# 用法：kubectl apply -k . --kustomize-file kustomization-infra.yaml（见 apply-infra.sh）
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: spacegate
+
+resources:
+  - redis.yaml
+  - mock-upstream.yaml
+  - wasm-server.yaml
+  - ai-gateway-service.yaml
+  - gateway-ai.yaml
+  - spacegate-rbac-cluster.yaml
+  - admin-ui.yaml
+
+configMapGenerator:
+  - name: ai-gateway-queue-wasm
+    files:
+      - files/spacegate_plugin_ai_gateway_queue.wasm
+    options:
+      disableNameSuffixHash: true
