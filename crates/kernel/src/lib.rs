@@ -25,6 +25,8 @@ pub mod helper_layers;
 pub mod injector;
 /// tcp listener
 pub mod listener;
+/// OpenTelemetry helpers.
+pub mod observability;
 /// gateway service
 pub mod service;
 /// util functions and structs

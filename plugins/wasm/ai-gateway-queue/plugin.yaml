@@ -1,0 +1,25 @@
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: ai-gateway-queue
+  namespace: spacegate
+spec:
+  url: oci://registry.example.com/spacegate/plugins/ai-gateway-queue:v1
+  pluginName: ai-gateway-queue
+  phase: AUTHN
+  priority: 90
+  failStrategy: FAIL_CLOSE
+  defaultConfig:
+    service_cluster: ai-gateway-service
+    service_authority: ai-gateway-service
+    rate_limit_path: /v1/ratelimit/check
+    enqueue_path: /v1/queue/enqueue
+    wait_path: /v1/queue/enqueue-and-wait
+    service_timeout_ms: 65000
+    require_policy: true
+    policy_header: x-ratelimit-policy
+    tenant_header: x-tenant-id
+    model_header: x-model
+    priority_header: x-queue-priority
+    priority_enabled: true
+    default_priority: normal

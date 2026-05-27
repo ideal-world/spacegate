@@ -1,0 +1,16 @@
+{
+  "gateway": {
+    "name": "hai-demo",
+    "parameters": {},
+    "listeners": [
+      {
+        "name": "http",
+        "ip": "127.0.0.1",
+        "port": 18080,
+        "protocol": {
+          "type": "http"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+# ai-gateway-service：限流 / 入队 / Worker / 回调
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway-service
+  labels:
+    app.kubernetes.io/name: ai-gateway-service
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-gateway-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-gateway-service
+    spec:
+      containers:
+        - name: ai-gateway-service
+          # 构建：见 deploy/k8s/ai-gateway/build-images.sh 或使用本地镜像 ai-gateway/service:dev
+          image: ai-gateway/service:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 18080
+              name: http
+          env:
+            - name: REDIS_URL
+              value: redis://ai-gateway-redis:6379/
+            - name: AI_UPSTREAM_BASE_URL
+              value: http://ai-gateway-mock-upstream:9000
+            - name: AI_REQUIRE_HTTPS_CALLBACK
+              value: "false"
+            - name: AI_GATEWAY_SERVICE_HOST
+              value: 0.0.0.0
+            - name: AI_GATEWAY_SERVICE_PORT
+              value: "18080"
+            - name: RUST_LOG
+              value: info
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway-service
+  labels:
+    app.kubernetes.io/name: ai-gateway-service
+spec:
+  selector:
+    app.kubernetes.io/name: ai-gateway-service
+  ports:
+    - name: http
+      port: 18080
+      targetPort: http

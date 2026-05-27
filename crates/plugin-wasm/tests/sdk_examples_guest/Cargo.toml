@@ -1,0 +1,23 @@
+[package]
+name = "sdk_examples_guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Mirrors proxy-wasm-rust-sdk examples (http_headers / http_body / http_config / http_auth_random) inside one guest, selectable via plugin configuration."
+
+# 独立 workspace：本 crate 目标 `wasm32-wasip1`，不参与外层 host workspace。
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm = "0.2"
+log = "0.4"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = "fat"
+strip = true
+panic = "abort"

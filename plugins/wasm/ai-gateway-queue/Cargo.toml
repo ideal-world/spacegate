@@ -1,0 +1,13 @@
+[package]
+name = "spacegate_plugin_ai_gateway_queue"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "AI gateway rate-limit and queue Proxy-Wasm plugin for SpaceGate."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+proxy-wasm.workspace = true
+serde_json.workspace = true

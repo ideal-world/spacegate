@@ -126,7 +126,7 @@ impl Plugin for RateLimitPlugin {
 
         if result == EXCEEDED {
             let mut response = Response::<SgBody>::with_code_message(StatusCode::TOO_MANY_REQUESTS, "[SG.Filter.Limit] too many requests");
-            response.extensions_mut().insert(self.report( ip));
+            response.extensions_mut().insert(self.report(ip));
             return Ok(response);
         }
         Ok(inner.call(req).await)

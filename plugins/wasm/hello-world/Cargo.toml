@@ -1,0 +1,13 @@
+[package]
+name = "spacegate_plugin_hello_world"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Hello World Proxy-Wasm plugin template for Spacegate."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm.workspace = true
+

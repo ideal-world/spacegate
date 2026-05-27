@@ -143,3 +143,30 @@ Fields:
         - kind - `Gateway` `HTTPRoute`
         - namespace (option)
         - name
+
+### Higress-compatible WasmPlugin
+
+Spacegate can read Higress-style `extensions.higress.io/v1alpha1` `WasmPlugin` resources and translate them into the internal `code = "wasm"` plugin runtime configuration.
+
+Supported fields:
+
+- `spec.url` - local path, `file://`, `http://`, `https://`, or OCI wasm image URL (`oci://`, `docker://`, `image://`).
+- `spec.sha256` - optional wasm byte digest, plain hex or `sha256:<hex>`.
+- `spec.pluginName` - exposed to the proxy-wasm guest as `plugin_name`.
+- `spec.defaultConfig` - converted to a Spacegate wasm plugin instance and mounted at Gateway level.
+- `spec.defaultConfigDisable` - disables the generated Gateway-level default plugin instance.
+- `spec.matchRules[].ingress` - generates per-rule wasm plugin instances and mounts them on matching Spacegate routes.
+- `spec.matchRules[].domain` - generates per-rule wasm plugin instances and mounts them on routes whose hostnames match.
+- `spec.matchRules[].service` - generates per-rule wasm plugin instances and mounts them on matching backends.
+- `spec.matchRules[].config/configDisable` - configures or disables each generated rule-level plugin instance.
+- `spec.failStrategy` - accepts `FAIL_OPEN`/`FAIL_CLOSE` and maps to Spacegate `fail_open`/`fail_close`.
+- `spec.phase` - participates in plugin ordering (`AUTHN` before `AUTHZ` before unspecified before `STATS`).
+- `spec.priority` - used inside the same phase; higher priority plugins are mounted earlier.
+- `spec.imagePullPolicy` - `Always` disables the Spacegate module cache for that plugin instance.
+- `spec.imagePullSecret` - for OCI URLs, Spacegate reads Docker config (`.dockerconfigjson`/`.dockercfg`) or basic-auth (`username`/`password`) Kubernetes Secrets and passes the registry credentials to the wasm runtime.
+- `status` - Spacegate writes `observedGeneration`, `phase`, `digest`, and `message` during K8s watch reconciliation.
+
+Current limitations:
+
+- OCI layer selection supports wasm media types (`application/vnd.module.wasm.content.layer.v1+wasm`, `application/vnd.wasm.content.layer.v1+wasm`, `application/wasm`) and falls back to a single-layer artifact.
+- `phase` currently maps to ordering only, not to separate Spacegate execution pipelines.

@@ -44,6 +44,7 @@ impl HttpRoute {
 }
 #[derive(Debug, Clone)]
 pub struct HttpRouter {
+    pub name: Arc<str>,
     pub hostnames: Arc<[String]>,
     pub rules: Arc<[Option<Arc<[Arc<HttpRouteMatch>]>>]>,
     pub ext: hyper::http::Extensions,

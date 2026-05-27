@@ -1,0 +1,6 @@
+target
+**/target
+.git
+**/.git
+.DS_Store
+**/.DS_Store
