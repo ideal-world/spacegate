@@ -28,6 +28,3 @@ util/gh-pages/lints.json
 # dev script
 devsh/*
 .uuid
-scripts
-.cursor
-.codegraph
