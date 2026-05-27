@@ -27,7 +27,6 @@ axum = ["spacegate-ext-axum", "spacegate-model/ext-axum"]
 dylib = ["libloading"]
 limit = ["cache"]
 header-modifier = []
-hai = ["redis", "chrono/serde", "url", "ipnet"]
 inject = []
 redirect = ["url"]
 retry = []
@@ -42,7 +41,6 @@ full = [
   "cache",
   "limit",
   "header-modifier",
-  "hai",
   "inject",
   "redirect",
   "retry",
@@ -113,3 +111,8 @@ required-features = ["schema", "cache"]
 name = "test_hot_update"
 path = "tests/test_hot_update.rs"
 required-features = ["maintenance"]
+
+[[test]]
+name = "test_builtin_plugins"
+path = "tests/test_builtin_plugins.rs"
+required-features = ["full"]

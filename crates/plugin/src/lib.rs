@@ -259,14 +259,6 @@ impl PluginRepository {
         // self.register::<plugins::retry::RetryPlugin>();
         #[cfg(feature = "header-modifier")]
         self.register::<plugins::header_modifier::HeaderModifierPlugin>();
-        #[cfg(feature = "hai")]
-        {
-            self.register::<plugins::hai::HaiObservePlugin>();
-            self.register::<plugins::hai::HaiAuthPlugin>();
-            self.register::<plugins::hai::HaiAssetPlugin>();
-            self.register::<plugins::hai::HaiQuotaPlugin>();
-            self.register::<plugins::hai::HaiDispatchPlugin>();
-        }
         #[cfg(feature = "inject")]
         self.register::<plugins::inject::InjectPlugin>();
         #[cfg(feature = "rewrite")]
