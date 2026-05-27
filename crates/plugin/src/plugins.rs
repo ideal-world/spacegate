@@ -1,5 +1,7 @@
 // #[cfg(feature = "decompression")]
 // pub mod decompression;
+#[cfg(feature = "hai")]
+pub mod hai;
 #[cfg(feature = "header-modifier")]
 pub mod header_modifier;
 #[cfg(feature = "inject")]

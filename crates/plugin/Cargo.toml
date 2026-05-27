@@ -27,6 +27,7 @@ axum = ["spacegate-ext-axum", "spacegate-model/ext-axum"]
 dylib = ["libloading"]
 limit = ["cache"]
 header-modifier = []
+hai = ["redis", "chrono/serde", "url", "ipnet"]
 inject = []
 redirect = ["url"]
 retry = []
@@ -41,6 +42,7 @@ full = [
   "cache",
   "limit",
   "header-modifier",
+  "hai",
   "inject",
   "redirect",
   "retry",
@@ -59,6 +61,7 @@ libloading = { version = "0.8", optional = true }
 spacegate-model = { workspace = true }
 spacegate-kernel = { workspace = true }
 tracing = { workspace = true }
+opentelemetry = { workspace = true }
 hyper = { workspace = true }
 http-body-util = { workspace = true }
 tower-layer = { workspace = true }
