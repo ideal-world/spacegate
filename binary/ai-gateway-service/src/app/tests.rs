@@ -76,6 +76,37 @@ mod tests {
     }
 
     #[test]
+    fn filters_hop_by_hop_headers_when_returning_upstream_body() {
+        assert!(!should_return_upstream_header("content-length"));
+        assert!(!should_return_upstream_header("Connection"));
+        assert!(!should_return_upstream_header("transfer-encoding"));
+        assert!(should_return_upstream_header("content-type"));
+        assert!(should_return_upstream_header("x-request-id"));
+    }
+
+    #[test]
+    fn poll_result_to_response_survives_realistic_upstream_headers() {
+        let result = StoredResult {
+            job_id: "01TEST".to_string(),
+            status: "completed".to_string(),
+            http_status: 200,
+            headers: HashMap::from([
+                ("content-type".to_string(), "application/json".to_string()),
+                ("content-length".to_string(), "999".to_string()),
+                ("connection".to_string(), "keep-alive".to_string()),
+                ("server".to_string(), "elb".to_string()),
+            ]),
+            body_base64: base64::engine::general_purpose::STANDARD.encode(br#"{"ok":true}"#),
+            completed_at_ms: 0,
+            error: None,
+        };
+        let resp = poll_result_to_response(result).expect("poll response");
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(resp.headers().get("content-length").is_none());
+        assert!(resp.headers().get("connection").is_none());
+    }
+
+    #[test]
     fn parses_queue_priority_values() {
         assert_eq!(parse_queue_priority("HIGH"), Some(QueuePriority::High));
         assert_eq!(parse_queue_priority("medium"), Some(QueuePriority::Normal));
