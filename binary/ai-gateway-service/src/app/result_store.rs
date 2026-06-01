@@ -18,6 +18,9 @@ fn result_to_response(result: StoredResult, created_at_ms: u64) -> Result<Respon
     let body = base64::engine::general_purpose::STANDARD.decode(result.body_base64).map_err(|e| ServiceError::internal(format!("decode result body: {e}")))?;
     let mut resp = (status, body).into_response();
     for (name, value) in result.headers {
+        if !should_return_upstream_header(&name) {
+            continue;
+        }
         if let (Ok(name), Ok(value)) = (HeaderName::try_from(name.as_str()), HeaderValue::from_str(&value)) {
             resp.headers_mut().insert(name, value);
         }
