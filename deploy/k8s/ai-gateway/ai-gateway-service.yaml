@@ -19,7 +19,7 @@ spec:
       containers:
         - name: ai-gateway-service
           # 构建：见 deploy/k8s/ai-gateway/build-images.sh 或使用本地镜像 ai-gateway/service:dev
-          image: ai-gateway/service:dev
+          image: ai-gateway/service:v20260601-fix
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 18080
@@ -28,7 +28,7 @@ spec:
             - name: REDIS_URL
               value: redis://ai-gateway-redis:6379/
             - name: AI_UPSTREAM_BASE_URL
-              value: http://ai-gateway-mock-upstream:9000
+              value: https://api.deepseek.com
             - name: AI_REQUIRE_HTTPS_CALLBACK
               value: "false"
             - name: AI_GATEWAY_SERVICE_HOST

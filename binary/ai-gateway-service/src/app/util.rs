@@ -24,6 +24,25 @@ fn should_forward_header(name: &str) -> bool {
     )
 }
 
+/// 将上游响应头写回 poll/wait 客户端时过滤 hop-by-hop 与 body 相关头。
+/// 若保留 `content-length` 等，axum 已按 body 设置长度时会冲突并导致 Empty reply。
+fn should_return_upstream_header(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    !matches!(
+        name.as_str(),
+        "host"
+            | "connection"
+            | "content-length"
+            | "transfer-encoding"
+            | "keep-alive"
+            | "proxy-connection"
+            | "upgrade"
+            | "te"
+            | "trailer"
+            | "trailers"
+    )
+}
+
 fn header_value(value: &str) -> Result<HeaderValue, ServiceError> {
     HeaderValue::from_str(value).map_err(|e| ServiceError::internal(format!("invalid response header value: {e}")))
 }
@@ -159,6 +178,9 @@ fn poll_result_to_response(result: StoredResult) -> Result<Response, ServiceErro
     let body = base64::engine::general_purpose::STANDARD.decode(result.body_base64).map_err(|e| ServiceError::internal(format!("decode poll result body: {e}")))?;
     let mut resp = (status, body).into_response();
     for (name, value) in result.headers {
+        if !should_return_upstream_header(&name) {
+            continue;
+        }
         if let (Ok(name), Ok(value)) = (HeaderName::try_from(name.as_str()), HeaderValue::from_str(&value)) {
             resp.headers_mut().insert(name, value);
         }
