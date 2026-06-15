@@ -7,11 +7,12 @@ where
     F: ConfigFormat + Send + Sync,
 {
     async fn delete_plugin(&self, id: &spacegate_model::PluginInstanceId) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            config.plugins.remove(id);
-            Ok(())
-        })
-        .await
+        let path = self.plugin_path(id);
+        match tokio::fs::remove_file(path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn delete_config_item_gateway(&self, gateway_name: &str) -> Result<(), BoxError> {
