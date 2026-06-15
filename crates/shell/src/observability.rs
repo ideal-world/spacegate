@@ -50,7 +50,8 @@ impl Drop for ObservabilityGuard {
 }
 
 pub fn init(config: &ObservabilityConfig) {
-    let _ = OTEL_GUARD.get_or_init(|| match build_guard(config) {
+    let config = config_with_env_overrides(config, |key| std::env::var(key));
+    let _ = OTEL_GUARD.get_or_init(|| match build_guard(&config) {
         Ok(guard) => guard,
         Err(err) => {
             eprintln!("failed to initialize OpenTelemetry, falling back to stdout tracing: {err}");
@@ -62,6 +63,58 @@ pub fn init(config: &ObservabilityConfig) {
             }
         }
     });
+}
+
+fn config_with_env_overrides<F>(config: &ObservabilityConfig, mut get_env: F) -> ObservabilityConfig
+where
+    F: FnMut(&str) -> Result<String, std::env::VarError>,
+{
+    let mut config = config.clone();
+    if let Ok(value) = get_env("SPACEGATE_OTEL_ENABLED") {
+        if let Ok(value) = value.parse::<bool>() {
+            config.enabled = value;
+        }
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_SERVICE_NAME") {
+        config.service_name = value;
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_ENDPOINT") {
+        config.otlp_endpoint = value;
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_PROTOCOL") {
+        if let Ok(value) = value.parse::<OtlpProtocol>() {
+            config.protocol = value;
+        }
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_TRACES_ENABLED") {
+        if let Ok(value) = value.parse::<bool>() {
+            config.traces.enabled = value;
+        }
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_TRACES_SAMPLE_RATIO") {
+        if let Ok(value) = value.parse::<f64>() {
+            config.traces.sample_ratio = value;
+        }
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_METRICS_ENABLED") {
+        if let Ok(value) = value.parse::<bool>() {
+            config.metrics.enabled = value;
+        }
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_METRICS_EXPORT_INTERVAL_MS") {
+        if let Ok(value) = value.parse::<u64>() {
+            config.metrics.export_interval_ms = value;
+        }
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_LOGS_ENABLED") {
+        if let Ok(value) = value.parse::<bool>() {
+            config.logs.enabled = value;
+        }
+    }
+    if let Ok(value) = get_env("SPACEGATE_OTEL_LOGS_LEVEL") {
+        config.logs.level = value;
+    }
+    config
 }
 
 fn build_guard(config: &ObservabilityConfig) -> Result<ObservabilityGuard, Box<dyn std::error::Error + Send + Sync>> {
@@ -200,6 +253,34 @@ mod tests {
         };
 
         assert_eq!(log_level_filter(&config), tracing_subscriber::filter::LevelFilter::INFO);
+    }
+
+    #[test]
+    fn env_overrides_observability_config() {
+        let config = config_with_env_overrides(&ObservabilityConfig::default(), |key| match key {
+            "SPACEGATE_OTEL_ENABLED" => Ok("true".to_string()),
+            "SPACEGATE_OTEL_SERVICE_NAME" => Ok("spacegate-k8s-test".to_string()),
+            "SPACEGATE_OTEL_ENDPOINT" => Ok("http://otel-collector:4317".to_string()),
+            "SPACEGATE_OTEL_PROTOCOL" => Ok("grpc".to_string()),
+            "SPACEGATE_OTEL_TRACES_ENABLED" => Ok("true".to_string()),
+            "SPACEGATE_OTEL_TRACES_SAMPLE_RATIO" => Ok("0.5".to_string()),
+            "SPACEGATE_OTEL_METRICS_ENABLED" => Ok("true".to_string()),
+            "SPACEGATE_OTEL_METRICS_EXPORT_INTERVAL_MS" => Ok("15000".to_string()),
+            "SPACEGATE_OTEL_LOGS_ENABLED" => Ok("true".to_string()),
+            "SPACEGATE_OTEL_LOGS_LEVEL" => Ok("warn".to_string()),
+            _ => Err(std::env::VarError::NotPresent),
+        });
+
+        assert!(config.enabled);
+        assert_eq!(config.service_name, "spacegate-k8s-test");
+        assert_eq!(config.otlp_endpoint, "http://otel-collector:4317");
+        assert_eq!(config.protocol, OtlpProtocol::Grpc);
+        assert!(config.traces.enabled);
+        assert_eq!(config.traces.sample_ratio, 0.5);
+        assert!(config.metrics.enabled);
+        assert_eq!(config.metrics.export_interval_ms, 15000);
+        assert!(config.logs.enabled);
+        assert_eq!(config.logs.level, "warn");
     }
 }
 

@@ -21,7 +21,12 @@ pub struct RateLimitPluginConfig {
     /// Time window in milliseconds, default is 1000ms
     pub time_window_ms: Option<u64>,
 
+    #[serde(default = "default_report_ext")]
     pub report_ext: Value,
+}
+
+fn default_report_ext() -> Value {
+    Value::Object(Default::default())
 }
 
 #[derive(Debug, Clone)]

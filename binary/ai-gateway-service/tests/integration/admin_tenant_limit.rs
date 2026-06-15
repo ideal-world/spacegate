@@ -18,13 +18,7 @@ async fn tc_rl_05_admin_tenant_rate_limit() {
         "burst": 1,
         "cost": 1
     });
-    let put = h
-        .client
-        .put(format!("{}/v1/admin/tenant-rate-limits", h.base_url))
-        .json(&rule)
-        .send()
-        .await
-        .expect("put rule");
+    let put = h.client.put(format!("{}/v1/admin/tenant-rate-limits", h.base_url)).json(&rule).send().await.expect("put rule");
     assert_eq!(put.status(), 200);
 
     let first = h.check_rate_limit("admin-tenant", "abandon").await.json::<serde_json::Value>().await.unwrap();
@@ -43,12 +37,7 @@ async fn tc_rl_06_model_specific_rule() {
         "rps": 1,
         "burst": 1
     });
-    h.client
-        .put(format!("{}/v1/admin/tenant-rate-limits", h.base_url))
-        .json(&rule)
-        .send()
-        .await
-        .expect("put");
+    h.client.put(format!("{}/v1/admin/tenant-rate-limits", h.base_url)).json(&rule).send().await.expect("put");
 
     let resp = h
         .client
