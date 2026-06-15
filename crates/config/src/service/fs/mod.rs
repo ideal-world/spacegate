@@ -188,11 +188,23 @@ where
         M: FnOnce(&mut Config) -> BoxResult<()>,
     {
         let mut config = self.collect_config().await?;
-        let result = map(&mut config);
-        if result.is_ok() {
-            tokio::fs::remove_dir_all(&self.dir).await?;
-            tokio::fs::create_dir_all(&self.dir).await?;
-            self.save_config(config).await?;
+        map(&mut config)?;
+        self.clear_config_dir().await?;
+        self.save_config(config).await?;
+        Ok(())
+    }
+
+    async fn clear_config_dir(&self) -> BoxResult<()> {
+        tokio::fs::create_dir_all(&self.dir).await?;
+        let mut entries = tokio::fs::read_dir(&self.dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            let file_type = entry.file_type().await?;
+            if file_type.is_dir() {
+                tokio::fs::remove_dir_all(path).await?;
+            } else {
+                tokio::fs::remove_file(path).await?;
+            }
         }
         Ok(())
     }

@@ -28,12 +28,6 @@ async fn tc_body_03_large_body_without_s3_rejected() {
 #[tokio::test]
 async fn tc_hdr_03_missing_tenant() {
     let h = TestHarness::start().await;
-    let resp = h
-        .client
-        .post(format!("{}/v1/ratelimit/check", h.base_url))
-        .header("x-ratelimit-policy", "abandon")
-        .send()
-        .await
-        .expect("check");
+    let resp = h.client.post(format!("{}/v1/ratelimit/check", h.base_url)).header("x-ratelimit-policy", "abandon").send().await.expect("check");
     assert_eq!(resp.status(), 400);
 }
