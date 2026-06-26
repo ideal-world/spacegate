@@ -12,16 +12,22 @@ use crate::{model::SgHttpPathModifier, Plugin};
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "重定向插件配置"))]
 pub struct RedirectPlugin {
     /// Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.
+    #[cfg_attr(feature = "schema", schemars(title = "协议"))]
     pub scheme: Option<String>,
     /// Hostname is the hostname to be used in the value of the Location header in the response. When empty, the hostname in the Host header of the request is used.
+    #[cfg_attr(feature = "schema", schemars(title = "主机名"))]
     pub hostname: Option<String>,
     /// Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.
+    #[cfg_attr(feature = "schema", schemars(title = "路径修改"))]
     pub path: Option<SgHttpPathModifier>,
     /// Port is the port to be used in the value of the Location header in the response.
+    #[cfg_attr(feature = "schema", schemars(title = "端口"))]
     pub port: Option<u16>,
     /// StatusCode is the HTTP status code to be used in response.
+    #[cfg_attr(feature = "schema", schemars(title = "状态码"))]
     pub status_code: Option<u16>,
 }
 

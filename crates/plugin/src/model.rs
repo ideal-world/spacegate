@@ -3,21 +3,25 @@ use spacegate_kernel::service::http_route::match_request::HttpPathMatchRewrite;
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "路径修改器"))]
 pub struct SgHttpPathModifier {
     /// Type defines the type of path modifier.
+    #[cfg_attr(feature = "schema", schemars(title = "修改类型"))]
     pub kind: SgHttpPathModifierType,
     /// Value is the value to be used to replace the path during forwarding.
+    #[cfg_attr(feature = "schema", schemars(title = "替换值"))]
     pub value: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default, Copy)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "路径修改类型"))]
 #[serde(rename_all = "PascalCase")]
 pub enum SgHttpPathModifierType {
     /// This type of modifier indicates that the full path will be replaced by the specified value.
     ReplaceFullPath,
     /// This type of modifier indicates that any prefix path matches will be replaced by the substitution value.
-    /// For example, a path with a prefix match of “/foo” and a ReplacePrefixMatch substitution of “/bar” will have the “/foo” prefix replaced with “/bar” in matching requests.
+    /// For example, a path with a prefix match of "/foo" and a ReplacePrefixMatch substitution of "/bar" will have the "/foo" prefix replaced with "/bar" in matching requests.
     #[default]
     ReplacePrefixMatch,
     ReplaceRegex,

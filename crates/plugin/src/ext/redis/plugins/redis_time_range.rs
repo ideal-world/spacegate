@@ -19,9 +19,17 @@ use super::redis_format_key;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "Redis时间范围插件配置"))]
 pub struct RedisTimeRangeConfig {
+    #[cfg_attr(feature = "schema", schemars(title = "实例ID"))]
     pub id: Option<String>,
+    #[serde(default = "default_header")]
+    #[cfg_attr(feature = "schema", schemars(default = "default_header", title = "身份标识头部"))]
     pub header: String,
+}
+
+fn default_header() -> String {
+    "authorization".to_string()
 }
 
 pub struct RedisTimeRangePlugin {

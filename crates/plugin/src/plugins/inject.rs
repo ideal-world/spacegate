@@ -13,10 +13,15 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "注入插件配置"))]
 pub struct InjectPlugin {
+    #[cfg_attr(feature = "schema", schemars(title = "请求注入URL"))]
     pub req_inject_url: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(title = "请求超时时间"))]
     pub req_timeout: Duration,
+    #[cfg_attr(feature = "schema", schemars(title = "响应注入URL"))]
     pub resp_inject_url: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(title = "响应超时时间"))]
     pub resp_timeout: Duration,
 }
 

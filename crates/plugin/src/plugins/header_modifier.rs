@@ -12,6 +12,7 @@ use crate::Plugin;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "头部修改类型"))]
 pub enum SgFilterHeaderModifierKind {
     #[default]
     Request,
@@ -20,10 +21,13 @@ pub enum SgFilterHeaderModifierKind {
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-
+#[cfg_attr(feature = "schema", schemars(title = "头部修改插件配置"))]
 pub struct SgFilterHeaderModifier {
+    #[cfg_attr(feature = "schema", schemars(title = "类型"))]
     pub kind: SgFilterHeaderModifierKind,
+    #[cfg_attr(feature = "schema", schemars(title = "设置头部"))]
     pub sets: Option<HashMap<String, String>>,
+    #[cfg_attr(feature = "schema", schemars(title = "移除头部"))]
     pub remove: Option<Vec<String>>,
 }
 

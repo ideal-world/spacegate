@@ -45,6 +45,10 @@ moka = { version = "0.12", features = ["sync"] }
 # WASI random_get：用 OS 级 RNG（getrandom 是 rand 的底层，体积小）
 getrandom = "0.2"
 
+# Docker/OCI tar.gz 层解压（支持 Docker 镜像格式推送的 WASM 插件）
+flate2 = "1"
+tar = "0.4"
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time"] }
 # 集成测试 mock HTTP server / inner.call mock service 需要 hyper 1 + hyper-util。

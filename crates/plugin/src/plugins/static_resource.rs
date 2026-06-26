@@ -14,17 +14,22 @@ use crate::{Plugin, PluginError};
 /// StaticResourceConfig
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "静态资源插件配置"))]
 pub struct StaticResourceConfig {
     /// response status code
+    #[cfg_attr(feature = "schema", schemars(title = "状态码"))]
     pub code: u16,
     /// response content type
+    #[cfg_attr(feature = "schema", schemars(title = "内容类型"))]
     pub content_type: String,
     /// response body
+    #[cfg_attr(feature = "schema", schemars(title = "响应体"))]
     pub body: BodyEnum,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "响应体类型"))]
 #[serde(tag = "kind", content = "value")]
 pub enum BodyEnum {
     /// json value

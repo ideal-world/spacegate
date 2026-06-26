@@ -26,17 +26,25 @@ use self::{
 };
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "状态检测插件配置"))]
 #[serde(default)]
 pub struct SgFilterStatusConfig {
     #[serde(alias = "serv_addr")]
+    #[cfg_attr(feature = "schema", schemars(title = "主机地址"))]
     pub host: String,
+    #[cfg_attr(feature = "schema", schemars(title = "端口"))]
     pub port: u16,
+    #[cfg_attr(feature = "schema", schemars(title = "标题"))]
     pub title: String,
     /// Unhealthy threshold , if server error more than this, server will be tag as unhealthy
+    #[cfg_attr(feature = "schema", schemars(title = "不健康阈值"))]
     pub unhealthy_threshold: u16,
     /// second
+    #[cfg_attr(feature = "schema", schemars(title = "检测间隔(秒)"))]
     pub interval: u64,
+    #[cfg_attr(feature = "schema", schemars(title = "状态缓存键"))]
     pub status_cache_key: String,
+    #[cfg_attr(feature = "schema", schemars(title = "窗口缓存键"))]
     pub window_cache_key: String,
 }
 

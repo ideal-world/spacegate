@@ -15,13 +15,17 @@ use spacegate_ext_redis::redis::Script;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "限流插件配置"))]
 pub struct RateLimitPluginConfig {
     /// Maximum number of requests, default is 100
+    #[cfg_attr(feature = "schema", schemars(title = "最大请求数"))]
     pub max_request_number: Option<u64>,
     /// Time window in milliseconds, default is 1000ms
+    #[cfg_attr(feature = "schema", schemars(title = "时间窗口(毫秒)"))]
     pub time_window_ms: Option<u64>,
 
     #[serde(default = "default_report_ext")]
+    #[cfg_attr(feature = "schema", schemars(title = "上报扩展"))]
     pub report_ext: Value,
 }
 
