@@ -6,13 +6,16 @@ use spacegate_kernel::SgBody;
 use crate::Plugin;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "设置版本插件配置"))]
 pub struct SetVersionPluginConfig {
     /// version to set
+    #[cfg_attr(feature = "schema", schemars(title = "HTTP版本"))]
     pub version: PluginSupportedVersion,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "HTTP协议版本"))]
 pub enum PluginSupportedVersion {
     Http10,
     #[default]

@@ -5,12 +5,14 @@
 
 use crate::config::OciAuthConfig;
 use crate::error::WasmHostError;
+use flate2::read::GzDecoder;
 use reqwest::header::{ACCEPT, WWW_AUTHENTICATE};
 use serde::Deserialize;
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, io::Read, time::Duration};
+use tar::Archive;
 
 const OCI_MANIFEST_ACCEPT: &str = "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.artifact.manifest.v1+json";
-const OCI_BLOB_ACCEPT: &str = "application/vnd.module.wasm.content.layer.v1+wasm, application/wasm, application/vnd.wasm.content.layer.v1+wasm, application/octet-stream";
+const OCI_BLOB_ACCEPT: &str = "application/vnd.module.wasm.content.layer.v1+wasm, application/wasm, application/vnd.wasm.content.layer.v1+wasm, application/octet-stream, application/vnd.docker.image.rootfs.diff.tar.gzip, application/vnd.oci.image.layer.v1.tar+gzip";
 
 fn fetch_http_wasm_bytes_sync(url: &str) -> Result<Vec<u8>, WasmHostError> {
     let url = url.to_string();
@@ -144,7 +146,11 @@ impl OciReference {
 
 fn default_oci_scheme(rest: &str) -> &'static str {
     let registry = rest.split('/').next().unwrap_or_default();
-    if registry.starts_with("localhost") || registry.starts_with("127.0.0.1") || registry.starts_with("[::1]") {
+    if registry.starts_with("localhost")
+        || registry.starts_with("127.0.0.1")
+        || registry.starts_with("[::1]")
+        || registry.starts_with("host.docker.internal")
+    {
         "http"
     } else {
         "https"
@@ -195,8 +201,25 @@ async fn fetch_oci_wasm_bytes(client: &reqwest::Client, reference: &OciReference
     } else {
         manifest
     };
-    let layer = select_wasm_descriptor(&manifest)?;
-    registry_get_bytes(client, &reference.blob_url(&layer.digest), OCI_BLOB_ACCEPT, reference, auth).await
+    // 1. 优先尝试原生 WASM artifact 层
+    if let Ok(layer) = select_wasm_descriptor(&manifest) {
+        return registry_get_bytes(client, &reference.blob_url(&layer.digest), OCI_BLOB_ACCEPT, reference, auth).await;
+    }
+    // 2. 回退：Docker 镜像格式（tar.gz 层内包含 .wasm 文件）
+    let docker_layers: Vec<_> = manifest.layers.iter().filter(|l| is_docker_tar_media_type(&l.media_type)).collect();
+    if !docker_layers.is_empty() {
+        // 从最后一层（最上层）向前搜索，Docker 镜像最后一层包含最终文件系统
+        for layer in docker_layers.iter().rev() {
+            let blob = registry_get_bytes(client, &reference.blob_url(&layer.digest), OCI_BLOB_ACCEPT, reference, auth).await?;
+            if let Ok(wasm_bytes) = extract_wasm_from_docker_layer(&blob) {
+                return Ok(wasm_bytes);
+            }
+        }
+        return Err(WasmHostError::Fetch(
+            "Docker image layers do not contain a .wasm file; ensure the image includes a .wasm file in its filesystem".to_string(),
+        ));
+    }
+    Err(WasmHostError::Fetch("OCI image does not contain a wasm layer".to_string()))
 }
 
 async fn fetch_oci_manifest(client: &reqwest::Client, reference: &OciReference, manifest_ref: &str, auth: Option<&OciAuthConfig>) -> Result<OciManifest, WasmHostError> {
@@ -325,7 +348,12 @@ fn select_wasm_descriptor(manifest: &OciManifest) -> Result<&OciDescriptor, Wasm
         .iter()
         .copied()
         .find(|layer| is_wasm_media_type(&layer.media_type))
-        .or_else(|| (descriptors.len() == 1).then(|| descriptors[0]))
+        // Single-layer fallback only when it is NOT a Docker/OCI tar.gz layer
+        // (Docker tar.gz layers are handled by the Docker-format extraction path in fetch_oci_wasm_bytes)
+        .or_else(|| {
+            (descriptors.len() == 1 && !is_docker_tar_media_type(&descriptors[0].media_type))
+                .then(|| descriptors[0])
+        })
         .ok_or_else(|| WasmHostError::Fetch("OCI image does not contain a wasm layer".to_string()))
 }
 
@@ -334,6 +362,37 @@ fn is_wasm_media_type(media_type: &str) -> bool {
         media_type,
         "application/vnd.module.wasm.content.layer.v1+wasm" | "application/vnd.wasm.content.layer.v1+wasm" | "application/wasm"
     ) || media_type.contains("wasm")
+}
+
+/// 判断是否为 Docker/OCI 镜像的 tar.gz 层（Docker 镜像格式推送的 WASM 插件）
+fn is_docker_tar_media_type(media_type: &str) -> bool {
+    matches!(
+        media_type,
+        "application/vnd.docker.image.rootfs.diff.tar.gzip"
+            | "application/vnd.oci.image.layer.v1.tar+gzip"
+            | "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
+    )
+}
+
+/// 从 Docker 镜像的 tar.gz 层中提取第一个 `.wasm` 文件。
+fn extract_wasm_from_docker_layer(tar_gz_data: &[u8]) -> Result<Vec<u8>, WasmHostError> {
+    let gz = GzDecoder::new(tar_gz_data);
+    let mut archive = Archive::new(gz);
+    for entry in archive.entries().map_err(|e| WasmHostError::Fetch(format!("read tar.gz entries: {e}")))? {
+        let mut entry = entry.map_err(|e| WasmHostError::Fetch(format!("read tar.gz entry: {e}")))?;
+        let path = match entry.path() {
+            Ok(p) => p.to_string_lossy().to_string(),
+            Err(_) => continue,
+        };
+        if path.ends_with(".wasm") {
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf).map_err(|e| WasmHostError::Fetch(format!("read .wasm from tar.gz entry {path}: {e}")))?;
+            if !buf.is_empty() {
+                return Ok(buf);
+            }
+        }
+    }
+    Err(WasmHostError::Fetch("no .wasm file found in tar.gz layer".to_string()))
 }
 
 #[cfg(test)]
@@ -361,5 +420,113 @@ mod tests {
         assert_eq!(parsed["realm"], "https://auth.example/token");
         assert_eq!(parsed["service"], "registry.example");
         assert_eq!(parsed["scope"], "repository:ns/plugin:pull");
+    }
+
+    #[test]
+    fn detects_docker_tar_media_types() {
+        assert!(is_docker_tar_media_type("application/vnd.docker.image.rootfs.diff.tar.gzip"));
+        assert!(is_docker_tar_media_type("application/vnd.oci.image.layer.v1.tar+gzip"));
+        assert!(!is_docker_tar_media_type("application/vnd.module.wasm.content.layer.v1+wasm"));
+        assert!(!is_docker_tar_media_type("application/octet-stream"));
+    }
+
+    #[test]
+    fn extracts_wasm_from_tar_gz_layer() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+
+        let wasm_content = b"(module)";
+        let mut tar_builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_path("plugin.wasm").unwrap();
+        header.set_size(wasm_content.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        tar_builder.append(&header, &wasm_content[..]).unwrap();
+        let tar_bytes = tar_builder.into_inner().unwrap();
+
+        let mut gz_buf = Vec::new();
+        let mut encoder = GzEncoder::new(&mut gz_buf, Compression::fast());
+        encoder.write_all(&tar_bytes).unwrap();
+        encoder.finish().unwrap();
+
+        let extracted = extract_wasm_from_docker_layer(&gz_buf).unwrap();
+        assert_eq!(extracted, wasm_content);
+    }
+
+    #[test]
+    fn extract_wasm_from_tar_gz_layer_no_wasm() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+
+        let content = b"hello world";
+        let mut tar_builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_path("readme.txt").unwrap();
+        header.set_size(content.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        tar_builder.append(&header, &content[..]).unwrap();
+        let tar_bytes = tar_builder.into_inner().unwrap();
+
+        let mut gz_buf = Vec::new();
+        let mut encoder = GzEncoder::new(&mut gz_buf, Compression::fast());
+        encoder.write_all(&tar_bytes).unwrap();
+        encoder.finish().unwrap();
+
+        let result = extract_wasm_from_docker_layer(&gz_buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn select_wasm_descriptor_skips_docker_tar_single_layer() {
+        // A Docker-format image has a single tar.gz layer;
+        // select_wasm_descriptor should NOT select it (the Docker extraction path handles it).
+        let manifest = OciManifest {
+            media_type: Some("application/vnd.docker.distribution.manifest.v2+json".to_string()),
+            manifests: vec![],
+            layers: vec![OciDescriptor {
+                media_type: "application/vnd.docker.image.rootfs.diff.tar.gzip".to_string(),
+                digest: "sha256:abc".to_string(),
+                platform: None,
+            }],
+            blobs: vec![],
+        };
+        assert!(select_wasm_descriptor(&manifest).is_err());
+    }
+
+    #[test]
+    fn select_wasm_descriptor_picks_native_wasm_layer() {
+        let manifest = OciManifest {
+            media_type: None,
+            manifests: vec![],
+            layers: vec![OciDescriptor {
+                media_type: "application/vnd.module.wasm.content.layer.v1+wasm".to_string(),
+                digest: "sha256:wasm".to_string(),
+                platform: None,
+            }],
+            blobs: vec![],
+        };
+        let desc = select_wasm_descriptor(&manifest).unwrap();
+        assert_eq!(desc.digest, "sha256:wasm");
+    }
+
+    #[test]
+    fn select_wasm_descriptor_single_non_docker_layer_fallback() {
+        // A single layer with an unknown (but non-Docker) media type should still be selected
+        let manifest = OciManifest {
+            media_type: None,
+            manifests: vec![],
+            layers: vec![OciDescriptor {
+                media_type: "application/octet-stream".to_string(),
+                digest: "sha256:fallback".to_string(),
+                platform: None,
+            }],
+            blobs: vec![],
+        };
+        let desc = select_wasm_descriptor(&manifest).unwrap();
+        assert_eq!(desc.digest, "sha256:fallback");
     }
 }

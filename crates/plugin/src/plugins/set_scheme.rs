@@ -6,8 +6,10 @@ use spacegate_kernel::{helper_layers::function::Inner, SgBody};
 use crate::Plugin;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "设置协议插件配置"))]
 pub struct SetSchemePluginConfig {
     /// scheme to set
+    #[cfg_attr(feature = "schema", schemars(title = "协议"))]
     pub scheme: String,
 }
 

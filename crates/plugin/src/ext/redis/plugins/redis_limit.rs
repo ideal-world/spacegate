@@ -14,9 +14,17 @@ use super::redis_format_key;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "Redis限流插件配置"))]
 pub struct RedisLimitConfig {
+    #[cfg_attr(feature = "schema", schemars(title = "实例ID"))]
     pub id: Option<String>,
+    #[serde(default = "default_header")]
+    #[cfg_attr(feature = "schema", schemars(default = "default_header", title = "身份标识头部"))]
     pub header: String,
+}
+
+fn default_header() -> String {
+    "authorization".to_string()
 }
 
 pub struct RedisLimitPlugin {
