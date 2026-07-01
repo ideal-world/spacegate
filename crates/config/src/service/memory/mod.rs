@@ -23,7 +23,7 @@ impl Retrieve for Memory {
         Ok(self.config.gateways.get(gateway_name).map(|item| item.gateway.clone()))
     }
 
-    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<spacegate_model::SgHttpRoute>, spacegate_model::BoxError> {
+    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<spacegate_model::SgRoute>, spacegate_model::BoxError> {
         Ok(self.config.gateways.get(gateway_name).and_then(|item| item.routes.get(route_name).cloned()))
     }
 

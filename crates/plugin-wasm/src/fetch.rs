@@ -12,7 +12,7 @@ use std::{collections::HashMap, io::Read, time::Duration};
 use tar::Archive;
 
 const OCI_MANIFEST_ACCEPT: &str = "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.artifact.manifest.v1+json";
-const OCI_BLOB_ACCEPT: &str = "application/vnd.module.wasm.content.layer.v1+wasm, application/wasm, application/vnd.wasm.content.layer.v1+wasm, application/octet-stream, application/vnd.docker.image.rootfs.diff.tar.gzip, application/vnd.oci.image.layer.v1.tar+gzip";
+const OCI_BLOB_ACCEPT: &str = "application/vnd.module.wasm.content.layer.v1+wasm, application/wasm, application/vnd.wasm.content.layer.v1+wasm, application/json, application/yaml, application/x-yaml, text/yaml, application/octet-stream, application/vnd.docker.image.rootfs.diff.tar.gzip, application/vnd.oci.image.layer.v1.tar+gzip";
 
 fn fetch_http_wasm_bytes_sync(url: &str) -> Result<Vec<u8>, WasmHostError> {
     let url = url.to_string();
@@ -63,6 +63,32 @@ fn fetch_oci_wasm_bytes_sync(url: &str, auth: Option<OciAuthConfig>) -> Result<V
         .map_err(|_| WasmHostError::Fetch("OCI fetch thread panicked".to_string()))?
 }
 
+fn fetch_oci_file_sync(url: &str, file_path: &str, auth: Option<OciAuthConfig>) -> Result<Vec<u8>, WasmHostError> {
+    let url = url.to_string();
+    let file_path = file_path.to_string();
+    std::thread::Builder::new()
+        .name("spacegate-wasm-oci-file-fetch".to_string())
+        .spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|e| WasmHostError::Fetch(format!("build OCI fetch runtime: {e}")))?;
+            rt.block_on(async move {
+                let reference = OciReference::parse(&url)?;
+                if let Some(auth_registry) = auth.as_ref().and_then(|a| a.registry.as_deref()).filter(|v| !v.trim().is_empty()) {
+                    if !auth_registry.eq_ignore_ascii_case(&reference.registry) {
+                        return Err(WasmHostError::Fetch(format!(
+                            "OCI auth registry `{auth_registry}` does not match image registry `{}`",
+                            reference.registry
+                        )));
+                    }
+                }
+                let client = reqwest::Client::builder().timeout(Duration::from_secs(60)).build().map_err(|e| WasmHostError::Fetch(format!("build OCI client: {e}")))?;
+                fetch_oci_file(&client, &reference, &file_path, auth.as_ref()).await
+            })
+        })
+        .map_err(|e| WasmHostError::Fetch(format!("spawn OCI fetch thread: {e}")))?
+        .join()
+        .map_err(|_| WasmHostError::Fetch("OCI file fetch thread panicked".to_string()))?
+}
+
 pub fn fetch_wasm_bytes_sync(url_or_path: &str) -> Result<Vec<u8>, WasmHostError> {
     fetch_wasm_bytes_sync_with_auth(url_or_path, None)
 }
@@ -79,6 +105,26 @@ pub fn fetch_wasm_bytes_sync_with_auth(url_or_path: &str, oci_auth: Option<&OciA
         return fetch_oci_wasm_bytes_sync(trim, oci_auth.cloned());
     }
     std::fs::read(trim).map_err(|e| WasmHostError::Fetch(format!("read path {trim}: {e}")))
+}
+
+pub fn fetch_wasm_image_file_sync_with_auth(url_or_path: &str, file_path: &str, oci_auth: Option<&OciAuthConfig>) -> Result<Vec<u8>, WasmHostError> {
+    let trim = url_or_path.trim();
+    let file_path = normalize_lookup_path(file_path);
+    if file_path.is_empty() {
+        return Err(WasmHostError::Fetch("schema path must not be empty".to_string()));
+    }
+    if is_oci_url(trim) {
+        return fetch_oci_file_sync(trim, &file_path, oci_auth.cloned());
+    }
+    if let Some(rest) = trim.strip_prefix("file://") {
+        return read_local_related_file(rest, &file_path);
+    }
+    if trim.starts_with("http://") || trim.starts_with("https://") {
+        let base = trim.trim_end_matches('/');
+        let parent = base.rsplit_once('/').map(|(prefix, _)| prefix).unwrap_or(base);
+        return fetch_http_wasm_bytes_sync(&format!("{parent}/{file_path}"));
+    }
+    read_local_related_file(trim, &file_path)
 }
 
 pub fn is_oci_url(url: &str) -> bool {
@@ -146,11 +192,7 @@ impl OciReference {
 
 fn default_oci_scheme(rest: &str) -> &'static str {
     let registry = rest.split('/').next().unwrap_or_default();
-    if registry.starts_with("localhost")
-        || registry.starts_with("127.0.0.1")
-        || registry.starts_with("[::1]")
-        || registry.starts_with("host.docker.internal")
-    {
+    if registry.starts_with("localhost") || registry.starts_with("127.0.0.1") || registry.starts_with("[::1]") || registry.starts_with("host.docker.internal") {
         "http"
     } else {
         "https"
@@ -220,6 +262,29 @@ async fn fetch_oci_wasm_bytes(client: &reqwest::Client, reference: &OciReference
         ));
     }
     Err(WasmHostError::Fetch("OCI image does not contain a wasm layer".to_string()))
+}
+
+async fn fetch_oci_file(client: &reqwest::Client, reference: &OciReference, file_path: &str, auth: Option<&OciAuthConfig>) -> Result<Vec<u8>, WasmHostError> {
+    let manifest = fetch_oci_manifest(client, reference, &reference.reference, auth).await?;
+    let manifest = if is_index_manifest(&manifest) {
+        let child = select_manifest_descriptor(&manifest.manifests)?;
+        fetch_oci_manifest(client, reference, &child.digest, auth).await?
+    } else {
+        manifest
+    };
+    let docker_layers: Vec<_> = manifest.layers.iter().filter(|l| is_docker_tar_media_type(&l.media_type)).collect();
+    if docker_layers.is_empty() {
+        return Err(WasmHostError::Fetch(format!(
+            "OCI image does not contain Docker/OCI tar layers; cannot read `{file_path}` from image filesystem"
+        )));
+    }
+    for layer in docker_layers.iter().rev() {
+        let blob = registry_get_bytes(client, &reference.blob_url(&layer.digest), OCI_BLOB_ACCEPT, reference, auth).await?;
+        if let Ok(bytes) = extract_file_from_docker_layer(&blob, file_path) {
+            return Ok(bytes);
+        }
+    }
+    Err(WasmHostError::Fetch(format!("OCI image filesystem does not contain `{file_path}`")))
 }
 
 async fn fetch_oci_manifest(client: &reqwest::Client, reference: &OciReference, manifest_ref: &str, auth: Option<&OciAuthConfig>) -> Result<OciManifest, WasmHostError> {
@@ -350,10 +415,7 @@ fn select_wasm_descriptor(manifest: &OciManifest) -> Result<&OciDescriptor, Wasm
         .find(|layer| is_wasm_media_type(&layer.media_type))
         // Single-layer fallback only when it is NOT a Docker/OCI tar.gz layer
         // (Docker tar.gz layers are handled by the Docker-format extraction path in fetch_oci_wasm_bytes)
-        .or_else(|| {
-            (descriptors.len() == 1 && !is_docker_tar_media_type(&descriptors[0].media_type))
-                .then(|| descriptors[0])
-        })
+        .or_else(|| (descriptors.len() == 1 && !is_docker_tar_media_type(&descriptors[0].media_type)).then(|| descriptors[0]))
         .ok_or_else(|| WasmHostError::Fetch("OCI image does not contain a wasm layer".to_string()))
 }
 
@@ -368,14 +430,21 @@ fn is_wasm_media_type(media_type: &str) -> bool {
 fn is_docker_tar_media_type(media_type: &str) -> bool {
     matches!(
         media_type,
-        "application/vnd.docker.image.rootfs.diff.tar.gzip"
-            | "application/vnd.oci.image.layer.v1.tar+gzip"
-            | "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
+        "application/vnd.docker.image.rootfs.diff.tar.gzip" | "application/vnd.oci.image.layer.v1.tar+gzip" | "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
     )
 }
 
 /// 从 Docker 镜像的 tar.gz 层中提取第一个 `.wasm` 文件。
 fn extract_wasm_from_docker_layer(tar_gz_data: &[u8]) -> Result<Vec<u8>, WasmHostError> {
+    extract_file_from_docker_layer_by(tar_gz_data, |path| path.ends_with(".wasm"), ".wasm")
+}
+
+fn extract_file_from_docker_layer(tar_gz_data: &[u8], file_path: &str) -> Result<Vec<u8>, WasmHostError> {
+    let lookup = normalize_lookup_path(file_path);
+    extract_file_from_docker_layer_by(tar_gz_data, |path| normalize_lookup_path(path) == lookup, &lookup)
+}
+
+fn extract_file_from_docker_layer_by(tar_gz_data: &[u8], mut predicate: impl FnMut(&str) -> bool, label: &str) -> Result<Vec<u8>, WasmHostError> {
     let gz = GzDecoder::new(tar_gz_data);
     let mut archive = Archive::new(gz);
     for entry in archive.entries().map_err(|e| WasmHostError::Fetch(format!("read tar.gz entries: {e}")))? {
@@ -384,15 +453,30 @@ fn extract_wasm_from_docker_layer(tar_gz_data: &[u8]) -> Result<Vec<u8>, WasmHos
             Ok(p) => p.to_string_lossy().to_string(),
             Err(_) => continue,
         };
-        if path.ends_with(".wasm") {
+        if predicate(&path) {
             let mut buf = Vec::new();
-            entry.read_to_end(&mut buf).map_err(|e| WasmHostError::Fetch(format!("read .wasm from tar.gz entry {path}: {e}")))?;
+            entry.read_to_end(&mut buf).map_err(|e| WasmHostError::Fetch(format!("read {label} from tar.gz entry {path}: {e}")))?;
             if !buf.is_empty() {
                 return Ok(buf);
             }
         }
     }
-    Err(WasmHostError::Fetch("no .wasm file found in tar.gz layer".to_string()))
+    Err(WasmHostError::Fetch(format!("no {label} file found in tar.gz layer")))
+}
+
+fn normalize_lookup_path(path: &str) -> String {
+    path.trim().trim_start_matches('/').split('/').filter(|part| !part.is_empty() && *part != ".").collect::<Vec<_>>().join("/")
+}
+
+fn read_local_related_file(base: &str, file_path: &str) -> Result<Vec<u8>, WasmHostError> {
+    let base_path = std::path::Path::new(base);
+    let root = if base_path.is_dir() {
+        base_path
+    } else {
+        base_path.parent().unwrap_or_else(|| std::path::Path::new("."))
+    };
+    let full_path = root.join(file_path);
+    std::fs::read(&full_path).map_err(|e| WasmHostError::Fetch(format!("read file {}: {e}", full_path.display())))
 }
 
 #[cfg(test)]
@@ -453,6 +537,31 @@ mod tests {
 
         let extracted = extract_wasm_from_docker_layer(&gz_buf).unwrap();
         assert_eq!(extracted, wasm_content);
+    }
+
+    #[test]
+    fn extracts_named_schema_file_from_tar_gz_layer() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+
+        let schema_content = br#"{"type":"object"}"#;
+        let mut tar_builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_path("./schema/plugin.schema.json").unwrap();
+        header.set_size(schema_content.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        tar_builder.append(&header, &schema_content[..]).unwrap();
+        let tar_bytes = tar_builder.into_inner().unwrap();
+
+        let mut gz_buf = Vec::new();
+        let mut encoder = GzEncoder::new(&mut gz_buf, Compression::fast());
+        encoder.write_all(&tar_bytes).unwrap();
+        encoder.finish().unwrap();
+
+        let extracted = extract_file_from_docker_layer(&gz_buf, "/schema/plugin.schema.json").unwrap();
+        assert_eq!(extracted, schema_content);
     }
 
     #[test]

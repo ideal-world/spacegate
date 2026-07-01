@@ -9,6 +9,7 @@ use kube::{
 use spacegate_model::{
     ext::k8s::crd::{
         http_spaceroute::HttpSpaceroute,
+        mcp_route::McpRoute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
     },
     BoxError, BoxResult, PluginInstanceId,
@@ -17,7 +18,7 @@ use spacegate_model::{
 use crate::service::{Retrieve as _, Update};
 
 use super::{
-    convert::{filter_k8s_conv::PluginIdConv as _, gateway_k8s_conv::SgGatewayConv as _, route_k8s_conv::SgHttpRouteConv, ToTarget},
+    convert::{filter_k8s_conv::PluginIdConv as _, gateway_k8s_conv::SgGatewayConv as _, route_k8s_conv::KubeRoute, route_k8s_conv::SgRouteK8sConv, ToTarget},
     K8s,
 };
 
@@ -56,28 +57,50 @@ impl Update for K8s {
         Ok(())
     }
 
-    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgHttpRoute) -> BoxResult<()> {
-        let (mut http_spaceroute, update_plugin_ids) = route.to_kube_httproute(gateway_name, route_name, &self.namespace);
+    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgRoute) -> BoxResult<()> {
+        let mut kube_route = route.to_kube_route(gateway_name, route_name, &self.namespace);
 
         let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
         let http_route_api: Api<HttpRoute> = self.get_namespace_api();
+        let mcp_route_api: Api<McpRoute> = self.get_namespace_api();
 
         let old_sg_httproute = self.retrieve_config_item_route(gateway_name, route_name).await?;
 
-        if let Some(old_route) = http_spaceroute_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
-            http_spaceroute.metadata.resource_version = old_route.resource_version();
-            http_spaceroute_api.replace(&http_spaceroute.name_any(), &PostParams::default(), &http_spaceroute).await?;
-        } else if http_route_api.get_metadata_opt(&http_spaceroute.name_any()).await?.is_some() {
-            http_route_api.delete(&http_spaceroute.name_any(), &DeleteParams::default()).await?;
-            http_spaceroute_api.create(&PostParams::default(), &http_spaceroute).await?;
-        } else {
-            return Err(format!("raw http route {route_name} not found").into());
+        match &mut kube_route {
+            KubeRoute::Http(http_spaceroute, _) => {
+                if let Some(old_route) = http_spaceroute_api.get_metadata_opt(&http_spaceroute.name_any()).await? {
+                    http_spaceroute.metadata.resource_version = old_route.resource_version();
+                    http_spaceroute_api.replace(&http_spaceroute.name_any(), &PostParams::default(), http_spaceroute).await?;
+                } else if http_route_api.get_metadata_opt(&http_spaceroute.name_any()).await?.is_some() {
+                    http_route_api.delete(&http_spaceroute.name_any(), &DeleteParams::default()).await?;
+                    http_spaceroute_api.create(&PostParams::default(), http_spaceroute).await?;
+                } else if mcp_route_api.get_metadata_opt(&http_spaceroute.name_any()).await?.is_some() {
+                    mcp_route_api.delete(&http_spaceroute.name_any(), &DeleteParams::default()).await?;
+                    http_spaceroute_api.create(&PostParams::default(), http_spaceroute).await?;
+                } else {
+                    return Err(format!("raw route {route_name} not found").into());
+                };
+            }
+            KubeRoute::Mcp(mcp_route, _) => {
+                if let Some(old_route) = mcp_route_api.get_metadata_opt(&mcp_route.name_any()).await? {
+                    mcp_route.metadata.resource_version = old_route.resource_version();
+                    mcp_route_api.replace(&mcp_route.name_any(), &PostParams::default(), mcp_route).await?;
+                } else if http_spaceroute_api.get_metadata_opt(&mcp_route.name_any()).await?.is_some() {
+                    http_spaceroute_api.delete(&mcp_route.name_any(), &DeleteParams::default()).await?;
+                    mcp_route_api.create(&PostParams::default(), mcp_route).await?;
+                } else if http_route_api.get_metadata_opt(&mcp_route.name_any()).await?.is_some() {
+                    http_route_api.delete(&mcp_route.name_any(), &DeleteParams::default()).await?;
+                    mcp_route_api.create(&PostParams::default(), mcp_route).await?;
+                } else {
+                    return Err(format!("raw route {route_name} not found").into());
+                };
+            }
         };
 
         self.update_plugin_ids_changes(
-            old_sg_httproute.map(|r| r.to_kube_httproute(gateway_name, route_name, &self.namespace).1).unwrap_or_default(),
-            update_plugin_ids,
-            http_spaceroute.to_target_ref(),
+            old_sg_httproute.map(|r| r.to_kube_route(gateway_name, route_name, &self.namespace).plugin_ids().to_vec()).unwrap_or_default(),
+            kube_route.plugin_ids().to_vec(),
+            kube_route.to_target_ref(),
         )
         .await?;
 

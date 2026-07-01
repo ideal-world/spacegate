@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::BTreeMap};
 
 use gateway::SgBackendProtocol;
-use http_route::SgHttpRoute;
+use http_route::{SgHttpRoute, SgMcpRoute, SgRoute};
 use k8s_gateway_api::{
     BackendObjectReference, CommonRouteSpec, HttpHeader, HttpHeaderMatch, HttpPathMatch, HttpPathModifier, HttpQueryParamMatch, HttpRequestHeaderFilter, HttpRouteFilter,
     HttpRouteMatch, HttpUrlRewriteFilter, ParentReference, RouteParentStatus, RouteStatus,
@@ -10,7 +10,11 @@ use kube::{api::ObjectMeta, ResourceExt};
 use spacegate_model::{
     constants::GATEWAY_CONTROLLER_NAME,
     ext::k8s::{
-        crd::{http_spaceroute::HttpSpacerouteStatus, sg_filter::K8sSgFilterSpecTargetRef},
+        crd::{
+            http_spaceroute::HttpSpacerouteStatus,
+            mcp_route::{McpRoute, McpRouteSpec, McpRouteStatus},
+            sg_filter::K8sSgFilterSpecTargetRef,
+        },
         helper_struct::{BackendObjectRefKind, SgTargetKind},
     },
     PluginInstanceId,
@@ -69,6 +73,91 @@ impl SgHttpRouteConv for SgHttpRoute {
     }
 }
 
+pub(crate) enum KubeRoute {
+    Http(HttpSpaceroute, Vec<PluginInstanceId>),
+    Mcp(McpRoute, Vec<PluginInstanceId>),
+}
+
+impl KubeRoute {
+    pub(crate) fn plugin_ids(&self) -> &[PluginInstanceId] {
+        match self {
+            KubeRoute::Http(_, plugin_ids) | KubeRoute::Mcp(_, plugin_ids) => plugin_ids,
+        }
+    }
+
+    pub(crate) fn into_plugin_ids(self) -> Vec<PluginInstanceId> {
+        match self {
+            KubeRoute::Http(_, plugin_ids) | KubeRoute::Mcp(_, plugin_ids) => plugin_ids,
+        }
+    }
+
+    pub(crate) fn to_target_ref(&self) -> K8sSgFilterSpecTargetRef {
+        match self {
+            KubeRoute::Http(route, _) => route.to_target_ref(),
+            KubeRoute::Mcp(route, _) => route.to_target_ref(),
+        }
+    }
+}
+
+pub(crate) trait SgRouteK8sConv {
+    fn to_kube_route(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> KubeRoute;
+}
+
+impl SgRouteK8sConv for SgRoute {
+    fn to_kube_route(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> KubeRoute {
+        match self {
+            SgRoute::Http(route) => {
+                let (route, plugin_ids) = route.to_kube_httproute(gateway_name, name, gateway_namespace);
+                KubeRoute::Http(route, plugin_ids)
+            }
+            SgRoute::Mcp(route) => {
+                let (route, plugin_ids) = mcp_route_to_kube_mcp_route(route, gateway_name, name, gateway_namespace);
+                KubeRoute::Mcp(route, plugin_ids)
+            }
+        }
+    }
+}
+
+fn mcp_route_to_kube_mcp_route(route: SgMcpRoute, gateway_name: &str, name: &str, gateway_namespace: &str) -> (McpRoute, Vec<PluginInstanceId>) {
+    let gateway_ref = ParentReference {
+        group: None,
+        kind: Some(SgTargetKind::Gateway.into()),
+        namespace: Some(gateway_namespace.to_string()),
+        name: gateway_name.to_string(),
+        section_name: None,
+        port: None,
+    };
+    let mcp_route = McpRoute {
+        metadata: ObjectMeta {
+            name: Some(name.to_string()),
+            namespace: Some(gateway_namespace.to_string()),
+            ..Default::default()
+        },
+        spec: McpRouteSpec {
+            inner: CommonRouteSpec {
+                parent_refs: Some(vec![gateway_ref.clone()]),
+            },
+            hostnames: route.hostnames,
+            transport: route.transport,
+            path: route.path,
+            legacy_sse: route.legacy_sse,
+            backend_refs: route.backends.into_iter().map(|backend| backend.into_kube_httproute()).collect(),
+            timeout_mode: route.timeout_mode,
+            session_affinity: route.session_affinity,
+        },
+        status: Some(McpRouteStatus {
+            inner: RouteStatus {
+                parents: vec![RouteParentStatus {
+                    parent_ref: gateway_ref,
+                    controller_name: GATEWAY_CONTROLLER_NAME.to_string(),
+                    conditions: Vec::new(),
+                }],
+            },
+        }),
+    };
+    (mcp_route, route.plugins)
+}
+
 pub(crate) trait SgHttpRouteRuleConv {
     /// # to_kube_httproute
     /// `SgHttpRouteRule` to `HttpRouteRule`, include `HttpRouteFilter` and  excluding `SgFilter`.
@@ -91,6 +180,7 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
             filters: Some(plugins),
             backend_refs: Some(self.backends.into_iter().map(|b| b.into_kube_httproute()).collect::<Vec<_>>()),
             timeout_ms: self.timeout_ms,
+            timeout_mode: self.timeout_mode,
         }
     }
 
@@ -154,6 +244,8 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
                 .transpose()?
                 .unwrap_or_default(),
             timeout_ms: rule.timeout_ms,
+            timeout_mode: rule.timeout_mode,
+            balance_policy: None,
         })
     }
 }
@@ -417,6 +509,7 @@ impl SgBackendRefConv for SgBackendRef {
             backend_ref: Some(BackendRef {
                 weight: self.weight,
                 timeout_ms: self.timeout_ms,
+                timeout_mode: self.timeout_mode,
                 inner: backend_inner_ref,
                 downgrade_http2: self.downgrade_http2,
             }),
@@ -456,6 +549,7 @@ impl SgBackendRefConv for SgBackendRef {
                     host: backend_host,
                     port: backend.inner.port,
                     timeout_ms: backend.timeout_ms,
+                    timeout_mode: backend.timeout_mode,
                     protocol,
                     weight: backend.weight,
                     plugins: ext_plugins.into_iter().filter_map(PluginInstanceId::from_http_route_filter).collect(),
@@ -470,6 +564,16 @@ impl ToTarget for HttpSpaceroute {
     fn to_target_ref(&self) -> K8sSgFilterSpecTargetRef {
         K8sSgFilterSpecTargetRef {
             kind: SgTargetKind::Httpspaceroute.into(),
+            name: self.name_any(),
+            namespace: self.namespace(),
+        }
+    }
+}
+
+impl ToTarget for McpRoute {
+    fn to_target_ref(&self) -> K8sSgFilterSpecTargetRef {
+        K8sSgFilterSpecTargetRef {
+            kind: SgTargetKind::McpRoute.into(),
             name: self.name_any(),
             namespace: self.namespace(),
         }

@@ -9,6 +9,7 @@ use crate::{
         reload::Reloader,
         route::{Router, RouterService},
     },
+    observability::AccessLogContext,
     utils::fold_box_layers::fold_layers,
     BoxLayer, SgBody,
 };
@@ -175,6 +176,9 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
 
 fn insert_route_name(req: &mut Request<SgBody>, name: Arc<str>) {
     let route_name = RouteName::new(name);
+    if let Some(context) = req.extensions().get::<AccessLogContext>() {
+        context.set_route_name(route_name.to_string());
+    }
     if let Some(reflect) = req.extensions_mut().get_mut::<Reflect>() {
         reflect.insert(route_name.clone());
     }

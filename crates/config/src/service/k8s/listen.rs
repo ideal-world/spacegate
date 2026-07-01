@@ -16,6 +16,7 @@ use spacegate_model::{
     constants,
     ext::k8s::crd::{
         http_spaceroute::HttpSpaceroute,
+        mcp_route::McpRoute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
         wasm_plugin::{HigressWasmPluginStatus, WasmPlugin},
     },
@@ -140,6 +141,53 @@ impl K8s {
             }
         }
     }
+
+    async fn process_mcp_route_event(
+        move_evt_tx: &tokio::sync::mpsc::UnboundedSender<(ConfigType, ConfigEventType)>,
+        move_mcp_route_names: &[String],
+        move_namespace: &str,
+        mcp_route_event: watcher::Event<McpRoute>,
+        uid_version_map: &mut HashMap<Option<String>, ObjectMeta>,
+    ) {
+        let apply_event = |mcp_route: McpRoute, uid_version_map: &mut HashMap<_, _>| {
+            if move_mcp_route_names.contains(&mcp_route.name_any()) && uid_version_map.get(&mcp_route.uid()).is_none() {
+                uid_version_map.insert(mcp_route.uid(), mcp_route.meta().clone());
+                return;
+            }
+            if uid_version_map.get(&mcp_route.uid()) == Some(mcp_route.meta()) {
+                return;
+            }
+            move_evt_tx
+                .send((
+                    ConfigType::Route {
+                        name: mcp_route.name_any(),
+                        gateway_name: mcp_route.get_gateway_name(move_namespace),
+                    },
+                    ConfigEventType::Delete,
+                ))
+                .expect("send event error");
+        };
+        match mcp_route_event {
+            watcher::Event::Applied(mcp_route) => apply_event(mcp_route, uid_version_map),
+            watcher::Event::Deleted(mcp_route) => {
+                uid_version_map.remove(&mcp_route.uid());
+                move_evt_tx
+                    .send((
+                        ConfigType::Route {
+                            name: mcp_route.name_any(),
+                            gateway_name: mcp_route.get_gateway_name(move_namespace),
+                        },
+                        ConfigEventType::Delete,
+                    ))
+                    .expect("send event error");
+            }
+            watcher::Event::Restarted(mcp_routes) => {
+                for mcp_route in mcp_routes {
+                    apply_event(mcp_route, uid_version_map);
+                }
+            }
+        }
+    }
 }
 
 impl CreateListener for K8s {
@@ -155,6 +203,7 @@ impl CreateListener for K8s {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         let http_route_api: Api<HttpRoute> = self.get_namespace_api();
         let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
+        let mcp_route_api: Api<McpRoute> = self.get_namespace_api();
         let sg_filter_api: Api<SgFilter> = self.get_namespace_api();
         let wasm_plugin_api: Api<WasmPlugin> = self.get_namespace_api();
         let secret_api: Api<Secret> = self.get_namespace_api();
@@ -269,13 +318,33 @@ impl CreateListener for K8s {
             }
         });
 
+        let move_mcp_route_names = config.gateways.clone().into_values().flat_map(|item| item.routes.keys().cloned().collect::<Vec<_>>()).collect::<Vec<_>>();
+        let move_evt_tx = evt_tx.clone();
+        let move_namespace = self.namespace.to_string();
+        let move_mcp_route_api = mcp_route_api.clone();
+        tokio::task::spawn(async move {
+            let mut uid_version_map = HashMap::new();
+            let ew = watcher::watcher(move_mcp_route_api, watcher::Config::default());
+            pin_mut!(ew);
+            while let Some(mcp_route_event) = ew.try_next().await.unwrap_or_default() {
+                Self::process_mcp_route_event(&move_evt_tx, &move_mcp_route_names, &move_namespace, mcp_route_event, &mut uid_version_map).await
+            }
+        });
+
         let move_filter_codes_names = config
             .gateways
             .clone()
             .into_values()
             .flat_map(|item| {
                 let mut plugin_ids = item.gateway.plugins.clone();
-                let route_plugin_ids = item.routes.values().flat_map(|route| route.plugins.clone()).collect::<Vec<_>>();
+                let route_plugin_ids = item
+                    .routes
+                    .values()
+                    .flat_map(|route| match route {
+                        spacegate_model::SgRoute::Http(route) => route.plugins.clone(),
+                        spacegate_model::SgRoute::Mcp(route) => route.plugins.clone(),
+                    })
+                    .collect::<Vec<_>>();
                 plugin_ids.extend(route_plugin_ids);
                 plugin_ids
             })

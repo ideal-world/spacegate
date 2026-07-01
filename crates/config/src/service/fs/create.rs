@@ -1,10 +1,6 @@
-use spacegate_model::ConfigItem;
+use spacegate_model::{ConfigItem, SgRoute};
 
-use crate::{
-    model::{SgGateway, SgHttpRoute},
-    service::config_format::ConfigFormat,
-    BoxError,
-};
+use crate::{model::SgGateway, service::config_format::ConfigFormat, BoxError};
 
 use crate::service::Create;
 
@@ -45,7 +41,7 @@ where
         )
         .await
     }
-    async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgHttpRoute) -> Result<(), BoxError> {
+    async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> Result<(), BoxError> {
         self.modify_cached(|config| {
             if let Some(item) = config.gateways.get_mut(gateway_name) {
                 if item.routes.contains_key(gateway_name) {

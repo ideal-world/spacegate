@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::{Redis, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY, CONF_PLUGIN_KEY};
 use crate::{
-    model::{SgGateway, SgHttpRoute},
+    model::{SgGateway, SgRoute},
     service::config_format::ConfigFormat,
     BoxResult,
 };
@@ -20,9 +20,9 @@ where
         gateway_config.map(|config| self.format.de::<SgGateway>(config.as_bytes()).map_err(|e| format!("[SG.Config] Gateway Config parse error {}", e).into())).transpose()
     }
 
-    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> BoxResult<Option<crate::model::SgHttpRoute>> {
+    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> BoxResult<Option<SgRoute>> {
         let http_route_config: Option<String> = self.get_con().await?.hget(format!("{CONF_HTTP_ROUTE_KEY}{}", gateway_name), route_name).await?;
-        http_route_config.map(|config| self.format.de::<SgHttpRoute>(config.as_bytes()).map_err(|e| format!("[SG.Config] Route Config parse error {}", e).into())).transpose()
+        http_route_config.map(|config| self.format.de::<SgRoute>(config.as_bytes()).map_err(|e| format!("[SG.Config] Route Config parse error {}", e).into())).transpose()
     }
 
     async fn retrieve_config_item_route_names(&self, name: &str) -> BoxResult<Vec<String>> {

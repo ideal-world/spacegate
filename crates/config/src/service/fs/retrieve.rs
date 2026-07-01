@@ -1,9 +1,9 @@
-use spacegate_model::{PluginConfig, PluginInstanceId};
+use spacegate_model::{PluginConfig, PluginInstanceId, SgRoute};
 
 use super::Fs;
+use crate::model::gateway::SgGateway;
 use crate::service::config_format::ConfigFormat;
 use crate::BoxError;
-use crate::{model::gateway::SgGateway, model::http_route::SgHttpRoute};
 
 use crate::service::Retrieve;
 
@@ -23,7 +23,7 @@ where
         self.retrieve_cached(|cfg| cfg.gateways.get(gateway_name).map(|item| item.gateway.clone())).await
     }
 
-    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<SgHttpRoute>, BoxError> {
+    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<Option<SgRoute>, BoxError> {
         self.retrieve_cached(|cfg| cfg.gateways.get(gateway_name).and_then(|item| item.routes.get(route_name)).cloned()).await
     }
 

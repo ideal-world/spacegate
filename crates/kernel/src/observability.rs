@@ -12,6 +12,17 @@ pub struct TelemetryContext {
     fields: Arc<Mutex<BTreeMap<String, String>>>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct AccessLogContext {
+    fields: Arc<Mutex<AccessLogContextFields>>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct AccessLogContextFields {
+    route_name: Option<String>,
+    upstream_host: Option<String>,
+}
+
 pub const MAX_TELEMETRY_KEY_LEN: usize = 128;
 pub const MAX_TELEMETRY_VALUE_LEN: usize = 4096;
 
@@ -81,6 +92,30 @@ impl TelemetryContext {
 
     pub fn is_empty(&self) -> bool {
         self.fields.lock().map(|fields| fields.is_empty()).unwrap_or(true)
+    }
+}
+
+impl AccessLogContext {
+    pub fn set_route_name(&self, value: impl Into<String>) {
+        let Ok(mut fields) = self.fields.lock() else {
+            return;
+        };
+        fields.route_name = Some(value.into());
+    }
+
+    pub fn set_upstream_host(&self, value: impl Into<String>) {
+        let Ok(mut fields) = self.fields.lock() else {
+            return;
+        };
+        fields.upstream_host = Some(value.into());
+    }
+
+    pub fn route_name(&self) -> String {
+        self.fields.lock().ok().and_then(|fields| fields.route_name.clone()).unwrap_or_default()
+    }
+
+    pub fn upstream_host(&self) -> String {
+        self.fields.lock().ok().and_then(|fields| fields.upstream_host.clone()).unwrap_or_default()
     }
 }
 
@@ -442,6 +477,17 @@ mod tests {
         let fields = context.snapshot();
         assert_eq!(fields.get("ai.asset_id").map(String::as_str), Some("deepseek-chat"));
         assert_eq!(fields.get("ai.total_tokens").map(String::as_str), Some("37"));
+    }
+
+    #[test]
+    fn access_log_context_keeps_route_and_backend_for_early_responses() {
+        let context = super::AccessLogContext::default();
+
+        context.set_route_name("model-route");
+        context.set_upstream_host("model.default.svc.cluster.local");
+
+        assert_eq!(context.route_name(), "model-route");
+        assert_eq!(context.upstream_host(), "model.default.svc.cluster.local");
     }
 
     #[test]

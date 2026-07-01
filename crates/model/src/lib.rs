@@ -27,7 +27,7 @@ pub type BoxResult<T> = Result<T, BoxError>;
 pub struct ConfigItem<P = PluginInstanceId> {
     pub gateway: SgGateway<P>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub routes: BTreeMap<String, SgHttpRoute<P>>,
+    pub routes: BTreeMap<String, SgRoute<P>>,
 }
 
 impl<P> ConfigItem<P> {

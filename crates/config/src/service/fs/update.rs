@@ -1,4 +1,4 @@
-use spacegate_model::{Config, ConfigItem, SgGateway, SgHttpRoute};
+use spacegate_model::{Config, ConfigItem, SgGateway, SgRoute};
 
 use crate::{
     service::{config_format::ConfigFormat, Update},
@@ -30,7 +30,7 @@ where
         })
         .await
     }
-    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgHttpRoute) -> Result<(), BoxError> {
+    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> Result<(), BoxError> {
         self.modify_cached(|config| {
             if let Some(prev_item) = config.gateways.get_mut(gateway_name) {
                 if let Some(prev_route) = prev_item.routes.get_mut(route_name) {
