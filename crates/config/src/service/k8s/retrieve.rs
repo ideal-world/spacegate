@@ -10,6 +10,7 @@ use spacegate_model::{
     ext::k8s::{
         crd::{
             http_spaceroute::HttpSpaceroute,
+            mcp_route::McpRoute,
             sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
             wasm_plugin::WasmPlugin,
         },
@@ -20,7 +21,7 @@ use spacegate_model::{
 
 use crate::{
     constants::{self, GATEWAY_CLASS_NAME},
-    model::{gateway, http_route, PluginConfig, SgGateway, SgHttpRoute},
+    model::{gateway, http_route, PluginConfig, SgGateway, SgHttpRoute, SgMcpRoute, SgRoute, SgRouteKind},
     service::Retrieve,
     BoxError, BoxResult,
 };
@@ -30,7 +31,7 @@ use super::{
         filter_k8s_conv::PluginConfigConv,
         gateway_k8s_conv::SgParametersConv as _,
         higress_wasm_plugin_conv::{sort_higress_wasm_plugins, HigressWasmPluginConv as _},
-        route_k8s_conv::SgHttpRouteRuleConv as _,
+        route_k8s_conv::{SgBackendRefConv as _, SgHttpRouteRuleConv as _},
     },
     K8s,
 };
@@ -54,11 +55,27 @@ impl Retrieve for K8s {
         Ok(result)
     }
 
-    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> BoxResult<Option<SgHttpRoute>> {
+    async fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> BoxResult<Option<SgRoute>> {
         let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
         let httproute_api: Api<HttpRoute> = self.get_namespace_api();
+        let mcp_route_api: Api<McpRoute> = self.get_namespace_api();
 
-        let result = if let Some(httpspaceroute) = http_spaceroute_api.get_opt(route_name).await?.and_then(|http_route_obj| {
+        let result = if let Some(mcp_route) = mcp_route_api.get_opt(route_name).await?.and_then(|mcp_route_obj| {
+            if mcp_route_obj
+                .spec
+                .inner
+                .parent_refs
+                .as_ref()
+                .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == mcp_route_obj.namespace() && parent_ref.name == gateway_name))
+                .unwrap_or(false)
+            {
+                Some(mcp_route_obj)
+            } else {
+                None
+            }
+        }) {
+            Some(SgRoute::Mcp(self.kube_mcproute_2_sg_route(mcp_route).await?))
+        } else if let Some(httpspaceroute) = http_spaceroute_api.get_opt(route_name).await?.and_then(|http_route_obj| {
             if http_route_obj
                 .spec
                 .inner
@@ -72,7 +89,7 @@ impl Retrieve for K8s {
                 None
             }
         }) {
-            Some(self.kube_httpspaceroute_2_sg_route(httpspaceroute).await?)
+            Some(SgRoute::Http(self.kube_httpspaceroute_2_sg_route(httpspaceroute).await?))
         } else if let Some(http_route) = httproute_api.get_opt(route_name).await?.and_then(|http_route| {
             if http_route
                 .spec
@@ -87,7 +104,7 @@ impl Retrieve for K8s {
                 None
             }
         }) {
-            Some(self.kube_httproute_2_sg_route(http_route).await?)
+            Some(SgRoute::Http(self.kube_httproute_2_sg_route(http_route).await?))
         } else {
             None
         };
@@ -98,8 +115,9 @@ impl Retrieve for K8s {
     async fn retrieve_config_item_route_names(&self, name: &str) -> BoxResult<Vec<String>> {
         let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
         let httproute_api: Api<HttpRoute> = self.get_namespace_api();
+        let mcp_route_api: Api<McpRoute> = self.get_namespace_api();
 
-        let mut result: Vec<String> = http_spaceroute_api
+        let mut result: Vec<String> = mcp_route_api
             .list(&ListParams::default())
             .await?
             .iter()
@@ -114,6 +132,23 @@ impl Retrieve for K8s {
             })
             .map(|route| route.name_any())
             .collect();
+
+        result.extend(
+            http_spaceroute_api
+                .list(&ListParams::default())
+                .await?
+                .iter()
+                .filter(|route| {
+                    route
+                        .spec
+                        .inner
+                        .parent_refs
+                        .as_ref()
+                        .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == route.namespace() && parent_ref.name == name))
+                        .unwrap_or(false)
+                })
+                .map(|route| route.name_any()),
+        );
 
         result.extend(
             httproute_api
@@ -263,6 +298,37 @@ impl K8s {
         self.kube_httpspaceroute_2_sg_route(http_route.into()).await
     }
 
+    async fn kube_mcproute_2_sg_route(&self, mcp_route: McpRoute) -> BoxResult<SgMcpRoute> {
+        let route_name = mcp_route.name_any();
+        let namespace = mcp_route.namespace();
+        let plugins = self
+            .retrieve_config_item_filters(K8sSgFilterSpecTargetRef {
+                kind: SgTargetKind::McpRoute.into(),
+                name: route_name.clone(),
+                namespace: mcp_route.namespace(),
+            })
+            .await?;
+        let mut route = SgMcpRoute {
+            kind: SgRouteKind::McpRoute,
+            route_name,
+            hostnames: mcp_route.spec.hostnames,
+            transport: mcp_route.spec.transport,
+            path: mcp_route.spec.path,
+            legacy_sse: mcp_route.spec.legacy_sse,
+            backends: mcp_route
+                .spec
+                .backend_refs
+                .into_iter()
+                .filter_map(|backend| spacegate_model::SgBackendRef::from_kube_httproute(backend).transpose())
+                .collect::<BoxResult<Vec<_>>>()?,
+            plugins,
+            timeout_mode: mcp_route.spec.timeout_mode,
+            session_affinity: mcp_route.spec.session_affinity,
+        };
+        self.apply_higress_wasm_mcp_route_plugins(&mut route, namespace).await?;
+        Ok(route)
+    }
+
     async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<PluginInstanceId>> {
         let kind = target.kind;
         let name = target.name;
@@ -387,6 +453,22 @@ impl K8s {
                 for backend in &mut rule.backends {
                     backend.plugins.extend(plugin.backend_plugin_ids(backend));
                 }
+            }
+        }
+        Ok(())
+    }
+
+    async fn apply_higress_wasm_mcp_route_plugins(&self, route: &mut SgMcpRoute, namespace: Option<String>) -> BoxResult<()> {
+        let namespace = namespace.unwrap_or_else(|| self.namespace.to_string());
+        let wasm_plugin_api: Api<WasmPlugin> = self.get_specify_namespace_api(&namespace);
+        let mut wasm_plugins = wasm_plugin_api.list(&ListParams::default()).await?.items;
+        sort_higress_wasm_plugins(&mut wasm_plugins);
+        let hostnames = route.hostnames.as_deref();
+
+        for plugin in wasm_plugins {
+            route.plugins.extend(plugin.route_plugin_ids(&route.route_name, hostnames));
+            for backend in &mut route.backends {
+                backend.plugins.extend(plugin.backend_plugin_ids(backend));
             }
         }
         Ok(())

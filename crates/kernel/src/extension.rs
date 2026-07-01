@@ -18,9 +18,11 @@ mod defer;
 pub use original_ip_addr::*;
 mod original_ip_addr;
 pub use is_east_west_traffic::*;
+pub use mcp_proxy::*;
 
 use crate::{extractor::OptionalExtract, injector::Inject};
 mod is_east_west_traffic;
+mod mcp_proxy;
 pub mod user_group;
 /// Just extract and attach the extension to the request
 #[derive(Debug, Clone)]

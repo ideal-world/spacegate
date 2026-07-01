@@ -5,7 +5,7 @@ use axum::{
 };
 use serde_json::Value;
 use spacegate_config::{
-    model::{SgGateway, SgHttpRoute},
+    model::{SgGateway, SgRoute},
     service::*,
     BoxError, Config, ConfigItem, PluginConfig, PluginInstanceId,
 };
@@ -30,7 +30,7 @@ async fn get_config_item_gateway<B: Retrieve>(
 async fn get_config_item_route<B: Retrieve>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
-) -> Result<Json<Option<SgHttpRoute>>, InternalError<BoxError>> {
+) -> Result<Json<Option<SgRoute>>, InternalError<BoxError>> {
     backend.retrieve_config_item_route(&name, &route_name).await.map(Json).map_err(InternalError)
 }
 async fn get_config_item_route_names<B: Retrieve>(
@@ -42,7 +42,7 @@ async fn get_config_item_route_names<B: Retrieve>(
 async fn get_config_item_all_routes<B: Retrieve>(
     Path(name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
-) -> Result<Json<BTreeMap<String, SgHttpRoute>>, InternalError<BoxError>> {
+) -> Result<Json<BTreeMap<String, SgRoute>>, InternalError<BoxError>> {
     backend.retrieve_config_item_all_routes(&name).await.map(Json).map_err(InternalError)
 }
 async fn get_config_item<B: Retrieve>(Path(name): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Option<ConfigItem>>, InternalError<BoxError>> {
@@ -93,7 +93,7 @@ async fn post_config_item_gateway<B: Create>(
 async fn post_config_item_route<B: Create>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
-    Json(route): Json<SgHttpRoute>,
+    Json(route): Json<SgRoute>,
 ) -> Result<(), InternalError<BoxError>> {
     backend.create_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
@@ -118,7 +118,7 @@ async fn put_config_item_gateway<B: Update>(
 async fn put_config_item_route<B: Update>(
     Path((name, route_name)): Path<(String, String)>,
     State(AppState { backend, .. }): State<AppState<B>>,
-    Json(route): Json<SgHttpRoute>,
+    Json(route): Json<SgRoute>,
 ) -> Result<(), InternalError<BoxError>> {
     backend.update_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }

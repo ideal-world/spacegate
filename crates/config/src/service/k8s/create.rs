@@ -2,7 +2,7 @@ use k8s_gateway_api::Gateway;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::PostParams, Api};
 use spacegate_model::{
-    ext::k8s::crd::{http_spaceroute, sg_filter::SgFilter},
+    ext::k8s::crd::{http_spaceroute, mcp_route, sg_filter::SgFilter},
     BoxError, PluginInstanceId,
 };
 
@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    convert::{filter_k8s_conv::PluginIdConv as _, gateway_k8s_conv::SgGatewayConv as _, route_k8s_conv::SgHttpRouteConv as _, ToTarget as _},
+    convert::{filter_k8s_conv::PluginIdConv as _, gateway_k8s_conv::SgGatewayConv as _, route_k8s_conv::KubeRoute, route_k8s_conv::SgRouteK8sConv as _, ToTarget as _},
     K8s,
 };
 
@@ -35,14 +35,22 @@ impl Create for K8s {
         Ok(())
     }
 
-    async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgHttpRoute) -> BoxResult<()> {
-        let (http_spaceroute, plugin_ids) = route.to_kube_httproute(gateway_name, route_name, &self.namespace);
+    async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgRoute) -> BoxResult<()> {
+        let route = route.to_kube_route(gateway_name, route_name, &self.namespace);
+        let target_ref = route.to_target_ref();
+        match &route {
+            KubeRoute::Http(http_spaceroute, _) => {
+                let http_spaceroute_api: Api<http_spaceroute::HttpSpaceroute> = self.get_namespace_api();
+                http_spaceroute_api.create(&PostParams::default(), http_spaceroute).await?;
+            }
+            KubeRoute::Mcp(mcp_route, _) => {
+                let mcp_route_api: Api<mcp_route::McpRoute> = self.get_namespace_api();
+                mcp_route_api.create(&PostParams::default(), mcp_route).await?;
+            }
+        }
 
-        let http_spaceroute_api: Api<http_spaceroute::HttpSpaceroute> = self.get_namespace_api();
-        http_spaceroute_api.create(&PostParams::default(), &http_spaceroute).await?;
-
-        for id in plugin_ids {
-            id.add_filter_target(http_spaceroute.to_target_ref(), self).await?;
+        for id in route.into_plugin_ids() {
+            id.add_filter_target(target_ref.clone(), self).await?;
         }
 
         Ok(())

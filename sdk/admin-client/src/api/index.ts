@@ -1,5 +1,5 @@
 import axios, { AxiosResponse, AxiosInstance, AxiosError } from 'axios'
-import { BackendHost, Config, ConfigItem, PluginAttributes, SgGateway, SgHttpRoute } from '../model'
+import { BackendHost, Config, ConfigItem, PluginAttributes, SgGateway, SgRoute } from '../model'
 import { PluginConfig } from '../model/PluginConfig'
 import { PluginInstanceId } from '../model/PluginInstanceId'
 export * from 'axios'
@@ -87,7 +87,7 @@ export async function getConfigItemRoute(
     gateway_name: string,
     route_name: string,
 
-): Promise<AxiosResponse<SgHttpRoute | null>> {
+): Promise<AxiosResponse<SgRoute | null>> {
     return getClient().axiosInstance.get(`/config/item/${gateway_name}/route/item/${route_name}`)
 }
 export async function getConfigItemRouteNames(
@@ -99,7 +99,7 @@ export async function getConfigItemRouteNames(
 export async function getConfigItemAllRoutes(
     gatewayName: string,
 
-): Promise<AxiosResponse<Record<string, SgHttpRoute>>> {
+): Promise<AxiosResponse<Record<string, SgRoute>>> {
     return getClient().axiosInstance.get(`/config/item/${gatewayName}/route/all`)
 }
 export async function getConfigItem(gatewayName: string,): Promise<AxiosResponse<ConfigItem | null>> {
@@ -145,7 +145,7 @@ export async function postConfigItemRoute(
     gateway_name: string,
     route_name: string,
 
-    route: SgHttpRoute,
+    route: SgRoute,
 ): Promise<AxiosResponse> {
     return getClient().axiosInstance.post(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }
@@ -168,7 +168,7 @@ export async function putConfigItemRoute(
     gateway_name: string,
     route_name: string,
 
-    route: SgHttpRoute,
+    route: SgRoute,
 ): Promise<AxiosResponse> {
     return getClient().axiosInstance.put(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }

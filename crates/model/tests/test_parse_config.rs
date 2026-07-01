@@ -1,4 +1,4 @@
-use spacegate_model::Config;
+use spacegate_model::{Config, McpSessionAffinity, McpTimeoutMode, SgMcpTransport, SgRoute};
 
 #[test]
 fn test_parse_config() {
@@ -149,4 +149,81 @@ fn local_otel_json_config_shape_can_be_parsed() {
     assert_eq!(gateway.gateway.listeners.len(), 1);
     assert_eq!(gateway.gateway.listeners[0].port, 9000);
     assert!(gateway.routes.contains_key("root"));
+}
+
+#[test]
+fn legacy_http_route_without_kind_is_wrapped_as_http_route() {
+    let file = r#"
+{
+  "gateways": {
+    "local": {
+      "gateway": {
+        "name": "local",
+        "listeners": []
+      },
+      "routes": {
+        "root": {
+          "route_name": "root",
+          "rules": []
+        }
+      }
+    }
+  }
+}
+"#;
+
+    let config = serde_json::from_str::<Config>(file).expect("parse legacy http route");
+    let route = config.gateways["local"].routes.get("root").expect("root route");
+
+    match route {
+        SgRoute::Http(route) => assert_eq!(route.route_name, "root"),
+        SgRoute::Mcp(_) => panic!("legacy HTTP route should parse as SgRoute::Http"),
+    }
+}
+
+#[test]
+fn mcp_route_parses_with_streamable_defaults() {
+    let file = r#"
+{
+  "gateways": {
+    "local": {
+      "gateway": {
+        "name": "local",
+        "listeners": []
+      },
+      "routes": {
+        "mcp": {
+          "kind": "MCPRoute",
+          "route_name": "mcp",
+          "path": "/mcp",
+          "backends": [
+            {
+              "host": {
+                "kind": "Host",
+                "host": "127.0.0.1"
+              },
+              "port": 3001,
+              "protocol": "http"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+"#;
+
+    let config = serde_json::from_str::<Config>(file).expect("parse mcp route");
+    let route = config.gateways["local"].routes.get("mcp").expect("mcp route");
+
+    match route {
+        SgRoute::Mcp(route) => {
+            assert_eq!(route.route_name, "mcp");
+            assert_eq!(route.transport, SgMcpTransport::StreamableHttp);
+            assert_eq!(route.timeout_mode, McpTimeoutMode::Disabled);
+            assert_eq!(route.session_affinity, McpSessionAffinity::McpSession);
+            assert_eq!(route.backends.len(), 1);
+        }
+        SgRoute::Http(_) => panic!("MCPRoute should parse as SgRoute::Mcp"),
+    }
 }

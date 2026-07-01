@@ -13,7 +13,7 @@ use crate::{
     extension::{BackendHost, EnterTime, PeerAddr, Reflect, RouteName},
     observability::{
         access_log_fields, client_ip, content_length, header_value, http_protocol_version, record_http_server_active_request, record_http_server_metrics_with_labels,
-        telemetry_json, HttpMetricLabels, TelemetryContext,
+        telemetry_json, AccessLogContext, HttpMetricLabels, TelemetryContext,
     },
     ArcHyperService, BoxResult, SgBody,
 };
@@ -200,6 +200,7 @@ where
         );
         let gateway_label = self.gateway_name.to_string();
         let telemetry_context = TelemetryContext::default();
+        let access_log_context = AccessLogContext::default();
         let active_request_labels = HttpMetricLabels {
             gateway: gateway_label.clone(),
             method: method_label.clone(),
@@ -217,6 +218,7 @@ where
         req.extensions_mut().insert(PeerAddr(self.peer));
         req.extensions_mut().insert(enter_time);
         req.extensions_mut().insert(telemetry_context.clone());
+        req.extensions_mut().insert(access_log_context.clone());
         let span_for_recording = span.clone();
         Box::pin(
             async move {
@@ -239,9 +241,16 @@ where
                 let access_request_id = resp.headers().get("x-request-id").and_then(|v| v.to_str().ok()).map(str::to_string).unwrap_or(request_id);
                 tracing::trace!(latency = ?latency, "request finished");
                 let authority = host.clone();
-                let route_name = resp.extensions().get::<RouteName>().map(|route| route.to_string()).unwrap_or_default();
-                let upstream_host = resp.extensions().get::<BackendHost>().map(|host| host.to_string()).unwrap_or_default();
-                let trace_id = span_for_recording.context().span().span_context().trace_id().to_string();
+                let route_name = resp.extensions().get::<RouteName>().map(|route| route.to_string()).unwrap_or_else(|| access_log_context.route_name());
+                let upstream_host = resp.extensions().get::<BackendHost>().map(|host| host.to_string()).unwrap_or_else(|| access_log_context.upstream_host());
+                let span_context = span_for_recording.context();
+                let span = span_context.span();
+                let otel_span_context = span.span_context();
+                let trace_id = if otel_span_context.is_valid() {
+                    otel_span_context.trace_id().to_string()
+                } else {
+                    String::new()
+                };
                 record_http_server_metrics_with_labels(
                     HttpMetricLabels {
                         gateway: gateway_label.clone(),

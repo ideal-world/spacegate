@@ -7,7 +7,7 @@ use std::{
     time::SystemTime,
 };
 pub mod model;
-use spacegate_model::{BoxError, BoxResult, Config, ConfigItem, PluginInstanceId, SgHttpRoute};
+use spacegate_model::{BoxError, BoxResult, Config, ConfigItem, PluginInstanceId};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::service::config_format::ConfigFormat;
@@ -166,7 +166,9 @@ where
                 let path = entry.path();
                 if path.is_file() && path.extension() == Some(ext) {
                     let Some(route_name) = path.file_stem().and_then(OsStr::to_str) else { continue };
-                    if let Ok(route) = self.format.de::<SgHttpRoute>(&tokio::fs::read(&path).await?).inspect_err(|e| tracing::debug!("fail to read route config {path:?}: {e}")) {
+                    if let Ok(route) =
+                        self.format.de::<spacegate_model::SgRoute>(&tokio::fs::read(&path).await?).inspect_err(|e| tracing::debug!("fail to read route config {path:?}: {e}"))
+                    {
                         main_config.routes.insert(route_name.to_string(), route);
                     }
                 }

@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, ObservabilityConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgHttpRoute};
+use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, ObservabilityConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgRoute};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -72,7 +72,7 @@ impl<P> Default for MainFileConfig<P> {
 pub struct MainFileConfigItem<P = FsAsmPluginConfig> {
     #[serde(flatten)]
     pub gateway: SgGateway<P>,
-    pub routes: Vec<SgHttpRoute<P>>,
+    pub routes: Vec<SgRoute<P>>,
 }
 impl<P> Default for MainFileConfigItem<P> {
     fn default() -> Self {
@@ -95,7 +95,7 @@ impl<P> From<MainFileConfigItem<P>> for ConfigItem<P> {
     fn from(val: MainFileConfigItem<P>) -> Self {
         ConfigItem {
             gateway: val.gateway,
-            routes: val.routes.into_iter().map(|route| (route.route_name.clone(), route)).collect(),
+            routes: val.routes.into_iter().map(|route| (route.route_name().to_string(), route)).collect(),
         }
     }
 }
