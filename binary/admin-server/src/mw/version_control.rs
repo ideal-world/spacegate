@@ -35,7 +35,7 @@ pub async fn version_control<B>(State(state): State<AppState<B>>, request: extra
     // do something with `request`...
     let client_version = request.headers().get(CLIENT_HEADER).and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or_default();
     let method = request.method().clone();
-    if method == Method::DELETE || method == Method::POST || method == Method::PUT {
+    if requires_version_control(&method, request.uri().path()) {
         if state.version.equal(client_version) {
             // up to date, update version
             state.version.update();
@@ -54,4 +54,30 @@ pub async fn version_control<B>(State(state): State<AppState<B>>, request: extra
         response.headers_mut().insert(SERVER_HEADER, version.into());
     }
     response
+}
+
+fn requires_version_control(method: &Method, path: &str) -> bool {
+    if method != Method::DELETE && method != Method::POST && method != Method::PUT {
+        return false;
+    }
+    !path.ends_with("/wasm/schema/preview")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wasm_schema_preview_post_is_read_only_and_skips_version_control() {
+        assert!(!requires_version_control(&Method::POST, "/wasm/schema/preview"));
+        assert!(!requires_version_control(&Method::POST, "/plugin/wasm/schema/preview"));
+    }
+
+    #[test]
+    fn config_mutations_still_require_version_control() {
+        assert!(requires_version_control(&Method::POST, "/config/plugin"));
+        assert!(requires_version_control(&Method::PUT, "/config/plugin"));
+        assert!(requires_version_control(&Method::DELETE, "/config/plugin"));
+        assert!(!requires_version_control(&Method::GET, "/config/plugin"));
+    }
 }
