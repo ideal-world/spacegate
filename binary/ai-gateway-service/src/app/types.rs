@@ -546,6 +546,32 @@ struct TenantRateLimitRuleView {
     ttl_remaining_secs: Option<i64>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct TenantRateLimitResolveQuery {
+    tenant: String,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    policy: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TenantRateLimitResolveView {
+    tenant: String,
+    model: String,
+    path: String,
+    policy: String,
+    rps: u64,
+    burst: u64,
+    cost: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matched_key: Option<String>,
+    fallback_global: bool,
+    candidate_keys: Vec<String>,
+}
+
 fn default_host() -> IpAddr {
     "0.0.0.0".parse().expect("default host")
 }

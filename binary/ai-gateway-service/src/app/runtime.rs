@@ -48,6 +48,7 @@ pub fn build_router(state: AppState, max_body_bytes: usize) -> Router {
         .route("/jobs/{job_id}/status", get(get_job))
         .route("/v1/admin/plugins/{plugin}/schema", get(admin_plugin_schema))
         .route("/v1/admin/plugins/{plugin}/readme", get(admin_plugin_readme))
+        .route("/v1/admin/tenant-rate-limits/resolve", get(admin_resolve_tenant_rate_limit))
         .route("/v1/admin/tenant-rate-limits", get(admin_list_tenant_rate_limits).put(admin_upsert_tenant_rate_limit).delete(admin_delete_tenant_rate_limit))
         .layer(DefaultBodyLimit::max(max_body_bytes))
         .layer(build_admin_cors_layer(state.cfg.as_ref()))

@@ -24,6 +24,10 @@ async fn admin_list_tenant_rate_limits(State(state): State<AppState>, Query(filt
     Ok(Json(list_tenant_rate_limit_rules(&state, &filters).await?))
 }
 
+async fn admin_resolve_tenant_rate_limit(State(state): State<AppState>, Query(query): Query<TenantRateLimitResolveQuery>) -> Result<Json<TenantRateLimitResolveView>, ServiceError> {
+    Ok(Json(resolve_tenant_rate_limit_rule(&state, query).await?))
+}
+
 async fn admin_upsert_tenant_rate_limit(State(state): State<AppState>, Json(rule): Json<TenantRateLimitRule>) -> Result<Json<TenantRateLimitRuleView>, ServiceError> {
     Ok(Json(upsert_tenant_rate_limit_rule(&state, rule).await?))
 }

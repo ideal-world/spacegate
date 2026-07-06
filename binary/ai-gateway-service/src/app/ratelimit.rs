@@ -74,6 +74,53 @@ async fn resolve_rate_limit(state: &AppState, tenant: &str, model: &str, path: &
     Ok(global_rate_limit(state))
 }
 
+async fn resolve_tenant_rate_limit_rule(state: &AppState, query: TenantRateLimitResolveQuery) -> Result<TenantRateLimitResolveView, ServiceError> {
+    let tenant = query.tenant.trim().to_string();
+    if tenant.is_empty() {
+        return Err(ServiceError::bad_request("tenant is required"));
+    }
+    validate_admin_rule_dimension("tenant", &tenant)?;
+    let model = query.model.as_deref().map(str::trim).filter(|value| !value.is_empty()).unwrap_or("default").to_string();
+    let path = query.path.as_deref().map(str::trim).filter(|value| !value.is_empty()).unwrap_or("/").to_string();
+    let policy = query.policy.as_deref().map(str::trim).filter(|value| !value.is_empty()).unwrap_or("abandon").to_string();
+    validate_admin_rule_dimension("model", &model)?;
+    validate_admin_rule_dimension("path", &path)?;
+    validate_policy_dimension(&policy)?;
+
+    let candidate_keys = tenant_rate_limit_candidate_keys(state, &tenant, &model, &path, &policy);
+    for key in &candidate_keys {
+        let raw: Option<String> = state.redis.get(key.as_str()).await?;
+        if let Some(stored) = raw.and_then(|raw| parse_stored_tenant_rate_limit(&raw)) {
+            return Ok(TenantRateLimitResolveView {
+                tenant,
+                model,
+                path,
+                policy,
+                rps: stored.limit.rps,
+                burst: stored.limit.burst,
+                cost: stored.limit.cost,
+                matched_key: Some(key.clone()),
+                fallback_global: false,
+                candidate_keys,
+            });
+        }
+    }
+
+    let fallback = global_rate_limit(state);
+    Ok(TenantRateLimitResolveView {
+        tenant,
+        model,
+        path,
+        policy,
+        rps: fallback.rps,
+        burst: fallback.burst,
+        cost: fallback.cost,
+        matched_key: None,
+        fallback_global: true,
+        candidate_keys,
+    })
+}
+
 fn tenant_rate_limit_keys(tenant: &str) -> (String, String) {
     let tenant_key = sanitize_key(tenant);
     (
@@ -107,7 +154,7 @@ async fn list_tenant_rate_limit_rules(state: &AppState, filters: &HashMap<String
         }
     }
 
-    out.sort_by(|a, b| tenant_rule_specificity_rule(a).cmp(&tenant_rule_specificity_rule(b)).then_with(|| a.key.cmp(&b.key)));
+    out.sort_by(|a, b| tenant_rule_specificity_rule(b).cmp(&tenant_rule_specificity_rule(a)).then_with(|| a.key.cmp(&b.key)));
     Ok(out)
 }
 
@@ -201,6 +248,9 @@ fn validate_tenant_rate_limit_rule(rule: &TenantRateLimitRule) -> Result<(), Ser
     if rule.cost == 0 {
         return Err(ServiceError::bad_request("cost must be greater than 0"));
     }
+    if rule.cost > rule.burst {
+        return Err(ServiceError::bad_request("cost must be less than or equal to burst"));
+    }
     Ok(())
 }
 
@@ -208,13 +258,31 @@ fn validate_tenant_rule_dimensions(rule: &TenantRateLimitRule) -> Result<(), Ser
     if rule.tenant.trim().is_empty() {
         return Err(ServiceError::bad_request("tenant is required"));
     }
+    validate_admin_rule_dimension("tenant", rule.tenant.trim())?;
+    if let Some(model) = non_empty_opt(&rule.model) {
+        validate_admin_rule_dimension("model", model)?;
+    }
+    if let Some(path) = non_empty_opt(&rule.path) {
+        validate_admin_rule_dimension("path", path)?;
+    }
     if let Some(policy) = non_empty_opt(&rule.policy) {
-        match policy {
-            "abandon" | "queue" | "wait" => {}
-            _ => return Err(ServiceError::bad_request("policy must be abandon, queue, or wait")),
-        }
+        validate_policy_dimension(policy)?;
     }
     Ok(())
+}
+
+fn validate_admin_rule_dimension(name: &str, value: &str) -> Result<(), ServiceError> {
+    if value.contains(':') {
+        return Err(ServiceError::bad_request(format!("{name} must not contain ':'")));
+    }
+    Ok(())
+}
+
+fn validate_policy_dimension(policy: &str) -> Result<(), ServiceError> {
+    match policy {
+        "abandon" | "queue" | "wait" => Ok(()),
+        _ => Err(ServiceError::bad_request("policy must be abandon, queue, or wait")),
+    }
 }
 
 fn tenant_rule_matches_filters(rule: &TenantRateLimitRule, filters: &HashMap<String, String>) -> bool {
