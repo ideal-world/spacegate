@@ -76,6 +76,74 @@ mod tests {
     }
 
     #[test]
+    fn rejects_tenant_rate_limit_cost_above_burst() {
+        let rule = TenantRateLimitRule {
+            tenant: "tenant-a".to_string(),
+            model: None,
+            path: None,
+            policy: None,
+            rps: 10,
+            burst: 2,
+            cost: 3,
+            ttl_secs: None,
+        };
+
+        let err = validate_tenant_rate_limit_rule(&rule).expect_err("cost above burst must be rejected");
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+        assert!(err.message.contains("cost must be less than or equal to burst"));
+    }
+
+    #[test]
+    fn rejects_colon_in_admin_rate_limit_dimensions() {
+        for (field, rule) in [
+            (
+                "tenant",
+                TenantRateLimitRule {
+                    tenant: "tenant:a".to_string(),
+                    model: None,
+                    path: None,
+                    policy: None,
+                    rps: 10,
+                    burst: 20,
+                    cost: 1,
+                    ttl_secs: None,
+                },
+            ),
+            (
+                "model",
+                TenantRateLimitRule {
+                    tenant: "tenant-a".to_string(),
+                    model: Some("gpt:4".to_string()),
+                    path: None,
+                    policy: None,
+                    rps: 10,
+                    burst: 20,
+                    cost: 1,
+                    ttl_secs: None,
+                },
+            ),
+            (
+                "path",
+                TenantRateLimitRule {
+                    tenant: "tenant-a".to_string(),
+                    model: None,
+                    path: Some("/v1/chat:completions".to_string()),
+                    policy: None,
+                    rps: 10,
+                    burst: 20,
+                    cost: 1,
+                    ttl_secs: None,
+                },
+            ),
+        ] {
+            let err = validate_tenant_rate_limit_rule(&rule).expect_err("colon dimension must be rejected");
+            assert_eq!(err.status, StatusCode::BAD_REQUEST);
+            assert!(err.message.contains(field));
+            assert!(err.message.contains("must not contain ':'"));
+        }
+    }
+
+    #[test]
     fn filters_hop_by_hop_headers_when_returning_upstream_body() {
         assert!(!should_return_upstream_header("content-length"));
         assert!(!should_return_upstream_header("Connection"));
