@@ -16,8 +16,10 @@ schema!(EastWestTrafficWhiteListPlugin, EastWestTrafficWhiteListConfig);
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "白名单配置"))]
 #[serde(default)]
 pub struct EastWestTrafficWhiteListConfig {
+    #[cfg_attr(feature = "schema", schemars(title = "IP白名单列表"))]
     pub ip_list: Vec<String>,
 }
 

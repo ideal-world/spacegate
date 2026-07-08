@@ -1,4 +1,4 @@
-use spacegate_model::{Config, ConfigItem, SgGateway, SgHttpRoute};
+use spacegate_model::{Config, ConfigItem, SgGateway, SgRoute};
 
 use crate::{
     service::{config_format::ConfigFormat, Update},
@@ -12,15 +12,12 @@ where
     F: ConfigFormat + Send + Sync,
 {
     async fn update_plugin(&self, id: &spacegate_model::PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            if let Some(prev_spec) = config.plugins.get_mut(id) {
-                *prev_spec = value;
-                Ok(())
-            } else {
-                Err("plugin not exists".into())
-            }
-        })
-        .await
+        // 仅更新单个插件 JSON，避免 modify_cached 清空整棵配置树（Docker 共享挂载会 EBUSY/EROFS）
+        tokio::fs::create_dir_all(self.plugin_dir()).await?;
+        let path = self.plugin_path(id);
+        let b_spec = self.format.ser(&value)?;
+        tokio::fs::write(&path, &b_spec).await?;
+        Ok(())
     }
     async fn update_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> Result<(), BoxError> {
         self.modify_cached(|config| {
@@ -33,7 +30,7 @@ where
         })
         .await
     }
-    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgHttpRoute) -> Result<(), BoxError> {
+    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> Result<(), BoxError> {
         self.modify_cached(|config| {
             if let Some(prev_item) = config.gateways.get_mut(gateway_name) {
                 if let Some(prev_route) = prev_item.routes.get_mut(route_name) {

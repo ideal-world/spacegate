@@ -1,3 +1,4 @@
+#[cfg(target_os = "linux")]
 use spacegate_model::BackendHost;
 
 use crate::service::{config_format::ConfigFormat, Discovery, Instance};

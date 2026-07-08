@@ -2,6 +2,7 @@
 import type { BackendHost } from "./BackendHost";
 import type { PluginInstanceId } from "./PluginInstanceId";
 import type { SgBackendProtocol } from "./SgBackendProtocol";
+import type { TimeoutMode } from "./TimeoutMode";
 
 export type SgBackendRef<P = PluginInstanceId> = { host: BackendHost, 
 /**
@@ -11,7 +12,7 @@ port: number | null,
 /**
  * Timeout specifies the timeout for requests forwarded to the referenced backend.
  */
-timeout_ms: number | null, protocol: SgBackendProtocol | null, 
+timeout_ms: number | null, timeout_mode: TimeoutMode | null, protocol: SgBackendProtocol | null, 
 /**
  * Downgrade HTTP2 connections, it is useful when the backend does not support HTTP2.
  */

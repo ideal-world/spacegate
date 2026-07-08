@@ -2,15 +2,23 @@
 members = [
   "binary/spacegate",
   "binary/admin-server",
+  "binary/ai-gateway-service",
   "crates/extension/*",
   "crates/kernel",
   "crates/plugin",
+  "crates/plugin-wasm",
   "crates/model",
   "crates/config",
   "crates/shell",
   "examples/sayhello",
   "examples/socks5-proxy",
   "examples/mitm-proxy", 
+]
+exclude = [
+  # proxy-wasm-rust-sdk guest 用作 host 集成测试参考插件，目标三元组 wasm32-wasip1，不属于主 workspace。
+  "crates/plugin-wasm/tests/spec_test_guest",
+  "crates/plugin-wasm/tests/sdk_examples_guest",
+  "crates/plugin-wasm/tests/on_tick_guest",
 ]
 resolver = "2"
 [profile.release]
@@ -46,6 +54,7 @@ spacegate-plugin = { version = "0.2.0-alpha.4", path = "./crates/plugin" }
 spacegate-config = { version = "0.2.0-alpha.4", path = "./crates/config" }
 spacegate-model = { version = "0.2.0-alpha.4", path = "./crates/model" }
 spacegate-shell = { version = "0.2.0-alpha.4", path = "./crates/shell" }
+spacegate-plugin-wasm = { version = "0.2.0-alpha.4", path = "./crates/plugin-wasm" }
 spacegate-ext-axum = { version = "0.2.0-alpha.4", path = "./crates/extension/axum" }
 spacegate-ext-redis = { version = "0.2.0-alpha.4", path = "./crates/extension/redis" }
 
@@ -59,6 +68,12 @@ toml = { version = "0.8", features = ["preserve_order"] }
 lazy_static = { version = "1.4" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = { version = "0" }
+tracing-opentelemetry = { version = "0.33" }
+opentelemetry = { version = "0.32" }
+opentelemetry_sdk = { version = "0.32" }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic", "http-proto", "reqwest-blocking-client"] }
+opentelemetry-appender-tracing = { version = "0.32" }
+opentelemetry-semantic-conventions = { version = "0.32" }
 
 # Encode
 base64 = { version = "0.22" }

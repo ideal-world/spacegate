@@ -83,6 +83,26 @@ rules:
       - list
       - watch
       - delete
+  - apiGroups:
+      - extensions.higress.io
+    resources:
+      - wasmplugins
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+      - list
+      - watch
+      - delete
+  - apiGroups:
+      - extensions.higress.io
+    resources:
+      - wasmplugins/status
+    verbs:
+      - get
+      - update
+      - patch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

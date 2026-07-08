@@ -19,7 +19,7 @@ where
         Ok(())
     }
 
-    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgHttpRoute) -> BoxResult<()> {
+    async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: crate::model::SgRoute) -> BoxResult<()> {
         let _: () = self.get_con().await?.hset(format!("{}{}", CONF_HTTP_ROUTE_KEY, gateway_name), route_name, self.format.ser(&route)?).await?;
         let event = RedisConfEvent(
             crate::service::ConfigType::Route {

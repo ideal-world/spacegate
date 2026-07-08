@@ -41,6 +41,7 @@ where
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "退避策略"))]
 pub enum BackOff {
     /// Fixed interval
     Fixed,
@@ -55,16 +56,22 @@ pub enum BackOff {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "重试插件配置"))]
 #[serde(default)]
 pub struct SgPluginRetryConfig {
+    #[cfg_attr(feature = "schema", schemars(title = "重试次数"))]
     pub retries: u16,
+    #[cfg_attr(feature = "schema", schemars(title = "可重试方法"))]
     pub retirable_methods: Vec<String>,
     /// Backoff strategies can vary depending on the specific implementation and requirements.
     /// see [BackOff]
+    #[cfg_attr(feature = "schema", schemars(title = "退避策略"))]
     pub backoff: BackOff,
     /// milliseconds
+    #[cfg_attr(feature = "schema", schemars(title = "基础间隔(毫秒)"))]
     pub base_interval: u64,
     /// milliseconds
+    #[cfg_attr(feature = "schema", schemars(title = "最大间隔(毫秒)"))]
     pub max_interval: u64,
 }
 

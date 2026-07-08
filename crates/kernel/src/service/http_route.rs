@@ -7,6 +7,7 @@ use crate::{
     backend_service::{get_http_backend_service, http_backend_service, static_file_service::static_file_service, ArcHyperService},
     extension::{BackendHost, Defer, Reflect},
     helper_layers::balancer::{self, Balancer},
+    observability::AccessLogContext,
     utils::{fold_box_layers::fold_layers, schema_port::port_to_schema},
     BoxLayer, SgBody,
 };
@@ -44,6 +45,7 @@ impl HttpRoute {
 }
 #[derive(Debug, Clone)]
 pub struct HttpRouter {
+    pub name: Arc<str>,
     pub hostnames: Arc<[String]>,
     pub rules: Arc<[Option<Arc<[Arc<HttpRouteMatch>]>>]>,
     pub ext: hyper::http::Extensions,
@@ -59,7 +61,7 @@ pub struct HttpRouter {
 pub struct HttpRouteRule {
     pub r#match: Option<Vec<HttpRouteMatch>>,
     pub plugins: Vec<BoxLayer>,
-    timeouts: Option<Duration>,
+    timeout: RequestTimeout,
     backends: Vec<HttpBackend>,
     balance_policy: BalancePolicyEnum,
     pub ext: hyper::http::Extensions,
@@ -70,6 +72,7 @@ pub enum BalancePolicyEnum {
     Random,
     #[default]
     IpHash,
+    McpSession,
 }
 
 impl HttpRouteRule {
@@ -79,7 +82,6 @@ impl HttpRouteRule {
     pub fn as_service(&self) -> HttpRouteRuleService {
         use crate::helper_layers::timeout::TimeoutLayer;
         let filter_layer = self.plugins.iter();
-        let time_out = self.timeouts.unwrap_or(DEFAULT_TIMEOUT);
         let fallback = get_http_backend_service();
         let service_iter = self.backends.iter().map(HttpBackend::as_service).collect::<Vec<_>>();
         let balanced = match self.balance_policy {
@@ -88,10 +90,24 @@ impl HttpRouteRule {
                 ArcHyperService::new(Balancer::new(balancer::Random::new(weights), service_iter, fallback))
             }
             BalancePolicyEnum::IpHash => ArcHyperService::new(Balancer::new(balancer::IpHash::default(), service_iter, fallback)),
+            BalancePolicyEnum::McpSession => ArcHyperService::new(Balancer::new(balancer::McpSessionHash::default(), service_iter, fallback)),
         };
-        let service = fold_layers(filter_layer, ArcHyperService::new(TimeoutLayer::new(time_out).layer(balanced)));
+        let balanced = match self.timeout {
+            RequestTimeout::Default => ArcHyperService::new(TimeoutLayer::new(DEFAULT_TIMEOUT).layer(balanced)),
+            RequestTimeout::Duration(timeout) => ArcHyperService::new(TimeoutLayer::new(timeout).layer(balanced)),
+            RequestTimeout::Disabled => balanced,
+        };
+        let service = fold_layers(filter_layer, balanced);
         HttpRouteRuleService { service }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum RequestTimeout {
+    #[default]
+    Default,
+    Disabled,
+    Duration(Duration),
 }
 
 #[derive(Clone, Debug)]
@@ -120,7 +136,7 @@ pub struct HttpBackend {
     pub plugins: Vec<BoxLayer>,
     pub backend: Backend,
     pub weight: u16,
-    pub timeout: Option<Duration>,
+    pub timeout: RequestTimeout,
     pub ext: hyper::http::Extensions,
 }
 
@@ -129,11 +145,17 @@ impl HttpBackend {
         HttpBackendBuilder::new()
     }
     pub fn as_service(&self) -> ArcHyperService {
+        use crate::helper_layers::timeout::TimeoutLayer;
         let inner_service = HttpBackendService {
             backend: self.backend.clone().into(),
         };
-        let timeout_layer = crate::helper_layers::timeout::TimeoutLayer::new(self.timeout.unwrap_or(DEFAULT_TIMEOUT));
-        let filtered = fold_layers(self.plugins.iter(), ArcHyperService::new(timeout_layer.layer(inner_service)));
+        let inner_service = ArcHyperService::new(inner_service);
+        let inner_service = match self.timeout {
+            RequestTimeout::Default => ArcHyperService::new(TimeoutLayer::new(DEFAULT_TIMEOUT).layer(inner_service)),
+            RequestTimeout::Duration(timeout) => ArcHyperService::new(TimeoutLayer::new(timeout).layer(inner_service)),
+            RequestTimeout::Disabled => inner_service,
+        };
+        let filtered = fold_layers(self.plugins.iter(), inner_service);
         filtered
     }
 }
@@ -185,6 +207,9 @@ impl hyper::service::Service<Request<SgBody>> for HttpBackendService {
             | Backend::File { .. } => req,
             Backend::Http { host, port, schema, version } => {
                 if let Some(ref host) = host {
+                    if let Some(context) = req.extensions().get::<AccessLogContext>() {
+                        context.set_upstream_host(host.clone());
+                    }
                     if let Some(reflect) = req.extensions_mut().get_mut::<Reflect>() {
                         reflect.insert(BackendHost::new(host.clone()));
                     }

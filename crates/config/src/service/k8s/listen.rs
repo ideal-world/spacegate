@@ -6,8 +6,9 @@ use std::{
 
 use futures_util::{pin_mut, TryStreamExt};
 use k8s_gateway_api::{Gateway, HttpRoute};
+use k8s_openapi::api::core::v1::Secret;
 use kube::{
-    api::ObjectMeta,
+    api::{ObjectMeta, PostParams},
     runtime::{watcher, WatchStreamExt},
     Api, Resource, ResourceExt,
 };
@@ -15,13 +16,21 @@ use spacegate_model::{
     constants,
     ext::k8s::crd::{
         http_spaceroute::HttpSpaceroute,
+        mcp_route::McpRoute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
+        wasm_plugin::{HigressWasmPluginStatus, WasmPlugin},
     },
     BoxResult, Config, PluginInstanceId,
 };
 use tracing::debug;
 
-use crate::service::{k8s::convert::filter_k8s_conv::PluginIdConv, ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve as _};
+use crate::service::{
+    k8s::{
+        convert::{filter_k8s_conv::PluginIdConv, higress_wasm_plugin_conv::HigressWasmPluginConv as _},
+        retrieve::oci_auth_from_secret,
+    },
+    ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve as _,
+};
 
 use super::K8s;
 
@@ -31,6 +40,43 @@ pub struct K8sListener {
 impl K8sListener {}
 
 impl K8s {
+    async fn reconcile_wasm_plugin_status(api: &Api<WasmPlugin>, secret_api: &Api<Secret>, plugin: &WasmPlugin) {
+        let (phase, message) = match Self::validate_wasm_plugin(api, secret_api, plugin).await {
+            Ok(()) => ("Accepted".to_string(), "WasmPlugin accepted by Spacegate".to_string()),
+            Err(e) => ("Unsupported".to_string(), e),
+        };
+        let status = HigressWasmPluginStatus {
+            observed_generation: plugin.meta().generation,
+            phase: Some(phase),
+            digest: plugin.digest(),
+            message: Some(message),
+        };
+        let mut update = plugin.clone();
+        update.status = Some(status);
+        if let Err(e) = api.replace_status(&plugin.name_any(), &PostParams::default(), serde_json::to_vec(&update).unwrap_or_default()).await {
+            tracing::warn!(name = %plugin.name_any(), error = %e, "failed to update WasmPlugin status");
+        }
+    }
+
+    async fn validate_wasm_plugin(_api: &Api<WasmPlugin>, secret_api: &Api<Secret>, plugin: &WasmPlugin) -> Result<(), String> {
+        plugin.validate_for_spacegate()?;
+        let Some(registry) = plugin.oci_registry() else {
+            return Ok(());
+        };
+        let Some(secret_name) = plugin.spec.image_pull_secret.as_deref().map(str::trim).filter(|v| !v.is_empty()) else {
+            return Ok(());
+        };
+        let secret = secret_api
+            .get_opt(secret_name)
+            .await
+            .map_err(|e| format!("read imagePullSecret {secret_name}: {e}"))?
+            .ok_or_else(|| format!("imagePullSecret {secret_name} not found"))?;
+        if oci_auth_from_secret(&secret, &registry).is_none() {
+            return Err(format!("imagePullSecret {secret_name} does not contain credentials for {registry}"));
+        }
+        Ok(())
+    }
+
     async fn process_http_spaceroute_event(
         move_evt_tx: &tokio::sync::mpsc::UnboundedSender<(ConfigType, ConfigEventType)>,
         move_http_route_names: &[String],
@@ -95,6 +141,53 @@ impl K8s {
             }
         }
     }
+
+    async fn process_mcp_route_event(
+        move_evt_tx: &tokio::sync::mpsc::UnboundedSender<(ConfigType, ConfigEventType)>,
+        move_mcp_route_names: &[String],
+        move_namespace: &str,
+        mcp_route_event: watcher::Event<McpRoute>,
+        uid_version_map: &mut HashMap<Option<String>, ObjectMeta>,
+    ) {
+        let apply_event = |mcp_route: McpRoute, uid_version_map: &mut HashMap<_, _>| {
+            if move_mcp_route_names.contains(&mcp_route.name_any()) && uid_version_map.get(&mcp_route.uid()).is_none() {
+                uid_version_map.insert(mcp_route.uid(), mcp_route.meta().clone());
+                return;
+            }
+            if uid_version_map.get(&mcp_route.uid()) == Some(mcp_route.meta()) {
+                return;
+            }
+            move_evt_tx
+                .send((
+                    ConfigType::Route {
+                        name: mcp_route.name_any(),
+                        gateway_name: mcp_route.get_gateway_name(move_namespace),
+                    },
+                    ConfigEventType::Delete,
+                ))
+                .expect("send event error");
+        };
+        match mcp_route_event {
+            watcher::Event::Applied(mcp_route) => apply_event(mcp_route, uid_version_map),
+            watcher::Event::Deleted(mcp_route) => {
+                uid_version_map.remove(&mcp_route.uid());
+                move_evt_tx
+                    .send((
+                        ConfigType::Route {
+                            name: mcp_route.name_any(),
+                            gateway_name: mcp_route.get_gateway_name(move_namespace),
+                        },
+                        ConfigEventType::Delete,
+                    ))
+                    .expect("send event error");
+            }
+            watcher::Event::Restarted(mcp_routes) => {
+                for mcp_route in mcp_routes {
+                    apply_event(mcp_route, uid_version_map);
+                }
+            }
+        }
+    }
 }
 
 impl CreateListener for K8s {
@@ -110,7 +203,10 @@ impl CreateListener for K8s {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         let http_route_api: Api<HttpRoute> = self.get_namespace_api();
         let http_spaceroute_api: Api<HttpSpaceroute> = self.get_namespace_api();
+        let mcp_route_api: Api<McpRoute> = self.get_namespace_api();
         let sg_filter_api: Api<SgFilter> = self.get_namespace_api();
+        let wasm_plugin_api: Api<WasmPlugin> = self.get_namespace_api();
+        let secret_api: Api<Secret> = self.get_namespace_api();
 
         let move_gateway_names = config.gateways.clone().into_values().map(|item| item.gateway.name).collect::<Vec<_>>();
         let move_evt_tx = evt_tx.clone();
@@ -222,13 +318,33 @@ impl CreateListener for K8s {
             }
         });
 
+        let move_mcp_route_names = config.gateways.clone().into_values().flat_map(|item| item.routes.keys().cloned().collect::<Vec<_>>()).collect::<Vec<_>>();
+        let move_evt_tx = evt_tx.clone();
+        let move_namespace = self.namespace.to_string();
+        let move_mcp_route_api = mcp_route_api.clone();
+        tokio::task::spawn(async move {
+            let mut uid_version_map = HashMap::new();
+            let ew = watcher::watcher(move_mcp_route_api, watcher::Config::default());
+            pin_mut!(ew);
+            while let Some(mcp_route_event) = ew.try_next().await.unwrap_or_default() {
+                Self::process_mcp_route_event(&move_evt_tx, &move_mcp_route_names, &move_namespace, mcp_route_event, &mut uid_version_map).await
+            }
+        });
+
         let move_filter_codes_names = config
             .gateways
             .clone()
             .into_values()
             .flat_map(|item| {
                 let mut plugin_ids = item.gateway.plugins.clone();
-                let route_plugin_ids = item.routes.values().flat_map(|route| route.plugins.clone()).collect::<Vec<_>>();
+                let route_plugin_ids = item
+                    .routes
+                    .values()
+                    .flat_map(|route| match route {
+                        spacegate_model::SgRoute::Http(route) => route.plugins.clone(),
+                        spacegate_model::SgRoute::Mcp(route) => route.plugins.clone(),
+                    })
+                    .collect::<Vec<_>>();
                 plugin_ids.extend(route_plugin_ids);
                 plugin_ids
             })
@@ -322,6 +438,56 @@ impl CreateListener for K8s {
                     target_ref_map.remove(&name_any);
                 } else {
                     target_ref_map.insert(name_any, filter.spec.target_refs);
+                }
+            }
+        });
+
+        let move_evt_tx = evt_tx.clone();
+        let wasm_plugin_status_api = wasm_plugin_api.clone();
+        let wasm_plugin_secret_api = secret_api.clone();
+        // watch Higress-compatible WasmPlugin. A WasmPlugin can add/remove gateway-level
+        // plugins, so the simplest correct reconciliation is a global reload.
+        tokio::task::spawn(async move {
+            let mut uid_version_map = HashMap::new();
+            let ew = watcher::watcher(wasm_plugin_api, watcher::Config::default());
+            pin_mut!(ew);
+            while let Some(event) = ew.try_next().await.unwrap_or_default() {
+                match event {
+                    watcher::Event::Applied(plugin) => {
+                        Self::reconcile_wasm_plugin_status(&wasm_plugin_status_api, &wasm_plugin_secret_api, &plugin).await;
+                        if uid_version_map.get(&plugin.uid()) == Some(plugin.meta()) {
+                            continue;
+                        }
+                        uid_version_map.insert(plugin.uid(), plugin.meta().clone());
+                        move_evt_tx
+                            .send((
+                                ConfigType::Plugin {
+                                    id: plugin.to_spacegate_plugin_id(),
+                                },
+                                ConfigEventType::Update,
+                            ))
+                            .expect("send event error");
+                        move_evt_tx.send((ConfigType::Global, ConfigEventType::Update)).expect("send event error");
+                    }
+                    watcher::Event::Deleted(plugin) => {
+                        uid_version_map.remove(&plugin.uid());
+                        move_evt_tx
+                            .send((
+                                ConfigType::Plugin {
+                                    id: plugin.to_spacegate_plugin_id(),
+                                },
+                                ConfigEventType::Delete,
+                            ))
+                            .expect("send event error");
+                        move_evt_tx.send((ConfigType::Global, ConfigEventType::Update)).expect("send event error");
+                    }
+                    watcher::Event::Restarted(plugins) => {
+                        for plugin in &plugins {
+                            Self::reconcile_wasm_plugin_status(&wasm_plugin_status_api, &wasm_plugin_secret_api, plugin).await;
+                        }
+                        uid_version_map = plugins.into_iter().map(|plugin| (plugin.uid(), plugin.meta().clone())).collect();
+                        move_evt_tx.send((ConfigType::Global, ConfigEventType::Update)).expect("send event error");
+                    }
                 }
             }
         });

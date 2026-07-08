@@ -15,17 +15,23 @@ use crate::{Plugin, PluginError};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "维护插件配置"))]
 #[serde(default)]
 pub struct MaintenancePluginConfig {
     /// enable time range
+    #[cfg_attr(feature = "schema", schemars(title = "启用时间范围"))]
     enabled_time_range: Option<Vec<Range<NaiveTime>>>,
     /// exclude ip range
+    #[cfg_attr(feature = "schema", schemars(title = "排除IP范围"))]
     exclude_ip_range: Option<Vec<String>>,
     /// maintenance page title
+    #[cfg_attr(feature = "schema", schemars(title = "页面标题"))]
     title: String,
     /// maintenance message
+    #[cfg_attr(feature = "schema", schemars(title = "维护消息"))]
     msg: String,
     /// return code 307 to redirect to a specified path
+    #[cfg_attr(feature = "schema", schemars(title = "重定向路径"))]
     redirect: Option<String>,
 }
 

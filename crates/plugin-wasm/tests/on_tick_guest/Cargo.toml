@@ -1,0 +1,21 @@
+[package]
+name = "on_tick_guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Tiny proxy-wasm guest exercising proxy_set_tick_period_milliseconds + proxy_on_tick; persists tick count into shared_data for host-side assertion."
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm = "0.2"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = "fat"
+strip = true
+panic = "abort"

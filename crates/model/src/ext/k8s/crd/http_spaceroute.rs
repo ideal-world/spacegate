@@ -172,6 +172,7 @@ pub struct HttpRouteRule {
     pub backend_refs: Option<Vec<HttpBackendRef>>,
 
     pub timeout_ms: Option<u32>,
+    pub timeout_mode: Option<crate::TimeoutMode>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
@@ -224,6 +225,7 @@ pub struct BackendRef {
     pub weight: Option<u16>,
 
     pub timeout_ms: Option<u32>,
+    pub timeout_mode: Option<crate::TimeoutMode>,
 
     /// whether to downgrade http2 to http1.1
     pub downgrade_http2: Option<bool>,
@@ -268,12 +270,14 @@ impl From<HttpRoute> for HttpSpaceroute {
                                                 port: backend_ref.inner.port,
                                             },
                                             downgrade_http2: None,
+                                            timeout_mode: None,
                                         }),
                                         filters: http_backend_ref.filters,
                                     })
                                     .collect()
                             }),
                             timeout_ms: None,
+                            timeout_mode: None,
                         })
                         .collect()
                 }),

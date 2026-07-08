@@ -1,10 +1,6 @@
-use spacegate_model::ConfigItem;
+use spacegate_model::{ConfigItem, SgRoute};
 
-use crate::{
-    model::{SgGateway, SgHttpRoute},
-    service::config_format::ConfigFormat,
-    BoxError,
-};
+use crate::{model::SgGateway, service::config_format::ConfigFormat, BoxError};
 
 use crate::service::Create;
 
@@ -15,14 +11,15 @@ where
     F: ConfigFormat + Send + Sync,
 {
     async fn create_plugin(&self, id: &spacegate_model::PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            if config.plugins.get(id).is_some() {
-                return Err("plugin existed".into());
-            }
-            config.plugins.insert(id.clone(), value);
-            Ok(())
-        })
-        .await
+        let path = self.plugin_path(id);
+        if path.exists() {
+            return Err("plugin existed".into());
+        }
+        // 仅写入新插件文件，避免 rewrite 整个 /etc/spacegate
+        tokio::fs::create_dir_all(self.plugin_dir()).await?;
+        let b_spec = self.format.ser(&value)?;
+        tokio::fs::write(&path, &b_spec).await?;
+        Ok(())
     }
     async fn create_config_item(&self, gateway_name: &str, item: ConfigItem) -> Result<(), BoxError> {
         self.modify_cached(|config| {
@@ -44,7 +41,7 @@ where
         )
         .await
     }
-    async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgHttpRoute) -> Result<(), BoxError> {
+    async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> Result<(), BoxError> {
         self.modify_cached(|config| {
             if let Some(item) = config.gateways.get_mut(gateway_name) {
                 if item.routes.contains_key(gateway_name) {

@@ -7,12 +7,15 @@ use std::{
 use crate::config::{matches_convert::convert_config_to_kernel, plugin_filter_dto::global_batch_mount_plugin, PluginConfig, SgProtocolConfig, SgTlsMode};
 
 use hyper::Version;
-use spacegate_config::{BackendHost, Config, ConfigItem};
+use spacegate_config::{
+    BackendHost, Config, ConfigItem, McpSessionAffinity, SgBalancePolicy, SgHttpMethodMatch, SgHttpPathMatch, SgHttpRouteMatch, SgMcpRoute, SgMcpTransport, SgRoute, TimeoutMode,
+};
 use spacegate_kernel::{
+    helper_layers::map_request::MapRequestLayer,
     helper_layers::reload::Reloader,
     listener::SgListen,
     service::http_gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
-    ArcHyperService, BoxError,
+    ArcHyperService, BoxError, BoxLayer,
 };
 use spacegate_plugin::{mount::MountPointIndex, PluginRepository};
 use std::time::Duration;
@@ -25,11 +28,12 @@ use tokio_util::sync::CancellationToken;
 
 fn collect_http_route(
     gateway_name: Arc<str>,
-    http_routes: impl IntoIterator<Item = (String, crate::SgHttpRoute)>,
+    http_routes: impl IntoIterator<Item = (String, SgRoute)>,
 ) -> Result<HashMap<String, spacegate_kernel::service::http_route::HttpRoute>, BoxError> {
     http_routes
         .into_iter()
         .map(|(name, route)| {
+            let (route, mcp_transport) = compile_route(route);
             let route_name: Arc<str> = name.clone().into();
             let mount_index = MountPointIndex::HttpRoute {
                 gateway: gateway_name.clone(),
@@ -47,6 +51,17 @@ fn collect_http_route(
                         route: route_name.clone(),
                     };
                     let mut builder = spacegate_kernel::service::http_route::HttpRouteRule::builder();
+                    if let Some(transport) = mcp_transport.clone() {
+                        builder = builder.plugin(BoxLayer::new(MapRequestLayer::new(move |mut req: spacegate_kernel::SgRequest| {
+                            let session_id_present = req.headers().contains_key("Mcp-Session-Id");
+                            req.extensions_mut().insert(spacegate_kernel::extension::McpProxyMeta {
+                                transport: transport.clone(),
+                                route_type: "MCPRoute",
+                                session_id_present,
+                            });
+                            req
+                        })));
+                    }
                     builder = if let Some(matches) = route_rule.matches {
                         builder.matches(matches.into_iter().map(convert_config_to_kernel).collect::<Result<Vec<_>, _>>()?)
                     } else {
@@ -84,6 +99,9 @@ fn collect_http_route(
                             if let Some(timeout) = backend.timeout_ms.map(|timeout| Duration::from_millis(timeout as u64)) {
                                 builder = builder.timeout(timeout)
                             }
+                            if backend.timeout_mode == Some(TimeoutMode::Disabled) {
+                                builder = builder.disable_timeout()
+                            }
                             let mut layer = if let BackendHost::File { path } = backend.host {
                                 builder.file().path(path).build()
                             } else if let Some(protocol) = backend.protocol {
@@ -104,6 +122,16 @@ fn collect_http_route(
                     if let Some(timeout) = route_rule.timeout_ms {
                         builder = builder.timeout(Duration::from_millis(timeout as u64));
                     }
+                    if route_rule.timeout_mode == Some(TimeoutMode::Disabled) {
+                        builder = builder.disable_timeout();
+                    }
+                    if let Some(policy) = route_rule.balance_policy {
+                        builder = builder.balance_policy(match policy {
+                            SgBalancePolicy::Random => spacegate_kernel::service::http_route::BalancePolicyEnum::Random,
+                            SgBalancePolicy::IpHash => spacegate_kernel::service::http_route::BalancePolicyEnum::IpHash,
+                            SgBalancePolicy::McpSession => spacegate_kernel::service::http_route::BalancePolicyEnum::McpSession,
+                        });
+                    }
                     let mut layer = builder.build();
                     global_batch_mount_plugin(route_rule.plugins, &mut layer, mount_index);
                     Result::<_, BoxError>::Ok(layer)
@@ -115,6 +143,65 @@ fn collect_http_route(
             Ok((name, layer))
         })
         .collect::<Result<HashMap<String, _>, _>>()
+}
+
+fn compile_route(route: SgRoute) -> (crate::SgHttpRoute, Option<String>) {
+    match route {
+        SgRoute::Http(route) => (route, None),
+        SgRoute::Mcp(route) => compile_mcp_route_to_http_route(route),
+    }
+}
+
+fn compile_mcp_route_to_http_route(route: SgMcpRoute) -> (crate::SgHttpRoute, Option<String>) {
+    let transport = route.transport.clone();
+    let matches = match route.transport {
+        SgMcpTransport::StreamableHttp => vec![mcp_path_method_match(route.path.clone(), "GET"), mcp_path_method_match(route.path.clone(), "POST")],
+        SgMcpTransport::LegacySse => {
+            let legacy = route.legacy_sse.unwrap_or_else(|| spacegate_config::SgMcpLegacySse {
+                sse_path: "/sse".to_string(),
+                message_path: "/message".to_string(),
+            });
+            vec![mcp_path_method_match(legacy.sse_path, "GET"), mcp_path_method_match(legacy.message_path, "POST")]
+        }
+    };
+    let timeout_mode = route.timeout_mode;
+    let session_affinity = route.session_affinity;
+    (
+        crate::SgHttpRoute {
+            route_name: route.route_name,
+            hostnames: route.hostnames,
+            plugins: route.plugins,
+            rules: vec![spacegate_config::SgHttpRouteRule {
+                matches: Some(matches),
+                plugins: Vec::new(),
+                backends: route
+                    .backends
+                    .into_iter()
+                    .map(|mut backend| {
+                        backend.timeout_mode.get_or_insert(timeout_mode.clone());
+                        backend
+                    })
+                    .collect(),
+                timeout_ms: None,
+                timeout_mode: Some(timeout_mode),
+                balance_policy: (session_affinity == McpSessionAffinity::McpSession).then_some(spacegate_config::SgBalancePolicy::McpSession),
+            }],
+            priority: 1,
+        },
+        Some(match transport {
+            SgMcpTransport::StreamableHttp => "streamable_http".to_string(),
+            SgMcpTransport::LegacySse => "legacy_sse".to_string(),
+        }),
+    )
+}
+
+fn mcp_path_method_match(path: String, method: impl Into<String>) -> SgHttpRouteMatch {
+    SgHttpRouteMatch {
+        path: Some(SgHttpPathMatch::Exact { value: path, replace: None }),
+        header: None,
+        query: None,
+        method: Some(vec![SgHttpMethodMatch(method.into())]),
+    }
 }
 
 /// Create a gateway service from plugins and http_routes
@@ -134,7 +221,7 @@ pub(crate) fn create_service(item: ConfigItem, reloader: Reloader<HttpRouterServ
 }
 
 /// create a new sg gateway route, which can be sent to reloader
-pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<HttpRouterService, BoxError> {
+pub(crate) fn create_router_service(gateway_name: Arc<str>, http_routes: BTreeMap<String, SgRoute>) -> Result<HttpRouterService, BoxError> {
     let routes = collect_http_route(gateway_name, http_routes.clone())?;
     let service = create_http_router(routes.values(), default_gateway_route_fallback());
     Ok(service)
@@ -208,7 +295,7 @@ impl RunningSgGateway {
         global_store.remove(gateway_name.as_ref())
     }
 
-    pub fn global_update(gateway_name: impl AsRef<str>, http_routes: BTreeMap<String, crate::SgHttpRoute>) -> Result<(), BoxError> {
+    pub fn global_update(gateway_name: impl AsRef<str>, http_routes: BTreeMap<String, SgRoute>) -> Result<(), BoxError> {
         let gateway_name = gateway_name.as_ref();
         let service = create_router_service(gateway_name.to_string().into(), http_routes)?;
         let reloader = {
@@ -293,14 +380,14 @@ impl RunningSgGateway {
                             tls_server_cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
                             tls_server_cfg.ignore_client_order = true;
                             tls_server_cfg.enable_secret_extraction = true;
-                            listen.add_service(service.clone().https(tls_server_cfg))
+                            listen.add_service(service.clone().https_with_gateway_name(tls_server_cfg, gateway_name.clone()))
                         } else {
                             error!("[SG.Server] Can not found a valid Tls private key");
                         }
                     };
                 }
             } else {
-                listen.add_service(service.clone().http());
+                listen.add_service(service.clone().http_with_gateway_name(gateway_name.clone()));
             }
             listens.push(listen)
         }
@@ -354,5 +441,76 @@ impl RunningSgGateway {
             }
         };
         tracing::info!("[SG.Server] Gateway shutdown");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spacegate_config::{SgBackendRef, SgMcpLegacySse};
+
+    fn backend() -> SgBackendRef {
+        SgBackendRef {
+            host: BackendHost::Host { host: "127.0.0.1".to_string() },
+            port: Some(9001),
+            ..Default::default()
+        }
+    }
+
+    fn match_path_method(route_match: &SgHttpRouteMatch) -> (&str, &str) {
+        let path = match route_match.path.as_ref().expect("path match") {
+            SgHttpPathMatch::Exact { value, .. } => value.as_str(),
+            _ => panic!("MCP route should compile to exact path match"),
+        };
+        let method = route_match.method.as_ref().expect("method match")[0].0.as_str();
+        (path, method)
+    }
+
+    #[test]
+    fn streamable_http_mcp_route_compiles_to_get_and_post_with_mcp_defaults() {
+        let (route, transport) = compile_mcp_route_to_http_route(SgMcpRoute {
+            kind: spacegate_config::SgRouteKind::McpRoute,
+            route_name: "mcp".to_string(),
+            hostnames: None,
+            transport: SgMcpTransport::StreamableHttp,
+            path: "/mcp".to_string(),
+            legacy_sse: None,
+            backends: vec![backend()],
+            plugins: Vec::new(),
+            timeout_mode: TimeoutMode::Disabled,
+            session_affinity: McpSessionAffinity::McpSession,
+        });
+
+        assert_eq!(transport.as_deref(), Some("streamable_http"));
+        let rule = route.rules.first().expect("compiled rule");
+        let matches = rule.matches.as_ref().expect("compiled matches");
+        assert_eq!(matches.iter().map(match_path_method).collect::<Vec<_>>(), vec![("/mcp", "GET"), ("/mcp", "POST")]);
+        assert_eq!(rule.timeout_mode, Some(TimeoutMode::Disabled));
+        assert_eq!(rule.backends[0].timeout_mode, Some(TimeoutMode::Disabled));
+        assert_eq!(rule.balance_policy, Some(SgBalancePolicy::McpSession));
+    }
+
+    #[test]
+    fn legacy_sse_mcp_route_compiles_to_sse_get_and_message_post() {
+        let (route, transport) = compile_mcp_route_to_http_route(SgMcpRoute {
+            kind: spacegate_config::SgRouteKind::McpRoute,
+            route_name: "mcp-sse".to_string(),
+            hostnames: None,
+            transport: SgMcpTransport::LegacySse,
+            path: "/ignored".to_string(),
+            legacy_sse: Some(SgMcpLegacySse {
+                sse_path: "/events".to_string(),
+                message_path: "/messages".to_string(),
+            }),
+            backends: vec![backend()],
+            plugins: Vec::new(),
+            timeout_mode: TimeoutMode::Disabled,
+            session_affinity: McpSessionAffinity::McpSession,
+        });
+
+        assert_eq!(transport.as_deref(), Some("legacy_sse"));
+        let rule = route.rules.first().expect("compiled rule");
+        let matches = rule.matches.as_ref().expect("compiled matches");
+        assert_eq!(matches.iter().map(match_path_method).collect::<Vec<_>>(), vec![("/events", "GET"), ("/messages", "POST")]);
     }
 }

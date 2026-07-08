@@ -20,6 +20,7 @@ use crate::{def_plugin, MakeSgLayer};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "解压插件配置"))]
 #[serde(default)]
 pub struct DecompressionConfig {}
 

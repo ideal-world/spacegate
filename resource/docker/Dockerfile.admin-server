@@ -1,0 +1,14 @@
+# 仅重建 spacegate-admin-server（含插件增量写入修复）
+FROM rust:1.88-bookworm AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release -p spacegate-admin-server
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/spacegate-admin-server /usr/local/bin/spacegate-admin-server
+ENV CONFIG=file:/etc/spacegate RUST_LOG=info
+EXPOSE 19992
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/spacegate-admin-server"]
+CMD ["-c", "file:/etc/spacegate", "-p", "19992", "-H", "0.0.0.0"]

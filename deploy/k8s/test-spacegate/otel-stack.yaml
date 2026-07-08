@@ -1,0 +1,189 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spacegate-clickhouse
+  labels:
+    app: spacegate-clickhouse
+    app.kubernetes.io/part-of: spacegate-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spacegate-clickhouse
+  template:
+    metadata:
+      labels:
+        app: spacegate-clickhouse
+        app.kubernetes.io/part-of: spacegate-test
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CLICKHOUSE_DB
+              value: otel
+            - name: CLICKHOUSE_USER
+              value: default
+            - name: CLICKHOUSE_PASSWORD
+              value: ""
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spacegate-clickhouse
+  labels:
+    app: spacegate-clickhouse
+    app.kubernetes.io/part-of: spacegate-test
+spec:
+  selector:
+    app: spacegate-clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+    - name: native
+      port: 9000
+      targetPort: native
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spacegate-otel-collector-config
+  labels:
+    app: spacegate-otel-collector
+    app.kubernetes.io/part-of: spacegate-test
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+
+    exporters:
+      clickhouse:
+        endpoint: tcp://spacegate-clickhouse:9000?dial_timeout=10s
+        database: otel
+        async_insert: true
+        compress: lz4
+        create_schema: true
+        logs_table_name: otel_logs
+        traces_table_name: otel_traces
+        timeout: 5s
+        metrics_tables:
+          gauge:
+            name: otel_metrics_gauge
+          sum:
+            name: otel_metrics_sum
+          summary:
+            name: otel_metrics_summary
+          histogram:
+            name: otel_metrics_histogram
+          exponential_histogram:
+            name: otel_metrics_exp_histogram
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [clickhouse]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [clickhouse]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [clickhouse]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spacegate-otel-collector
+  labels:
+    app: spacegate-otel-collector
+    app.kubernetes.io/part-of: spacegate-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spacegate-otel-collector
+  template:
+    metadata:
+      labels:
+        app: spacegate-otel-collector
+        app.kubernetes.io/part-of: spacegate-test
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.152.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config=/etc/otelcol-contrib/config.yaml
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          readinessProbe:
+            tcpSocket:
+              port: otlp-grpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol-contrib
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: spacegate-otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spacegate-otel-collector
+  labels:
+    app: spacegate-otel-collector
+    app.kubernetes.io/part-of: spacegate-test
+spec:
+  selector:
+    app: spacegate-otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http

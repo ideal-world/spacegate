@@ -32,6 +32,7 @@ pub enum SgTargetKind {
     Gateway,
     Httproute,
     Httpspaceroute,
+    McpRoute,
 }
 
 impl From<SgTargetKind> for String {
@@ -40,6 +41,7 @@ impl From<SgTargetKind> for String {
             SgTargetKind::Gateway => "Gateway".to_string(),
             SgTargetKind::Httproute => "HTTPRoute".to_string(),
             SgTargetKind::Httpspaceroute => "HTTPSpaceroute".to_string(),
+            SgTargetKind::McpRoute => "MCPRoute".to_string(),
         }
     }
 }

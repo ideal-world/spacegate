@@ -1,0 +1,23 @@
+{
+  "gateway": {
+    "name": "ai-demo",
+    "parameters": {},
+    "listeners": [
+      {
+        "name": "http",
+        "ip": "127.0.0.1",
+        "port": 9993,
+        "protocol": {
+          "type": "http"
+        }
+      }
+    ],
+    "plugins": [
+      {
+        "code": "wasm",
+        "kind": "named",
+        "name": "ai-gateway-queue"
+      }
+    ]
+  }
+}

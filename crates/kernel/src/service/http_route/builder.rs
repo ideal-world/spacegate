@@ -4,7 +4,7 @@ use hyper::Version;
 
 use crate::BoxLayer;
 
-use super::{match_request::HttpRouteMatch, Backend, BalancePolicyEnum, HttpBackend, HttpRoute, HttpRouteRule};
+use super::{match_request::HttpRouteMatch, Backend, BalancePolicyEnum, HttpBackend, HttpRoute, HttpRouteRule, RequestTimeout};
 
 #[derive(Debug)]
 pub struct HttpRouteBuilder {
@@ -84,7 +84,7 @@ impl HttpRouteBuilder {
 pub struct HttpRouteRuleBuilder {
     r#match: Option<Vec<HttpRouteMatch>>,
     pub plugins: Vec<BoxLayer>,
-    timeouts: Option<Duration>,
+    timeout: RequestTimeout,
     backends: Vec<HttpBackend>,
     pub extensions: hyper::http::Extensions,
     pub balance_policy: BalancePolicyEnum,
@@ -100,7 +100,7 @@ impl HttpRouteRuleBuilder {
         Self {
             r#match: None,
             plugins: Vec::new(),
-            timeouts: None,
+            timeout: RequestTimeout::Default,
             backends: Vec::new(),
             extensions: Default::default(),
             balance_policy: BalancePolicyEnum::default(),
@@ -130,7 +130,11 @@ impl HttpRouteRuleBuilder {
         self
     }
     pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.timeouts = Some(timeout);
+        self.timeout = RequestTimeout::Duration(timeout);
+        self
+    }
+    pub fn disable_timeout(mut self) -> Self {
+        self.timeout = RequestTimeout::Disabled;
         self
     }
     pub fn backend(mut self, backend: HttpBackend) -> Self {
@@ -149,7 +153,7 @@ impl HttpRouteRuleBuilder {
         HttpRouteRule {
             r#match: self.r#match,
             plugins: self.plugins,
-            timeouts: self.timeouts,
+            timeout: self.timeout,
             backends: self.backends,
             ext: self.extensions,
             balance_policy: self.balance_policy,
@@ -167,7 +171,7 @@ pub trait BackendKindBuilder: Default + Debug {
 pub struct HttpBackendBuilder<B: BackendKindBuilder = HttpBackendKindBuilder> {
     backend: B,
     pub plugins: Vec<BoxLayer>,
-    timeout: Option<Duration>,
+    timeout: RequestTimeout,
     weight: u16,
     pub extensions: hyper::http::Extensions,
 }
@@ -207,7 +211,7 @@ impl<B: BackendKindBuilder> Default for HttpBackendBuilder<B> {
         Self {
             backend: B::default(),
             plugins: Vec::new(),
-            timeout: None,
+            timeout: RequestTimeout::Default,
             weight: 1,
             extensions: Default::default(),
         }
@@ -262,7 +266,11 @@ impl<B: BackendKindBuilder> HttpBackendBuilder<B> {
         self
     }
     pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
+        self.timeout = RequestTimeout::Duration(timeout);
+        self
+    }
+    pub fn disable_timeout(mut self) -> Self {
+        self.timeout = RequestTimeout::Disabled;
         self
     }
     pub fn weight(mut self, weight: u16) -> Self {

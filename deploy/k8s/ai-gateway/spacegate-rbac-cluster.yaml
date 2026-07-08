@@ -1,0 +1,28 @@
+# 补充 SpaceGate ServiceAccount 对 SgFilter / Gateway API 的集群级 list 权限
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: spacegate-k8s-config
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes", "gateways/status", "httproutes/status"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["spacegate.idealworld.group"]
+    resources: ["sgfilters", "httpspaceroutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions.higress.io"]
+    resources: ["wasmplugins"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: spacegate-k8s-config
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: spacegate-k8s-config
+subjects:
+  - kind: ServiceAccount
+    name: spacegate
+    namespace: spacegate

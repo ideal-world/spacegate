@@ -1,0 +1,18 @@
+{
+  "url": "/Users/sh.zhang/Workspace/[REDACTED]/jiyan/gateway/spacegate/resource/wasm/hai_process_mix.wasm",
+  "validate_on_create": false,
+  "fail_strategy": "fail_close",
+  "plugin_config": {
+    "ac_service_host": "ac-service.static",
+    "ac_service_port": 18091,
+    "asset_service_host": "asset-service.static",
+    "asset_service_port": 18092,
+    "ac_auth_path": "/ai-agent/internal/v1/ac/auth",
+    "asset_lookup_path": "/ai-agent/internal/v1/am/assets/{asset_id}",
+    "model_error_keywords": ["error", "ERR_", "FAILED"]
+  },
+  "clusters": {
+    "outbound|18091||ac-service.static": "http://127.0.0.1:18091",
+    "outbound|18092||asset-service.static": "http://127.0.0.1:18092"
+  }
+}

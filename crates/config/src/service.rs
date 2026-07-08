@@ -20,7 +20,7 @@ use spacegate_model::*;
 
 pub trait Create: Sync + Send {
     fn create_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> impl Future<Output = Result<(), BoxError>> + Send;
-    fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgHttpRoute) -> impl Future<Output = Result<(), BoxError>> + Send;
+    fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> impl Future<Output = Result<(), BoxError>> + Send;
     fn create_config_item(&self, name: &str, item: ConfigItem) -> impl Future<Output = Result<(), BoxError>> + Send {
         async move {
             self.create_config_item_gateway(name, item.gateway).await?;
@@ -43,7 +43,7 @@ pub trait Create: Sync + Send {
 
 pub trait Update: Sync + Send {
     fn update_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> impl Future<Output = Result<(), BoxError>> + Send;
-    fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgHttpRoute) -> impl Future<Output = Result<(), BoxError>> + Send;
+    fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> impl Future<Output = Result<(), BoxError>> + Send;
 
     fn update_config_item(&self, name: &str, item: ConfigItem) -> impl Future<Output = Result<(), BoxError>> + Send {
         async move {
@@ -94,9 +94,9 @@ pub trait Delete: Sync + Send {
 
 pub trait Retrieve: Sync + Send {
     fn retrieve_config_item_gateway(&self, gateway_name: &str) -> impl Future<Output = Result<Option<SgGateway>, BoxError>> + Send;
-    fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> impl Future<Output = Result<Option<SgHttpRoute>, BoxError>> + Send;
+    fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> impl Future<Output = Result<Option<SgRoute>, BoxError>> + Send;
     fn retrieve_config_item_route_names(&self, name: &str) -> impl Future<Output = Result<Vec<String>, BoxError>> + Send;
-    fn retrieve_config_item_all_routes(&self, name: &str) -> impl Future<Output = Result<BTreeMap<String, SgHttpRoute>, BoxError>> + Send {
+    fn retrieve_config_item_all_routes(&self, name: &str) -> impl Future<Output = Result<BTreeMap<String, SgRoute>, BoxError>> + Send {
         async move {
             let mut routes = BTreeMap::new();
             for route_name in self.retrieve_config_item_route_names(name).await? {
@@ -134,6 +134,7 @@ pub trait Retrieve: Sync + Send {
                 gateways,
                 plugins: PluginInstanceMap::from_config_vec(plugins),
                 api_port: None,
+                observability: Default::default(),
             })
         }
     }

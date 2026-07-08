@@ -29,6 +29,7 @@ where
     C: Retrieve + CreateListener + 'static,
 {
     let (init_config, listener) = config.create_listener().await?;
+    crate::observability::init(&init_config.observability);
     #[cfg(feature = "ext-axum")]
     let listener = {
         use crate::ext_features::axum::{shell_routers, App};

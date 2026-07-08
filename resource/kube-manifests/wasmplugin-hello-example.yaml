@@ -1,0 +1,19 @@
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: hello-world
+  namespace: spacegate
+spec:
+  url: https://example.com/plugins/spacegate_wasm_hello.wasm
+  sha256: sha256:6b9dacbcbf5a2d9de9795737aeecd434dc6b261476486803419e9d62084e651c
+  pluginName: hello-world
+  phase: AUTHN
+  priority: 100
+  failStrategy: FAIL_CLOSE
+  defaultConfig:
+    message: hello world
+  matchRules:
+    - domain:
+        - api.example.com
+      config:
+        message: hello api

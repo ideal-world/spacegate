@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgHttpRoute};
+use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, ObservabilityConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgRoute};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -53,6 +53,7 @@ pub struct MainFileConfig<P = FsAsmPluginConfig> {
     pub gateways: Vec<MainFileConfigItem<P>>,
     pub plugins: PluginConfigs,
     pub api_port: u16,
+    pub observability: ObservabilityConfig,
 }
 
 impl<P> Default for MainFileConfig<P> {
@@ -61,6 +62,7 @@ impl<P> Default for MainFileConfig<P> {
             gateways: Default::default(),
             plugins: Default::default(),
             api_port: DEFAULT_API_PORT,
+            observability: Default::default(),
         }
     }
 }
@@ -70,7 +72,7 @@ impl<P> Default for MainFileConfig<P> {
 pub struct MainFileConfigItem<P = FsAsmPluginConfig> {
     #[serde(flatten)]
     pub gateway: SgGateway<P>,
-    pub routes: Vec<SgHttpRoute<P>>,
+    pub routes: Vec<SgRoute<P>>,
 }
 impl<P> Default for MainFileConfigItem<P> {
     fn default() -> Self {
@@ -93,7 +95,7 @@ impl<P> From<MainFileConfigItem<P>> for ConfigItem<P> {
     fn from(val: MainFileConfigItem<P>) -> Self {
         ConfigItem {
             gateway: val.gateway,
-            routes: val.routes.into_iter().map(|route| (route.route_name.clone(), route)).collect(),
+            routes: val.routes.into_iter().map(|route| (route.route_name().to_string(), route)).collect(),
         }
     }
 }
@@ -140,6 +142,7 @@ impl MainFileConfig<FsAsmPluginConfigMaybeUninitialized> {
             gateways,
             plugins: self.plugins,
             api_port: self.api_port,
+            observability: self.observability,
         }
     }
 }
@@ -191,6 +194,7 @@ impl MainFileConfig<FsAsmPluginConfig> {
             gateways,
             plugins,
             api_port: Some(self.api_port),
+            observability: self.observability,
         }
     }
 }
@@ -228,6 +232,7 @@ impl From<spacegate_model::Config> for MainFileConfig<FsAsmPluginConfig> {
             gateways,
             plugins,
             api_port: value.api_port.unwrap_or(DEFAULT_API_PORT),
+            observability: value.observability,
         }
     }
 }
