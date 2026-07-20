@@ -1,5 +1,5 @@
 {
-  "url": "file:///Users/sh.zhang/Workspace/huayun/jiyan/ai-gateway-dev/spacegate/plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm",
+  "url": "file:///path/to/spacegate/plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm",
   "validate_on_create": false,
   "fail_strategy": "fail_close",
   "plugin_name": "ai-gateway-queue",
