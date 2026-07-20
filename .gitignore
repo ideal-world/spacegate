@@ -30,3 +30,8 @@ devsh/*
 .uuid
 scripts
 mix
+dist/
+resource/docker/spacegate-admin-server/
+
+# Agent process artifacts
+docs/superpowers/

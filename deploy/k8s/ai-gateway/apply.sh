@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# 编译 Wasm + 打包 ConfigMap + 部署 AI Gateway K8s 栈
+# 部署 AI Gateway K8s 栈。ai-gateway-queue Wasm 已内置在 SpaceGate 镜像中。
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/../../.." && pwd)"
-WASM_SRC="$ROOT/plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm"
-WASM_DST="$DIR/files/spacegate_plugin_ai_gateway_queue.wasm"
 
 echo "==> 检查 SpaceGate 前置（namespace / GatewayClass / DaemonSet）"
 if ! kubectl get namespace spacegate >/dev/null 2>&1; then
@@ -14,16 +12,6 @@ if ! kubectl get namespace spacegate >/dev/null 2>&1; then
   echo "  kubectl apply -f $ROOT/resource/kube-manifests/spacegate-gateway.yaml" >&2
   exit 1
 fi
-
-echo "==> 编译 ai-gateway-queue Wasm"
-cd "$ROOT"
-rustup target add wasm32-wasip1 2>/dev/null || true
-cargo build --release --target wasm32-wasip1 \
-  --manifest-path plugins/wasm/Cargo.toml \
-  -p spacegate_plugin_ai_gateway_queue
-
-mkdir -p "$DIR/files"
-cp "$WASM_SRC" "$WASM_DST"
 
 echo "==> 应用 Kustomize"
 kubectl apply -k "$DIR"

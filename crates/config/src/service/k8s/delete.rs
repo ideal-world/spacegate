@@ -18,7 +18,7 @@ impl Delete for K8s {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
 
         if let Some(sg_gateway) = self.retrieve_config_item_gateway(gateway_name).await? {
-            let (gateway, secret, delete_plugin_ids) = sg_gateway.to_kube_gateway(&self.namespace);
+            let (gateway, secret, delete_plugin_ids) = sg_gateway.to_kube_gateway(&self.namespace, &self.gateway_class_name);
 
             if let Some(secret) = secret {
                 let secret_api: Api<Secret> = self.get_namespace_api();

@@ -48,7 +48,7 @@
 - Modify: `scripts/otel-local/query-access-logs.sh`
   - 从 `LogAttributes['telemetry']` JSON 中解析字段，不再查询 `LogAttributes['telemetry.asset_id']`。
 
-- Modify: `docs/wasm-telemetry-host-function-plan.md`
+- Modify: `docs/archive/otlp/wasm-telemetry-host-function-plan.md`
   - 对齐本计划中的校验规则和 telemetry JSON 入库形态。
 
 ---
@@ -496,7 +496,7 @@ Expected: no output and exit code 0.
 ### Task 6: Update WASM Plan
 
 **Files:**
-- Modify: `docs/wasm-telemetry-host-function-plan.md`
+- Modify: `docs/archive/otlp/wasm-telemetry-host-function-plan.md`
 
 - [ ] **Step 1: Align ABI plan with namespaced telemetry**
 

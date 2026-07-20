@@ -93,7 +93,13 @@ MCPRoute 不解析 JSON-RPC body。建议只挂载不需要缓存、聚合或完
 
 ## K8S MCPRoute
 
-K8S 配置使用 `spacegate.idealworld.group/v1` 的 `MCPRoute`，`targetRefs` 指向 `Gateway`：
+K8S 配置使用 `spacegate.idealworld.group/v1` 的 `MCPRoute`，`parentRefs` 指向 `Gateway`：
+
+部署前需要安装 MCPRoute CRD，并确保 Spacegate ServiceAccount 具有 `mcproutes` 的 `get/list/watch` 权限：
+
+```bash
+kubectl apply -f resource/kube-manifests/spacegate-mcproute.yaml
+```
 
 ```yaml
 apiVersion: spacegate.idealworld.group/v1
@@ -111,9 +117,8 @@ spec:
   timeout_mode: disabled
   session_affinity: mcp_session
   backend_refs:
-    - backendRef:
-        kind: ExternalHttp
-        name: mcp-server.default.svc.cluster.local
-        port: 8080
-        weight: 1
+    - kind: ExternalHttp
+      name: mcp-server.default.svc.cluster.local
+      port: 8080
+      weight: 1
 ```

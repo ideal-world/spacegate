@@ -121,12 +121,14 @@ APPLY_OTEL_STACK=false OTEL_ENABLED=false ./deploy/k8s/test-spacegate/deploy.sh
 
 1. 检查 `kubectl`、`docker` 等命令。
 2. 使用 `rg` 检查 SpaceGate 内置侧是否仍残留 HAI feature/注册引用。
-3. 使用 `deploy/k8s/test-spacegate/Dockerfile.spacegate` 构建当前代码镜像：SpaceGate 编译启用 `build-k8s,wasm,dylib,static-openssl`；`hai-hub-spacegate-plugins` 在同一镜像构建中编译为 Linux `.so`。
+3. 使用 `resource/docker/spacegate-k8s/Dockerfile` 构建当前代码镜像：SpaceGate 编译启用 `build-k8s,wasm,dylib,static-openssl`；`hai-hub-spacegate-plugins` 在同一镜像构建中编译为 Linux `.so`。
 4. 可选导入镜像到 `kind` 或 `k3d`。
 5. 应用：
    - `resource/kube-manifests/gateway-api-0.6.2-experimental-china.yaml`
    - `resource/kube-manifests/namespace.yaml`
    - `resource/kube-manifests/gatewayclass.yaml`
+   - `resource/kube-manifests/spacegate-httproute.yaml`
+   - `resource/kube-manifests/spacegate-mcproute.yaml`
    - `resource/kube-manifests/higress-wasmplugin-crd.yaml`
    - `resource/kube-manifests/spacegate-gateway.yaml`
    - `deploy/k8s/ai-gateway/spacegate-rbac-cluster.yaml`
@@ -193,8 +195,8 @@ curl -i http://<node-ip>:9993/
 
 当前测试镜像通过 SpaceGate 的 native dylib 路径加载 HAI 插件：
 
-- `binary/spacegate` 启用 `dylib` feature 后，会扫描启动参数 `--plugins/-p` 指向的目录。
-- Linux 镜像中默认插件目录是 `/lib/spacegate/plugins`。
+- `binary/spacegate` 启用 `dylib` feature 后，会扫描启动参数 `--plugins/-p` 或环境变量 `PLUGINS` 指向的目录。
+- Linux 镜像中默认插件目录是 `/lib/spacegate/plugins`；K8s 挂载插件建议使用 `/var/lib/spacegate/plugins`，避免覆盖镜像内置插件目录。
 - Dockerfile 会从 `HAI_HUB_ROOT` 对应的仓库构建 `hai-hub-spacegate-plugins`，并复制 `libhai_hub_spacegate_plugins.so` 到该目录。
 - 该 dylib 暴露 `register(repo: &PluginRepository)`，一次性注册 `hub-request-id`、`hai-observe`、`hai-auth`、`hai-asset`、`hai-quota`、`hai-dispatch`。
 

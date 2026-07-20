@@ -20,7 +20,7 @@ use spacegate_model::{
 };
 
 use crate::{
-    constants::{self, GATEWAY_CLASS_NAME},
+    constants,
     model::{gateway, http_route, PluginConfig, SgGateway, SgHttpRoute, SgMcpRoute, SgRoute, SgRouteKind},
     service::Retrieve,
     BoxError, BoxResult,
@@ -33,7 +33,7 @@ use super::{
         higress_wasm_plugin_conv::{sort_higress_wasm_plugins, HigressWasmPluginConv as _},
         route_k8s_conv::{SgBackendRefConv as _, SgHttpRouteRuleConv as _},
     },
-    K8s,
+    gateway_uses_class, K8s,
 };
 
 impl Retrieve for K8s {
@@ -41,7 +41,7 @@ impl Retrieve for K8s {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
 
         let result = if let Some(gateway_obj) = gateway_api.get_opt(gateway_name).await?.and_then(|gateway_obj| {
-            if gateway_obj.spec.gateway_class_name == GATEWAY_CLASS_NAME {
+            if gateway_uses_class(&gateway_obj, &self.gateway_class_name) {
                 Some(gateway_obj)
             } else {
                 None
@@ -173,7 +173,13 @@ impl Retrieve for K8s {
     async fn retrieve_config_names(&self) -> BoxResult<Vec<String>> {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
 
-        let result = gateway_api.list(&ListParams::default()).await?.iter().map(|gateway| gateway.name_any()).collect();
+        let result = gateway_api
+            .list(&ListParams::default())
+            .await?
+            .iter()
+            .filter(|gateway| gateway_uses_class(gateway, &self.gateway_class_name))
+            .map(|gateway| gateway.name_any())
+            .collect();
 
         Ok(result)
     }

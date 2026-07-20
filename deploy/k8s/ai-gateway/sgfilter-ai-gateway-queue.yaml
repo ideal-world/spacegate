@@ -16,8 +16,8 @@ spec:
       name: ai-gateway-queue
       enable: true
       config:
-        # 集群内 nginx 分发 Wasm（apply.sh 会同步 files/*.wasm 到 ConfigMap）
-        url: http://ai-gateway-wasm/spacegate_plugin_ai_gateway_queue.wasm
+        # SpaceGate 镜像内置 Wasm 文件；该路径必须存在于每个 SpaceGate Pod 内。
+        url: file:///lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm
         fail_strategy: fail_close
         validate_on_create: false
         plugin_name: ai-gateway-queue

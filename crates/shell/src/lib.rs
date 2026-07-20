@@ -74,6 +74,12 @@ pub async fn startup_file(conf_dir: impl AsRef<std::path::Path>) -> Result<(), B
 /// The `namespace` is the k8s namespace.
 /// If the `namespace` is None, it will read from the file `/var/run/secrets/kubernetes.io/serviceaccount/namespace`.
 pub async fn startup_k8s(namespace: Option<&str>) -> Result<(), BoxError> {
+    startup_k8s_with_gateway_class(namespace, spacegate_config::constants::DEFAULT_GATEWAY_CLASS_NAME).await
+}
+
+#[cfg(feature = "k8s")]
+/// Starts the gateway from Kubernetes resources managed by the selected GatewayClass.
+pub async fn startup_k8s_with_gateway_class(namespace: Option<&str>, gateway_class_name: &str) -> Result<(), BoxError> {
     use spacegate_config::service::k8s::K8s;
     fn k8s_namespace_from_file() -> &'static str {
         static NAMESPACE: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
@@ -88,7 +94,7 @@ pub async fn startup_k8s(namespace: Option<&str>) -> Result<(), BoxError> {
     }
 
     let namespace = namespace.unwrap_or_else(|| k8s_namespace_from_file());
-    let config = K8s::with_default_client(namespace).await?;
+    let config = K8s::with_default_client(namespace).await?.with_gateway_selection(gateway_class_name, None::<&str>);
     startup(config).await
 }
 #[cfg(feature = "cache")]

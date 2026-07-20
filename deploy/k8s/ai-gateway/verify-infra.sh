@@ -17,7 +17,7 @@ check() {
 }
 
 echo "==> Pod 状态"
-kubectl get pods -n "$NS" -l 'app.kubernetes.io/name in (ai-gateway-redis,ai-gateway-service,ai-gateway-wasm,ai-gateway-mock-upstream)'
+kubectl get pods -n "$NS" -l 'app.kubernetes.io/name in (ai-gateway-redis,ai-gateway-service,ai-gateway-mock-upstream)'
 
 echo "==> 不应存在默认 HTTPRoute ai-api"
 if kubectl get httproute ai-api -n "$NS" >/dev/null 2>&1; then
@@ -57,15 +57,6 @@ if kubectl run curl-health-$RANDOM --rm -i --restart=Never -n "$NS" \
   pass=$((pass + 1))
 else
   echo "❌ ai-gateway-service /healthz"
-  fail=$((fail + 1))
-fi
-
-echo "==> Wasm HTTP 分发"
-if kubectl exec -n "$NS" deploy/ai-gateway-wasm -- wget -qO- http://127.0.0.1/spacegate_plugin_ai_gateway_queue.wasm >/dev/null 2>&1; then
-  echo "✅ ai-gateway-wasm 可下载 .wasm"
-  pass=$((pass + 1))
-else
-  echo "❌ ai-gateway-wasm"
   fail=$((fail + 1))
 fi
 

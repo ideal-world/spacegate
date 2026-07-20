@@ -9,17 +9,9 @@ namespace: spacegate
 resources:
   - redis.yaml
   - mock-upstream.yaml
-  - wasm-server.yaml
   - ai-gateway-service.yaml
   - gateway-ai.yaml
   - httproute-ai.yaml
   - sgfilter-ai-gateway-queue.yaml
   # 可选：Higress WasmPlugin（不含 clusters，生产建议用 SgFilter）
   # - wasmplugin-ai-gateway-queue.yaml
-
-configMapGenerator:
-  - name: ai-gateway-queue-wasm
-    files:
-      - files/spacegate_plugin_ai_gateway_queue.wasm
-    options:
-      disableNameSuffixHash: true

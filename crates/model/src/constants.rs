@@ -1,8 +1,16 @@
 pub const KUBE_OBJECT_INSTANCE: &str = "app.kubernetes.io/instance";
 
 pub const GATEWAY_CONTROLLER_NAME: &str = "spacegate.idealworld.group/spacegate-controller";
-pub const GATEWAY_CLASS_NAME: &str = "spacegate";
-pub const GATEWAY_DEFAULT_INSTANCE: &str = "spacegate.spacegate";
+/// GatewayClass used when no runtime selection is configured.
+pub const DEFAULT_GATEWAY_CLASS_NAME: &str = "spacegate";
+/// Spacegate DaemonSet used when neither runtime configuration nor a GatewayClass label selects one.
+pub const DEFAULT_GATEWAY_INSTANCE: &str = "spacegate.spacegate";
+/// Backward-compatible alias for the legacy default GatewayClass constant.
+#[deprecated(note = "use DEFAULT_GATEWAY_CLASS_NAME for the fallback value; use runtime configuration for selection")]
+pub const GATEWAY_CLASS_NAME: &str = DEFAULT_GATEWAY_CLASS_NAME;
+/// Backward-compatible alias for the legacy default Spacegate instance constant.
+#[deprecated(note = "use DEFAULT_GATEWAY_INSTANCE for the fallback value; use runtime configuration for selection")]
+pub const GATEWAY_DEFAULT_INSTANCE: &str = DEFAULT_GATEWAY_INSTANCE;
 pub const GATEWAY_ANNOTATION_REDIS_URL: &str = "redis_url";
 pub const GATEWAY_ANNOTATION_LOG_LEVEL: &str = "log_level";
 pub const GATEWAY_ANNOTATION_LANGUAGE: &str = "lang";

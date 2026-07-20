@@ -26,10 +26,10 @@ impl Discovery for K8s {
     async fn instances(&self) -> BoxResult<Vec<impl Instance>> {
         let gateway_class_api: Api<GatewayClass> = self.get_all_api();
 
-        let instance = if let Some(mut gateway_class) = gateway_class_api.get_opt(spacegate_model::constants::GATEWAY_CLASS_NAME).await? {
-            gateway_class.labels_mut().remove(spacegate_model::constants::KUBE_OBJECT_INSTANCE).unwrap_or(spacegate_model::constants::GATEWAY_DEFAULT_INSTANCE.to_string())
+        let instance = if let Some(gateway_class) = gateway_class_api.get_opt(&self.gateway_class_name).await? {
+            resolve_gateway_instance(self.gateway_instance.as_deref(), gateway_class.labels())
         } else {
-            return Err("gateway class not found".into());
+            return Err(format!("gateway class '{}' not found", self.gateway_class_name).into());
         };
 
         let instance_split: Vec<_> = instance.split('.').collect();
@@ -90,5 +90,37 @@ impl Discovery for K8s {
             })
             .collect();
         Ok(result)
+    }
+}
+
+/// Resolves the Spacegate DaemonSet from explicit configuration, GatewayClass labels, or the legacy default.
+fn resolve_gateway_instance(explicit_instance: Option<&str>, labels: &std::collections::BTreeMap<String, String>) -> String {
+    explicit_instance
+        .map(str::trim)
+        .filter(|instance| !instance.is_empty())
+        .or_else(|| labels.get(spacegate_model::constants::KUBE_OBJECT_INSTANCE).map(String::as_str))
+        .unwrap_or(spacegate_model::constants::DEFAULT_GATEWAY_INSTANCE)
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::resolve_gateway_instance;
+
+    #[test]
+    fn explicit_gateway_instance_overrides_gateway_class_label() {
+        let labels = BTreeMap::from([(spacegate_model::constants::KUBE_OBJECT_INSTANCE.to_string(), "label-spacegate.label-namespace".to_string())]);
+
+        assert_eq!(resolve_gateway_instance(Some("ai-spacegate.ai-hai"), &labels), "ai-spacegate.ai-hai");
+    }
+
+    #[test]
+    fn gateway_instance_falls_back_to_label_then_legacy_default() {
+        let labels = BTreeMap::from([(spacegate_model::constants::KUBE_OBJECT_INSTANCE.to_string(), "label-spacegate.label-namespace".to_string())]);
+
+        assert_eq!(resolve_gateway_instance(None, &labels), "label-spacegate.label-namespace");
+        assert_eq!(resolve_gateway_instance(None, &BTreeMap::new()), spacegate_model::constants::DEFAULT_GATEWAY_INSTANCE);
     }
 }

@@ -326,16 +326,21 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build rust
-        run: cargo build --release -p spacegate --features build-k8s
+        run: |
+          cargo build --release -p spacegate --features build-k8s,wasm,dylib
+          rustup target add wasm32-wasip1
+          cargo build --release --target wasm32-wasip1 --manifest-path plugins/wasm/Cargo.toml -p spacegate_plugin_ai_gateway_queue
 
       - name: Copy binary to workspace
-        run: cp ./target/release/spacegate resource/docker/spacegate/
+        run: |
+          cp ./target/release/spacegate resource/docker/spacegate-runtime/
+          cp ./plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm resource/docker/spacegate-runtime/
 
       - name: Build and push Docker image to github
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: resource/docker/spacegate/
-          dockerfile: resource/docker/spacegate/Dockerfile
+          directory: resource/docker/spacegate-runtime/
+          dockerfile: resource/docker/spacegate-runtime/Dockerfile
           registry: ghcr.io
           image: spacegate
           tags: ${{ github.ref_name }}
@@ -345,8 +350,8 @@ jobs:
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: resource/docker/spacegate/
-          dockerfile: resource/docker/spacegate/Dockerfile
+          directory: resource/docker/spacegate-runtime/
+          dockerfile: resource/docker/spacegate-runtime/Dockerfile
           registry: docker.io
           image: ecfront/spacegate
           tags: ${{ github.ref_name }}
@@ -376,16 +381,21 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build rust
-        run: cargo build --release -p spacegate --features build-k8s
+        run: |
+          cargo build --release -p spacegate --features build-k8s,wasm,dylib
+          rustup target add wasm32-wasip1
+          cargo build --release --target wasm32-wasip1 --manifest-path plugins/wasm/Cargo.toml -p spacegate_plugin_ai_gateway_queue
 
       - name: Copy binary to workspace
-        run: cp ./target/release/spacegate resource/docker/spacegate/
+        run: |
+          cp ./target/release/spacegate resource/docker/spacegate-runtime/
+          cp ./plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm resource/docker/spacegate-runtime/
 
       - name: Build and push Docker image to dockerhub
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
-          directory: resource/docker/spacegate/
-          dockerfile: resource/docker/spacegate/Dockerfile
+          directory: resource/docker/spacegate-runtime/
+          dockerfile: resource/docker/spacegate-runtime/Dockerfile
           registry: docker.io
           image: ecfront/spacegate
           tags: ${{ github.ref == 'refs/heads/master' && 'latest' || github.ref_name }}
