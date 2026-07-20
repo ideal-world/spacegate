@@ -1,12 +1,14 @@
 # AI 网关排队限流插件 — 管理界面配置指南
 
+> 历史流程：本文要求手工创建并绑定插件实例，已不适用于当前 `ai-gateway-queue` 系统内置插件模型；仅保留用于追溯旧实现。
+
 本文说明如何在 **SpaceGate Admin 管理界面** 中配置 **AI 请求队列网关**（`ai-gateway-queue` Wasm 插件），包括插件实例创建、网关/路由挂载、租户配额，以及客户端请求头约定。
 
 相关文档：
 
-- 插件行为与 API：[`plugins/wasm/ai-gateway-queue/README.md`](../plugins/wasm/ai-gateway-queue/README.md)
-- 编译与 K8s 部署：[`deploy/README.md`](../deploy/README.md)
-- 测试用例：[`ai-gateway-queue-test-spec.md`](ai-gateway-queue-test-spec.md)
+- 插件行为与 API：[`plugins/wasm/ai-gateway-queue/README.md`](../../../plugins/wasm/ai-gateway-queue/README.md)
+- 编译与 K8s 部署：[`deploy/README.md`](../../../deploy/README.md)
+- 当前测试用例：[`test-spec.md`](../../ai-gateway/test-spec.md)
 
 ---
 
@@ -476,7 +478,7 @@ admin-server:
 
 ```bash
 cd spacegate
-docker build -f resource/docker/Dockerfile.admin-server -t ai-gateway/admin-server:dev .
+docker build -f resource/docker/spacegate-admin/Dockerfile -t ai-gateway/admin-server:dev .
 docker rm -f ai-gateway-admin-server && docker run -d --name ai-gateway-admin-server \
   --network container:ai-gateway-spacegate --restart unless-stopped \
   -e CONFIG=file:/etc/spacegate -e RUST_LOG=info \
@@ -492,7 +494,7 @@ admin-server 读不到 `/etc/spacegate` 配置。Docker 环境检查 **工作区
 
 ### Q7：K8s 环境能用这套 UI 吗？
 
-可以管理 SpaceGate 配置（若 admin-server 连到同一配置源）。K8s 下 Wasm 常通过 **SgFilter** 内联 spec + HTTP/OCI 分发 Wasm，详见 [`deploy/README.md`](../deploy/README.md) §6。Higress **WasmPlugin** CR 的 `defaultConfig` **不含** `clusters`，生产建议用 **SgFilter**。
+可以管理 SpaceGate 配置（若 admin-server 连到同一配置源）。K8s 下 Wasm 常通过 **SgFilter** 内联 spec + HTTP/OCI 分发 Wasm，详见 [`deploy/README.md`](../../../deploy/README.md) §6。Higress **WasmPlugin** CR 的 `defaultConfig` **不含** `clusters`，生产建议用 **SgFilter**。
 
 ---
 

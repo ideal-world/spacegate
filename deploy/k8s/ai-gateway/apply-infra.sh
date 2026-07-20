@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# 编译 Wasm + 部署 AI Gateway K8s 基础设施（不含默认 HTTPRoute ai-api / SgFilter）
+# 部署 AI Gateway K8s 基础设施（不含默认 HTTPRoute ai-api / SgFilter）。
+# ai-gateway-queue Wasm 已内置在 SpaceGate 镜像中。
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/../../.." && pwd)"
 KUSTOMIZE_FILE="$DIR/kustomization-infra.yaml"
-WASM_SRC="$ROOT/plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm"
-WASM_DST="$DIR/files/spacegate_plugin_ai_gateway_queue.wasm"
 
 echo "==> 检查 SpaceGate 前置（namespace / GatewayClass / DaemonSet）"
 if ! kubectl get namespace spacegate >/dev/null 2>&1; then
@@ -18,16 +17,6 @@ fi
 echo "==> 移除默认 Demo 路由（若存在）"
 kubectl delete -f "$DIR/httproute-ai.yaml" -n spacegate --ignore-not-found
 kubectl delete -f "$DIR/sgfilter-ai-gateway-queue.yaml" -n spacegate --ignore-not-found
-
-echo "==> 编译 ai-gateway-queue Wasm"
-cd "$ROOT"
-rustup target add wasm32-wasip1 2>/dev/null || true
-cargo build --release --target wasm32-wasip1 \
-  --manifest-path plugins/wasm/Cargo.toml \
-  -p spacegate_plugin_ai_gateway_queue
-
-mkdir -p "$DIR/files"
-cp "$WASM_SRC" "$WASM_DST"
 
 echo "==> 应用 Kustomize（infra-only，无 ai-api HTTPRoute）"
 KUST_BACKUP="$DIR/kustomization.yaml.full.bak"
@@ -45,7 +34,7 @@ fi
 
 echo "==> 等待 AI Gateway Pod Ready"
 kubectl wait --for=condition=ready pod \
-  -l 'app.kubernetes.io/name in (ai-gateway-redis,ai-gateway-service,ai-gateway-wasm,ai-gateway-mock-upstream)' \
+  -l 'app.kubernetes.io/name in (ai-gateway-redis,ai-gateway-service,ai-gateway-mock-upstream)' \
   -n spacegate \
   --timeout=180s
 

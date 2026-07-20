@@ -38,9 +38,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 /// 构建 HTTP 路由，供 main 与集成测试复用。
 pub fn build_router(state: AppState, max_body_bytes: usize) -> Router {
-    Router::new()
-        .route("/healthz", get(healthz))
-        .route("/metrics", get(metrics))
+    // Health probes are intentionally excluded to keep business request logs readable.
+    let business_routes = Router::new()
         .route("/v1/ratelimit/check", post(check_rate_limit))
         .route("/v1/queue/enqueue", post(enqueue))
         .route("/v1/queue/enqueue-and-wait", post(enqueue_and_wait))
@@ -49,10 +48,23 @@ pub fn build_router(state: AppState, max_body_bytes: usize) -> Router {
         .route("/v1/admin/plugins/{plugin}/schema", get(admin_plugin_schema))
         .route("/v1/admin/plugins/{plugin}/readme", get(admin_plugin_readme))
         .route("/v1/admin/tenant-rate-limits/resolve", get(admin_resolve_tenant_rate_limit))
-        .route("/v1/admin/tenant-rate-limits", get(admin_list_tenant_rate_limits).put(admin_upsert_tenant_rate_limit).delete(admin_delete_tenant_rate_limit))
+        .route(
+            "/v1/admin/tenant-rate-limits",
+            get(admin_list_tenant_rate_limits).put(admin_upsert_tenant_rate_limit).delete(admin_delete_tenant_rate_limit),
+        )
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &axum::http::Request<_>| tracing::info_span!("http_request", method = %request.method(), path = request_log_path(request.uri())))
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        );
+
+    Router::new()
+        .route("/healthz", get(healthz))
+        .route("/metrics", get(metrics))
+        .merge(business_routes)
         .layer(DefaultBodyLimit::max(max_body_bytes))
         .layer(build_admin_cors_layer(state.cfg.as_ref()))
-        .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 

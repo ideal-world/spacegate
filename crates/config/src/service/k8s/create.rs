@@ -18,7 +18,7 @@ use super::{
 
 impl Create for K8s {
     async fn create_config_item_gateway(&self, _gateway_name: &str, gateway: crate::model::SgGateway) -> BoxResult<()> {
-        let (gateway, secret, plugin_ids) = gateway.to_kube_gateway(&self.namespace);
+        let (gateway, secret, plugin_ids) = gateway.to_kube_gateway(&self.namespace, &self.gateway_class_name);
 
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         gateway_api.create(&PostParams::default(), &gateway).await?;

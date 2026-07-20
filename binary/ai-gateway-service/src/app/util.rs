@@ -2,6 +2,11 @@ fn required_header(headers: &HeaderMap, name: &str) -> Result<String, ServiceErr
     optional_header(headers, name).ok_or_else(|| ServiceError::bad_request(format!("missing required header `{name}`")))
 }
 
+/// Returns the request path without query parameters for safe request logging.
+fn request_log_path(uri: &Uri) -> &str {
+    uri.path()
+}
+
 fn optional_header(headers: &HeaderMap, name: &str) -> Option<String> {
     headers.get(name).and_then(|value| value.to_str().ok()).map(str::trim).filter(|value| !value.is_empty()).map(ToOwned::to_owned)
 }

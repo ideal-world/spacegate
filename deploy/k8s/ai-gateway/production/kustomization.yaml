@@ -1,0 +1,10 @@
+# Production AI Gateway deployment. Demo resources are intentionally excluded.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: spacegate
+
+resources:
+  - ai-gateway-service.yaml
+  - httproute-ai.yaml
+  - sgfilter-ai-gateway-queue.yaml

@@ -13,7 +13,6 @@ use kube::{
     Api, Resource, ResourceExt,
 };
 use spacegate_model::{
-    constants,
     ext::k8s::crd::{
         http_spaceroute::HttpSpaceroute,
         mcp_route::McpRoute,
@@ -32,7 +31,7 @@ use crate::service::{
     ConfigEventType, ConfigType, CreateListener, Listen, ListenEvent, Retrieve as _,
 };
 
-use super::K8s;
+use super::{gateway_uses_class, K8s};
 
 pub struct K8sListener {
     rx: tokio::sync::mpsc::UnboundedReceiver<(ConfigType, ConfigEventType)>,
@@ -196,9 +195,8 @@ impl CreateListener for K8s {
     async fn create_listener(&self) -> BoxResult<(Config, Self::Listener)> {
         let (evt_tx, evt_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        // self.reject_gateway_class(constants::GATEWAY_CLASS_NAME).await?;
         let config = self.retrieve_config().await?;
-        // self.accept_gateway_class(constants::GATEWAY_CLASS_NAME).await?;
+        self.accept_gateway_class(self.gateway_class_name.as_ref()).await?;
 
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         let http_route_api: Api<HttpRoute> = self.get_namespace_api();
@@ -209,6 +207,7 @@ impl CreateListener for K8s {
         let secret_api: Api<Secret> = self.get_namespace_api();
 
         let move_gateway_names = config.gateways.clone().into_values().map(|item| item.gateway.name).collect::<Vec<_>>();
+        let move_gateway_class_name = self.gateway_class_name.clone();
         let move_evt_tx = evt_tx.clone();
         #[cfg(unix)]
         {
@@ -227,6 +226,9 @@ impl CreateListener for K8s {
             let mut gateway_uid_version_map = HashMap::new();
 
             let apply_event = |gateway: Gateway, mut gateway_uid_version_map: HashMap<_, _>| -> HashMap<_, _> {
+                if !gateway_uses_class(&gateway, &move_gateway_class_name) {
+                    return gateway_uid_version_map;
+                }
                 if move_gateway_names.contains(&gateway.name_any()) && !gateway_uid_version_map.contains_key(&gateway.uid()) {
                     // ignore existing obj
                     gateway_uid_version_map.insert(gateway.uid(), gateway.meta().clone());
@@ -234,9 +236,6 @@ impl CreateListener for K8s {
                 }
                 if gateway_uid_version_map.get(&gateway.uid()).map(|gateway_meta| &gateway_meta.resource_version) == Some(&gateway.resource_version()) {
                     // ignore same version obj
-                    return gateway_uid_version_map;
-                }
-                if gateway.spec.gateway_class_name != constants::GATEWAY_CLASS_NAME {
                     return gateway_uid_version_map;
                 }
                 gateway_uid_version_map.insert(gateway.uid(), gateway.meta().clone());
@@ -255,6 +254,9 @@ impl CreateListener for K8s {
                         gateway_uid_version_map = apply_event(gateway, gateway_uid_version_map);
                     }
                     watcher::Event::Deleted(gateway) => {
+                        if !gateway_uses_class(&gateway, &move_gateway_class_name) {
+                            continue;
+                        }
                         gateway_uid_version_map.remove(&gateway.uid());
                         move_evt_tx.send((ConfigType::Gateway { name: gateway.name_any() }, ConfigEventType::Delete)).expect("send event error");
                     }

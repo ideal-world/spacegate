@@ -1,6 +1,6 @@
 # AI Gateway 队列 — 测试用例规格
 
-**设计文档：** [`/Users/sh.zhang/Documents/ai-gateway-queue-design.md`](/Users/sh.zhang/Documents/ai-gateway-queue-design.md)  
+**设计依据：** 原始设计文档未纳入本仓库；本文件以当前实现约定为准。  
 **语义基准：** DOC-01/02 定稿（配额内三种策略均直通上游；超额时 abandon→429 / queue→202 / wait→阻塞或 504）
 
 ---

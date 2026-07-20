@@ -24,13 +24,13 @@ use super::{
 
 impl Update for K8s {
     async fn update_config_item_gateway(&self, gateway_name: &str, gateway: crate::model::SgGateway) -> BoxResult<()> {
-        let (mut gateway, secret, update_plugin_ids) = gateway.to_kube_gateway(&self.namespace);
+        let (mut gateway, secret, update_plugin_ids) = gateway.to_kube_gateway(&self.namespace, &self.gateway_class_name);
 
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         let old_gateway = self
             .retrieve_config_item_gateway(gateway_name)
             .await?
-            .map(|g| g.to_kube_gateway(&self.namespace))
+            .map(|g| g.to_kube_gateway(&self.namespace, &self.gateway_class_name))
             .ok_or_else(|| -> BoxError { format!("[Sg.Config] gateway [{gateway_name}] not found ,update failed").into() })?;
 
         gateway.metadata.resource_version = gateway_api.get_metadata(gateway_name).await?.resource_version();

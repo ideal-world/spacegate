@@ -75,6 +75,8 @@ rules:
       - sgfilters
       - httpspaceroutes
       - httpspaceroutes/status
+      - mcproutes
+      - mcproutes/status
     verbs:
       - get
       - create
@@ -133,13 +135,87 @@ spec:
         app: spacegate-admin
     spec:
       serviceAccountName: spacegate-admin
+      volumes:
+        # ConfigMap updates require a Deployment rollout because nginx.conf uses subPath.
+        - name: nginx-config
+          configMap:
+            name: spacegate-admin-nginx
       containers:
         - name: spacegate-admin
-          image: ecfront/spacegate-admin-server:latest
+          image: registry.example.com/spacegate/spacegate-admin:v2026.07.10-001
           imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
           ports:
             - containerPort: 9080
-              hostPort: 9080
           env:
             - name: CONFIG
               value: k8s:spacegate
+            # GatewayClass used when Admin creates, lists, reads, and watches Gateway resources.
+            - name: GATEWAY_CLASS_NAME
+              value: spacegate
+            # Spacegate DaemonSet used by plugin discovery: <daemonset>.<namespace>.
+            - name: GATEWAY_INSTANCE
+              value: spacegate.spacegate
+            - name: RUST_LOG
+              value: info
+            - name: AI_GATEWAY_SERVICE_URL
+              value: http://ai-gateway-queue:18080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spacegate-admin-nginx
+  namespace: spacegate
+data:
+  nginx.conf: |
+    events {}
+
+    http {
+        include mime.types;
+        server {
+            listen 9080;
+
+            location / {
+                root /usr/share/nginx/html;
+                index index.html;
+                try_files $uri $uri/ /index.html;
+            }
+
+            location /api {
+                rewrite ^/api/(.*) /$1 break;
+                proxy_pass http://127.0.0.1:9081;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_redirect off;
+            }
+
+            location /ai-gateway {
+                rewrite ^/ai-gateway/?(.*)$ /$1 break;
+                proxy_pass http://ai-gateway-queue:18080;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_redirect off;
+            }
+        }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+spec:
+  selector:
+    app: spacegate-admin
+  ports:
+    - name: http
+      port: 9080
+      targetPort: 9080
