@@ -127,7 +127,7 @@ v2026.07.08-<git-short-sha>
 以下命令假设在工作区根目录执行：
 
 ```bash
-cd /Users/yiye/projectSpace/[REDACTED]_project/spacegate-workspace
+cd /path/to/spacegate-workspace
 export WORKSPACE_ROOT="$PWD"
 export SPACEGATE_ROOT="$WORKSPACE_ROOT/spacegate"
 export ADMIN_FE_ROOT="$WORKSPACE_ROOT/spacegate-admin-fe"
@@ -644,12 +644,12 @@ curl -i http://<node-ip-or-lb>:9993/v1/chat/completions \
 执行目录：`spacegate-workspace`
 
 ```bash
-cd /Users/yiye/projectSpace/[REDACTED]_project/spacegate-workspace
+cd /path/to/spacegate-workspace
 
 export WORKSPACE_ROOT="$PWD"
 export SPACEGATE_ROOT="$WORKSPACE_ROOT/spacegate"
 export ADMIN_FE_ROOT="$WORKSPACE_ROOT/spacegate-admin-fe"
-export HAI_HUB_ROOT="/Users/yiye/projectSpace/[REDACTED]_project/hai-hub"
+export HAI_HUB_ROOT="/path/to/hai-hub"
 export ARTIFACT_DIR="$WORKSPACE_ROOT/image-artifacts"
 export SPACEGATE_ADMIN_CONFIG_DIR="$WORKSPACE_ROOT/spacegate-admin-config"
 

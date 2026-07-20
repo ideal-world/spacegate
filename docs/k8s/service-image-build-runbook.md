@@ -15,7 +15,7 @@
 执行脚本：以下命令块用于设置后续所有构建命令共享的路径、镜像名和离线制品目录。
 
 ```bash
-cd /Users/yiye/projectSpace/[REDACTED]_project/spacegate-workspace
+cd /path/to/spacegate-workspace
 
 export WORKSPACE_ROOT="$PWD"
 export SPACEGATE_ROOT="$WORKSPACE_ROOT/spacegate"
@@ -35,7 +35,7 @@ export AI_GATEWAY_SERVICE_IMAGE="ai-gateway-service:$VERSION"
 export ADMIN_NGINX_IMAGE="nginx:1.27-bookworm"
 
 # 如果网关镜像需要内置 HAI native dylib，设置到 hai-hub 仓库路径。
-export HAI_HUB_ROOT="/Users/yiye/projectSpace/[REDACTED]_project/hai-hub"
+export HAI_HUB_ROOT="/path/to/hai-hub"
 
 mkdir -p "$ARTIFACT_DIR"
 ```
