@@ -1,7 +1,7 @@
-use spacegate_model::{Config, ConfigItem, SgGateway, SgRoute};
+use spacegate_model::{Config, ConfigItem, PluginConfig, SgGateway, SgRoute};
 
 use crate::{
-    service::{config_format::ConfigFormat, Update},
+    service::{config_format::ConfigFormat, encode_stored_plugin_config, Update},
     BoxError,
 };
 
@@ -11,11 +11,11 @@ impl<F> Update for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
 {
-    async fn update_plugin(&self, id: &spacegate_model::PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
+    async fn update_plugin(&self, config: PluginConfig) -> Result<(), BoxError> {
         // 仅更新单个插件 JSON，避免 modify_cached 清空整棵配置树（Docker 共享挂载会 EBUSY/EROFS）
         tokio::fs::create_dir_all(self.plugin_dir()).await?;
-        let path = self.plugin_path(id);
-        let b_spec = self.format.ser(&value)?;
+        let path = self.plugin_path(&config.id);
+        let b_spec = self.format.ser(&encode_stored_plugin_config(config)?)?;
         tokio::fs::write(&path, &b_spec).await?;
         Ok(())
     }

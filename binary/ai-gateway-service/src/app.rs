@@ -23,7 +23,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tokio::sync::{oneshot, Semaphore};
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 include!("app/types.rs");
 include!("app/config.rs");

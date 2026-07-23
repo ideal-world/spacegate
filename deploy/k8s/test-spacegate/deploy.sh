@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 NAMESPACE="${NAMESPACE:-spacegate}"
 IMAGE="${SPACEGATE_IMAGE:-spacegate:test}"
-DOCKERFILE="$ROOT/deploy/k8s/test-spacegate/Dockerfile.spacegate"
+DOCKERFILE="$ROOT/resource/docker/spacegate-k8s/Dockerfile"
 TIMEOUT="${ROLLOUT_TIMEOUT:-180s}"
 HAI_HUB_ROOT="${HAI_HUB_ROOT:-$(cd "$ROOT/../hai-hub" 2>/dev/null && pwd || true)}"
 
@@ -99,6 +99,8 @@ if [[ "$APPLY_GATEWAY_API" == "true" ]]; then
 fi
 kubectl apply -f "$ROOT/resource/kube-manifests/namespace.yaml"
 kubectl apply -f "$ROOT/resource/kube-manifests/gatewayclass.yaml"
+kubectl apply -f "$ROOT/resource/kube-manifests/spacegate-httproute.yaml"
+kubectl apply -f "$ROOT/resource/kube-manifests/spacegate-mcproute.yaml"
 if [[ "$APPLY_WASMPLUGIN_CRD" == "true" ]]; then
   kubectl apply -f "$ROOT/resource/kube-manifests/higress-wasmplugin-crd.yaml"
 fi

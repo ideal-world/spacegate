@@ -16,11 +16,68 @@ use spacegate_config::{
     BoxError, PluginAttributes, PluginConfig, PluginInstanceId,
 };
 use spacegate_plugin_wasm::{config::OciAuthConfig, error::WasmHostError, fetch::fetch_wasm_image_file_sync_with_auth};
-use std::{collections::HashMap, sync::OnceLock, time::Duration};
-use tokio::{sync::RwLock, time::Instant};
+use std::{collections::HashMap, future::Future, sync::OnceLock, time::Duration};
+use tokio::{
+    sync::{Mutex, RwLock},
+    time::Instant,
+};
 use tracing::info;
 
-static ATTR_CACHE: OnceLock<RwLock<HashMap<String, PluginAttributes>>> = OnceLock::new();
+const ATTR_SYNC_INTERVAL: Duration = Duration::from_secs(3600);
+static ATTR_CACHE: OnceLock<PluginAttrCache> = OnceLock::new();
+
+/// Stores plugin attributes discovered from a running Spacegate instance.
+struct PluginAttrCache {
+    /// Attributes indexed by plugin code for list and detail endpoints.
+    attrs: RwLock<HashMap<String, PluginAttributes>>,
+    /// Earliest time at which an automatic refresh may run again.
+    next_sync: Mutex<Instant>,
+}
+
+impl PluginAttrCache {
+    /// Creates an empty cache that is immediately eligible for refresh.
+    fn new() -> Self {
+        Self {
+            attrs: RwLock::new(HashMap::new()),
+            next_sync: Mutex::new(Instant::now()),
+        }
+    }
+
+    /// Refreshes attributes from the configured Spacegate discovery backend.
+    async fn sync<B: Discovery>(&self, backend: &B, force: bool) -> Result<(), BoxError> {
+        self.sync_with(force, || async {
+            let Some(remote) = backend.instances().await?.into_iter().next() else {
+                return Err("spacegate instance not found".into());
+            };
+            info!(instance = remote.id(), api_url = remote.api_url(), "refresh plugin attributes");
+            InstanceApi::new(&remote).plugin_list().await
+        })
+        .await
+    }
+
+    /// Commits fetched attributes and the next refresh time only after a successful fetch.
+    async fn sync_with<F, Fut>(&self, force: bool, fetch: F) -> Result<(), BoxError>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<Vec<PluginAttributes>, BoxError>>,
+    {
+        let mut next_sync = self.next_sync.lock().await;
+        if !force && Instant::now() < *next_sync {
+            return Ok(());
+        }
+
+        let attrs = fetch().await?;
+        let attrs = attrs.into_iter().map(|attr| (attr.code.to_string(), attr)).collect();
+        *self.attrs.write().await = attrs;
+        *next_sync = Instant::now() + ATTR_SYNC_INTERVAL;
+        Ok(())
+    }
+
+    /// Returns a snapshot of all cached plugin attributes.
+    async fn values(&self) -> Vec<PluginAttributes> {
+        self.attrs.read().await.values().cloned().collect()
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct WasmImageSchemaRequest {
@@ -32,22 +89,7 @@ struct WasmImageSchemaRequest {
 }
 
 async fn sync_attr_cache<B: Discovery>(backend: &B, refresh: bool) -> Result<(), BoxError> {
-    static NEXT_SYNC: OnceLock<RwLock<Instant>> = OnceLock::new();
-    const SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
-    let next_sync = NEXT_SYNC.get_or_init(|| RwLock::new(Instant::now())).read().await;
-    if next_sync.elapsed() != Duration::ZERO || refresh {
-        drop(next_sync);
-        let mut cache = ATTR_CACHE.get_or_init(Default::default).write().await;
-        if let Some(remote) = backend.instances().await?.into_iter().next() {
-            info!("refresh plugin attr from: {}", remote.id());
-            let attrs = InstanceApi::new(&remote).plugin_list().await?;
-            cache.clear();
-            cache.extend(attrs.into_iter().map(|attr| (attr.code.to_string(), attr)));
-        };
-        let mut next_sync = NEXT_SYNC.get_or_init(|| RwLock::new(Instant::now())).write().await;
-        *next_sync = Instant::now() + SYNC_INTERVAL;
-    }
-    Ok(())
+    ATTR_CACHE.get_or_init(PluginAttrCache::new).sync(backend, refresh).await
 }
 
 async fn get_schema_by_code<B: Discovery>(Path(plugin_code): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Option<Value>>, InternalError> {
@@ -125,15 +167,19 @@ fn parse_schema_bytes(bytes: &[u8]) -> Result<Value, std::io::Error> {
 }
 async fn get_list<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<String>>, InternalError> {
     sync_attr_cache(backend.as_ref(), false).await.map_err(InternalError)?;
-    Ok(Json(ATTR_CACHE.get_or_init(Default::default).read().await.keys().cloned().collect()))
+    Ok(Json(ATTR_CACHE.get_or_init(PluginAttrCache::new).attrs.read().await.keys().cloned().collect()))
 }
 async fn get_attr_all<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<PluginAttributes>>, InternalError> {
     sync_attr_cache(backend.as_ref(), false).await.map_err(InternalError)?;
-    Ok(Json(ATTR_CACHE.get_or_init(Default::default).read().await.values().cloned().collect()))
+    Ok(Json(ATTR_CACHE.get_or_init(PluginAttrCache::new).values().await))
 }
 async fn get_attr<B: Discovery>(Path(plugin_code): Path<String>, State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Option<PluginAttributes>>, InternalError> {
     sync_attr_cache(backend.as_ref(), false).await.map_err(InternalError)?;
-    Ok(Json(ATTR_CACHE.get_or_init(Default::default).read().await.get(&plugin_code).cloned()))
+    Ok(Json(ATTR_CACHE.get_or_init(PluginAttrCache::new).attrs.read().await.get(&plugin_code).cloned()))
+}
+async fn refresh_attr_cache<B: Discovery>(State(AppState { backend, .. }): State<AppState<B>>) -> Result<Json<Vec<PluginAttributes>>, InternalError> {
+    sync_attr_cache(backend.as_ref(), true).await.map_err(InternalError)?;
+    Ok(Json(ATTR_CACHE.get_or_init(PluginAttrCache::new).values().await))
 }
 
 pub fn router<B>() -> axum::Router<state::AppState<B>>
@@ -147,11 +193,49 @@ where
         .route("/list", get(get_list::<B>))
         .route("/attr-all", get(get_attr_all::<B>))
         .route("/attr/{plugin_code}", get(get_attr::<B>))
+        .route("/refresh", post(refresh_attr_cache::<B>))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn plugin_attr(code: &'static str) -> PluginAttributes {
+        PluginAttributes {
+            meta: Default::default(),
+            mono: false,
+            code: code.into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_refresh_preserves_cached_attributes_and_retry_time() {
+        let cache = PluginAttrCache::new();
+        cache.attrs.write().await.insert("existing".to_string(), plugin_attr("existing"));
+        let retry_time = Instant::now() - Duration::from_secs(1);
+        *cache.next_sync.lock().await = retry_time;
+
+        let result = cache.sync_with(true, || async { Err::<Vec<PluginAttributes>, BoxError>("gateway unavailable".into()) }).await;
+
+        assert!(result.is_err());
+        assert_eq!(*cache.next_sync.lock().await, retry_time);
+        assert_eq!(cache.attrs.read().await.keys().cloned().collect::<Vec<_>>(), vec!["existing"]);
+    }
+
+    #[tokio::test]
+    async fn successful_refresh_replaces_cached_attributes_and_advances_retry_time() {
+        let cache = PluginAttrCache::new();
+        cache.attrs.write().await.insert("existing".to_string(), plugin_attr("existing"));
+        let refresh_started = Instant::now();
+
+        cache.sync_with(true, || async { Ok::<_, BoxError>(vec![plugin_attr("hai-auth"), plugin_attr("hai-asset")]) }).await.expect("refresh should succeed");
+
+        assert!(*cache.next_sync.lock().await > refresh_started);
+        let attrs = cache.attrs.read().await;
+        assert!(!attrs.contains_key("existing"));
+        assert!(attrs.contains_key("hai-auth"));
+        assert!(attrs.contains_key("hai-asset"));
+    }
 
     #[test]
     fn treats_absent_schema_file_as_empty_schema() {
@@ -177,6 +261,7 @@ mod tests {
     fn extracts_schema_request_from_saved_wasm_plugin_config() {
         let config = PluginConfig {
             id: PluginInstanceId::from_file_stem("wasm.hai-mix-process"),
+            display_name: None,
             spec: serde_json::json!({
                 "image_url": "oci+http://localhost:5001/hai-process-mix:dev",
                 "schema_path": "schema.json",

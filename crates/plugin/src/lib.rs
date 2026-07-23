@@ -101,6 +101,7 @@ pub trait Plugin: Any + Sized + Send + Sync {
     fn create_by_spec(spec: JsonValue, name: PluginInstanceName) -> Result<Self, BoxError> {
         Self::create(PluginConfig {
             id: PluginInstanceId { code: Self::CODE.into(), name },
+            display_name: None,
             spec,
         })
     }
@@ -172,6 +173,13 @@ impl PluginDefinitionObject {
     }
     /// Make a plugin trait object from [`Plugin`] Trait
     pub fn from_trait<P: Plugin>() -> Self {
+        let mut meta = P::meta();
+        #[cfg(feature = "schema")]
+        let schema = P::schema_opt();
+        #[cfg(feature = "schema")]
+        if meta.title.is_none() {
+            meta.title = schema.as_ref().and_then(|root| root.schema.metadata.as_ref()).and_then(|metadata| metadata.title.clone()).map(Cow::Owned);
+        }
         let constructor = move |config: PluginConfig| {
             let plugin = Arc::new(P::create(config)?);
             let function = move |req: Request<SgBody>, inner: Inner| {
@@ -195,9 +203,9 @@ impl PluginDefinitionObject {
         Self {
             code: P::CODE.into(),
             #[cfg(feature = "schema")]
-            schema: P::schema_opt(),
+            schema,
             mono: P::MONO,
-            meta: P::meta(),
+            meta,
             make_pf,
         }
     }
@@ -412,4 +420,67 @@ macro_rules! schema {
             }
         }
     };
+}
+
+#[cfg(all(test, feature = "schema"))]
+mod tests {
+    use super::*;
+
+    #[derive(schemars::JsonSchema)]
+    #[schemars(title = "Schema Derived Title")]
+    struct SchemaTitleConfig;
+
+    struct SchemaTitlePlugin;
+
+    impl Plugin for SchemaTitlePlugin {
+        const CODE: &'static str = "schema-title-test";
+
+        async fn call(&self, req: SgRequest, inner: Inner) -> Result<SgResponse, BoxError> {
+            Ok(inner.call(req).await)
+        }
+
+        fn create(_plugin_config: PluginConfig) -> Result<Self, BoxError> {
+            Ok(Self)
+        }
+
+        fn schema_opt() -> Option<schemars::schema::RootSchema> {
+            Some(schemars::schema_for!(SchemaTitleConfig))
+        }
+    }
+
+    struct ExplicitTitlePlugin;
+
+    impl Plugin for ExplicitTitlePlugin {
+        const CODE: &'static str = "explicit-title-test";
+
+        fn meta() -> PluginMetaData {
+            plugin_meta!(title: "Explicit Metadata Title")
+        }
+
+        async fn call(&self, req: SgRequest, inner: Inner) -> Result<SgResponse, BoxError> {
+            Ok(inner.call(req).await)
+        }
+
+        fn create(_plugin_config: PluginConfig) -> Result<Self, BoxError> {
+            Ok(Self)
+        }
+
+        fn schema_opt() -> Option<schemars::schema::RootSchema> {
+            Some(schemars::schema_for!(SchemaTitleConfig))
+        }
+    }
+
+    #[test]
+    fn plugin_title_prefers_explicit_metadata() {
+        let definition = PluginDefinitionObject::from_trait::<ExplicitTitlePlugin>();
+
+        assert_eq!(definition.meta.title.as_deref(), Some("Explicit Metadata Title"));
+    }
+
+    #[test]
+    fn plugin_title_falls_back_to_schema_root_title() {
+        let definition = PluginDefinitionObject::from_trait::<SchemaTitlePlugin>();
+
+        assert_eq!(definition.meta.title.as_deref(), Some("Schema Derived Title"));
+    }
 }

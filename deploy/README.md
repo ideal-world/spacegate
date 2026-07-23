@@ -4,9 +4,10 @@
 
 相关文档：
 
+- **生产 K8S 部署手册**：[`docs/k8s/production-deployment.md`](../docs/k8s/production-deployment.md)
 - 插件行为与请求头：[`plugins/wasm/ai-gateway-queue/README.md`](../plugins/wasm/ai-gateway-queue/README.md)
-- **管理界面配置指南**：[`docs/ai-gateway-queue-admin-ui-guide.md`](../docs/ai-gateway-queue-admin-ui-guide.md)
-- 测试用例规格：[`docs/ai-gateway-queue-test-spec.md`](../docs/ai-gateway-queue-test-spec.md)
+- **AI Gateway 当前配置入口**：[`docs/ai-gateway/README.md`](../docs/ai-gateway/README.md)
+- 测试用例规格：[`docs/ai-gateway/test-spec.md`](../docs/ai-gateway/test-spec.md)
 - K8s manifest 目录：[`deploy/k8s/ai-gateway/`](k8s/ai-gateway/)
 
 ---
@@ -130,7 +131,7 @@ cd spacegate/deploy/k8s/ai-gateway
 # 默认镜像名 ai-gateway/service:dev
 ```
 
-Dockerfile：[`deploy/k8s/ai-gateway/docker/Dockerfile.ai-gateway-service`](k8s/ai-gateway/docker/Dockerfile.ai-gateway-service)
+Dockerfile：[`resource/docker/ai-gateway-service/Dockerfile`](../resource/docker/ai-gateway-service/Dockerfile)
 
 导入本地集群（示例 k3d）：
 
@@ -253,11 +254,13 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/downloa
 
 kubectl apply -f resource/kube-manifests/namespace.yaml
 kubectl apply -f resource/kube-manifests/gatewayclass.yaml
+kubectl apply -f resource/kube-manifests/spacegate-httproute.yaml
+kubectl apply -f resource/kube-manifests/spacegate-mcproute.yaml
 kubectl apply -f resource/kube-manifests/spacegate-gateway.yaml
-kubectl apply -f resource/kube-manifests/higress-wasmplugin-crd.yaml   # 若使用 WasmPlugin
+kubectl apply -f resource/kube-manifests/higress-wasmplugin-crd.yaml
 ```
 
-SpaceGate DaemonSet 使用 `CONFIG=k8s:spacegate`，监听同 namespace 下的 Gateway / HTTPRoute / SgFilter / WasmPlugin。
+SpaceGate DaemonSet 使用 `CONFIG=k8s:spacegate`，监听同 namespace 下的 Gateway / HTTPRoute / HTTPSpaceroute / MCPRoute / SgFilter / WasmPlugin。以上 CRD 必须先于 DaemonSet 安装；缺失后 watcher 会退出，补装 CRD 后需执行 `kubectl rollout restart daemonset/spacegate -n spacegate`。
 
 ### 6.2 一键部署 AI Gateway 栈
 
@@ -499,6 +502,7 @@ spacegate/
 │   ├── README.md                      # 本文档
 │   └── k8s/ai-gateway/                # K8s manifest + apply.sh
 └── docs/
-    ├── ai-gateway-queue-test-spec.md  # 测试用例
-    └── ai-gateway-queue-design-gap-fixlist.md
+    ├── ai-gateway/                    # 当前 AI Gateway 文档
+    ├── k8s/                            # K8s 安装与部署手册
+    └── archive/                        # 阶段性评审与历史流程
 ```

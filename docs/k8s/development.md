@@ -25,7 +25,7 @@
     OR
 
     ```
-    kubectl apply -f ./docs/k8s/gateway-api-0.6.2-experimental-china.yaml
+    kubectl apply -f ./resource/kube-manifests/gateway-api-0.6.2-experimental-china.yaml
     ```
 
     * This file replaces the addresses of the two images to solve the problem of inaccessibility in mainland China
@@ -43,13 +43,13 @@
 1. Build image
 
     ```
-    cargo build --release -p spacegate
-    cd services/full/res
-    mv ../../../target/release/spacegate ./
-    docker build -t ecfront/spacegate:0.1.0-alpha.2 .
-    rm spacegate
-    k3d image import ecfront/spacegate:0.1.0-alpha.2 -c spacegate-test
+    cargo build --release -p spacegate --features build-k8s,wasm,dylib,static-openssl
+    cp target/release/spacegate resource/docker/spacegate/spacegate
+    docker build -t spacegate:dev resource/docker/spacegate
+    k3d image import spacegate:dev -c spacegate-test
     ```
+
+    Native `.so` plugins built into the image should live under `/lib/spacegate/plugins`. Plugins mounted by Kubernetes should use `/var/lib/spacegate/plugins` so they do not shadow image-bundled plugins.
 
 ## Process spacegate resources
 
@@ -73,8 +73,13 @@
     ```
     cd ../../../
     kubectl apply -f ./resource/kube-manifests/namespace.yaml
+    kubectl apply -f ./resource/kube-manifests/spacegate-httproute.yaml
+    kubectl apply -f ./resource/kube-manifests/spacegate-mcproute.yaml
+    kubectl apply -f ./resource/kube-manifests/higress-wasmplugin-crd.yaml
     kubectl apply -f ./resource/kube-manifests/gatewayclass.yaml
     kubectl apply -f ./resource/kube-manifests/spacegate-gateway.yaml
+    kubectl set image daemonset/spacegate spacegate=spacegate:dev -n spacegate
+    kubectl rollout status daemonset/spacegate -n spacegate
     ```
 
 1. Confirm the spacegate resources is running in `spacegate` namespace:

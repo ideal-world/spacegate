@@ -887,6 +887,7 @@ impl ServiceError {
 
 impl IntoResponse for ServiceError {
     fn into_response(self) -> Response {
+        tracing::warn!(status = self.status.as_u16(), error = %self.message, "business request failed");
         let body = Json(serde_json::json!({ "error": self.message }));
         (self.status, body).into_response()
     }

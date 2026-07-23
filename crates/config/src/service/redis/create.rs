@@ -1,7 +1,7 @@
 use redis::AsyncCommands;
 use spacegate_model::PluginConfig;
 
-use super::{Redis, RedisConfEvent, CONF_EVENT_CHANNEL, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY};
+use super::{encode_plugin_config_value, Redis, RedisConfEvent, CONF_EVENT_CHANNEL, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY, CONF_PLUGIN_KEY};
 use crate::service::Create;
 use crate::{service::config_format::ConfigFormat, BoxResult};
 
@@ -32,11 +32,12 @@ where
         Ok(())
     }
 
-    async fn create_plugin(&self, id: &crate::model::PluginInstanceId, value: serde_json::Value) -> BoxResult<()> {
+    async fn create_plugin(&self, config: PluginConfig) -> BoxResult<()> {
+        let id = config.id.clone();
         let key = id.to_string();
-        let config = serde_json::to_string_pretty(&PluginConfig::new(id.clone(), value))?;
-        let _: () = self.get_con().await?.hset("sg:plugin", key, config).await?;
-        let event = RedisConfEvent(crate::service::ConfigType::Plugin { id: id.clone() }, crate::service::ConfigEventType::Create);
+        let value = self.format.ser(&encode_plugin_config_value(config))?;
+        let _: () = self.get_con().await?.hset(CONF_PLUGIN_KEY, key, value).await?;
+        let event = RedisConfEvent(crate::service::ConfigType::Plugin { id }, crate::service::ConfigEventType::Create);
         let _: () = self.get_con().await?.publish(CONF_EVENT_CHANNEL, event).await?;
         Ok(())
     }

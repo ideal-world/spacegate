@@ -4,6 +4,9 @@ use crate::{
     BoxResult,
 };
 use redis::AsyncCommands as _;
+use spacegate_model::PluginConfig;
+
+use super::encode_plugin_config_value;
 
 impl<F> Update for Redis<F>
 where
@@ -32,9 +35,11 @@ where
         Ok(())
     }
 
-    async fn update_plugin(&self, id: &crate::model::PluginInstanceId, value: serde_json::Value) -> BoxResult<()> {
-        let _: () = self.get_con().await?.hset(CONF_PLUGIN_KEY, id.to_string(), value.to_string()).await?;
-        let event = RedisConfEvent(crate::service::ConfigType::Plugin { id: id.clone() }, crate::service::ConfigEventType::Update);
+    async fn update_plugin(&self, config: PluginConfig) -> BoxResult<()> {
+        let id = config.id.clone();
+        let value = self.format.ser(&encode_plugin_config_value(config))?;
+        let _: () = self.get_con().await?.hset(CONF_PLUGIN_KEY, id.to_string(), value).await?;
+        let event = RedisConfEvent(crate::service::ConfigType::Plugin { id }, crate::service::ConfigEventType::Update);
         let _: () = self.get_con().await?.publish(CONF_EVENT_CHANNEL, event).await?;
         Ok(())
     }

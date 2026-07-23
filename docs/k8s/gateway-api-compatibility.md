@@ -7,6 +7,7 @@
 | GatewayClass                        | Support             | Not supported          | Not supported                         | v1beta1     |
 | [Gateway](#gateway)                 | Partially Supported | Not supported          | Not supported                         | v1beta1     |
 | [HTTPRoute](#httproute)             | Partially Supported | Partially Supported    | Partially Supported                   | v1beta1     |
+| [MCPRoute](#mcproute)               | N/A                 | N/A                    | Supported                             | spacegate.idealworld.group/v1 |
 | [ReferenceGrant](#referencegrant)   | Not Support         | Not Support            | Not supported                         | v1beta1     |
 | [Custom policies](#custom-policies) | Not supported       | N/A                    | Not supported                         | N/A         |
 | [TLSRoute](#tlsroute)               | Not supported       | Not supported          | Not supported                         | N/A         |
@@ -140,13 +141,32 @@ Fields:
         - enable (option)
         - config - json Value
     - targetRefs:
-        - kind - `Gateway` `HTTPRoute`
+        - kind - `Gateway` `HTTPRoute` `HTTPSpaceroute` `MCPRoute`
         - namespace (option)
         - name
+
+### MCPRoute
+
+`MCPRoute` is a Spacegate-specific namespaced resource for proxying existing MCP servers over Streamable HTTP or legacy SSE.
+
+Supported fields:
+
+- `spec.parentRefs` - attaches the route to a Spacegate `Gateway`.
+- `spec.hostnames` - optional hostname matching.
+- `spec.transport` - `streamable_http` or `legacy_sse`.
+- `spec.path` - Streamable HTTP path.
+- `spec.legacy_sse` - explicit SSE and message paths for legacy transport.
+- `spec.backend_refs` - MCP upstream backends.
+- `spec.timeout_mode` - `disabled` by default for long-running streams, or `request`.
+- `spec.session_affinity` - `mcp_session` or `none`.
+
+Install `resource/kube-manifests/spacegate-mcproute.yaml` before starting the Spacegate controller. See [MCPRoute proxy guide](../mcp/mcp-route-guide.md) for examples and streaming constraints.
 
 ### Higress-compatible WasmPlugin
 
 Spacegate can read Higress-style `extensions.higress.io/v1alpha1` `WasmPlugin` resources and translate them into the internal `code = "wasm"` plugin runtime configuration.
+
+The gateway image must be compiled with the `wasm` feature, and `resource/kube-manifests/higress-wasmplugin-crd.yaml` must be installed before the controller starts.
 
 Supported fields:
 

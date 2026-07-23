@@ -1,0 +1,86 @@
+# Queue, rate-limit, worker, and callback service. Redis is supplied externally.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway-queue
+  labels:
+    app.kubernetes.io/name: ai-gateway-queue
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-gateway-queue
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-gateway-queue
+        app.kubernetes.io/part-of: ai-gateway
+    spec:
+      containers:
+        - name: ai-gateway-service
+          # Set the immutable registry and tag before applying; see README.md.
+          image: ai-gateway-service:REPLACE_ME
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 18080
+              name: http
+          env:
+            # Redis credentials must not be committed to this repository.
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-queue-redis
+                  key: REDIS_URL
+            # The worker is enabled only when this real model upstream is configured.
+            - name: AI_UPSTREAM_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-gateway-queue-runtime
+                  key: AI_UPSTREAM_BASE_URL
+            - name: AI_ADMIN_CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-gateway-queue-runtime
+                  key: AI_ADMIN_CORS_ORIGINS
+            - name: AI_REQUIRE_HTTPS_CALLBACK
+              value: "true"
+            - name: AI_GATEWAY_SERVICE_HOST
+              value: 0.0.0.0
+            - name: AI_GATEWAY_SERVICE_PORT
+              value: "18080"
+            - name: RUST_LOG
+              value: info
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway-queue
+  labels:
+    app.kubernetes.io/name: ai-gateway-queue
+spec:
+  selector:
+    app.kubernetes.io/name: ai-gateway-queue
+  ports:
+    - name: http
+      port: 18080
+      targetPort: http

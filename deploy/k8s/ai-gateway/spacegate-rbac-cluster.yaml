@@ -8,7 +8,7 @@ rules:
     resources: ["gateways", "httproutes", "gateways/status", "httproutes/status"]
     verbs: ["get", "list", "watch", "update"]
   - apiGroups: ["spacegate.idealworld.group"]
-    resources: ["sgfilters", "httpspaceroutes"]
+    resources: ["sgfilters", "httpspaceroutes", "mcproutes"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["extensions.higress.io"]
     resources: ["wasmplugins"]

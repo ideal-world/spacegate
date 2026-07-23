@@ -3,6 +3,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn request_log_path_excludes_query_parameters() {
+        let uri: Uri = "/v1/admin/tenant-rate-limits?tenant=secret-tenant".parse().expect("valid URI");
+
+        assert_eq!(request_log_path(&uri), "/v1/admin/tenant-rate-limits");
+    }
+
+    #[test]
     fn extracts_upload_id_from_multipart_xml() {
         let xml = "<InitiateMultipartUploadResult><UploadId>a+b/c=</UploadId></InitiateMultipartUploadResult>";
         assert_eq!(extract_xml_tag(xml, "UploadId").as_deref(), Some("a+b/c="));

@@ -2,7 +2,7 @@ use k8s_gateway_api::{CommonRouteSpec, Hostname, RouteStatus};
 
 use crate::{constants::DEFAULT_NAMESPACE, McpSessionAffinity, McpTimeoutMode, SgMcpLegacySse, SgMcpTransport, TimeoutMode};
 
-use super::http_spaceroute::HttpBackendRef;
+use super::http_spaceroute::{BackendRef, HttpBackendRef};
 
 #[derive(Clone, Debug, kube::CustomResource, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[kube(
@@ -23,11 +23,46 @@ pub struct McpRouteSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub legacy_sse: Option<SgMcpLegacySse>,
     #[serde(default)]
+    #[schemars(schema_with = "mcp_backend_refs_schema")]
     pub backend_refs: Vec<HttpBackendRef>,
     #[serde(default = "default_mcp_timeout_mode")]
     pub timeout_mode: McpTimeoutMode,
     #[serde(default)]
     pub session_affinity: McpSessionAffinity,
+}
+
+#[allow(dead_code)]
+#[derive(schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct McpBackendRefSchema {
+    /// Backend target fields used by MCPRoute.
+    #[serde(flatten)]
+    backend_ref: Option<BackendRef>,
+    /// HTTPRoute-compatible backend filters are validated by the runtime model.
+    filters: Option<Vec<McpBackendFilterSchema>>,
+}
+
+/// Represents an arbitrary HTTPRoute filter while preserving its nested fields in Kubernetes.
+struct McpBackendFilterSchema;
+
+impl schemars::JsonSchema for McpBackendFilterSchema {
+    fn schema_name() -> String {
+        "McpBackendFilter".to_string()
+    }
+
+    fn json_schema(_generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::SingleOrVec::Single(Box::new(schemars::schema::InstanceType::Object))),
+            ..Default::default()
+        };
+        schema.extensions.insert("x-kubernetes-preserve-unknown-fields".to_string(), serde_json::Value::Bool(true));
+        schemars::schema::Schema::Object(schema)
+    }
+}
+
+/// Builds a structural CRD schema without expanding HttpRouteFilter's complex enums.
+fn mcp_backend_refs_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    <Vec<McpBackendRefSchema> as schemars::JsonSchema>::json_schema(generator)
 }
 
 fn default_mcp_timeout_mode() -> TimeoutMode {

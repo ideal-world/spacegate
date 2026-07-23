@@ -5,12 +5,12 @@ use crate::constants::DEFAULT_NAMESPACE;
 pub use super::route_match::*;
 use serde::{Deserialize, Serialize};
 
-use super::{gateway::SgBackendProtocol, PluginInstanceId};
+use super::{gateway::SgBackendProtocol, PluginBinding};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(untagged)]
-pub enum SgRoute<P = PluginInstanceId> {
+pub enum SgRoute<P = PluginBinding> {
     Mcp(SgMcpRoute<P>),
     Http(SgHttpRoute<P>),
 }
@@ -122,7 +122,7 @@ pub struct SgMcpLegacySse {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(bound(deserialize = "P: Deserialize<'de>"))]
-pub struct SgMcpRoute<P = PluginInstanceId> {
+pub struct SgMcpRoute<P = PluginBinding> {
     #[serde(default = "default_mcp_route_kind")]
     pub kind: SgRouteKind,
     pub route_name: String,
@@ -169,7 +169,7 @@ impl<P> SgMcpRoute<P> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
-pub struct SgHttpRoute<P = PluginInstanceId> {
+pub struct SgHttpRoute<P = PluginBinding> {
     /// Route name
     pub route_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -216,7 +216,7 @@ impl<P> Default for SgHttpRoute<P> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
-pub struct SgHttpRouteRule<P = PluginInstanceId> {
+pub struct SgHttpRouteRule<P = PluginBinding> {
     #[serde(skip_serializing_if = "Option::is_none")]
     /// Matches define conditions used for matching the rule against incoming HTTP requests. Each match is independent, i.e. this rule will be matched if any one of the matches is satisfied.
     pub matches: Option<Vec<SgHttpRouteMatch>>,
@@ -268,7 +268,7 @@ impl<P> Default for SgHttpRouteRule<P> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
-pub struct SgBackendRef<P = PluginInstanceId> {
+pub struct SgBackendRef<P = PluginBinding> {
     // #[serde(flatten)]
     pub host: BackendHost,
     #[serde(skip_serializing_if = "Option::is_none")]

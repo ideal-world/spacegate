@@ -24,7 +24,7 @@ pub type BoxResult<T> = Result<T, BoxError>;
 #[derive(Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
-pub struct ConfigItem<P = PluginInstanceId> {
+pub struct ConfigItem<P = PluginBinding> {
     pub gateway: SgGateway<P>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub routes: BTreeMap<String, SgRoute<P>>,
@@ -61,7 +61,7 @@ impl<P: Debug> std::fmt::Debug for ConfigItem<P> {
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct Config {
-    pub gateways: BTreeMap<String, ConfigItem<PluginInstanceId>>,
+    pub gateways: BTreeMap<String, ConfigItem<PluginBinding>>,
     #[cfg_attr(feature = "typegen", ts(as = "crate::plugin::PluginInstanceMapTs"))]
     pub plugins: PluginInstanceMap,
     pub api_port: Option<u16>,

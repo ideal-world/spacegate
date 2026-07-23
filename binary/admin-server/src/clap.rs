@@ -41,6 +41,12 @@ pub struct Args {
     pub key: Option<Base64Decoded>,
     #[arg(short, long, env)]
     pub sk: Option<String>,
+    /// GatewayClass managed by the Kubernetes config backend.
+    #[arg(long, env, default_value = spacegate_config::constants::DEFAULT_GATEWAY_CLASS_NAME)]
+    pub gateway_class_name: String,
+    /// Spacegate DaemonSet used for discovery in `<name>[.<namespace>]` format.
+    #[arg(long, env)]
+    pub gateway_instance: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub struct Base64Decoded(pub Vec<u8>);
@@ -147,5 +153,29 @@ impl fmt::Display for ConfigFormat {
             ConfigFormat::Toml => write!(f, "toml"),
             ConfigFormat::Json => write!(f, "json"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn accepts_gateway_class_and_instance_arguments() {
+        let args = Args::try_parse_from([
+            "admin-server",
+            "--config",
+            "k8s:ai-hai",
+            "--gateway-class-name",
+            "ai-spacegate",
+            "--gateway-instance",
+            "ai-spacegate.ai-hai",
+        ])
+        .expect("gateway selection arguments should parse");
+
+        assert_eq!(args.gateway_class_name, "ai-spacegate");
+        assert_eq!(args.gateway_instance.as_deref(), Some("ai-spacegate.ai-hai"));
     }
 }

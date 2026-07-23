@@ -42,7 +42,7 @@ This official manage tool will provide you a web interface to edit gateway's con
 ```shell
 sh resource/install/install-admin.sh
 ```
-![manage tool](docs/readme/manage-tool.png)
+![manage tool](docs/assets/manage-tool.png)
 #### Configure your gateway
 Visit localhost:9991 if you installed spacegate-admin manage tool.
 ```shell
@@ -224,4 +224,3 @@ This project is based on the ``Rust`` language and uses ``hyper`` as the base ne
 | **linux**   | **x86_64**,**aarch64** | **gnu,musl**  | If you need static linking please use `musl` |
 <!-- | **macos**   | **x86_64**,**aarch64** | **Libsystem** |                                              |
 | **windows** | **x86_64**             | **msvc**      |                                              | -->
-

@@ -5,22 +5,52 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, ObservabilityConfig, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgRoute};
+use spacegate_model::{constants::DEFAULT_API_PORT, ConfigItem, ObservabilityConfig, PluginBinding, PluginInstanceId, PluginInstanceMap, PluginInstanceName, SgGateway, SgRoute};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum FsAsmPluginConfig {
-    Anon { uid: String, code: String, spec: Value },
-    Named { name: String, code: String },
-    Mono { code: String },
+    Anon {
+        uid: String,
+        code: String,
+        spec: Value,
+        #[serde(default)]
+        priority: i32,
+    },
+    Named {
+        name: String,
+        code: String,
+        #[serde(default)]
+        priority: i32,
+    },
+    Mono {
+        code: String,
+        #[serde(default)]
+        priority: i32,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub(crate) enum FsAsmPluginConfigMaybeUninitialized {
-    Anon { uid: Option<String>, code: String, spec: Value },
-    Named { name: String, code: String },
-    Mono { code: String },
+    Anon {
+        uid: Option<String>,
+        code: String,
+        spec: Value,
+        #[serde(default)]
+        priority: i32,
+    },
+    Named {
+        name: String,
+        code: String,
+        #[serde(default)]
+        priority: i32,
+    },
+    Mono {
+        code: String,
+        #[serde(default)]
+        priority: i32,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -123,7 +153,7 @@ impl MainFileConfig<FsAsmPluginConfigMaybeUninitialized> {
     pub fn initialize_uid(self) -> MainFileConfig<FsAsmPluginConfig> {
         let mut hasher = DefaultHasher::new();
         let mut set_uid = move |p: FsAsmPluginConfigMaybeUninitialized| match p {
-            FsAsmPluginConfigMaybeUninitialized::Anon { uid, code, spec } => {
+            FsAsmPluginConfigMaybeUninitialized::Anon { uid, code, spec, priority } => {
                 let uid = if let Some(uid) = uid {
                     hasher.write(uid.as_bytes());
                     uid
@@ -132,10 +162,10 @@ impl MainFileConfig<FsAsmPluginConfigMaybeUninitialized> {
                     hasher.write(spec.to_string().as_bytes());
                     format!("{:016x}", hasher.finish())
                 };
-                FsAsmPluginConfig::Anon { uid, code, spec }
+                FsAsmPluginConfig::Anon { uid, code, spec, priority }
             }
-            FsAsmPluginConfigMaybeUninitialized::Named { name, code } => FsAsmPluginConfig::Named { name, code },
-            FsAsmPluginConfigMaybeUninitialized::Mono { code } => FsAsmPluginConfig::Mono { code },
+            FsAsmPluginConfigMaybeUninitialized::Named { name, code, priority } => FsAsmPluginConfig::Named { name, code, priority },
+            FsAsmPluginConfigMaybeUninitialized::Mono { code, priority } => FsAsmPluginConfig::Mono { code, priority },
         };
         let gateways = self.gateways.into_iter().map(|item| item.map_plugins(&mut set_uid)).collect();
         MainFileConfig {
@@ -165,22 +195,16 @@ impl MainFileConfig<FsAsmPluginConfig> {
             plugins.insert(id.clone(), mono.spec);
         }
         let mut collect_plugin = |p: FsAsmPluginConfig| match p {
-            FsAsmPluginConfig::Anon { uid, code, spec } => {
+            FsAsmPluginConfig::Anon { uid, code, spec, priority } => {
                 let id = PluginInstanceId {
                     code: code.into(),
                     name: spacegate_model::PluginInstanceName::Anon { uid },
                 };
                 plugins.insert(id.clone(), spec);
-                id
+                PluginBinding::from(id).with_priority(priority)
             }
-            FsAsmPluginConfig::Named { name, code } => PluginInstanceId {
-                code: code.into(),
-                name: spacegate_model::PluginInstanceName::Named { name },
-            },
-            FsAsmPluginConfig::Mono { code } => PluginInstanceId {
-                code: code.into(),
-                name: spacegate_model::PluginInstanceName::Mono {},
-            },
+            FsAsmPluginConfig::Named { name, code, priority } => PluginBinding::new(code, PluginInstanceName::Named { name }, priority),
+            FsAsmPluginConfig::Mono { code, priority } => PluginBinding::new(code, PluginInstanceName::Mono {}, priority),
         };
         let gateways = self
             .gateways
@@ -212,20 +236,33 @@ impl From<spacegate_model::Config> for MainFileConfig<FsAsmPluginConfig> {
                 PluginInstanceName::Mono {} => plugins.mono.push(FsMonoPluginConfig { code: id.code.into(), spec }),
             }
         }
-        let mut map = |id: PluginInstanceId| match id.name {
+        let mut map = |binding: PluginBinding| match binding.id.name {
             PluginInstanceName::Anon { uid } => {
                 if let Some(spec) = anon_plugins.remove(&uid) {
-                    FsAsmPluginConfig::Anon { uid, code: id.code.into(), spec }
+                    FsAsmPluginConfig::Anon {
+                        uid,
+                        code: binding.id.code.into(),
+                        spec,
+                        priority: binding.priority,
+                    }
                 } else {
                     FsAsmPluginConfig::Anon {
                         uid,
-                        code: id.code.into(),
+                        code: binding.id.code.into(),
                         spec: Default::default(),
+                        priority: binding.priority,
                     }
                 }
             }
-            PluginInstanceName::Named { name } => FsAsmPluginConfig::Named { name, code: id.code.into() },
-            PluginInstanceName::Mono {} => FsAsmPluginConfig::Mono { code: id.code.into() },
+            PluginInstanceName::Named { name } => FsAsmPluginConfig::Named {
+                name,
+                code: binding.id.code.into(),
+                priority: binding.priority,
+            },
+            PluginInstanceName::Mono {} => FsAsmPluginConfig::Mono {
+                code: binding.id.code.into(),
+                priority: binding.priority,
+            },
         };
         let gateways = value.gateways.into_values().map(|item| <MainFileConfigItem<FsAsmPluginConfig>>::from(item.map_plugins(&mut map))).collect();
         MainFileConfig {
@@ -234,5 +271,37 @@ impl From<spacegate_model::Config> for MainFileConfig<FsAsmPluginConfig> {
             api_port: value.api_port.unwrap_or(DEFAULT_API_PORT),
             observability: value.observability,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::MainFileConfig;
+
+    #[test]
+    fn preserves_plugin_binding_priority_through_file_config_round_trip() {
+        let config: MainFileConfig = serde_json::from_value(json!({
+            "gateways": [{
+                "name": "test-gateway",
+                "plugins": [
+                    { "code": "native", "kind": "named", "name": "legacy" },
+                    { "code": "native", "kind": "named", "name": "negative", "priority": -20 },
+                    { "code": "wasm", "kind": "named", "name": "first", "priority": 100 },
+                    { "code": "wasm", "kind": "named", "name": "second", "priority": 100 }
+                ]
+            }]
+        }))
+        .expect("file config should deserialize");
+
+        let output = MainFileConfig::from(config.into_model_config());
+        let value = serde_json::to_value(output).expect("file config should serialize");
+
+        let plugins = value["gateways"][0]["plugins"].as_array().unwrap();
+        assert_eq!(plugins[0]["priority"], 0);
+        assert_eq!(plugins[1]["priority"], -20);
+        assert_eq!(plugins[2]["priority"], 100);
+        assert_eq!(plugins[3]["priority"], 100);
     }
 }

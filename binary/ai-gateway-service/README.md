@@ -194,7 +194,7 @@ cargo test -p ai-gateway-service store_body_
 
 ## 测试规格与集成测试
 
-完整用例规格见 [`spacegate/docs/ai-gateway-queue-test-spec.md`](../../docs/ai-gateway-queue-test-spec.md)（TC-* 编号，映射设计文档章节）。
+完整用例规格见 [`spacegate/docs/ai-gateway/test-spec.md`](../../docs/ai-gateway/test-spec.md)（TC-* 编号，映射设计文档章节）。
 
 ```bash
 # 单元测试（无需 Redis）
