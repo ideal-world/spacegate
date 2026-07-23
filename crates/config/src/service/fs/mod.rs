@@ -7,10 +7,10 @@ use std::{
     time::SystemTime,
 };
 pub mod model;
-use spacegate_model::{BoxError, BoxResult, Config, ConfigItem, PluginInstanceId};
+use spacegate_model::{BoxError, BoxResult, Config, ConfigItem, PluginConfig, PluginInstanceId};
 use tokio::sync::{Mutex, RwLock};
 
-use crate::service::config_format::ConfigFormat;
+use crate::service::{config_format::ConfigFormat, decode_stored_plugin_config, encode_stored_plugin_config};
 
 pub const GATEWAY_DIR: &str = "gateway";
 pub const ROUTE_DIR: &str = "route";
@@ -59,21 +59,9 @@ where
             main_config
         };
         // collect plugin
-        let ext = self.format.extension();
-        if let Ok(mut plugin_dir) = tokio::fs::read_dir(self.plugin_dir()).await.inspect_err(|e| tracing::debug!("fail to read plugin dir {e}")) {
-            while let Some(entry) = plugin_dir.next_entry().await? {
-                let path = entry.path();
-                if !path.is_file() || path.extension() != Some(ext) {
-                    continue;
-                };
-                let Some(file_stem) = path.file_stem().and_then(OsStr::to_str) else {
-                    continue;
-                };
-                let plugin_id = PluginInstanceId::from_file_stem(file_stem);
-                let spec: serde_json::Value = self.format.de(&tokio::fs::read(path).await?)?;
-                config.plugins.insert(plugin_id, spec);
-            }
-        };
+        for plugin in self.collect_plugin_configs().await? {
+            config.plugins.insert(plugin.id, plugin.spec);
+        }
         // collect gateway
         {
             let dir_path = self.gateway_dir();
@@ -145,6 +133,55 @@ where
         Ok(())
     }
 
+    /// 读取单个插件文件，同时兼容旧版裸 spec 文件。
+    pub async fn read_plugin_config(&self, id: &PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {
+        let path = self.plugin_path(id);
+        match tokio::fs::read(path).await {
+            Ok(bytes) => {
+                let value = self.format.de::<serde_json::Value>(&bytes)?;
+                Ok(Some(decode_stored_plugin_config(id, value, false)?))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// 收集插件管理配置，保留展示名称等不进入运行时 spec 的字段。
+    pub async fn collect_plugin_configs(&self) -> Result<Vec<PluginConfig>, BoxError> {
+        let ext = self.format.extension();
+        let mut plugins = Vec::new();
+        let Ok(mut plugin_dir) = tokio::fs::read_dir(self.plugin_dir()).await.inspect_err(|error| tracing::debug!("fail to read plugin dir {error}")) else {
+            return Ok(plugins);
+        };
+        while let Some(entry) = plugin_dir.next_entry().await? {
+            let path = entry.path();
+            if !path.is_file() || path.extension() != Some(ext) {
+                continue;
+            }
+            let Some(file_stem) = path.file_stem().and_then(OsStr::to_str) else {
+                continue;
+            };
+            let id = PluginInstanceId::from_file_stem(file_stem);
+            let value = self.format.de::<serde_json::Value>(&tokio::fs::read(path).await?)?;
+            plugins.push(decode_stored_plugin_config(&id, value, false)?);
+        }
+        Ok(plugins)
+    }
+
+    /// 写回插件管理配置，文件名始终由稳定实例 ID 决定。
+    async fn save_plugin_configs(&self, plugins: Vec<PluginConfig>) -> Result<(), BoxError> {
+        if plugins.is_empty() {
+            return Ok(());
+        }
+        tokio::fs::create_dir_all(self.plugin_dir()).await?;
+        for plugin in plugins {
+            let path = self.plugin_path(&plugin.id);
+            let bytes = self.format.ser(&encode_stored_plugin_config(plugin)?)?;
+            tokio::fs::write(path, bytes).await?;
+        }
+        Ok(())
+    }
+
     pub async fn collect_gateway_item_config(&self, gateway_name: &str) -> Result<Option<ConfigItem>, BoxError> {
         let dir_path = self.gateway_dir();
         let ext = self.format.extension();
@@ -189,10 +226,23 @@ where
     where
         M: FnOnce(&mut Config) -> BoxResult<()>,
     {
+        let display_names = self.collect_plugin_configs().await?.into_iter().map(|plugin| (plugin.id, plugin.display_name)).collect::<std::collections::HashMap<_, _>>();
         let mut config = self.collect_config().await?;
         map(&mut config)?;
+        let plugins = config
+            .plugins
+            .clone()
+            .into_inner()
+            .into_iter()
+            .map(|(id, spec)| PluginConfig {
+                display_name: display_names.get(&id).cloned().flatten(),
+                id,
+                spec,
+            })
+            .collect();
         self.clear_config_dir().await?;
         self.save_config(config).await?;
+        self.save_plugin_configs(plugins).await?;
         Ok(())
     }
 
@@ -284,7 +334,7 @@ mod tests {
     use super::Fs;
     use crate::service::{config_format::Json, Create, Delete, Retrieve};
     use serde_json::json;
-    use spacegate_model::{Config, PluginInstanceId, PluginInstanceName};
+    use spacegate_model::{Config, PluginConfig, PluginInstanceId, PluginInstanceName};
     use std::{
         fs,
         path::PathBuf,
@@ -313,7 +363,14 @@ mod tests {
             let fs_backend = Fs::new(&dir, Json::default());
             let id = named_wasm("third-party-authn");
 
-            fs_backend.create_plugin(&id, json!({ "plugin_name": "authn" })).await.unwrap();
+            fs_backend
+                .create_plugin(PluginConfig {
+                    id: id.clone(),
+                    display_name: None,
+                    spec: json!({ "plugin_name": "authn" }),
+                })
+                .await
+                .unwrap();
 
             assert!(dir.join("plugin/wasm.third-party-authn.json").exists());
             assert!(!dir.join("plugin/wasm.json").exists());
@@ -333,14 +390,100 @@ mod tests {
             let first = named_wasm("first");
             let second = named_wasm("second");
 
-            fs_backend.create_plugin(&first, json!({ "plugin_name": "first" })).await.unwrap();
-            fs_backend.create_plugin(&second, json!({ "plugin_name": "second" })).await.unwrap();
+            fs_backend
+                .create_plugin(PluginConfig {
+                    id: first.clone(),
+                    display_name: None,
+                    spec: json!({ "plugin_name": "first" }),
+                })
+                .await
+                .unwrap();
+            fs_backend
+                .create_plugin(PluginConfig {
+                    id: second.clone(),
+                    display_name: None,
+                    spec: json!({ "plugin_name": "second" }),
+                })
+                .await
+                .unwrap();
             fs_backend.delete_plugin(&first).await.unwrap();
 
             assert!(!dir.join("plugin/wasm.first.json").exists());
             assert!(dir.join("plugin/wasm.second.json").exists());
             assert!(dir.join("config.json").exists());
             assert!(fs_backend.retrieve_plugin(&second).await.unwrap().is_some());
+
+            fs::remove_dir_all(dir).unwrap();
+        });
+    }
+
+    #[test]
+    fn plugin_display_name_round_trips_without_changing_fs_path() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let dir = temp_config_dir("plugin-display-name");
+            let fs_backend = Fs::new(&dir, Json::default());
+            let id = named_wasm("third-party-authn");
+
+            fs_backend
+                .create_plugin(PluginConfig {
+                    id: id.clone(),
+                    display_name: Some("  生产鉴权  ".to_string()),
+                    spec: json!({ "plugin_name": "authn" }),
+                })
+                .await
+                .unwrap();
+
+            let path = dir.join("plugin/wasm.third-party-authn.json");
+            let stored: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            let got = fs_backend.retrieve_plugin(&id).await.unwrap().unwrap();
+
+            assert_eq!(stored["_spacegate_format"], "plugin_config_v1");
+            assert_eq!(got.display_name.as_deref(), Some("生产鉴权"));
+            assert_eq!(got.spec, json!({ "plugin_name": "authn" }));
+            assert_eq!(fs_backend.plugin_path(&id), path);
+
+            fs::remove_dir_all(dir).unwrap();
+        });
+    }
+
+    #[test]
+    fn plugin_display_name_reads_legacy_raw_spec() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let dir = temp_config_dir("legacy-plugin-spec");
+            let fs_backend = Fs::new(&dir, Json::default());
+            let id = named_wasm("legacy-authn");
+            fs::create_dir_all(dir.join("plugin")).unwrap();
+            fs::write(fs_backend.plugin_path(&id), serde_json::to_vec(&json!({ "plugin_name": "legacy" })).unwrap()).unwrap();
+
+            let got = fs_backend.retrieve_plugin(&id).await.unwrap().unwrap();
+
+            assert_eq!(got.display_name, None);
+            assert_eq!(got.spec, json!({ "plugin_name": "legacy" }));
+
+            fs::remove_dir_all(dir).unwrap();
+        });
+    }
+
+    #[test]
+    fn plugin_display_name_survives_fs_config_rewrite() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let dir = temp_config_dir("plugin-display-name-rewrite");
+            let fs_backend = Fs::new(&dir, Json::default());
+            let id = named_wasm("rewrite-authn");
+            fs_backend
+                .create_plugin(PluginConfig {
+                    id: id.clone(),
+                    display_name: Some("生产鉴权".to_string()),
+                    spec: json!({ "plugin_name": "authn" }),
+                })
+                .await
+                .unwrap();
+
+            fs_backend.modify_cached(|_| Ok(())).await.unwrap();
+
+            let got = fs_backend.retrieve_plugin(&id).await.unwrap().unwrap();
+            assert_eq!(got.display_name.as_deref(), Some("生产鉴权"));
+            assert_eq!(got.spec, json!({ "plugin_name": "authn" }));
 
             fs::remove_dir_all(dir).unwrap();
         });

@@ -1,0 +1,17 @@
+# Dedicated listener for AI traffic. Reuse an existing Gateway instead if one already owns port 9993.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: ai-gateway
+  labels:
+    app.kubernetes.io/name: ai-gateway
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  gatewayClassName: spacegate
+  listeners:
+    - name: http
+      port: 9993
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same

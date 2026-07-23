@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             create_app(backend, sec, digest)
         }
         clap::ConfigBackend::K8s(ns) => {
-            let backend = spacegate_config::service::k8s::K8s::with_default_client(ns).await?;
+            let backend = spacegate_config::service::k8s::K8s::with_default_client(ns).await?.with_gateway_selection(args.gateway_class_name, args.gateway_instance);
             create_app(backend, sec, digest)
         }
     };

@@ -3,4 +3,8 @@
 /**
  * Plugin meta information
  */
-export type PluginMetaData = { authors: string | null, description: string | null, version: string | null, homepage: string | null, repository: string | null, };
+export type PluginMetaData = {
+/**
+ * 插件类型的人类可读标题；实例名称仍由 `PluginConfig.display_name` 表示。
+ */
+title: string | null, authors: string | null, description: string | null, version: string | null, homepage: string | null, repository: string | null, };

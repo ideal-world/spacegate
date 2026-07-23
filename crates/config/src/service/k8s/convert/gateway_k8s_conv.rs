@@ -3,16 +3,16 @@ use std::{collections::BTreeMap, hash::Hasher};
 use k8s_gateway_api::{Gateway, GatewaySpec, GatewayTlsConfig, Listener, SecretObjectReference};
 use k8s_openapi::{api::core::v1::Secret, ByteString};
 use kube::{api::ObjectMeta, ResourceExt};
-use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, ObservabilityConfig, PluginInstanceId};
+use spacegate_model::{ext::k8s::helper_struct::SgTargetKind, ObservabilityConfig, PluginBinding};
 
-use crate::{constants, ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, service::k8s::K8s, SgGateway, SgParameters};
+use crate::{ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef, service::k8s::K8s, SgGateway, SgParameters};
 
 use super::ToTarget;
 pub(crate) trait SgGatewayConv {
-    fn to_kube_gateway(self, namespace: &str) -> (Gateway, Option<Secret>, Vec<PluginInstanceId>);
+    fn to_kube_gateway(self, namespace: &str, gateway_class_name: &str) -> (Gateway, Option<Secret>, Vec<PluginBinding>);
 }
 impl SgGatewayConv for SgGateway {
-    fn to_kube_gateway(self, namespace: &str) -> (Gateway, Option<Secret>, Vec<PluginInstanceId>) {
+    fn to_kube_gateway(self, namespace: &str, gateway_class_name: &str) -> (Gateway, Option<Secret>, Vec<PluginBinding>) {
         let mut secret = None;
 
         let gateway = Gateway {
@@ -26,7 +26,7 @@ impl SgGatewayConv for SgGateway {
                 ..Default::default()
             },
             spec: GatewaySpec {
-                gateway_class_name: constants::GATEWAY_CLASS_NAME.to_string(),
+                gateway_class_name: gateway_class_name.to_string(),
                 listeners: self
                     .listeners
                     .into_iter()
@@ -192,6 +192,37 @@ impl ToTarget for Gateway {
             kind: SgTargetKind::Gateway.into(),
             name: self.name_any(),
             namespace: self.namespace(),
+            priority: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SgGatewayConv;
+    use crate::{PluginBinding, PluginInstanceName, SgGateway};
+
+    #[test]
+    fn gateway_conversion_uses_configured_gateway_class() {
+        let gateway = SgGateway {
+            name: "ai-gateway".to_string(),
+            ..Default::default()
+        };
+
+        let (gateway, _, _) = gateway.to_kube_gateway("ai-hai", "ai-spacegate");
+
+        assert_eq!(gateway.spec.gateway_class_name, "ai-spacegate");
+    }
+
+    #[test]
+    fn gateway_conversion_preserves_plugin_binding_priority() {
+        let gateway = SgGateway {
+            plugins: vec![PluginBinding::new("wasm", PluginInstanceName::named("auth"), 100)],
+            ..Default::default()
+        };
+
+        let (_, _, bindings) = gateway.to_kube_gateway("default", "spacegate");
+
+        assert_eq!(bindings[0].priority, 100);
     }
 }

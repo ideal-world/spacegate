@@ -1,0 +1,7 @@
+# Use this overlay only when port 9993 is not owned by an existing SpaceGate Gateway.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../production
+  - gateway-ai.yaml

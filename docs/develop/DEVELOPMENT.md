@@ -691,4 +691,3 @@ Shell 层监听这些事件后，会对相应的 `RunningSgGateway` 进行增量
 - [tower-layer 文档](https://docs.rs/tower-layer)
 - [Cargo Make 文档](https://sagiegurari.github.io/cargo-make/)
 - [`docs/k8s/installation.md`](../k8s/installation.md) — Kubernetes 部署指南
-- [`docs/develop/make.md`](make.md) — Docker 镜像构建快速参考

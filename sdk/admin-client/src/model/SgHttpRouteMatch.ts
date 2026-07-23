@@ -4,22 +4,22 @@ import type { SgHttpMethodMatch } from "./SgHttpMethodMatch";
 import type { SgHttpPathMatch } from "./SgHttpPathMatch";
 import type { SgHttpQueryMatch } from "./SgHttpQueryMatch";
 
-export type SgHttpRouteMatch = { 
+export type SgHttpRouteMatch = {
 /**
  * Path specifies a HTTP request path matcher.
  * If this field is not specified, a default prefix match on the “/” path is provided.
  */
-path: SgHttpPathMatch | null, 
+path: SgHttpPathMatch | null,
 /**
  * Headers specifies HTTP request header matchers.
  * Multiple match values are ANDed together, meaning, a request must match all the specified headers to select the route.
  */
-header: Array<SgHttpHeaderMatch> | null, 
+header: Array<SgHttpHeaderMatch> | null,
 /**
  * Query specifies HTTP query parameter matchers.
  * Multiple match values are ANDed together, meaning, a request must match all the specified query parameters to select the route.
  */
-query: Array<SgHttpQueryMatch> | null, 
+query: Array<SgHttpQueryMatch> | null,
 /**
  * Method specifies HTTP method matcher.
  * When specified, this route will be matched only if the request has the specified method.

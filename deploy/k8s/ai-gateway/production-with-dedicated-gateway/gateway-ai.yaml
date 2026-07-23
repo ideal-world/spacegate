@@ -1,0 +1,18 @@
+# Creates the Gateway required by httproute-ai.yaml when no shared Gateway exists.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: ai-gateway
+  namespace: spacegate
+  labels:
+    app.kubernetes.io/name: ai-gateway
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  gatewayClassName: spacegate
+  listeners:
+    - name: http
+      port: 9993
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same

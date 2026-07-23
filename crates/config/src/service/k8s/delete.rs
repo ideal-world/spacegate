@@ -18,15 +18,15 @@ impl Delete for K8s {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
 
         if let Some(sg_gateway) = self.retrieve_config_item_gateway(gateway_name).await? {
-            let (gateway, secret, delete_plugin_ids) = sg_gateway.to_kube_gateway(&self.namespace);
+            let (gateway, secret, delete_plugin_ids) = sg_gateway.to_kube_gateway(&self.namespace, &self.gateway_class_name);
 
             if let Some(secret) = secret {
                 let secret_api: Api<Secret> = self.get_namespace_api();
                 secret_api.delete(&secret.name_any(), &DeleteParams::default()).await?;
             }
 
-            for delete_plugin_id in delete_plugin_ids {
-                delete_plugin_id.remove_filter_target(gateway.to_target_ref(), self).await?;
+            for binding in delete_plugin_ids {
+                binding.id.remove_filter_target(gateway.to_target_ref(), self).await?;
             }
 
             gateway_api.delete(gateway_name, &DeleteParams::default()).await?;
@@ -42,8 +42,8 @@ impl Delete for K8s {
         if let Some(sg_http_route) = self.retrieve_config_item_route(gateway_name, route_name).await? {
             let route = sg_http_route.to_kube_route(gateway_name, route_name, &self.namespace);
             let target_ref = route.to_target_ref();
-            for delete_plugin_id in route.plugin_ids() {
-                delete_plugin_id.remove_filter_target(target_ref.clone(), self).await?;
+            for binding in route.plugin_bindings() {
+                binding.id.remove_filter_target(target_ref.clone(), self).await?;
             }
             match route {
                 KubeRoute::Http(_, _) => match http_spaceroute_api.delete(route_name, &DeleteParams::default()).await {

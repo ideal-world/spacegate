@@ -1,0 +1,20 @@
+# Replace ai-model-upstream with the in-cluster Service that serves the real model API.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: ai-api
+  labels:
+    app.kubernetes.io/name: ai-api
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  parentRefs:
+    - name: ai-gateway
+      namespace: spacegate
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/
+      backendRefs:
+        - name: ai-model-upstream
+          port: 8080

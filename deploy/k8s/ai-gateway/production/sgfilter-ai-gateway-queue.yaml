@@ -1,0 +1,42 @@
+# Attaches the queue/rate-limit Wasm module once to the production AI route.
+apiVersion: spacegate.idealworld.group/v1
+kind: SgFilter
+metadata:
+  name: ai-gateway-queue
+  labels:
+    app.kubernetes.io/name: ai-gateway-queue
+    app.kubernetes.io/part-of: ai-gateway
+spec:
+  targetRefs:
+    - kind: httproute
+      name: ai-api
+      namespace: spacegate
+  filters:
+    - code: wasm
+      name: ai-gateway-queue
+      enable: true
+      config:
+        # System-managed Wasm bundled in the SpaceGate image; /plugins remains for external extensions.
+        url: file:///lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm
+        fail_strategy: fail_close
+        plugin_name: ai-gateway-queue
+        plugin_root_id: ai-gateway-queue-root
+        plugin_vm_id: ai-gateway-queue-vm
+        vm_pool_size: 4
+        wait_vm_pool_size: 4
+        limits:
+          max_memory_pages: 64
+          fuel_per_call: 20000000
+          epoch_timeout_millis: 50
+          max_body_bytes: 33554432
+          max_pending_calls: 1
+        plugin_config:
+          service_cluster: ai-gateway-queue
+          service_authority: ai-gateway-queue
+          rate_limit_path: /v1/ratelimit/check
+          enqueue_path: /v1/queue/enqueue
+          wait_path: /v1/queue/enqueue-and-wait
+          service_timeout_ms: 65000
+          require_policy: true
+        clusters:
+          ai-gateway-queue: http://ai-gateway-queue:18080

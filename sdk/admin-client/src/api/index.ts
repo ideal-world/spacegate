@@ -28,6 +28,16 @@ function pluginInstanceIdAsQuery(id: PluginInstanceId): URLSearchParams {
     return param
 }
 
+/** 构造插件创建和更新参数，空展示名称不发送给服务端。 */
+function pluginUpsertAsQuery(config: PluginConfig): URLSearchParams {
+    const param = pluginInstanceIdAsQuery(config)
+    const displayName = config.display_name?.trim()
+    if (displayName) {
+        param.set('display_name', displayName)
+    }
+    return param
+}
+
 export class ExceptionVersionConflict extends Error {
     constructor() {
         super('spacegate-admin-client: Client version conflict')
@@ -150,7 +160,7 @@ export async function postConfigItemRoute(
     return getClient().axiosInstance.post(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }
 export async function postConfigPlugin(config: PluginConfig): Promise<AxiosResponse> {
-    const param = pluginInstanceIdAsQuery(config);
+    const param = pluginUpsertAsQuery(config);
     return getClient().axiosInstance.post(`/config/plugin?${param}`, config.spec)
 }
 /**********************************************
@@ -186,7 +196,7 @@ export async function putConfig(config: Config): Promise<AxiosResponse> {
 }
 
 export async function putConfigPlugin(config: PluginConfig): Promise<AxiosResponse> {
-    const param = pluginInstanceIdAsQuery(config);
+    const param = pluginUpsertAsQuery(config);
     return getClient().axiosInstance.put(`/config/plugin?${param}`, config.spec)
 }
 /**********************************************

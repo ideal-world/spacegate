@@ -1,5 +1,5 @@
 {
-  "url": "/Users/sh.zhang/Workspace/[REDACTED]/jiyan/gateway/spacegate/resource/wasm/hai_process_mix.wasm",
+  "url": "/path/to/spacegate/resource/wasm/hai_process_mix.wasm",
   "validate_on_create": false,
   "fail_strategy": "fail_close",
   "plugin_config": {

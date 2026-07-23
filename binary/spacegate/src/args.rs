@@ -107,12 +107,30 @@ pub struct Args {
     #[cfg_attr(feature = "build-k8s", arg(default_value_t=Config::K8s(String::from("default"))))]
     #[cfg_attr(all(not(feature = "build-k8s"), target_family = "unix", feature="fs"), arg(default_value_t=Config::File(PathBuf::from("/etc/spacegate"))))]
     pub config: Config,
-    /// The dynamic lib plugins dir
+    /// Dynamic library plugin directories scanned during process startup.
     ///
     /// # Example
-    /// If you are using linux, you may put the plugins dll in `/lib/spacegate/plugins`.
-    /// `-p /lib/spacegate/plugins`
+    /// If you are using linux, you may put image-bundled plugins in `/lib/spacegate/plugins`
+    /// and mounted plugins in `/var/lib/spacegate/plugins`.
+    /// `-p /lib/spacegate/plugins,/var/lib/spacegate/plugins`
     #[arg(short, long, env)]
     #[cfg_attr(target_family = "unix", arg(default_value = "/lib/spacegate/plugins"))]
-    pub plugins: Option<PathBuf>,
+    pub plugins: Option<String>,
+    /// GatewayClass watched by the Kubernetes config backend.
+    #[arg(long, env, default_value = spacegate_shell::model::constants::DEFAULT_GATEWAY_CLASS_NAME)]
+    pub gateway_class_name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn accepts_runtime_gateway_class() {
+        let args = Args::try_parse_from(["spacegate", "--config", "static:/tmp/config.json", "--gateway-class-name", "ai-spacegate"]).expect("gateway class argument should parse");
+
+        assert_eq!(args.gateway_class_name, "ai-spacegate");
+    }
 }

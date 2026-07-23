@@ -43,6 +43,7 @@ impl Retrieve for Memory {
         Ok(self.config.plugins.get(id).map(|spec| spacegate_model::PluginConfig {
             spec: spec.clone(),
             id: id.clone(),
+            display_name: None,
         }))
     }
 
@@ -55,6 +56,7 @@ impl Retrieve for Memory {
                 (id.code == code).then_some(PluginConfig {
                     spec: spec.clone(),
                     id: id.clone(),
+                    display_name: None,
                 })
             })
             .collect())

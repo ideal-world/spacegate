@@ -44,6 +44,7 @@ impl HttpContext for SpecHttp {}
 // 直接 extern：spec 里这些 host fn SDK 没暴露，我们手动 import 用
 // ─────────────────────────────────────────────────────────
 
+#[link(wasm_import_module = "env")]
 extern "C" {
     fn proxy_grpc_call(
         a: *const u8, b: usize, c: *const u8, d: usize, e: *const u8, f: usize,

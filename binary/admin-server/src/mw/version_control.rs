@@ -60,7 +60,8 @@ fn requires_version_control(method: &Method, path: &str) -> bool {
     if method != Method::DELETE && method != Method::POST && method != Method::PUT {
         return false;
     }
-    !path.ends_with("/wasm/schema/preview")
+    let is_read_only_post = path.ends_with("/wasm/schema/preview") || path == "/refresh" || path.ends_with("/plugin/refresh");
+    !is_read_only_post
 }
 
 #[cfg(test)]
@@ -71,6 +72,12 @@ mod tests {
     fn wasm_schema_preview_post_is_read_only_and_skips_version_control() {
         assert!(!requires_version_control(&Method::POST, "/wasm/schema/preview"));
         assert!(!requires_version_control(&Method::POST, "/plugin/wasm/schema/preview"));
+    }
+
+    #[test]
+    fn plugin_cache_refresh_post_is_read_only_and_skips_version_control() {
+        assert!(!requires_version_control(&Method::POST, "/refresh"));
+        assert!(!requires_version_control(&Method::POST, "/plugin/refresh"));
     }
 
     #[test]

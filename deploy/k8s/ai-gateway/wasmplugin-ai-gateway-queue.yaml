@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/name: ai-gateway-queue
     app.kubernetes.io/part-of: ai-gateway
 spec:
-  url: http://ai-gateway-wasm/spacegate_plugin_ai_gateway_queue.wasm
+  url: file:///lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm
   pluginName: ai-gateway-queue
   failStrategy: FAIL_CLOSE
   phase: AUTHZ

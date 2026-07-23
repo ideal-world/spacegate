@@ -35,3 +35,4 @@ typeshare = "1.0.3"
 
 [dev-dependencies]
 toml = { workspace = true }
+serde_yaml = "0.9"

@@ -7,23 +7,31 @@ fn main() -> Result<(), BoxError> {
     if let Some(plugins) = args.plugins {
         #[cfg(feature = "dylib")]
         {
-            let dir = std::fs::read_dir(plugins)?;
-            for entry in dir {
-                let entry = entry?;
-                let path = entry.path();
-                let ext = path.extension();
-                let is_dylib = if cfg!(target_os = "windows") {
-                    ext == Some("dll".as_ref())
-                } else if cfg!(target_os = "macos") {
-                    ext == Some("dylib".as_ref())
-                } else {
-                    ext == Some("so".as_ref())
+            for plugins in plugin_dirs(&plugins) {
+                let dir = match std::fs::read_dir(plugins) {
+                    Ok(dir) => dir,
+                    Err(e) => {
+                        eprintln!("skip plugin dir {:?}: {:?}", plugins, e);
+                        continue;
+                    }
                 };
-                if path.is_file() && is_dylib {
-                    println!("loading plugin lib: {:?}", path);
-                    let res = unsafe { spacegate_shell::plugin::PluginRepository::global().register_dylib(&path) };
-                    if let Err(e) = res {
-                        eprintln!("fail to load plugin: {:?}", e);
+                for entry in dir {
+                    let entry = entry?;
+                    let path = entry.path();
+                    let ext = path.extension();
+                    let is_dylib = if cfg!(target_os = "windows") {
+                        ext == Some("dll".as_ref())
+                    } else if cfg!(target_os = "macos") {
+                        ext == Some("dylib".as_ref())
+                    } else {
+                        ext == Some("so".as_ref())
+                    };
+                    if path.is_file() && is_dylib {
+                        println!("loading plugin lib: {:?}", path);
+                        let res = unsafe { spacegate_shell::plugin::PluginRepository::global().register_dylib(&path) };
+                        if let Err(e) = res {
+                            eprintln!("fail to load plugin: {:?}", e);
+                        }
                     }
                 }
             }
@@ -39,7 +47,7 @@ fn main() -> Result<(), BoxError> {
             #[cfg(feature = "fs")]
             args::Config::File(path) => spacegate_shell::startup_file(path).await,
             #[cfg(feature = "k8s")]
-            args::Config::K8s(ns) => spacegate_shell::startup_k8s(Some(ns.as_ref())).await,
+            args::Config::K8s(ns) => spacegate_shell::startup_k8s_with_gateway_class(Some(ns.as_ref()), &args.gateway_class_name).await,
             #[cfg(feature = "redis")]
             args::Config::Redis(url) => spacegate_shell::startup_redis(url).await,
             args::Config::Static(s) => {
@@ -48,4 +56,21 @@ fn main() -> Result<(), BoxError> {
             }
         }
     })
+}
+
+/// Splits the startup plugin directory argument into concrete directories.
+fn plugin_dirs(plugins: &str) -> impl Iterator<Item = &str> {
+    plugins.split(',').map(str::trim).filter(|plugins| !plugins.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plugin_dirs;
+
+    #[test]
+    fn plugin_dirs_parse_comma_separated_directories() {
+        let dirs = plugin_dirs(" /lib/spacegate/plugins, /var/lib/spacegate/plugins ,,").collect::<Vec<_>>();
+
+        assert_eq!(dirs, vec!["/lib/spacegate/plugins", "/var/lib/spacegate/plugins"]);
+    }
 }

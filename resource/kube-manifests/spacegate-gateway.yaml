@@ -59,6 +59,10 @@ spec:
                       namespace:
                         type: string
                         minLength: 1
+                      priority:
+                        type: integer
+                        format: int32
+                        default: 0
                     required:
                       - kind
                       - name
@@ -122,6 +126,7 @@ rules:
     resources:
       - sgfilters
       - httpspaceroutes
+      - mcproutes
     verbs:
       - get
       - list
@@ -156,6 +161,34 @@ roleRef:
   name: spacegate
   apiGroup: rbac.authorization.k8s.io
 ---
+# GatewayClass is cluster-scoped, so status reconciliation needs ClusterRole permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: spacegate-gatewayclass-status
+rules:
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gatewayclasses
+      - gatewayclasses/status
+    verbs:
+      - get
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: spacegate-gatewayclass-status
+subjects:
+  - kind: ServiceAccount
+    name: spacegate
+    namespace: spacegate
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: spacegate-gatewayclass-status
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -175,10 +208,57 @@ spec:
       serviceAccountName: spacegate
       containers:
         - name: spacegate
-          image: ecfront/spacegate:latest
+          # Replace with an immutable registry tag or digest before applying in production.
+          image: registry.example.com/spacegate/spacegate:REPLACE_ME
           imagePullPolicy: IfNotPresent
+          volumeMounts:
+            # Keep externally supplied dylibs separate from image-bundled plugins.
+            - name: external-plugins
+              mountPath: /var/lib/spacegate/plugins
+            # Wasm modules referenced by file:///plugins/<name>.wasm.
+            - name: wasm-plugins
+              mountPath: /plugins
+              readOnly: true
           env:
             - name: CONFIG
               value: k8s:spacegate
-            # - name: RUST_LOG
-            #   value: trace,hyper=error,tower=off,mio=error,kube_client=error
+            # Must match the GatewayClass selected by the corresponding Admin deployment.
+            - name: GATEWAY_CLASS_NAME
+              value: spacegate
+            # Native dylib plugin directories scanned at process startup.
+            # Keep image-bundled plugins separate from K8s-mounted plugins to avoid volume shadowing.
+            - name: PLUGINS
+              value: /lib/spacegate/plugins,/var/lib/spacegate/plugins
+            # Controls stdout logs and the events/spans visible to OTLP layers.
+            - name: RUST_LOG
+              value: info
+            # OTLP is disabled by default; production overlays should replace the endpoint and enable required signals.
+            - name: SPACEGATE_OTEL_ENABLED
+              value: "false"
+            - name: SPACEGATE_OTEL_SERVICE_NAME
+              value: spacegate
+            - name: SPACEGATE_OTEL_ENDPOINT
+              value: http://otel-collector.observability.svc.cluster.local:4317
+            - name: SPACEGATE_OTEL_PROTOCOL
+              value: grpc
+            - name: SPACEGATE_OTEL_TRACES_ENABLED
+              value: "false"
+            - name: SPACEGATE_OTEL_TRACES_SAMPLE_RATIO
+              value: "1.0"
+            - name: SPACEGATE_OTEL_METRICS_ENABLED
+              value: "false"
+            - name: SPACEGATE_OTEL_METRICS_EXPORT_INTERVAL_MS
+              value: "60000"
+            - name: SPACEGATE_OTEL_LOGS_ENABLED
+              value: "false"
+            - name: SPACEGATE_OTEL_LOGS_LEVEL
+              value: info
+      volumes:
+        # Creates the configured external plugin directory even when no dylib is mounted.
+        - name: external-plugins
+          emptyDir: {}
+        # Every node running SpaceGate must contain the same approved Wasm modules here.
+        - name: wasm-plugins
+          hostPath:
+            path: /opt/spacegate/wasm
+            type: DirectoryOrCreate

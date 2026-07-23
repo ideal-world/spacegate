@@ -1,8 +1,8 @@
-use spacegate_model::{ConfigItem, SgRoute};
+use spacegate_model::{ConfigItem, PluginConfig, SgRoute};
 
 use crate::{model::SgGateway, service::config_format::ConfigFormat, BoxError};
 
-use crate::service::Create;
+use crate::service::{encode_stored_plugin_config, Create};
 
 use super::Fs;
 
@@ -10,14 +10,14 @@ impl<F> Create for Fs<F>
 where
     F: ConfigFormat + Send + Sync,
 {
-    async fn create_plugin(&self, id: &spacegate_model::PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
-        let path = self.plugin_path(id);
+    async fn create_plugin(&self, config: PluginConfig) -> Result<(), BoxError> {
+        let path = self.plugin_path(&config.id);
         if path.exists() {
             return Err("plugin existed".into());
         }
         // 仅写入新插件文件，避免 rewrite 整个 /etc/spacegate
         tokio::fs::create_dir_all(self.plugin_dir()).await?;
-        let b_spec = self.format.ser(&value)?;
+        let b_spec = self.format.ser(&encode_stored_plugin_config(config)?)?;
         tokio::fs::write(&path, &b_spec).await?;
         Ok(())
     }

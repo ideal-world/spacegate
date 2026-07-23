@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use k8s_gateway_api::{Gateway, HttpRoute};
 use k8s_openapi::api::core::v1::Secret;
@@ -12,7 +12,7 @@ use spacegate_model::{
         mcp_route::McpRoute,
         sg_filter::{K8sSgFilterSpecTargetRef, SgFilter},
     },
-    BoxError, BoxResult, PluginInstanceId,
+    BoxError, BoxResult, PluginConfig,
 };
 
 use crate::service::{Retrieve as _, Update};
@@ -24,13 +24,13 @@ use super::{
 
 impl Update for K8s {
     async fn update_config_item_gateway(&self, gateway_name: &str, gateway: crate::model::SgGateway) -> BoxResult<()> {
-        let (mut gateway, secret, update_plugin_ids) = gateway.to_kube_gateway(&self.namespace);
+        let (mut gateway, secret, update_plugin_ids) = gateway.to_kube_gateway(&self.namespace, &self.gateway_class_name);
 
         let gateway_api: Api<Gateway> = self.get_namespace_api();
         let old_gateway = self
             .retrieve_config_item_gateway(gateway_name)
             .await?
-            .map(|g| g.to_kube_gateway(&self.namespace))
+            .map(|g| g.to_kube_gateway(&self.namespace, &self.gateway_class_name))
             .ok_or_else(|| -> BoxError { format!("[Sg.Config] gateway [{gateway_name}] not found ,update failed").into() })?;
 
         gateway.metadata.resource_version = gateway_api.get_metadata(gateway_name).await?.resource_version();
@@ -98,8 +98,8 @@ impl Update for K8s {
         };
 
         self.update_plugin_ids_changes(
-            old_sg_httproute.map(|r| r.to_kube_route(gateway_name, route_name, &self.namespace).plugin_ids().to_vec()).unwrap_or_default(),
-            kube_route.plugin_ids().to_vec(),
+            old_sg_httproute.map(|r| r.to_kube_route(gateway_name, route_name, &self.namespace).plugin_bindings().to_vec()).unwrap_or_default(),
+            kube_route.plugin_bindings().to_vec(),
             kube_route.to_target_ref(),
         )
         .await?;
@@ -107,8 +107,9 @@ impl Update for K8s {
         Ok(())
     }
 
-    async fn update_plugin(&self, id: &spacegate_model::PluginInstanceId, value: serde_json::Value) -> BoxResult<()> {
-        let filter = id.to_singe_filter(value, None, &self.namespace);
+    async fn update_plugin(&self, config: PluginConfig) -> BoxResult<()> {
+        let id = config.id.clone();
+        let filter = config.id.to_singe_filter(config.spec, config.display_name, None, &self.namespace);
 
         if let Some(filter) = filter {
             let filter_api: Api<SgFilter> = self.get_namespace_api();
@@ -128,19 +129,24 @@ impl Update for K8s {
 }
 
 impl K8s {
-    pub(crate) async fn update_plugin_ids_changes(&self, old: Vec<PluginInstanceId>, update: Vec<PluginInstanceId>, target: K8sSgFilterSpecTargetRef) -> BoxResult<()> {
+    pub(crate) async fn update_plugin_ids_changes(
+        &self,
+        old: Vec<spacegate_model::PluginBinding>,
+        update: Vec<spacegate_model::PluginBinding>,
+        target: K8sSgFilterSpecTargetRef,
+    ) -> BoxResult<()> {
         if old.is_empty() && update.is_empty() {
             return Ok(());
         }
 
-        let old_set: HashSet<_> = old.into_iter().collect();
-        let update_set: HashSet<_> = update.into_iter().collect();
+        let old_set: HashSet<_> = old.into_iter().map(|binding| binding.id).collect();
+        let update_set: HashMap<_, _> = update.into_iter().map(|binding| (binding.id, binding.priority)).collect();
 
-        let add_vec: Vec<_> = update_set.difference(&old_set).collect();
-        for add_id in add_vec {
-            add_id.add_filter_target(target.clone(), self).await?;
+        for (id, priority) in &update_set {
+            id.add_filter_target(target.clone(), *priority, self).await?;
         }
-        let delete_vec: Vec<_> = old_set.difference(&update_set).collect();
+        let update_ids: HashSet<_> = update_set.into_keys().collect();
+        let delete_vec: Vec<_> = old_set.difference(&update_ids).collect();
         for delete_id in delete_vec {
             delete_id.remove_filter_target(target.clone(), self).await?;
         }
