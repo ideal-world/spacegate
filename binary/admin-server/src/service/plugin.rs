@@ -261,6 +261,7 @@ mod tests {
     fn extracts_schema_request_from_saved_wasm_plugin_config() {
         let config = PluginConfig {
             id: PluginInstanceId::from_file_stem("wasm.hai-mix-process"),
+            display_name: None,
             spec: serde_json::json!({
                 "image_url": "oci+http://localhost:5001/hai-process-mix:dev",
                 "schema_path": "schema.json",

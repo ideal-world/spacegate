@@ -76,6 +76,15 @@ fn release_workflow_builds_wasm_and_dylib_capable_gateway() {
     assert_eq!(workflow.matches(expected).count(), 2);
 }
 
+/// Ensures the bundled HAI dylib exposes plugin-owned schemas to the Admin API.
+#[test]
+fn gateway_image_builds_hai_plugins_with_schema_metadata() {
+    let dockerfile = include_str!("../../../resource/docker/spacegate-k8s/Dockerfile");
+    let command = dockerfile.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    assert!(command.contains("cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema"));
+}
+
 /// Ensures the base DaemonSet keeps the image-bundled plugin directory and exposes a mount directory.
 #[test]
 fn gateway_manifest_declares_native_dylib_plugin_directories() {

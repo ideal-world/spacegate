@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{Redis, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY, CONF_PLUGIN_KEY};
+use super::{decode_plugin_config_entry, decode_plugin_config_value, Redis, CONF_GATEWAY_KEY, CONF_HTTP_ROUTE_KEY, CONF_PLUGIN_KEY};
 use crate::{
     model::{SgGateway, SgRoute},
     service::config_format::ConfigFormat,
@@ -47,25 +47,36 @@ where
         let plugin_configs: HashMap<String, String> = self.get_con().await?.hgetall(CONF_PLUGIN_KEY).await?;
 
         let plugin_configs = plugin_configs
-            .into_values()
-            .map(|v| self.format.de(v.as_bytes()).map_err(|e| format!("[SG.Config] Plugin Config parse error {}", e).into()))
+            .into_iter()
+            .map(|(key, value)| {
+                let value = self.format.de(value.as_bytes()).map_err(|error| -> spacegate_model::BoxError { format!("[SG.Config] Plugin Config parse error {error}").into() })?;
+                decode_plugin_config_entry(&key, value)
+            })
             .collect::<BoxResult<Vec<PluginConfig>>>()?;
         Ok(plugin_configs)
     }
 
     async fn retrieve_plugin(&self, id: &PluginInstanceId) -> BoxResult<Option<PluginConfig>> {
         let plugin_config: Option<String> = self.get_con().await?.hget(CONF_PLUGIN_KEY, id.to_string()).await?;
-        plugin_config.map(|config| self.format.de::<PluginConfig>(config.as_bytes()).map_err(|e| format!("[SG.Config] Plugin Config parse error {}", e).into())).transpose()
+        plugin_config
+            .map(|config| {
+                let value = self.format.de(config.as_bytes()).map_err(|error| -> spacegate_model::BoxError { format!("[SG.Config] Plugin Config parse error {error}").into() })?;
+                decode_plugin_config_value(id, value)
+            })
+            .transpose()
     }
 
     async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, spacegate_model::BoxError> {
         let plugin_configs: HashMap<String, String> = self.get_con().await?.hgetall(CONF_PLUGIN_KEY).await?;
 
         let plugin_configs = plugin_configs
-            .into_values()
-            .filter(|key| key.starts_with(code))
-            .filter_map(|v| self.format.de(v.as_bytes()).ok().filter(|c: &PluginConfig| c.id.code == code))
-            .collect::<Vec<PluginConfig>>();
+            .into_iter()
+            .filter_map(|(key, value)| {
+                let value = self.format.de(value.as_bytes()).ok()?;
+                decode_plugin_config_entry(&key, value).ok()
+            })
+            .filter(|config| config.id.code == code)
+            .collect::<Vec<_>>();
         Ok(plugin_configs)
     }
 }

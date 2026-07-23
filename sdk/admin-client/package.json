@@ -1,6 +1,6 @@
 {
   "name": "spacegate-admin-client",
-  "version": "0.2.0-alpha.25",
+  "version": "0.2.0-alpha.26",
   "description": "Type Script Client Lib for Spacegate Admin Server",
   "homepage": "https://github.com/ideal-world/spacegate",
   "main": "dist/index.js",
@@ -16,7 +16,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "axios": "^1.6.7"
+    "axios": "1.18.1"
   },
   "files": [
     "dist"

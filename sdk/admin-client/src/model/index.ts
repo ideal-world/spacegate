@@ -9,6 +9,7 @@ export * from './MetricConfig';
 export * from './ObservabilityConfig';
 export * from './OtlpProtocol';
 export * from './PluginAttributes';
+export * from './PluginBinding';
 export * from './PluginConfig';
 export * from './PluginInstanceId';
 export * from './PluginInstanceMap';

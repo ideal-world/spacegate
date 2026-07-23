@@ -152,7 +152,15 @@ fn build_plugin_config(plugin: &WasmPlugin, id: PluginInstanceId, plugin_config:
         spec["oci_auth"] = oci_auth;
     }
 
-    PluginConfig { id, spec }
+    let display_name = wasm_display_name(&spec);
+    PluginConfig { id, display_name, spec }
+}
+
+/// 从旧版 Wasm 管理字段中推导展示名称，保持已有配置可读。
+fn wasm_display_name(spec: &Value) -> Option<String> {
+    ["display_name", "title", "plugin_name"]
+        .into_iter()
+        .find_map(|key| spec.get(key).and_then(Value::as_str).map(str::to_string).and_then(|name| crate::service::normalize_plugin_display_name(Some(name))))
 }
 
 pub(crate) fn sort_higress_wasm_plugins(plugins: &mut [WasmPlugin]) {
@@ -267,6 +275,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn plugin_display_name_uses_legacy_wasm_field_precedence() {
+        assert_eq!(
+            wasm_display_name(&json!({ "display_name": "显示名", "title": "标题", "plugin_name": "插件名" })).as_deref(),
+            Some("显示名")
+        );
+        assert_eq!(
+            wasm_display_name(&json!({ "display_name": "  ", "title": "标题", "plugin_name": "插件名" })).as_deref(),
+            Some("标题")
+        );
+        assert_eq!(wasm_display_name(&json!({ "title": "标题", "plugin_name": "插件名" })).as_deref(), Some("标题"));
+        assert_eq!(wasm_display_name(&json!({ "plugin_name": "插件名" })).as_deref(), Some("插件名"));
+    }
+
+    #[test]
     fn converts_higress_wasmplugin_to_spacegate_wasm_plugin_config() {
         let plugin = WasmPlugin {
             metadata: ObjectMeta {
@@ -299,6 +321,7 @@ mod tests {
 
         let cfg = plugin.to_spacegate_plugin_configs().into_iter().next().expect("default config");
         assert_eq!(cfg.id.to_string(), "wasm-n-higress-authn");
+        assert_eq!(cfg.display_name.as_deref(), Some("authn-plugin"));
         assert_eq!(cfg.spec["url"], "https://example.com/authn.wasm");
         assert_eq!(cfg.spec["sha256"], "sha256:abc");
         assert_eq!(cfg.spec["fail_strategy"], "fail_close");

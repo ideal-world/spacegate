@@ -350,7 +350,7 @@ impl CreateListener for K8s {
                 plugin_ids.extend(route_plugin_ids);
                 plugin_ids
             })
-            .map(|f| (f.code, f.name))
+            .map(|binding| (binding.id.code, binding.id.name))
             .collect::<Vec<_>>();
         let move_evt_tx = evt_tx.clone();
         let move_namespace = self.namespace.to_string();

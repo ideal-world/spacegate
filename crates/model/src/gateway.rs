@@ -2,7 +2,7 @@ use std::{fmt::Display, net::IpAddr};
 
 use serde::{Deserialize, Serialize};
 
-use super::{observability::ObservabilityConfig, plugin::PluginInstanceId};
+use super::{observability::ObservabilityConfig, plugin::PluginBinding};
 
 /// Gateway represents an instance of a service-traffic handling infrastructure
 /// by binding Listeners to a set of IP addresses.
@@ -12,7 +12,7 @@ use super::{observability::ObservabilityConfig, plugin::PluginInstanceId};
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 /// Name of the Gateway. Global Unique.
-pub struct SgGateway<P = PluginInstanceId> {
+pub struct SgGateway<P = PluginBinding> {
     pub name: String,
     /// Some parameters necessary for the gateway.
     pub parameters: SgParameters,

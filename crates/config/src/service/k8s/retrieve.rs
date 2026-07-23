@@ -16,7 +16,7 @@ use spacegate_model::{
         },
         helper_struct::SgTargetKind,
     },
-    PluginInstanceId,
+    PluginBinding, PluginInstanceId,
 };
 
 use crate::{
@@ -256,6 +256,7 @@ impl K8s {
                 kind: SgTargetKind::Gateway.into(),
                 name: gateway_name.clone(),
                 namespace: gateway_obj.namespace(),
+                priority: 0,
             })
             .await?;
         plugins.extend(self.retrieve_higress_gateway_plugins(gateway_obj.namespace()).await?);
@@ -282,6 +283,7 @@ impl K8s {
                 kind,
                 name: route_name.clone(),
                 namespace: httpspace_route.namespace(),
+                priority: 0,
             })
             .await?;
         let mut route = SgHttpRoute {
@@ -312,6 +314,7 @@ impl K8s {
                 kind: SgTargetKind::McpRoute.into(),
                 name: route_name.clone(),
                 namespace: mcp_route.namespace(),
+                priority: 0,
             })
             .await?;
         let mut route = SgMcpRoute {
@@ -335,13 +338,13 @@ impl K8s {
         Ok(route)
     }
 
-    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<PluginInstanceId>> {
+    async fn retrieve_config_item_filters(&self, target: K8sSgFilterSpecTargetRef) -> BoxResult<Vec<PluginBinding>> {
         let kind = target.kind;
         let name = target.name;
         let namespace = target.namespace.unwrap_or(self.namespace.to_string());
 
         let filter_api: Api<SgFilter> = self.get_all_api();
-        let plugin_ids: Vec<PluginInstanceId> = filter_api
+        let plugin_ids: Vec<PluginBinding> = filter_api
             .list(&ListParams::default())
             .await
             .map_err(Box::new)?
@@ -353,13 +356,26 @@ impl K8s {
                         && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
                 })
             })
-            .flat_map(|filter_obj| PluginConfig::from_first_filter_obj(filter_obj).map(|f| f.into()))
+            .flat_map(|filter_obj| {
+                let priority = filter_obj
+                    .spec
+                    .target_refs
+                    .iter()
+                    .find(|target_ref| {
+                        target_ref.kind.eq_ignore_ascii_case(&kind)
+                            && target_ref.name.eq_ignore_ascii_case(&name)
+                            && target_ref.namespace.as_deref().unwrap_or("default").eq_ignore_ascii_case(&namespace)
+                    })
+                    .map(|target_ref| target_ref.priority)
+                    .unwrap_or_default();
+                PluginConfig::from_first_filter_obj(filter_obj).map(|config| PluginBinding::from(PluginInstanceId::from(config)).with_priority(priority))
+            })
             .collect();
         let plugin_ids = plugin_ids;
 
         if !plugin_ids.is_empty() {
             let mut filter_vec = String::new();
-            plugin_ids.clone().into_iter().for_each(|id| filter_vec.push_str(&format!("plugin:{{id:{}}},", id)));
+            plugin_ids.clone().into_iter().for_each(|binding| filter_vec.push_str(&format!("plugin:{{id:{}}},", binding.id)));
             tracing::trace!("[SG.Common] {namespace}.{kind}.{name} filter found: {}", filter_vec.trim_end_matches(','));
         }
 
@@ -438,12 +454,12 @@ impl K8s {
         .collect()
     }
 
-    async fn retrieve_higress_gateway_plugins(&self, namespace: Option<String>) -> BoxResult<Vec<PluginInstanceId>> {
+    async fn retrieve_higress_gateway_plugins(&self, namespace: Option<String>) -> BoxResult<Vec<PluginBinding>> {
         let namespace = namespace.unwrap_or_else(|| self.namespace.to_string());
         let wasm_plugin_api: Api<WasmPlugin> = self.get_specify_namespace_api(&namespace);
         let mut wasm_plugins = wasm_plugin_api.list(&ListParams::default()).await?.items;
         sort_higress_wasm_plugins(&mut wasm_plugins);
-        Ok(wasm_plugins.into_iter().filter_map(|p| p.gateway_plugin_id()).collect())
+        Ok(wasm_plugins.into_iter().filter_map(|p| p.gateway_plugin_id()).map(PluginBinding::from).collect())
     }
 
     async fn apply_higress_wasm_route_plugins(&self, route: &mut SgHttpRoute, namespace: Option<String>) -> BoxResult<()> {
@@ -454,10 +470,10 @@ impl K8s {
         let hostnames = route.hostnames.as_deref();
 
         for plugin in wasm_plugins {
-            route.plugins.extend(plugin.route_plugin_ids(&route.route_name, hostnames));
+            route.plugins.extend(plugin.route_plugin_ids(&route.route_name, hostnames).into_iter().map(PluginBinding::from));
             for rule in &mut route.rules {
                 for backend in &mut rule.backends {
-                    backend.plugins.extend(plugin.backend_plugin_ids(backend));
+                    backend.plugins.extend(plugin.backend_plugin_ids(backend).into_iter().map(PluginBinding::from));
                 }
             }
         }
@@ -472,9 +488,9 @@ impl K8s {
         let hostnames = route.hostnames.as_deref();
 
         for plugin in wasm_plugins {
-            route.plugins.extend(plugin.route_plugin_ids(&route.route_name, hostnames));
+            route.plugins.extend(plugin.route_plugin_ids(&route.route_name, hostnames).into_iter().map(PluginBinding::from));
             for backend in &mut route.backends {
-                backend.plugins.extend(plugin.backend_plugin_ids(backend));
+                backend.plugins.extend(plugin.backend_plugin_ids(backend).into_iter().map(PluginBinding::from));
             }
         }
         Ok(())

@@ -17,7 +17,7 @@ use spacegate_model::{
         },
         helper_struct::{BackendObjectRefKind, SgTargetKind},
     },
-    PluginInstanceId,
+    PluginBinding, PluginInstanceId,
 };
 
 use crate::{
@@ -29,11 +29,11 @@ use crate::{
 use super::{filter_k8s_conv::PluginIdConv as _, ToTarget};
 pub(crate) trait SgHttpRouteConv {
     /// Convert to HttpSpaceroute and SgSingeFilter
-    fn to_kube_httproute(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> (HttpSpaceroute, Vec<PluginInstanceId>);
+    fn to_kube_httproute(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> (HttpSpaceroute, Vec<PluginBinding>);
 }
 
 impl SgHttpRouteConv for SgHttpRoute {
-    fn to_kube_httproute(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> (HttpSpaceroute, Vec<PluginInstanceId>) {
+    fn to_kube_httproute(self, gateway_name: &str, name: &str, gateway_namespace: &str) -> (HttpSpaceroute, Vec<PluginBinding>) {
         let gateway_ref = ParentReference {
             group: None,
             kind: Some(SgTargetKind::Gateway.into()),
@@ -74,18 +74,18 @@ impl SgHttpRouteConv for SgHttpRoute {
 }
 
 pub(crate) enum KubeRoute {
-    Http(HttpSpaceroute, Vec<PluginInstanceId>),
-    Mcp(McpRoute, Vec<PluginInstanceId>),
+    Http(HttpSpaceroute, Vec<PluginBinding>),
+    Mcp(McpRoute, Vec<PluginBinding>),
 }
 
 impl KubeRoute {
-    pub(crate) fn plugin_ids(&self) -> &[PluginInstanceId] {
+    pub(crate) fn plugin_bindings(&self) -> &[PluginBinding] {
         match self {
             KubeRoute::Http(_, plugin_ids) | KubeRoute::Mcp(_, plugin_ids) => plugin_ids,
         }
     }
 
-    pub(crate) fn into_plugin_ids(self) -> Vec<PluginInstanceId> {
+    pub(crate) fn into_plugin_bindings(self) -> Vec<PluginBinding> {
         match self {
             KubeRoute::Http(_, plugin_ids) | KubeRoute::Mcp(_, plugin_ids) => plugin_ids,
         }
@@ -118,7 +118,7 @@ impl SgRouteK8sConv for SgRoute {
     }
 }
 
-fn mcp_route_to_kube_mcp_route(route: SgMcpRoute, gateway_name: &str, name: &str, gateway_namespace: &str) -> (McpRoute, Vec<PluginInstanceId>) {
+fn mcp_route_to_kube_mcp_route(route: SgMcpRoute, gateway_name: &str, name: &str, gateway_namespace: &str) -> (McpRoute, Vec<PluginBinding>) {
     let gateway_ref = ParentReference {
         group: None,
         kind: Some(SgTargetKind::Gateway.into()),
@@ -167,6 +167,8 @@ pub(crate) trait SgHttpRouteRuleConv {
 
 impl SgHttpRouteRuleConv for SgHttpRouteRule {
     fn into_kube_httproute(self) -> HttpRouteRule {
+        let mut plugin_bindings = self.plugins;
+        plugin_bindings.sort_by(|left, right| right.priority.cmp(&left.priority));
         let (matches, mut plugins): (Option<Vec<HttpRouteMatch>>, Vec<HttpRouteFilter>) = self
             .matches
             .map(|m_vec| {
@@ -174,7 +176,7 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
                 (Some(matches.into_iter().flatten().collect()), plugins.into_iter().flatten().collect())
             })
             .unwrap_or_default();
-        plugins.append(&mut self.plugins.into_iter().filter_map(|p| p.to_http_route_filter()).collect::<Vec<_>>());
+        plugins.append(&mut plugin_bindings.into_iter().filter_map(|binding| binding.id.to_http_route_filter()).collect::<Vec<_>>());
         HttpRouteRule {
             matches,
             filters: Some(plugins),
@@ -237,7 +239,12 @@ impl SgHttpRouteRuleConv for SgHttpRouteRule {
         };
         Ok(SgHttpRouteRule {
             matches,
-            plugins: ext_plugins.into_iter().filter_map(PluginInstanceId::from_http_route_filter).collect(),
+            plugins: ext_plugins
+                .into_iter()
+                .filter_map(PluginInstanceId::from_http_route_filter)
+                .enumerate()
+                .map(|(index, id)| PluginBinding::from(id).with_priority(1000 - index as i32 * 100))
+                .collect(),
             backends: rule
                 .backend_refs
                 .map(|b_vec| b_vec.into_iter().filter_map(|b| SgBackendRef::from_kube_httproute(b).transpose()).collect::<BoxResult<Vec<_>>>())
@@ -374,7 +381,7 @@ impl SgHttpPathMatchConv for SgHttpPathMatch {
         match self {
             SgHttpPathMatch::Exact { value, replace } => (
                 HttpPathMatch::Exact { value },
-                replace.map(|r| HttpRouteFilter::URLRewrite {
+                replace.filter(|r| !r.trim().is_empty()).map(|r| HttpRouteFilter::URLRewrite {
                     url_rewrite: HttpUrlRewriteFilter {
                         hostname: None,
                         path: Some(HttpPathModifier::ReplaceFullPath { replace_full_path: r }),
@@ -383,7 +390,7 @@ impl SgHttpPathMatchConv for SgHttpPathMatch {
             ),
             SgHttpPathMatch::Prefix { value, replace } => (
                 HttpPathMatch::PathPrefix { value },
-                replace.map(|r| HttpRouteFilter::URLRewrite {
+                replace.filter(|r| !r.trim().is_empty()).map(|r| HttpRouteFilter::URLRewrite {
                     url_rewrite: HttpUrlRewriteFilter {
                         hostname: None,
                         path: Some(HttpPathModifier::ReplacePrefixMatch { replace_prefix_match: r }),
@@ -392,7 +399,7 @@ impl SgHttpPathMatchConv for SgHttpPathMatch {
             ),
             SgHttpPathMatch::RegExp { value, replace } => (
                 HttpPathMatch::RegularExpression { value },
-                replace.map(|r| HttpRouteFilter::URLRewrite {
+                replace.filter(|r| !r.trim().is_empty()).map(|r| HttpRouteFilter::URLRewrite {
                     url_rewrite: HttpUrlRewriteFilter {
                         hostname: None,
                         path: Some(HttpPathModifier::ReplaceFullPath { replace_full_path: r }),
@@ -469,6 +476,29 @@ impl SgHttpQueryMatchConv for SgHttpQueryMatch {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::SgHttpRouteMatchConv;
+    use spacegate_model::{SgHttpPathMatch, SgHttpRouteMatch};
+
+    #[test]
+    fn empty_path_replace_does_not_create_a_url_rewrite_filter() {
+        let route_match = SgHttpRouteMatch {
+            path: Some(SgHttpPathMatch::Prefix {
+                value: "/api".to_string(),
+                replace: Some(String::new()),
+            }),
+            header: None,
+            query: None,
+            method: None,
+        };
+
+        let (_, filters) = route_match.into_kube_httproute();
+
+        assert!(filters.is_empty());
+    }
+}
+
 pub(crate) trait SgBackendRefConv {
     fn into_kube_httproute(self) -> HttpBackendRef;
     fn from_kube_httproute(http_backend: HttpBackendRef) -> BoxResult<Option<SgBackendRef>>;
@@ -476,6 +506,8 @@ pub(crate) trait SgBackendRefConv {
 
 impl SgBackendRefConv for SgBackendRef {
     fn into_kube_httproute(self) -> HttpBackendRef {
+        let mut plugin_bindings = self.plugins;
+        plugin_bindings.sort_by(|left, right| right.priority.cmp(&left.priority));
         let backend_inner_ref = match self.host {
             BackendHost::Host { host } => {
                 let kind = match self.protocol {
@@ -513,7 +545,7 @@ impl SgBackendRefConv for SgBackendRef {
                 inner: backend_inner_ref,
                 downgrade_http2: self.downgrade_http2,
             }),
-            filters: Some(self.plugins.into_iter().filter_map(|f| f.to_http_route_filter()).collect()),
+            filters: Some(plugin_bindings.into_iter().filter_map(|binding| binding.id.to_http_route_filter()).collect()),
         }
     }
 
@@ -552,7 +584,12 @@ impl SgBackendRefConv for SgBackendRef {
                     timeout_mode: backend.timeout_mode,
                     protocol,
                     weight: backend.weight,
-                    plugins: ext_plugins.into_iter().filter_map(PluginInstanceId::from_http_route_filter).collect(),
+                    plugins: ext_plugins
+                        .into_iter()
+                        .filter_map(PluginInstanceId::from_http_route_filter)
+                        .enumerate()
+                        .map(|(index, id)| PluginBinding::from(id).with_priority(1000 - index as i32 * 100))
+                        .collect(),
                     downgrade_http2: backend.downgrade_http2,
                 })
             })
@@ -566,6 +603,7 @@ impl ToTarget for HttpSpaceroute {
             kind: SgTargetKind::Httpspaceroute.into(),
             name: self.name_any(),
             namespace: self.namespace(),
+            priority: 0,
         }
     }
 }
@@ -576,6 +614,7 @@ impl ToTarget for McpRoute {
             kind: SgTargetKind::McpRoute.into(),
             name: self.name_any(),
             namespace: self.namespace(),
+            priority: 0,
         }
     }
 }

@@ -21,11 +21,14 @@ pub struct K8sSgFilterSpecFilter {
     /// see [crate::inner_model::plugin_filter::SgRouteFilter].code
     pub code: String,
     pub name: Option<String>,
+    /// 插件实例的管理端展示名称，不进入运行时插件配置。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub enable: bool,
     pub config: Value,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Eq)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct K8sSgFilterSpecTargetRef {
     /// # FilterTarget Kind
@@ -39,6 +42,9 @@ pub struct K8sSgFilterSpecTargetRef {
     pub name: String,
     /// if namespace is None, use SgFilter's namespace
     pub namespace: Option<String>,
+    /// Execution priority for this target binding. Higher values run first.
+    #[serde(default)]
+    pub priority: i32,
 }
 
 impl Hash for K8sSgFilterSpecTargetRef {
@@ -62,5 +68,32 @@ impl Display for K8sSgFilterSpecTargetRef {
         } else {
             write!(f, "{}:{}", self.kind, self.name)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::K8sSgFilterSpecTargetRef;
+
+    #[test]
+    fn plugin_binding_priority_round_trips_through_k8s_target_ref() {
+        let legacy: K8sSgFilterSpecTargetRef = serde_json::from_value(json!({
+            "kind": "Gateway",
+            "name": "api",
+            "namespace": "default"
+        }))
+        .unwrap();
+        assert_eq!(legacy.priority, 0);
+
+        let negative: K8sSgFilterSpecTargetRef = serde_json::from_value(json!({
+            "kind": "HTTPRoute",
+            "name": "chat",
+            "priority": -50
+        }))
+        .unwrap();
+        let value = serde_json::to_value(negative).unwrap();
+        assert_eq!(value["priority"], -50);
     }
 }

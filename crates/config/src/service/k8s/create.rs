@@ -3,7 +3,7 @@ use k8s_openapi::api::core::v1::Secret;
 use kube::{api::PostParams, Api};
 use spacegate_model::{
     ext::k8s::crd::{http_spaceroute, mcp_route, sg_filter::SgFilter},
-    BoxError, PluginInstanceId,
+    BoxError, PluginConfig,
 };
 
 use crate::{
@@ -28,8 +28,8 @@ impl Create for K8s {
             secret_api.create(&PostParams::default(), &secret).await?;
         }
 
-        for plugin_id in plugin_ids {
-            plugin_id.add_filter_target(gateway.to_target_ref(), self).await?;
+        for binding in plugin_ids {
+            binding.id.add_filter_target(gateway.to_target_ref(), binding.priority, self).await?;
         }
 
         Ok(())
@@ -49,15 +49,15 @@ impl Create for K8s {
             }
         }
 
-        for id in route.into_plugin_ids() {
-            id.add_filter_target(target_ref.clone(), self).await?;
+        for binding in route.into_plugin_bindings() {
+            binding.id.add_filter_target(target_ref.clone(), binding.priority, self).await?;
         }
 
         Ok(())
     }
 
-    async fn create_plugin(&self, id: &PluginInstanceId, value: serde_json::Value) -> Result<(), BoxError> {
-        let filter = id.to_singe_filter(value, None, &self.namespace);
+    async fn create_plugin(&self, config: PluginConfig) -> Result<(), BoxError> {
+        let filter = config.id.to_singe_filter(config.spec, config.display_name, None, &self.namespace);
 
         if let Some(filter) = filter {
             let filter_api: Api<SgFilter> = self.get_namespace_api();
@@ -65,7 +65,12 @@ impl Create for K8s {
                 filter_api.create(&PostParams::default(), &filter.into()).await?;
             } else {
                 // do update
-                self.update_plugin(id, filter.filter.config).await?;
+                self.update_plugin(PluginConfig {
+                    id: spacegate_model::PluginInstanceId::extract_from_filter(&filter.filter, &filter.name),
+                    display_name: filter.filter.display_name,
+                    spec: filter.filter.config,
+                })
+                .await?;
             }
         }
         Ok(())

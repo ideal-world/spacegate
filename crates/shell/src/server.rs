@@ -252,7 +252,11 @@ pub static GLOBAL_STORE: OnceLock<Arc<Mutex<HashMap<String, RunningSgGateway>>>>
 impl RunningSgGateway {
     pub async fn global_init(config: Config, signal: CancellationToken) {
         for (id, spec) in config.plugins.into_inner() {
-            if let Err(err) = PluginRepository::global().create_or_update_instance(PluginConfig { id: id.clone(), spec }) {
+            if let Err(err) = PluginRepository::global().create_or_update_instance(PluginConfig {
+                id: id.clone(),
+                display_name: None,
+                spec,
+            }) {
                 tracing::error!("[SG.Config] fail to init plugin [{id}]: {err}", id = id.to_string());
             }
         }

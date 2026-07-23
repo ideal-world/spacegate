@@ -3,6 +3,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use serde::Deserialize;
 use serde_json::Value;
 use spacegate_config::{
     model::{SgGateway, SgRoute},
@@ -16,6 +17,26 @@ use crate::{
     state::{self, AppState},
     Backend,
 };
+
+/// 插件创建和更新的查询参数，实例 ID 与展示名称分开管理。
+#[derive(Debug, Deserialize)]
+struct PluginUpsertQuery {
+    #[serde(flatten)]
+    id: PluginInstanceId,
+    #[serde(default)]
+    display_name: Option<String>,
+}
+
+impl PluginUpsertQuery {
+    /// 将查询参数和原始运行时 spec 合并为完整插件管理配置。
+    fn into_config(self, spec: Value) -> PluginConfig {
+        PluginConfig {
+            id: self.id,
+            display_name: normalize_plugin_display_name(self.display_name),
+            spec,
+        }
+    }
+}
 
 /**********************************************
                        GET
@@ -98,11 +119,11 @@ async fn post_config_item_route<B: Create>(
     backend.create_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 async fn post_config_plugin<B: Create>(
-    Query(id): Query<PluginInstanceId>,
+    Query(query): Query<PluginUpsertQuery>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.create_plugin(&id, spec).await.map_err(InternalError)
+    backend.create_plugin(query.into_config(spec)).await.map_err(InternalError)
 }
 /**********************************************
                        PUT
@@ -136,11 +157,11 @@ async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B
 }
 
 async fn put_config_plugin<B: Update>(
-    Query(id): Query<PluginInstanceId>,
+    Query(query): Query<PluginUpsertQuery>,
     State(AppState { backend, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_plugin(&id, spec).await.map_err(InternalError)
+    backend.update_plugin(query.into_config(spec)).await.map_err(InternalError)
 }
 /**********************************************
                        DELETE
@@ -204,4 +225,33 @@ where
         )
         .route("/plugin-all", get(get_config_all_plugin))
         .route("/plugins/{code}", get(get_config_plugins_by_code))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use spacegate_config::PluginInstanceName;
+
+    use super::PluginUpsertQuery;
+
+    #[test]
+    fn plugin_upsert_query_accepts_legacy_id_without_display_name() {
+        let query: PluginUpsertQuery = serde_urlencoded::from_str("code=hai-auth&kind=named&name=auth-a1").unwrap();
+
+        assert_eq!(query.id.code, "hai-auth");
+        assert_eq!(query.id.name, PluginInstanceName::named("auth-a1"));
+        assert_eq!(query.display_name, None);
+    }
+
+    #[test]
+    fn plugin_upsert_query_decodes_and_normalizes_display_name() {
+        let query: PluginUpsertQuery = serde_urlencoded::from_str("code=hai-auth&kind=named&name=auth-a1&display_name=+%E7%94%9F%E4%BA%A7+%E9%89%B4%E6%9D%83+").unwrap();
+        let config = query.into_config(json!({ "cache_url": "redis://redis:6379" }));
+
+        assert_eq!(config.display_name.as_deref(), Some("生产 鉴权"));
+        assert_eq!(config.spec, json!({ "cache_url": "redis://redis:6379" }));
+
+        let query: PluginUpsertQuery = serde_urlencoded::from_str("code=hai-auth&kind=named&name=auth-a1&display_name=+++").unwrap();
+        assert_eq!(query.into_config(json!({})).display_name, None);
+    }
 }
