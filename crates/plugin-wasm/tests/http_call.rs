@@ -221,6 +221,7 @@ async fn vm_pool_runs_slow_http_calls_concurrently() {
             code: "wasm".into(),
             name: PluginInstanceName::named("vm-pool-test"),
         },
+        display_name: None,
         spec: serde_json::json!({
             "url": format!("file://{}", wasm.display()),
             "plugin_config": {
@@ -263,6 +264,7 @@ async fn wait_policy_uses_separate_vm_pool() {
             code: "wasm".into(),
             name: PluginInstanceName::named("wait-vm-pool-test"),
         },
+        display_name: None,
         spec: serde_json::json!({
             "url": format!("file://{}", wasm.display()),
             "plugin_config": {

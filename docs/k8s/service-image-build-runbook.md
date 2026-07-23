@@ -15,17 +15,18 @@
 执行脚本：以下命令块用于设置后续所有构建命令共享的路径、镜像名和离线制品目录。
 
 ```bash
-cd /path/to/spacegate-workspace
+# 此处只是示例，根据实际项目路径设置
+cd /path/to/spacegate-workspace）
 
 export WORKSPACE_ROOT="$PWD"
 export SPACEGATE_ROOT="$WORKSPACE_ROOT/spacegate"
 export ADMIN_FE_ROOT="$WORKSPACE_ROOT/spacegate-admin-fe"
-export ADMIN_DOCKER_CONTEXT=""
-export ADMIN_DOCKER_DIR="/resource/docker/spacegate-admin"
+export ADMIN_DOCKER_CONTEXT="$SPACEGATE_ROOT"
+export ADMIN_DOCKER_DIR="$SPACEGATE_ROOT/resource/docker/spacegate-admin"
 export ARTIFACT_DIR="$WORKSPACE_ROOT/image-artifacts"
 
 # VERSION 建议使用 Git tag、日期版本或交付版本号，例如 20260709-001。
-export VERSION="1.0.1"
+export VERSION="1.0.2"
 
 export SPACEGATE_IMAGE="spacegate:$VERSION"
 export SPACEGATE_ADMIN_IMAGE="spacegate-admin:$VERSION"
@@ -35,7 +36,7 @@ export AI_GATEWAY_SERVICE_IMAGE="ai-gateway-service:$VERSION"
 export ADMIN_NGINX_IMAGE="nginx:1.27-bookworm"
 
 # 如果网关镜像需要内置 HAI native dylib，设置到 hai-hub 仓库路径。
-export HAI_HUB_ROOT="/path/to/hai-hub"
+export HAI_HUB_ROOT="/Users/yiye/projectSpace/huayun_project/hai-hub"
 
 mkdir -p "$ARTIFACT_DIR"
 ```
@@ -105,7 +106,7 @@ docker build --progress=plain \
   "$SPACEGATE_ROOT"
 ```
 
-如果这里失败，重点看 `cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins` 上方的 Rust 编译错误；Docker 最后一行 `exit code: 101` 只是汇总错误。
+如果这里失败，重点看 `cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema` 上方的 Rust 编译错误；Docker 最后一行 `exit code: 101` 只是汇总错误。
 
 ### 2.3 从 SpaceGate 镜像中复制 native 插件制品
 
@@ -289,7 +290,7 @@ RUN printf '%s\n' \
     'spacegate-shell = { path = "/app/crates/shell" }' \
     > /hai-hub/.cargo/config.toml
 RUN CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_PANIC=unwind \
-    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins \
+    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema \
     && test -f /hai-hub/target/release/libhai_hub_spacegate_plugins.so
 ```
 
@@ -326,7 +327,8 @@ sed -i 's/crate-type = \[ "rlib" \]/crate-type = [ "rlib", "dylib" ]/' \
 cargo build \
   --manifest-path "$HAI_HUB_ROOT/Cargo.toml" \
   --release \
-  -p hai-hub-spacegate-plugins
+  -p hai-hub-spacegate-plugins \
+  --features schema
 
 test -f "$HAI_HUB_ROOT/target/release/libhai_hub_spacegate_plugins.so"
 

@@ -59,6 +59,10 @@ spec:
                       namespace:
                         type: string
                         minLength: 1
+                      priority:
+                        type: integer
+                        format: int32
+                        default: 0
                     required:
                       - kind
                       - name

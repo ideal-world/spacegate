@@ -12,11 +12,11 @@ where
     F: ConfigFormat + Send + Sync,
 {
     async fn retrieve_all_plugins(&self) -> Result<Vec<PluginConfig>, BoxError> {
-        self.retrieve_cached(|cfg| cfg.plugins.clone().into_config_vec()).await
+        self.collect_plugin_configs().await
     }
 
     async fn retrieve_plugin(&self, id: &PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {
-        self.retrieve_cached(|cfg| cfg.plugins.get(id).cloned().map(|spec| PluginConfig { spec, id: id.clone() })).await
+        self.read_plugin_config(id).await
     }
 
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> Result<Option<SgGateway>, BoxError> {
@@ -40,17 +40,6 @@ where
     }
 
     async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, BoxError> {
-        self.retrieve_cached(|cfg| {
-            cfg.plugins
-                .iter()
-                .filter_map(|(id, spec)| {
-                    (id.code == code).then_some(PluginConfig {
-                        spec: spec.clone(),
-                        id: id.clone(),
-                    })
-                })
-                .collect()
-        })
-        .await
+        Ok(self.collect_plugin_configs().await?.into_iter().filter(|config| config.id.code == code).collect())
     }
 }

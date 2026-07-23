@@ -71,6 +71,44 @@ pub struct PluginInstanceId {
     pub name: PluginInstanceName,
 }
 
+/// Plugin binding at a gateway, route, route-rule, or backend scope.
+///
+/// Higher priority bindings handle requests first within the same scope.
+#[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct PluginBinding {
+    #[serde(flatten)]
+    pub id: PluginInstanceId,
+    #[serde(default)]
+    pub priority: i32,
+}
+
+impl PluginBinding {
+    pub fn new(code: impl Into<Cow<'static, str>>, name: PluginInstanceName, priority: i32) -> Self {
+        Self {
+            id: PluginInstanceId::new(code, name),
+            priority,
+        }
+    }
+
+    pub fn with_priority(mut self, priority: i32) -> Self {
+        self.priority = priority;
+        self
+    }
+}
+
+impl From<PluginInstanceId> for PluginBinding {
+    fn from(id: PluginInstanceId) -> Self {
+        Self { id, priority: 0 }
+    }
+}
+
+impl From<PluginBinding> for PluginInstanceId {
+    fn from(binding: PluginBinding) -> Self {
+        binding.id
+    }
+}
+
 impl std::fmt::Display for PluginInstanceId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}-{}", self.code, self.name)
@@ -151,12 +189,19 @@ impl FromStr for PluginInstanceName {
 pub struct PluginConfig {
     #[serde(flatten)]
     pub id: PluginInstanceId,
+    /// 插件实例的管理端展示名称，不参与实例 ID 和运行时配置计算。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub spec: Value,
 }
 
 impl PluginConfig {
     pub fn new(id: impl Into<PluginInstanceId>, spec: Value) -> Self {
-        Self { id: id.into(), spec }
+        Self {
+            id: id.into(),
+            display_name: None,
+            spec,
+        }
     }
     pub fn code(&self) -> &str {
         &self.id.code
@@ -181,7 +226,14 @@ pub struct PluginInstanceMap {
 
 impl PluginInstanceMap {
     pub fn into_config_vec(self) -> Vec<PluginConfig> {
-        self.plugins.into_iter().map(|(k, v)| PluginConfig { id: k, spec: v }).collect()
+        self.plugins
+            .into_iter()
+            .map(|(k, v)| PluginConfig {
+                id: k,
+                display_name: None,
+                spec: v,
+            })
+            .collect()
     }
     pub fn from_config_vec(vec: Vec<PluginConfig>) -> Self {
         let map = vec.into_iter().map(|v| (v.id.clone(), v.spec)).collect();
@@ -224,7 +276,20 @@ impl Serialize for PluginInstanceMap {
     where
         S: serde::Serializer,
     {
-        let map = self.plugins.iter().map(|(k, v)| (k.to_string(), PluginConfig { id: k.clone(), spec: v.clone() })).collect::<HashMap<String, PluginConfig>>();
+        let map = self
+            .plugins
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.to_string(),
+                    PluginConfig {
+                        id: k.clone(),
+                        display_name: None,
+                        spec: v.clone(),
+                    },
+                )
+            })
+            .collect::<HashMap<String, PluginConfig>>();
         map.serialize(serializer)
     }
 }
@@ -260,6 +325,8 @@ impl FromIterator<(PluginInstanceId, Value)> for PluginInstanceMap {
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "typegen", derive(ts_rs::TS), ts(export))]
 pub struct PluginMetaData {
+    /// 插件类型的人类可读标题；实例名称仍由 `PluginConfig.display_name` 表示。
+    pub title: Option<Cow<'static, str>>,
     pub authors: Option<Cow<'static, str>>,
     pub description: Option<Cow<'static, str>>,
     pub version: Option<Cow<'static, str>>,
@@ -272,6 +339,7 @@ macro_rules! plugin_meta {
     () => {
         {
             $crate::PluginMetaData {
+                title: None,
                 authors: Some(env!("CARGO_PKG_AUTHORS").into()),
                 version: Some(env!("CARGO_PKG_VERSION").into()),
                 description: Some(env!("CARGO_PKG_DESCRIPTION").into()),
@@ -347,6 +415,55 @@ mod test {
         let id: PluginInstanceId = serde_json::from_str(json).expect("fail to deserialize");
         println!("{id:?}");
     }
+
+    #[test]
+    fn plugin_binding_defaults_priority_for_legacy_plugin_id() {
+        let binding: PluginBinding = serde_json::from_str(r#"{"code":"wasm","kind":"named","name":"risk-check"}"#).expect("legacy plugin id should deserialize as a binding");
+
+        assert_eq!(binding.priority, 0);
+        assert_eq!(binding.id.code, "wasm");
+        assert_eq!(binding.id.name, PluginInstanceName::named("risk-check"));
+    }
+
+    #[test]
+    fn plugin_config_defaults_display_name_for_legacy_json() {
+        let config: PluginConfig = serde_json::from_str(r#"{"code":"hai-auth","kind":"named","name":"auth-a1","spec":{}}"#).expect("legacy plugin config should deserialize");
+
+        assert_eq!(config.display_name, None);
+    }
+
+    #[test]
+    fn plugin_config_preserves_display_name_without_changing_id() {
+        let mut config: PluginConfig = serde_json::from_str(r#"{"code":"hai-auth","kind":"named","name":"auth-a1","display_name":"生产鉴权","spec":{}}"#)
+            .expect("plugin config with display name should deserialize");
+        let original_id = config.id.clone();
+
+        config.display_name = Some("备用鉴权".to_string());
+
+        assert_eq!(config.id, original_id);
+        assert_eq!(config.display_name.as_deref(), Some("备用鉴权"));
+    }
+
+    #[test]
+    fn plugin_metadata_defaults_title_for_legacy_json() {
+        let metadata: PluginMetaData =
+            serde_json::from_str(r#"{"authors":null,"description":"legacy","version":null,"homepage":null,"repository":null}"#).expect("legacy plugin metadata should deserialize");
+
+        assert_eq!(metadata.title, None);
+    }
+
+    #[test]
+    fn plugin_metadata_serializes_title() {
+        let metadata = PluginMetaData {
+            title: Some("HAI API Key Authentication".into()),
+            ..PluginMetaData::default()
+        };
+
+        let value = serde_json::to_value(metadata).expect("plugin metadata should serialize");
+
+        assert_eq!(value["title"], "HAI API Key Authentication");
+    }
+
     #[test]
     fn test_dec() {
         let config = json!(

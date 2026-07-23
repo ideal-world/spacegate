@@ -43,7 +43,7 @@ RUN echo "==> hai-hub workspace members after trim" \
     && echo "==> local SpaceGate patch config" \
     && cat /hai-hub/.cargo/config.toml
 RUN CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_PANIC=unwind \
-    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins \
+    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema \
     && test -f /hai-hub/target/release/libhai_hub_spacegate_plugins.so
 
 FROM debian:bookworm-slim

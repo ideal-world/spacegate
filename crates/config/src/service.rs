@@ -18,6 +18,58 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use spacegate_model::*;
 
+const PLUGIN_CONFIG_FORMAT: &str = "plugin_config_v1";
+
+/// 插件配置的版本化持久化信封，用于将管理元数据与运行时 spec 分开保存。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredPluginConfig {
+    #[serde(rename = "_spacegate_format")]
+    format: String,
+    #[serde(flatten)]
+    config: PluginConfig,
+}
+
+/// 规范化可选展示名称，空白名称按未配置处理。
+pub fn normalize_plugin_display_name(display_name: Option<String>) -> Option<String> {
+    display_name.and_then(|name| {
+        let name = name.trim();
+        (!name.is_empty()).then(|| name.to_string())
+    })
+}
+
+/// 将插件配置编码为带版本标识的持久化值。
+pub(crate) fn encode_stored_plugin_config(mut config: PluginConfig) -> Result<Value, BoxError> {
+    config.display_name = normalize_plugin_display_name(config.display_name);
+    Ok(serde_json::to_value(StoredPluginConfig {
+        format: PLUGIN_CONFIG_FORMAT.to_string(),
+        config,
+    })?)
+}
+
+/// 解码插件持久化值；未带版本标识时按旧版裸 spec 读取。
+pub(crate) fn decode_stored_plugin_config(id: &PluginInstanceId, value: Value, accept_legacy_full_config: bool) -> Result<PluginConfig, BoxError> {
+    if value.get("_spacegate_format").and_then(Value::as_str) == Some(PLUGIN_CONFIG_FORMAT) {
+        let mut stored: StoredPluginConfig = serde_json::from_value(value)?;
+        stored.config.id = id.clone();
+        stored.config.display_name = normalize_plugin_display_name(stored.config.display_name);
+        return Ok(stored.config);
+    }
+
+    if accept_legacy_full_config {
+        if let Ok(mut config) = serde_json::from_value::<PluginConfig>(value.clone()) {
+            config.id = id.clone();
+            config.display_name = normalize_plugin_display_name(config.display_name);
+            return Ok(config);
+        }
+    }
+
+    Ok(PluginConfig {
+        id: id.clone(),
+        display_name: None,
+        spec: value,
+    })
+}
+
 pub trait Create: Sync + Send {
     fn create_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> impl Future<Output = Result<(), BoxError>> + Send;
     fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> impl Future<Output = Result<(), BoxError>> + Send;
@@ -38,7 +90,7 @@ pub trait Create: Sync + Send {
             Ok(())
         }
     }
-    fn create_plugin(&self, id: &PluginInstanceId, value: Value) -> impl Future<Output = Result<(), BoxError>> + Send;
+    fn create_plugin(&self, config: PluginConfig) -> impl Future<Output = Result<(), BoxError>> + Send;
 }
 
 pub trait Update: Sync + Send {
@@ -62,7 +114,7 @@ pub trait Update: Sync + Send {
             Ok(())
         }
     }
-    fn update_plugin(&self, id: &PluginInstanceId, value: Value) -> impl Future<Output = Result<(), BoxError>> + Send;
+    fn update_plugin(&self, config: PluginConfig) -> impl Future<Output = Result<(), BoxError>> + Send;
 }
 
 pub trait Delete: Sync + Send {

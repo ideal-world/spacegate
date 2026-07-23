@@ -73,6 +73,7 @@ async fn proxy_on_tick_drives_background_ticks() {
             code: "wasm".into(),
             name: PluginInstanceName::named("on-tick-test"),
         },
+        display_name: None,
         spec: serde_json::json!({
             "url": format!("file://{}", wasm.display()),
             "plugin_name": "on-tick-plugin",

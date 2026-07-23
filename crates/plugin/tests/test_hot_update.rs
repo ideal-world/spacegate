@@ -13,6 +13,7 @@ async fn test_hot_update() -> Result<(), BoxError> {
     let id = PluginInstanceId::new("maintenance", PluginInstanceName::named("name"));
     repo.create_or_update_instance(PluginConfig {
         id: id.clone(),
+        display_name: None,
         spec: json!(
             {
                 "code": "maintenance",
@@ -45,6 +46,7 @@ async fn test_hot_update() -> Result<(), BoxError> {
     dbg!(body);
     repo.create_or_update_instance(PluginConfig {
         id: id.clone(),
+        display_name: None,
         spec: json!(
             {
                 "code": "maintenance",
