@@ -16,7 +16,7 @@
 
 ```bash
 # 此处只是示例，根据实际项目路径设置
-cd /path/to/spacegate-workspace）
+cd /path/to/spacegate-workspace
 
 export WORKSPACE_ROOT="$PWD"
 export SPACEGATE_ROOT="$WORKSPACE_ROOT/spacegate"
@@ -36,7 +36,7 @@ export AI_GATEWAY_SERVICE_IMAGE="ai-gateway-service:$VERSION"
 export ADMIN_NGINX_IMAGE="nginx:1.27-bookworm"
 
 # 如果网关镜像需要内置 HAI native dylib，设置到 hai-hub 仓库路径。
-export HAI_HUB_ROOT="/Users/yiye/projectSpace/huayun_project/hai-hub"
+export HAI_HUB_ROOT="$LOCAL_HUB_ROOT/hai-hub"
 
 mkdir -p "$ARTIFACT_DIR"
 ```
