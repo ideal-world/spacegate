@@ -5,7 +5,7 @@ use std::{
 };
 
 use hyper::{Request, Response, StatusCode};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use serde_json::Value;
 use spacegate_kernel::{extension::OriginalIpAddr, helper_layers::function::Inner, BoxError, SgBody, SgRequestExt, SgResponseExt};
@@ -18,9 +18,11 @@ use spacegate_ext_redis::redis::Script;
 #[cfg_attr(feature = "schema", schemars(title = "限流插件配置"))]
 pub struct RateLimitPluginConfig {
     /// Maximum number of requests, default is 100
+    #[serde(default, deserialize_with = "deserialize_optional_u64_from_number_or_string")]
     #[cfg_attr(feature = "schema", schemars(title = "最大请求数"))]
     pub max_request_number: Option<u64>,
     /// Time window in milliseconds, default is 1000ms
+    #[serde(default, deserialize_with = "deserialize_optional_u64_from_number_or_string")]
     #[cfg_attr(feature = "schema", schemars(title = "时间窗口(毫秒)"))]
     pub time_window_ms: Option<u64>,
 
@@ -31,6 +33,20 @@ pub struct RateLimitPluginConfig {
 
 fn default_report_ext() -> Value {
     Value::Object(Default::default())
+}
+
+/// Reads current numeric values and legacy JSON strings without weakening invalid-value validation.
+fn deserialize_optional_u64_from_number_or_string<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(number)) => number.as_u64().map(Some).ok_or_else(|| serde::de::Error::custom("expected a non-negative integer")),
+        Some(Value::String(value)) => value.parse::<u64>().map(Some).map_err(|_| serde::de::Error::custom("expected a non-negative integer or decimal string")),
+        Some(_) => Err(serde::de::Error::custom("expected a non-negative integer or decimal string")),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -159,3 +175,20 @@ impl Plugin for RateLimitPlugin {
 
 #[cfg(feature = "schema")]
 crate::schema! { RateLimitPlugin, RateLimitPluginConfig }
+
+#[cfg(test)]
+mod tests {
+    use super::RateLimitPluginConfig;
+
+    #[test]
+    fn accepts_legacy_string_values_for_numeric_limit_fields() {
+        let config: RateLimitPluginConfig = serde_json::from_value(serde_json::json!({
+            "max_request_number": "23",
+            "time_window_ms": "1000"
+        }))
+        .expect("legacy numeric strings should remain readable");
+
+        assert_eq!(config.max_request_number, Some(23));
+        assert_eq!(config.time_window_ms, Some(1000));
+    }
+}

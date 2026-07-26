@@ -14,7 +14,8 @@ use std::collections::BTreeMap;
 
 use crate::{
     error::InternalError,
-    state::{self, AppState},
+    service::discovery::InstanceApi,
+    state::{self, AppState, PluginRuntimeSync},
     Backend,
 };
 
@@ -36,6 +37,24 @@ impl PluginUpsertQuery {
             spec,
         }
     }
+}
+
+/// 将 file backend 的插件配置变更同步到所有已发现的 Spacegate 运行时实例。
+async fn sync_plugin_runtime<B: Discovery>(
+    backend: &B,
+    plugin_runtime_sync: PluginRuntimeSync,
+    id: PluginInstanceId,
+    event_type: ConfigEventType,
+) -> Result<(), InternalError<BoxError>> {
+    let Some(event) = plugin_runtime_sync.plugin_event(id, event_type) else {
+        return Ok(());
+    };
+
+    for instance in backend.instances().await.map_err(InternalError)? {
+        InstanceApi::new(&instance).push_event(&event).await.map_err(InternalError)?;
+    }
+
+    Ok(())
 }
 
 /**********************************************
@@ -118,12 +137,15 @@ async fn post_config_item_route<B: Create>(
 ) -> Result<(), InternalError<BoxError>> {
     backend.create_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
-async fn post_config_plugin<B: Create>(
+async fn post_config_plugin<B: Create + Discovery>(
     Query(query): Query<PluginUpsertQuery>,
-    State(AppState { backend, .. }): State<AppState<B>>,
+    State(AppState { backend, plugin_runtime_sync, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.create_plugin(query.into_config(spec)).await.map_err(InternalError)
+    let config = query.into_config(spec);
+    let id = config.id.clone();
+    backend.create_plugin(config).await.map_err(InternalError)?;
+    sync_plugin_runtime(backend.as_ref(), plugin_runtime_sync, id, ConfigEventType::Create).await
 }
 /**********************************************
                        PUT
@@ -156,12 +178,15 @@ async fn put_config<B: Update>(State(AppState { backend, .. }): State<AppState<B
     backend.update_config(config).await.map_err(InternalError)
 }
 
-async fn put_config_plugin<B: Update>(
+async fn put_config_plugin<B: Update + Discovery>(
     Query(query): Query<PluginUpsertQuery>,
-    State(AppState { backend, .. }): State<AppState<B>>,
+    State(AppState { backend, plugin_runtime_sync, .. }): State<AppState<B>>,
     Json(spec): Json<Value>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.update_plugin(query.into_config(spec)).await.map_err(InternalError)
+    let config = query.into_config(spec);
+    let id = config.id.clone();
+    backend.update_plugin(config).await.map_err(InternalError)?;
+    sync_plugin_runtime(backend.as_ref(), plugin_runtime_sync, id, ConfigEventType::Update).await
 }
 /**********************************************
                        DELETE
@@ -186,17 +211,18 @@ async fn delete_config_item_all_routes<B: Delete + Retrieve>(Path(name): Path<St
     backend.delete_config_item_all_routes(&name).await.map_err(InternalError)
 }
 
-async fn delete_config_plugin<B: Delete + Retrieve>(
+async fn delete_config_plugin<B: Delete + Retrieve + Discovery>(
     Query(id): Query<PluginInstanceId>,
-    State(AppState { backend, .. }): State<AppState<B>>,
+    State(AppState { backend, plugin_runtime_sync, .. }): State<AppState<B>>,
 ) -> Result<(), InternalError<BoxError>> {
-    backend.delete_plugin(&id).await.map_err(InternalError)
+    backend.delete_plugin(&id).await.map_err(InternalError)?;
+    sync_plugin_runtime(backend.as_ref(), plugin_runtime_sync, id, ConfigEventType::Delete).await
 }
 
 // router
 pub fn router<B>() -> axum::Router<state::AppState<B>>
 where
-    B: Backend + Create + Retrieve + Update + Delete + Send + Sync + 'static,
+    B: Backend + Discovery + Create + Retrieve + Update + Delete + Send + Sync + 'static,
 {
     Router::new()
         .route("/", get(get_config::<B>).post(post_config::<B>).put(put_config::<B>))

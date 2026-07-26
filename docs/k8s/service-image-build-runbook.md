@@ -289,9 +289,13 @@ RUN printf '%s\n' \
     'spacegate-plugin = { path = "/app/crates/plugin" }' \
     'spacegate-shell = { path = "/app/crates/shell" }' \
     > /hai-hub/.cargo/config.toml
-RUN CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_PANIC=unwind \
-    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema \
-    && test -f /hai-hub/target/release/libhai_hub_spacegate_plugins.so
+WORKDIR /hai-hub
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/hai-hub/target \
+    CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_PANIC=unwind \
+    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema --config /hai-hub/.cargo/config.toml \
+    && install -Dm755 target/release/libhai_hub_spacegate_plugins.so /hai-plugin/libhai_hub_spacegate_plugins.so
 ```
 
 这里的 `sed` 只修改 Docker build 中的 `/hai-hub` 临时副本，不会修改本地 `HAI_HUB_ROOT`。原因是 `hai-hub` workspace 还有其他服务 member，这些 member 可能依赖构建上下文之外的兄弟仓库；但构建 SpaceGate native 插件只需要 `backend/hai-hub-spacegate-plugins`。
@@ -347,7 +351,7 @@ cp "$HAI_HUB_ROOT/target/release/libhai_hub_spacegate_plugins.so" \
 
 ```dockerfile
 COPY --from=hai-plugin-builder \
-  /hai-hub/target/release/libhai_hub_spacegate_plugins.so \
+  /hai-plugin/libhai_hub_spacegate_plugins.so \
   /lib/spacegate/plugins/
 ```
 

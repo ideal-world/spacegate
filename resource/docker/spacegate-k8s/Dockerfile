@@ -36,15 +36,19 @@ RUN printf '%s\n' \
     'spacegate-plugin = { path = "/app/crates/plugin" }' \
     'spacegate-shell = { path = "/app/crates/shell" }' \
     > /hai-hub/.cargo/config.toml
+WORKDIR /hai-hub
 RUN echo "==> hai-hub workspace members after trim" \
     && sed -n '1,12p' /hai-hub/Cargo.toml \
     && echo "==> hai-hub-spacegate-plugins lib config" \
     && sed -n '18,22p' /hai-hub/backend/hai-hub-spacegate-plugins/Cargo.toml \
     && echo "==> local SpaceGate patch config" \
     && cat /hai-hub/.cargo/config.toml
-RUN CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_PANIC=unwind \
-    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema \
-    && test -f /hai-hub/target/release/libhai_hub_spacegate_plugins.so
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/hai-hub/target \
+    CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_PANIC=unwind \
+    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema --config /hai-hub/.cargo/config.toml \
+    && install -Dm755 target/release/libhai_hub_spacegate_plugins.so /hai-plugin/libhai_hub_spacegate_plugins.so
 
 FROM debian:bookworm-slim
 
@@ -53,7 +57,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/spacegate /usr/local/bin/spacegate
-COPY --from=hai-plugin-builder /hai-hub/target/release/libhai_hub_spacegate_plugins.so /lib/spacegate/plugins/hai_hub_spacegate_plugins.so
+COPY --from=hai-plugin-builder /hai-plugin/libhai_hub_spacegate_plugins.so /lib/spacegate/plugins/hai_hub_spacegate_plugins.so
 COPY --from=builder /app/plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm /lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm
 
 ENV CONFIG=k8s:spacegate

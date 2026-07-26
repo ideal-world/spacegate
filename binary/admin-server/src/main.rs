@@ -1,6 +1,6 @@
 use axum::{http::Request, Router};
 use spacegate_config::service::*;
-use state::AppState;
+use state::{AppState, PluginRuntimeSync};
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::trace::TraceLayer;
 use tracing::Span;
@@ -30,11 +30,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = match args.config {
         clap::ConfigBackend::File(path) => {
             let backend = spacegate_config::service::fs::Fs::new(path, config_format::Json::default());
-            create_app(backend, sec, digest)
+            create_app(backend, PluginRuntimeSync::File, sec, digest)
         }
         clap::ConfigBackend::K8s(ns) => {
             let backend = spacegate_config::service::k8s::K8s::with_default_client(ns).await?.with_gateway_selection(args.gateway_class_name, args.gateway_instance);
-            create_app(backend, sec, digest)
+            create_app(backend, PluginRuntimeSync::Kubernetes, sec, digest)
         }
     };
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -52,12 +52,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// create app for an backend
-pub fn create_app<B>(backend: B, sec: Option<Arc<[u8]>>, sk_digest: Option<Arc<[u8; 32]>>) -> Router<()>
+pub fn create_app<B>(backend: B, plugin_runtime_sync: PluginRuntimeSync, sec: Option<Arc<[u8]>>, sk_digest: Option<Arc<[u8; 32]>>) -> Router<()>
 where
     B: Discovery + Create + Retrieve + Update + Delete + Send + Sync + 'static,
 {
     let state = AppState {
         backend: Arc::new(backend),
+        plugin_runtime_sync,
         version: mw::version_control::Version::new(),
         secret: sec,
         sk_digest,

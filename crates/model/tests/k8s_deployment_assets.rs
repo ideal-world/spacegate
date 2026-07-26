@@ -117,6 +117,23 @@ fn gateway_manifest_declares_native_dylib_plugin_directories() {
     assert!(volumes.iter().any(|volume| { volume.get("name").and_then(serde_json::Value::as_str) == Some("external-plugins") && volume.get("emptyDir").is_some() }));
 }
 
+/// Keeps all-in-one plugin volumes separate from image-bundled native and Wasm plugins.
+#[test]
+fn all_in_one_uses_k8s_compatible_plugin_directories() {
+    let dockerfile = include_str!("../../../../Dockerfile.all-in-one");
+    let start_script = include_str!("../../../../docker/all-in-one/start.sh");
+    let readme = include_str!("../../../../README.md");
+
+    assert!(dockerfile.contains("EXTERNAL_NATIVE_PLUGIN_DIR=/var/lib/spacegate/plugins"));
+    assert!(dockerfile.contains("EXTERNAL_WASM_PLUGIN_DIR=/plugins"));
+    assert!(start_script.contains("BUILTIN_NATIVE_PLUGIN_DIR=\"${BUILTIN_NATIVE_PLUGIN_DIR:-/lib/spacegate/plugins}\""));
+    assert!(start_script.contains("EXTERNAL_NATIVE_PLUGIN_DIR=\"${EXTERNAL_NATIVE_PLUGIN_DIR:-/var/lib/spacegate/plugins}\""));
+    assert!(start_script.contains("-p \"$BUILTIN_NATIVE_PLUGIN_DIR,$EXTERNAL_NATIVE_PLUGIN_DIR\""));
+    assert!(readme.contains("spacegate-native-plugins:/var/lib/spacegate/plugins"));
+    assert!(readme.contains("spacegate-wasm:/plugins"));
+    assert!(!readme.contains("spacegate-plugins:/lib/spacegate/plugins"));
+}
+
 /// Keeps non-runnable Wasm examples out of the directory used for base manifests.
 #[test]
 fn base_manifest_directory_excludes_wasm_hello_example() {
