@@ -31,3 +31,4 @@ devsh/*
 scripts
 mix
 superpowers/
+dist/

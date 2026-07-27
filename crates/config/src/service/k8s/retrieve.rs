@@ -2,7 +2,7 @@ use base64::{engine::general_purpose, Engine as _};
 use futures_util::future::join_all;
 use gateway::{SgListener, SgParameters, SgProtocolConfig, SgTlsConfig};
 use http_route::SgHttpRouteRule;
-use k8s_gateway_api::{Gateway, HttpRoute, Listener};
+use k8s_gateway_api::{Gateway, HttpRoute, Listener, ParentReference};
 use k8s_openapi::api::core::v1::Secret;
 use kube::{api::ListParams, Api, ResourceExt};
 use serde_json::{json, Value};
@@ -36,6 +36,12 @@ use super::{
     gateway_uses_class, K8s,
 };
 
+/// Checks whether a route parent reference targets a Gateway in its current namespace.
+/// Kubernetes treats an omitted parent reference namespace as the Route namespace.
+fn route_parent_refs_include_gateway(parent_refs: Option<&[ParentReference]>, gateway_name: &str, gateway_namespace: &str) -> bool {
+    parent_refs.into_iter().flatten().any(|parent_ref| parent_ref.name == gateway_name && parent_ref.namespace.as_deref().unwrap_or(gateway_namespace) == gateway_namespace)
+}
+
 impl Retrieve for K8s {
     async fn retrieve_config_item_gateway(&self, gateway_name: &str) -> BoxResult<Option<SgGateway>> {
         let gateway_api: Api<Gateway> = self.get_namespace_api();
@@ -61,14 +67,7 @@ impl Retrieve for K8s {
         let mcp_route_api: Api<McpRoute> = self.get_namespace_api();
 
         let result = if let Some(mcp_route) = mcp_route_api.get_opt(route_name).await?.and_then(|mcp_route_obj| {
-            if mcp_route_obj
-                .spec
-                .inner
-                .parent_refs
-                .as_ref()
-                .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == mcp_route_obj.namespace() && parent_ref.name == gateway_name))
-                .unwrap_or(false)
-            {
+            if route_parent_refs_include_gateway(mcp_route_obj.spec.inner.parent_refs.as_deref(), gateway_name, &self.namespace) {
                 Some(mcp_route_obj)
             } else {
                 None
@@ -76,14 +75,7 @@ impl Retrieve for K8s {
         }) {
             Some(SgRoute::Mcp(self.kube_mcproute_2_sg_route(mcp_route).await?))
         } else if let Some(httpspaceroute) = http_spaceroute_api.get_opt(route_name).await?.and_then(|http_route_obj| {
-            if http_route_obj
-                .spec
-                .inner
-                .parent_refs
-                .as_ref()
-                .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == http_route_obj.namespace() && parent_ref.name == gateway_name))
-                .unwrap_or(false)
-            {
+            if route_parent_refs_include_gateway(http_route_obj.spec.inner.parent_refs.as_deref(), gateway_name, &self.namespace) {
                 Some(http_route_obj)
             } else {
                 None
@@ -91,14 +83,7 @@ impl Retrieve for K8s {
         }) {
             Some(SgRoute::Http(self.kube_httpspaceroute_2_sg_route(httpspaceroute).await?))
         } else if let Some(http_route) = httproute_api.get_opt(route_name).await?.and_then(|http_route| {
-            if http_route
-                .spec
-                .inner
-                .parent_refs
-                .as_ref()
-                .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == http_route.namespace() && parent_ref.name == gateway_name))
-                .unwrap_or(false)
-            {
+            if route_parent_refs_include_gateway(http_route.spec.inner.parent_refs.as_deref(), gateway_name, &self.namespace) {
                 Some(http_route)
             } else {
                 None
@@ -121,15 +106,7 @@ impl Retrieve for K8s {
             .list(&ListParams::default())
             .await?
             .iter()
-            .filter(|route| {
-                route
-                    .spec
-                    .inner
-                    .parent_refs
-                    .as_ref()
-                    .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == route.namespace() && parent_ref.name == name))
-                    .unwrap_or(false)
-            })
+            .filter(|route| route_parent_refs_include_gateway(route.spec.inner.parent_refs.as_deref(), name, &self.namespace))
             .map(|route| route.name_any())
             .collect();
 
@@ -138,15 +115,7 @@ impl Retrieve for K8s {
                 .list(&ListParams::default())
                 .await?
                 .iter()
-                .filter(|route| {
-                    route
-                        .spec
-                        .inner
-                        .parent_refs
-                        .as_ref()
-                        .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == route.namespace() && parent_ref.name == name))
-                        .unwrap_or(false)
-                })
+                .filter(|route| route_parent_refs_include_gateway(route.spec.inner.parent_refs.as_deref(), name, &self.namespace))
                 .map(|route| route.name_any()),
         );
 
@@ -155,15 +124,7 @@ impl Retrieve for K8s {
                 .list(&ListParams::default())
                 .await?
                 .iter()
-                .filter(|route| {
-                    route
-                        .spec
-                        .inner
-                        .parent_refs
-                        .as_ref()
-                        .map(|parent_refs| parent_refs.iter().any(|parent_ref| parent_ref.namespace == route.namespace() && parent_ref.name == name))
-                        .unwrap_or(false)
-                })
+                .filter(|route| route_parent_refs_include_gateway(route.spec.inner.parent_refs.as_deref(), name, &self.namespace))
                 .map(|route| route.name_any()),
         );
 
@@ -234,6 +195,27 @@ impl Retrieve for K8s {
 
     async fn retrieve_plugins_by_code(&self, code: &str) -> Result<Vec<PluginConfig>, BoxError> {
         Ok(self.retrieve_all_plugins().await?.into_iter().filter(|p| p.code() == code).collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use k8s_gateway_api::ParentReference;
+
+    use super::route_parent_refs_include_gateway;
+
+    #[test]
+    fn omitted_parent_namespace_targets_gateway_in_current_namespace() {
+        let parent_refs = vec![ParentReference {
+            group: None,
+            kind: None,
+            namespace: None,
+            name: "gateway".to_string(),
+            section_name: None,
+            port: None,
+        }];
+
+        assert!(route_parent_refs_include_gateway(Some(&parent_refs), "gateway", "ai-hai"));
     }
 }
 

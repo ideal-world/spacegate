@@ -62,7 +62,7 @@ COPY --from=hai-plugin-builder /hai-plugin/hai-hub-spacegate /usr/local/bin/spac
 COPY --from=builder /app/plugins/wasm/target/wasm32-wasip1/release/spacegate_plugin_ai_gateway_queue.wasm /lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm
 
 ENV STARTUP_MODE=k8s
-ENV K8S_NAMESPACE=spacegate
+ENV K8S_NAMESPACE=ai-hai
 ENV PLUGIN_DIR=/lib/spacegate/plugins
 ENV RUST_LOG=info
 

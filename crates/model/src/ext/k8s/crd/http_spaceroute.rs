@@ -2,7 +2,7 @@ use k8s_gateway_api::{BackendObjectReference, CommonRouteSpec, Hostname, HttpRou
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use std::collections::BTreeMap;
 
-use crate::constants::{self, DEFAULT_NAMESPACE};
+use crate::constants;
 
 #[derive(Clone, Debug, Default, kube::CustomResource, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[kube(
@@ -293,13 +293,39 @@ impl HttpSpaceroute {
             .inner
             .parent_refs
             .as_ref()
-            .map(|p_rs| {
-                p_rs.iter()
-                    .filter(|p_r| p_r.namespace.eq(&Some(namespace.to_string())) || (namespace == DEFAULT_NAMESPACE && p_r.namespace.is_none()))
-                    .map(|p_r| p_r.name.clone())
-                    .next()
-            })
+            .map(|p_rs| p_rs.iter().filter(|p_r| p_r.namespace.as_deref().unwrap_or(namespace) == namespace).map(|p_r| p_r.name.clone()).next())
             .unwrap_or_default()
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use k8s_gateway_api::ParentReference;
+
+    use super::{CommonRouteSpec, HttpSpaceroute, HttpSpacerouteSpec};
+
+    #[test]
+    fn omitted_parent_namespace_uses_route_namespace() {
+        let mut inner = CommonRouteSpec::default();
+        inner.parent_refs = Some(vec![ParentReference {
+            group: None,
+            kind: None,
+            namespace: None,
+            name: "gateway".to_string(),
+            section_name: None,
+            port: None,
+        }]);
+        let route = HttpSpaceroute {
+            metadata: Default::default(),
+            spec: HttpSpacerouteSpec {
+                inner,
+                hostnames: None,
+                rules: None,
+            },
+            status: None,
+        };
+
+        assert_eq!(route.get_gateway_name("ai-hai"), "gateway");
     }
 }

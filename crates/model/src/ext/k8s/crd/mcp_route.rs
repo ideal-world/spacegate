@@ -1,6 +1,6 @@
 use k8s_gateway_api::{CommonRouteSpec, Hostname, RouteStatus};
 
-use crate::{constants::DEFAULT_NAMESPACE, McpSessionAffinity, McpTimeoutMode, SgMcpLegacySse, SgMcpTransport, TimeoutMode};
+use crate::{McpSessionAffinity, McpTimeoutMode, SgMcpLegacySse, SgMcpTransport, TimeoutMode};
 
 use super::http_spaceroute::{BackendRef, HttpBackendRef};
 
@@ -82,13 +82,45 @@ impl McpRoute {
             .parent_refs
             .as_ref()
             .map(|parent_refs| {
-                parent_refs
-                    .iter()
-                    .filter(|parent_ref| parent_ref.namespace.eq(&Some(namespace.to_string())) || (namespace == DEFAULT_NAMESPACE && parent_ref.namespace.is_none()))
-                    .map(|parent_ref| parent_ref.name.clone())
-                    .next()
+                parent_refs.iter().filter(|parent_ref| parent_ref.namespace.as_deref().unwrap_or(namespace) == namespace).map(|parent_ref| parent_ref.name.clone()).next()
             })
             .unwrap_or_default()
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use k8s_gateway_api::ParentReference;
+
+    use super::{default_mcp_timeout_mode, CommonRouteSpec, McpRoute, McpRouteSpec};
+
+    #[test]
+    fn omitted_parent_namespace_uses_route_namespace() {
+        let mut inner = CommonRouteSpec::default();
+        inner.parent_refs = Some(vec![ParentReference {
+            group: None,
+            kind: None,
+            namespace: None,
+            name: "gateway".to_string(),
+            section_name: None,
+            port: None,
+        }]);
+        let route = McpRoute {
+            metadata: Default::default(),
+            spec: McpRouteSpec {
+                inner,
+                hostnames: None,
+                transport: Default::default(),
+                path: "/mcp".to_string(),
+                legacy_sse: None,
+                backend_refs: vec![],
+                timeout_mode: default_mcp_timeout_mode(),
+                session_affinity: Default::default(),
+            },
+            status: None,
+        };
+
+        assert_eq!(route.get_gateway_name("ai-hai"), "gateway");
     }
 }
