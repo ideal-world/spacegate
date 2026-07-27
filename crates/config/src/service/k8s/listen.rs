@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::{Hash, Hasher},
-    task::ready,
-};
+use std::{collections::HashMap, task::ready};
 
 use futures_util::{pin_mut, TryStreamExt};
 use k8s_gateway_api::{Gateway, HttpRoute};
@@ -37,6 +33,25 @@ pub struct K8sListener {
     rx: tokio::sync::mpsc::UnboundedReceiver<(ConfigType, ConfigEventType)>,
 }
 impl K8sListener {}
+
+/// Returns bindings whose target must be reloaded after an SgFilter update.
+///
+/// Target identity intentionally excludes priority so add/remove operations can find the
+/// same binding. A priority change nevertheless changes the mounted plugin order and must
+/// reload the target using the current binding value.
+fn target_refs_requiring_reload(old: &[K8sSgFilterSpecTargetRef], current: &[K8sSgFilterSpecTargetRef]) -> Vec<K8sSgFilterSpecTargetRef> {
+    let mut changed = current
+        .iter()
+        .filter(|current_ref| match old.iter().find(|old_ref| *old_ref == *current_ref) {
+            Some(old_ref) => old_ref.priority != current_ref.priority,
+            None => true,
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    changed.extend(old.iter().filter(|old_ref| current.iter().all(|current_ref| current_ref != *old_ref)).cloned());
+    changed
+}
 
 impl K8s {
     async fn reconcile_wasm_plugin_status(api: &Api<WasmPlugin>, secret_api: &Api<Secret>, plugin: &WasmPlugin) {
@@ -358,7 +373,6 @@ impl CreateListener for K8s {
         //watch sgfilter
         tokio::task::spawn(async move {
             let mut uid_version_map = HashMap::new();
-            let mut target_digest_map: HashMap<String, u64> = HashMap::new();
             let mut target_ref_map: HashMap<String, Vec<K8sSgFilterSpecTargetRef>> = HashMap::new();
             let ew = watcher::watcher(sg_filter_api, watcher::Config::default()).touched_objects();
             pin_mut!(ew);
@@ -381,33 +395,18 @@ impl CreateListener for K8s {
                     }
                 }
 
-                let digest = {
-                    let mut hasher = std::hash::DefaultHasher::new();
-                    filter.spec.target_refs.hash(&mut hasher);
-                    hasher.finish()
-                };
-                debug!("filter {} - new digest: {}, old digest: {:?}", name_any, digest, target_digest_map.get(&name_any));
-                match target_digest_map.get(&name_any) {
-                    Some(d) if *d == digest => continue,
-                    _ => {
-                        if filter.spec.target_refs.is_empty() && !target_ref_map.contains_key(&name_any) {
-                            debug!("skip empty target_refs for filter {}", name_any);
-                            continue;
-                        }
-                        target_digest_map.insert(name_any.clone(), digest);
-                    }
+                let old_target_refs = target_ref_map.get(&name_any).map(Vec::as_slice).unwrap_or_default();
+                let updated_vec = target_refs_requiring_reload(old_target_refs, &filter.spec.target_refs);
+
+                if updated_vec.is_empty() {
+                    debug!("filter {} has no target_refs changes", name_any);
+                    continue;
                 }
 
-                let update_set: HashSet<_> = filter.spec.target_refs.iter().collect();
-                let old_set: HashSet<_> = target_ref_map.get(&name_any).map(|old| old.iter().collect()).unwrap_or_default();
-
-                let add_vec: Vec<_> = update_set.difference(&old_set).collect();
-                let mut delete_vec: Vec<_> = old_set.difference(&update_set).collect();
-
-                let mut updated_vec = add_vec;
-                updated_vec.append(&mut delete_vec);
-
-                debug!("target_refs changes - update_set: {:?}, old_set: {:?}, updated_vec: {:?}", update_set, old_set, updated_vec);
+                debug!(
+                    "target_refs changes - current: {:?}, old: {:?}, updated: {:?}",
+                    filter.spec.target_refs, old_target_refs, updated_vec
+                );
                 for target_ref in updated_vec {
                     match target_ref.kind.as_str() {
                         "Gateway" => {
@@ -525,5 +524,25 @@ impl<K, T, F> EnumMap<K, T, F> for watcher::Event<K> {
             watcher::Event::Deleted(k) => watcher::Event::Deleted(f(k)),
             watcher::Event::Restarted(k) => watcher::Event::Restarted(k.into_iter().map(f).collect()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use spacegate_model::ext::k8s::crd::sg_filter::K8sSgFilterSpecTargetRef;
+
+    use super::target_refs_requiring_reload;
+
+    #[test]
+    fn priority_change_requires_target_reload() {
+        let old = vec![K8sSgFilterSpecTargetRef {
+            kind: "HTTPSpaceroute".to_string(),
+            name: "demo-route".to_string(),
+            namespace: Some("ai-hai".to_string()),
+            priority: 0,
+        }];
+        let updated = vec![K8sSgFilterSpecTargetRef { priority: 100, ..old[0].clone() }];
+
+        assert_eq!(target_refs_requiring_reload(&old, &updated), updated);
     }
 }
