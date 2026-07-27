@@ -1,0 +1,22 @@
+[package]
+name = "streaming_body_guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Proxy-Wasm guest used to verify incremental SSE response body callbacks."
+
+# 独立 workspace：guest 仅编译为 wasm32-wasip1 测试制品，不参与 host workspace。
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm = "0.2"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = "fat"
+strip = true
+panic = "abort"

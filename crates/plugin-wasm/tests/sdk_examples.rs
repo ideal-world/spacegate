@@ -136,7 +136,7 @@ async fn sdk_example_http_headers_hello() {
     let req = HyperRequest::builder().method("GET").uri("http://example.test/hello").header("host", "example.test").body(SgBody::empty()).expect("build req");
     let captured = CaptureState::default();
     let inner = make_inner(captured.clone());
-    let resp = vm.process(req, inner).await.expect("process");
+    let resp = vm.process(req, inner).await.expect("process").into_complete_response().expect("complete response");
     let (resp, body) = full_body(resp).await;
 
     assert_eq!(resp.status(), 200);
@@ -163,7 +163,7 @@ async fn sdk_example_http_headers_passthrough() {
         .body(SgBody::empty())
         .expect("build req");
     let captured = CaptureState::default();
-    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process");
+    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process").into_complete_response().expect("complete response");
     let (resp, _body) = full_body(resp).await;
 
     assert_eq!(resp.status(), 200);
@@ -194,7 +194,7 @@ async fn sdk_example_http_body_reverses_request_body() {
         .body(SgBody::full(Bytes::from_static(b"abc-123")))
         .expect("build req");
     let captured = CaptureState::default();
-    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process");
+    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process").into_complete_response().expect("complete response");
     let (resp, body) = full_body(resp).await;
 
     assert_eq!(resp.status(), 200);
@@ -215,7 +215,7 @@ async fn sdk_example_http_config_missing_header_rejected() {
 
     let req = HyperRequest::builder().method("GET").uri("http://example.test/").header("host", "example.test").body(SgBody::empty()).expect("build req");
     let captured = CaptureState::default();
-    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process");
+    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process").into_complete_response().expect("complete response");
     let (resp, body) = full_body(resp).await;
 
     assert_eq!(resp.status(), 403);
@@ -237,7 +237,7 @@ async fn sdk_example_http_config_present_header_passthrough() {
         .body(SgBody::full(Bytes::from_static(b"hello")))
         .expect("build req");
     let captured = CaptureState::default();
-    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process");
+    let resp = vm.process(req, make_inner(captured.clone())).await.expect("process").into_complete_response().expect("complete response");
     let (resp, body) = full_body(resp).await;
 
     assert_eq!(resp.status(), 200);

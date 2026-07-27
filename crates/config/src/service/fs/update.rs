@@ -20,30 +20,26 @@ where
         Ok(())
     }
     async fn update_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            if let Some(prev_item) = config.gateways.get_mut(gateway_name) {
-                prev_item.gateway = gateway;
-                Ok(())
-            } else {
-                Err("item not exists".into())
-            }
-        })
-        .await
+        let Some(path) = self.existing_gateway_config_path(gateway_name) else {
+            return Err("item not exists".into());
+        };
+        let config = ConfigItem {
+            gateway,
+            routes: Default::default(),
+        };
+        tokio::fs::write(path, self.format.ser(&config)?).await?;
+        Ok(())
     }
     async fn update_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            if let Some(prev_item) = config.gateways.get_mut(gateway_name) {
-                if let Some(prev_route) = prev_item.routes.get_mut(route_name) {
-                    *prev_route = route;
-                    Ok(())
-                } else {
-                    Err("route not exists".into())
-                }
-            } else {
-                Err("item not exists".into())
-            }
-        })
-        .await
+        if self.existing_gateway_config_path(gateway_name).is_none() {
+            return Err("item not exists".into());
+        }
+        let path = self.route_path(gateway_name, route_name);
+        if !path.exists() {
+            return Err("route not exists".into());
+        }
+        tokio::fs::write(path, self.format.ser(&route)?).await?;
+        Ok(())
     }
 
     async fn update_config_item(&self, gateway_name: &str, item: ConfigItem) -> Result<(), BoxError> {

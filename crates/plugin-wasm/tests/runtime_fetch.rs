@@ -15,7 +15,7 @@ use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use sha2::{Digest, Sha256};
 use spacegate_plugin_wasm::config::WasmPluginShellConfig;
-use spacegate_plugin_wasm::fetch::fetch_wasm_bytes_sync;
+use spacegate_plugin_wasm::fetch::{fetch_wasm_bytes_sync, fetch_wasm_bytes_sync_with_http_headers, fetch_wasm_image_file_sync_with_http_headers};
 use spacegate_plugin_wasm::runtime::WasmModuleCache;
 use tokio::net::TcpListener;
 
@@ -138,6 +138,50 @@ async fn fetch_wasm_bytes_supports_http_urls() {
     let fetched = tokio::task::spawn_blocking(move || fetch_wasm_bytes_sync(&url)).await.expect("join").expect("fetch");
 
     assert_eq!(fetched, expected);
+}
+
+#[tokio::test]
+async fn fetch_wasm_bytes_forwards_configured_http_headers() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let addr = listener.local_addr().expect("local_addr");
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("accept");
+        let svc = service_fn(|req: Request<hyper::body::Incoming>| async move {
+            let authorized = req.headers().get("authorization").and_then(|value| value.to_str().ok()) == Some("Bearer test-token");
+            let mut resp = Response::new(Full::new(Bytes::from_static(b"protected wasm")));
+            *resp.status_mut() = if authorized { StatusCode::OK } else { StatusCode::UNAUTHORIZED };
+            Ok::<_, Infallible>(resp)
+        });
+        let _ = http1::Builder::new().serve_connection(TokioIo::new(stream), svc).await;
+    });
+    let url = format!("http://{addr}/protected.wasm");
+    let headers = HashMap::from([(String::from("Authorization"), String::from("Bearer test-token"))]);
+
+    let fetched = tokio::task::spawn_blocking(move || fetch_wasm_bytes_sync_with_http_headers(&url, &headers)).await.expect("join").expect("fetch");
+
+    assert_eq!(fetched, Bytes::from_static(b"protected wasm"));
+}
+
+#[tokio::test]
+async fn fetch_wasm_schema_forwards_configured_http_headers() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let addr = listener.local_addr().expect("local_addr");
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("accept");
+        let svc = service_fn(|req: Request<hyper::body::Incoming>| async move {
+            let authorized = req.headers().get("x-plugin-token").and_then(|value| value.to_str().ok()) == Some("schema-token");
+            let mut resp = Response::new(Full::new(Bytes::from_static(b"{\"type\":\"object\"}")));
+            *resp.status_mut() = if authorized { StatusCode::OK } else { StatusCode::UNAUTHORIZED };
+            Ok::<_, Infallible>(resp)
+        });
+        let _ = http1::Builder::new().serve_connection(TokioIo::new(stream), svc).await;
+    });
+    let url = format!("http://{addr}/plugin.wasm");
+    let headers = HashMap::from([(String::from("X-Plugin-Token"), String::from("schema-token"))]);
+
+    let fetched = tokio::task::spawn_blocking(move || fetch_wasm_image_file_sync_with_http_headers(&url, "schema.json", &headers)).await.expect("join").expect("fetch schema");
+
+    assert_eq!(fetched, Bytes::from_static(b"{\"type\":\"object\"}"));
 }
 
 #[tokio::test]

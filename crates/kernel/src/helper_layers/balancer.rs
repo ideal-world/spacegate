@@ -2,6 +2,7 @@ pub mod ip_hash;
 pub use ip_hash::IpHash;
 pub mod mcp_session;
 pub use mcp_session::McpSessionHash;
+pub mod mcp_session_affinity;
 pub mod random;
 pub use random::Random;
 #[derive(Debug, Clone, Default)]

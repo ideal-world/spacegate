@@ -90,7 +90,7 @@ impl HttpRouteRule {
                 ArcHyperService::new(Balancer::new(balancer::Random::new(weights), service_iter, fallback))
             }
             BalancePolicyEnum::IpHash => ArcHyperService::new(Balancer::new(balancer::IpHash::default(), service_iter, fallback)),
-            BalancePolicyEnum::McpSession => ArcHyperService::new(Balancer::new(balancer::McpSessionHash::default(), service_iter, fallback)),
+            BalancePolicyEnum::McpSession => ArcHyperService::new(balancer::mcp_session_affinity::McpSessionAffinityService::new(service_iter, fallback)),
         };
         let balanced = match self.timeout {
             RequestTimeout::Default => ArcHyperService::new(TimeoutLayer::new(DEFAULT_TIMEOUT).layer(balanced)),

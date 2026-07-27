@@ -26,7 +26,7 @@ export ADMIN_DOCKER_DIR="$SPACEGATE_ROOT/resource/docker/spacegate-admin"
 export ARTIFACT_DIR="$WORKSPACE_ROOT/image-artifacts"
 
 # VERSION 建议使用 Git tag、日期版本或交付版本号，例如 20260709-001。
-export VERSION="1.0.2"
+export VERSION="1.0.3"
 
 export SPACEGATE_IMAGE="spacegate:$VERSION"
 export SPACEGATE_ADMIN_IMAGE="spacegate-admin:$VERSION"
@@ -35,8 +35,8 @@ export AI_GATEWAY_SERVICE_IMAGE="ai-gateway-service:$VERSION"
 # Admin 合并镜像的 Nginx 基础镜像。若默认镜像源不可用，可改成本地已导入的 nginx Debian 镜像。
 export ADMIN_NGINX_IMAGE="nginx:1.27-bookworm"
 
-# 如果网关镜像需要内置 HAI native dylib，设置到 hai-hub 仓库路径。
-export HAI_HUB_ROOT="$LOCAL_HUB_ROOT/hai-hub"
+# HAI 静态插件源码所在的 hai-hub 仓库；网关镜像构建会从此目录编译它。
+export HAI_HUB_ROOT="/path/to/hai-hub"
 
 mkdir -p "$ARTIFACT_DIR"
 ```
@@ -94,6 +94,17 @@ docker load -i nginx-1.27-bookworm.tar
 docker image inspect "$ADMIN_NGINX_IMAGE" >/dev/null
 ```
 
+### HAI 静态构建一致性检查
+
+在构建镜像前，可运行以下检查确认 all-in-one 与 K8s Dockerfile 都从 `HAI_HUB_ROOT` 静态编译 `hai-hub-spacegate`，且未恢复过期的 HAI dylib 路径：
+
+```bash
+cd "$WORKSPACE_ROOT"
+sh docker/all-in-one/tests/test-hai-plugin-build.sh
+```
+
+该检查不构建镜像；all-in-one 仅作为本地集成验证，生产仍使用本 runbook 的三个独立服务镜像。
+
 ### 2.2 构建 SpaceGate 网关镜像
 
 ```bash
@@ -106,22 +117,21 @@ docker build --progress=plain \
   "$SPACEGATE_ROOT"
 ```
 
-如果这里失败，重点看 `cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema` 上方的 Rust 编译错误；Docker 最后一行 `exit code: 101` 只是汇总错误。
+如果这里失败，重点看 `cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate` 上方的 Rust 编译错误；Docker 最后一行 `exit code: 101` 只是汇总错误。
 
-### 2.3 从 SpaceGate 镜像中复制 native 插件制品
+### 2.3 验证 HAI 静态插件已内置
 
 ```bash
 cd "$WORKSPACE_ROOT"
-mkdir -p "$ARTIFACT_DIR/native-plugins"
 
-plugin_container_id="$(docker create "$SPACEGATE_IMAGE")"
-docker cp "$plugin_container_id:/lib/spacegate/plugins/hai_hub_spacegate_plugins.so" \
-  "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
-docker rm -f "$plugin_container_id"
-
-test -f "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
-ls -lh "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
+docker run --rm --entrypoint sh "$SPACEGATE_IMAGE" -c '
+  set -e
+  test -x /usr/local/bin/spacegate
+  /usr/local/bin/spacegate --help >/dev/null
+'
 ```
+
+HAI 插件已静态链接到 `/usr/local/bin/spacegate`，不会生成或导出单独的 HAI `.so`。`/lib/spacegate/plugins` 只保留给可选的第三方 native dylib。
 
 ### 2.4 构建 Admin SDK 和前端静态资源
 
@@ -208,9 +218,7 @@ docker save "$SPACEGATE_ADMIN_IMAGE" \
 docker save "$AI_GATEWAY_SERVICE_IMAGE" \
   -o "$ARTIFACT_DIR/ai-gateway-service-${VERSION}.tar"
 
-shasum -a 256 "$ARTIFACT_DIR"/*.tar \
-  "$ARTIFACT_DIR/native-plugins"/*.so \
-  > "$ARTIFACT_DIR/SHA256SUMS"
+shasum -a 256 "$ARTIFACT_DIR"/*.tar > "$ARTIFACT_DIR/SHA256SUMS"
 
 ls -lh "$ARTIFACT_DIR"
 cat "$ARTIFACT_DIR/SHA256SUMS"
@@ -223,7 +231,6 @@ spacegate-workspace/image-artifacts/
   spacegate-<version>.tar
   spacegate-admin-<version>.tar
   ai-gateway-service-<version>.tar
-  native-plugins/hai_hub_spacegate_plugins.so
   SHA256SUMS
 ```
 
@@ -242,11 +249,11 @@ cd "$SPACEGATE_ROOT"
 cargo build --release -p spacegate --features build-k8s,wasm,dylib,static-openssl
 ```
 
-### 3.1 `hai-hub-spacegate-plugins` 构建和 copy 逻辑
+### 3.1 HAI 静态插件构建和 copy 逻辑
 
-`hai-hub-spacegate-plugins` 不在 `spacegate` 仓库内，它由 `HAI_HUB_ROOT` 指向的 `hai-hub` 仓库提供。它是一个聚合 native dylib crate：Rust 编译原始产物是 `libhai_hub_spacegate_plugins.so`，但镜像内和离线交付时统一重命名为 `hai_hub_spacegate_plugins.so`。这个 `.so` 的 `register(repo)` 入口会一次性注册多个插件 code。
+`hai-hub-spacegate` 不在 `spacegate` 仓库内，它由 `HAI_HUB_ROOT` 指向的 `hai-hub` 仓库提供。Dockerfile 将它作为 Linux 可执行文件构建，并复制为最终镜像的 `/usr/local/bin/spacegate`。HAI 插件在该二进制中静态注册，不会生成单独的 HAI `.so` 制品。
 
-当前聚合 `.so` 注册的插件包括：
+当前静态注册的 HAI 插件包括：
 
 | 插件 code | 插件类型 | 作用 |
 | --- | --- | --- |
@@ -258,7 +265,7 @@ cargo build --release -p spacegate --features build-k8s,wasm,dylib,static-openss
 | `hai-quota` | `HaiQuotaPlugin` | 基于资产配置做 QPS/并发限流 |
 | `hai-dispatch` | `HaiDispatchPlugin` | 根据资产运行时配置派发上游 |
 
-当前 `hai-hub-spacegate-plugins/Cargo.toml` 的 `[lib] crate-type` 可能只有 `rlib`。因此 Dockerfile 会在 `/hai-hub` 临时副本中把 crate type 改为同时包含 `dylib`，再执行普通 `cargo build` 产出 Linux `.so`。
+更新 `hai-hub` 中的 HAI 插件代码后，必须使用新的 `HAI_HUB_ROOT` 重建网关镜像并滚动更新 K8s 工作负载；运行时不能热加载新的 HAI 代码。
 
 当前网关镜像 Dockerfile 通过 BuildKit external build context 引入 `hai-hub`：
 
@@ -276,9 +283,7 @@ Dockerfile 内部关键片段：
 COPY --from=hai_hub . /hai-hub
 
 RUN mkdir -p /hai-hub/.cargo
-RUN sed -i '/"backend\/hai-hub-resource"/d;/"services\/hai-hub-all"/d;/"services\/hai-hub-spacegate"/d;/"services\/hai-hub-auth-plugin"/d' /hai-hub/Cargo.toml
-RUN sed -i 's/crate-type = \[ "rlib" \]/crate-type = [ "rlib", "dylib" ]/' /hai-hub/backend/hai-hub-spacegate-plugins/Cargo.toml \
-    && grep -n 'crate-type = .*dylib' /hai-hub/backend/hai-hub-spacegate-plugins/Cargo.toml
+RUN sed -i '/"backend\/hai-hub-resource"/d;/"services\/hai-hub-all"/d;/"services\/hai-hub-auth-plugin"/d' /hai-hub/Cargo.toml
 RUN printf '%s\n' \
     '[patch."https://github.com/ideal-world/spacegate"]' \
     'spacegate-config = { path = "/app/crates/config" }' \
@@ -293,83 +298,13 @@ WORKDIR /hai-hub
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/hai-hub/target \
-    CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_PANIC=unwind \
-    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema --config /hai-hub/.cargo/config.toml \
-    && install -Dm755 target/release/libhai_hub_spacegate_plugins.so /hai-plugin/libhai_hub_spacegate_plugins.so
+    cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate --config /hai-hub/.cargo/config.toml \
+    && install -Dm755 target/release/hai-hub-spacegate /hai-plugin/hai-hub-spacegate
 ```
 
-这里的 `sed` 只修改 Docker build 中的 `/hai-hub` 临时副本，不会修改本地 `HAI_HUB_ROOT`。原因是 `hai-hub` workspace 还有其他服务 member，这些 member 可能依赖构建上下文之外的兄弟仓库；但构建 SpaceGate native 插件只需要 `backend/hai-hub-spacegate-plugins`。
+这里的 `sed` 只修改 Docker build 中的 `/hai-hub` 临时副本，不会修改本地 `HAI_HUB_ROOT`。原因是 `hai-hub` workspace 还有其他服务 member，这些 member 可能依赖构建上下文之外的兄弟仓库；镜像只需要静态 HAI 网关成员 `hai-hub-spacegate`。
 
-如果是在 Linux 构建机上直接构建 `hai-hub-spacegate-plugins`，可以执行以下命令。注意：macOS 本机构建会生成 `.dylib`，不能作为 Linux K8s 部署使用；Linux `.so` 推荐由上面的 Dockerfile 或 Linux 构建机生成。如果 Linux 构建机缺少 `hai-hub` 其他 workspace member 依赖的兄弟仓库，也需要先在临时副本中裁剪 workspace，只保留 `backend/hai-hub-spacegate-plugins`。
-
-```bash
-cd "$WORKSPACE_ROOT"
-mkdir -p "$HAI_HUB_ROOT/.cargo"
-
-if [[ -f "$HAI_HUB_ROOT/.cargo/config.toml" ]]; then
-  cp "$HAI_HUB_ROOT/.cargo/config.toml" \
-    "$HAI_HUB_ROOT/.cargo/config.toml.bak.$(date +%Y%m%d%H%M%S)"
-fi
-
-cp "$HAI_HUB_ROOT/backend/hai-hub-spacegate-plugins/Cargo.toml" \
-  "$HAI_HUB_ROOT/backend/hai-hub-spacegate-plugins/Cargo.toml.bak.$(date +%Y%m%d%H%M%S)"
-
-cat > "$HAI_HUB_ROOT/.cargo/config.toml" <<EOF
-[patch."https://github.com/ideal-world/spacegate"]
-spacegate-config = { path = "$SPACEGATE_ROOT/crates/config" }
-spacegate-ext-axum = { path = "$SPACEGATE_ROOT/crates/extension/axum" }
-spacegate-ext-redis = { path = "$SPACEGATE_ROOT/crates/extension/redis" }
-spacegate-kernel = { path = "$SPACEGATE_ROOT/crates/kernel" }
-spacegate-model = { path = "$SPACEGATE_ROOT/crates/model" }
-spacegate-plugin = { path = "$SPACEGATE_ROOT/crates/plugin" }
-spacegate-shell = { path = "$SPACEGATE_ROOT/crates/shell" }
-EOF
-
-sed -i 's/crate-type = \[ "rlib" \]/crate-type = [ "rlib", "dylib" ]/' \
-  "$HAI_HUB_ROOT/backend/hai-hub-spacegate-plugins/Cargo.toml"
-
-cargo build \
-  --manifest-path "$HAI_HUB_ROOT/Cargo.toml" \
-  --release \
-  -p hai-hub-spacegate-plugins \
-  --features schema
-
-test -f "$HAI_HUB_ROOT/target/release/libhai_hub_spacegate_plugins.so"
-
-mkdir -p "$ARTIFACT_DIR/native-plugins"
-cp "$HAI_HUB_ROOT/target/release/libhai_hub_spacegate_plugins.so" \
-  "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
-```
-
-如果采用 K8s volume 挂载 native 插件，可以把上面的 `.so` 放到目标节点或镜像制品目录，并在 Pod 中挂载到：
-
-```text
-/var/lib/spacegate/plugins/hai_hub_spacegate_plugins.so
-```
-
-然后 Dockerfile 将 `.so` 复制进最终 SpaceGate 镜像：
-
-```dockerfile
-COPY --from=hai-plugin-builder \
-  /hai-plugin/libhai_hub_spacegate_plugins.so \
-  /lib/spacegate/plugins/
-```
-
-最终镜像内置插件路径：
-
-```text
-/lib/spacegate/plugins/hai_hub_spacegate_plugins.so
-```
-
-一键脚本还会把镜像内的 `.so` 复制到离线制品目录：
-
-```bash
-docker create "$SPACEGATE_IMAGE"
-docker cp "<container-id>:/lib/spacegate/plugins/hai_hub_spacegate_plugins.so" \
-  "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
-```
-
-这个单独 `.so` 文件不是运行网关镜像的必要条件；它用于部署前核对、归档，或在需要 K8s volume 方式挂载 native 插件时使用。
+不要在宿主机单独构建或归档 HAI `.so`：macOS 产物无法用于 Linux，而当前 K8s 运行方式也不加载 HAI dylib。需要更新 HAI 代码时，始终通过本节 Dockerfile 从 `HAI_HUB_ROOT` 构建 Linux 网关镜像。
 
 ### 3.2 构建网关镜像
 
@@ -385,24 +320,17 @@ docker build \
   "$SPACEGATE_ROOT"
 ```
 
-快速检查镜像内是否包含二进制和内置 dylib：
+快速检查镜像内是否包含静态 HAI 网关二进制：
 
 ```bash
 docker run --rm --entrypoint sh "$SPACEGATE_IMAGE" -c '
   set -e
   test -x /usr/local/bin/spacegate
-  ls -l /lib/spacegate/plugins/*.so
+  /usr/local/bin/spacegate --help >/dev/null
 '
 ```
 
-K8s 运行时建议保留以下环境变量，使网关同时扫描镜像内置插件和 K8s volume 挂载插件：
-
-```yaml
-- name: PLUGINS
-  value: /lib/spacegate/plugins,/var/lib/spacegate/plugins
-```
-
-如果需要额外挂载 `.so`，建议挂载到 `/var/lib/spacegate/plugins`，不要直接覆盖 `/lib/spacegate/plugins`，否则会遮蔽镜像内置插件。
+`/lib/spacegate/plugins` 仍是可选第三方 native dylib 的加载目录，但不是 HAI 插件的来源。不要通过 volume 覆盖它来更新 HAI；更新 HAI 必须替换完整的网关镜像。
 
 ## 4. 构建 SpaceGate Admin 前后端合并镜像
 
@@ -610,15 +538,7 @@ docker save "$SPACEGATE_ADMIN_IMAGE" \
 docker save "$AI_GATEWAY_SERVICE_IMAGE" \
   -o "$ARTIFACT_DIR/ai-gateway-service-${VERSION}.tar"
 
-mkdir -p "$ARTIFACT_DIR/native-plugins"
-plugin_container_id="$(docker create "$SPACEGATE_IMAGE")"
-docker cp "$plugin_container_id:/lib/spacegate/plugins/hai_hub_spacegate_plugins.so" \
-  "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
-docker rm -f "$plugin_container_id"
-
-shasum -a 256 "$ARTIFACT_DIR"/*.tar \
-  "$ARTIFACT_DIR/native-plugins"/*.so \
-  > "$ARTIFACT_DIR/SHA256SUMS"
+shasum -a 256 "$ARTIFACT_DIR"/*.tar > "$ARTIFACT_DIR/SHA256SUMS"
 
 ls -lh "$ARTIFACT_DIR"
 cat "$ARTIFACT_DIR/SHA256SUMS"
@@ -631,7 +551,6 @@ spacegate-workspace/image-artifacts/
   spacegate-<version>.tar
   spacegate-admin-<version>.tar
   ai-gateway-service-<version>.tar
-  native-plugins/hai_hub_spacegate_plugins.so
   SHA256SUMS
 ```
 
@@ -679,7 +598,7 @@ ctr -n k8s.io images import "ai-gateway-service-${VERSION}.tar"
 | SpaceGate 网关 | `SPACEGATE_IMAGE` | `80` / `443` / `9993` | K8s 网关进程，启动参数 `-c k8s:spacegate` |
 | SpaceGate Admin | `SPACEGATE_ADMIN_IMAGE` | `9080` | 前端静态资源 + Admin Server，`/api` 代理到容器内 `9081` |
 | AI Gateway Service | `AI_GATEWAY_SERVICE_IMAGE` | `18080` | 排队、限流、wait、worker、回调服务 |
-| HAI native 插件 | `native-plugins/hai_hub_spacegate_plugins.so` | 无 | 已内置在 SpaceGate 镜像中；也可用于 K8s volume 挂载 |
+| HAI 静态插件 | `SPACEGATE_IMAGE` | 无 | 静态链接到网关二进制；更新 HAI 代码必须替换整个网关镜像 |
 
 ## 10. 更新 K8s 镜像参考
 
@@ -728,40 +647,6 @@ docker push "$REGISTRY/spacegate-admin:$VERSION"
 docker push "$REGISTRY/ai-gateway-service:$VERSION"
 ```
 
-## 12. 可选：一键构建全部镜像和离线制品
+## 12. 自动化构建脚本状态
 
-执行目录：`spacegate-workspace`
-
-执行脚本：`spacegate/deploy/k8s/build-offline-service-images.sh`
-
-当前建议先用第 2 节逐步命令跑通，再使用本脚本。该脚本会完成以下动作：
-
-1. 构建 `spacegate` 网关镜像，并在镜像内构建和内置 `hai-hub-spacegate-plugins` dylib。
-2. 从网关镜像中复制 `hai_hub_spacegate_plugins.so` 到离线制品目录，方便单独核对或挂载。
-3. 构建 `spacegate-admin-server` 后端二进制。
-4. 构建 `spacegate/sdk/admin-client` 和 `spacegate-admin-fe` 前端静态资源。
-5. 组装 `spacegate-admin` 前后端合并镜像。
-6. 构建 `ai-gateway-service` 镜像。
-7. 将三个镜像保存为 tar 包，并生成 SHA-256 校验文件。
-
-执行：
-
-```bash
-cd "$WORKSPACE_ROOT"
-
-VERSION="$VERSION" \
-HAI_HUB_ROOT="$HAI_HUB_ROOT" \
-bash "$SPACEGATE_ROOT/deploy/k8s/build-offline-service-images.sh"
-```
-
-脚本输出的离线制品目录：
-
-```text
-spacegate-workspace/image-artifacts/
-  spacegate-<version>.tar
-  spacegate-admin-<version>.tar
-  ai-gateway-service-<version>.tar
-  native-plugins/hai_hub_spacegate_plugins.so
-  SHA256SUMS
-  IMAGES.txt
-```
+`spacegate/deploy/k8s/build-offline-service-images.sh` 当前不存在，因此不要引用或执行它。请使用第 2 节的逐步构建流程；该流程会从 `HAI_HUB_ROOT` 构建静态 HAI 网关、保存三个服务镜像，并生成校验文件。

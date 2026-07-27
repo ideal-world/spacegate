@@ -35,6 +35,35 @@ use crate::engine::{ensure_epoch_ticker_started, shared_engine};
 use crate::error::WasmHostError;
 use crate::host_fn::register_all;
 use crate::host_state::{ContextStage, HostState, HttpCallResult, PseudoHeaders, RequestContext};
+use crate::streaming_body::PreparedWasmResponseStream;
+
+/// `Vm::process` 完成请求头和响应头阶段后的结果。
+#[derive(Debug)]
+pub enum VmProcessResult {
+    /// 普通有限响应，所有 Proxy-Wasm 生命周期回调均已完成。
+    Complete(SgResponse),
+    /// SSE 响应，body 与生命周期需要由 streaming worker 继续驱动。
+    Streaming(PreparedWasmResponseStream),
+}
+
+impl VmProcessResult {
+    /// 将有限响应结果解包；测试若意外命中 streaming 路径会得到明确错误。
+    pub fn into_complete_response(self) -> Result<SgResponse, WasmHostError> {
+        match self {
+            Self::Complete(response) => Ok(response),
+            Self::Streaming(_) => Err(WasmHostError::Config("expected a complete response but received an SSE stream".to_string())),
+        }
+    }
+}
+
+/// guest 对单个 SSE response-body callback 的处理结果。
+#[derive(Debug)]
+pub struct ProcessedResponseChunk {
+    /// guest 通过 response body buffer API 修改后的当前 chunk。
+    pub bytes: Bytes,
+    /// guest hook 返回的 Proxy-Wasm action。
+    pub action: Action,
+}
 
 /// 长生命 Vm：插件 `create` 时实例化一次，之后被多次请求复用，再加一条
 /// 后台 tick 任务用来驱动 `proxy_on_tick`。`store` !Sync，所以共享时必须
@@ -199,7 +228,7 @@ impl Vm {
     }
 
     /// 完整跑一遍：on_request_headers → 可能多次 dispatch → on_request_body → inner.call → on_response_*
-    pub async fn process(&mut self, req: SgRequest, inner: spacegate_plugin::Inner) -> Result<SgResponse, WasmHostError> {
+    pub async fn process(&mut self, req: SgRequest, inner: spacegate_plugin::Inner) -> Result<VmProcessResult, WasmHostError> {
         // 跨请求清理：上一次请求若提前 `send_local_response` 短路，可能留下未消费的
         // dispatch 结果和 pending token，不清掉会让本请求的 `drive_until_continue`
         // 把陈旧响应误当成自己的（spec §proxy_http_call 不要求 host 持久化）。
@@ -262,7 +291,7 @@ impl Vm {
         if let Some(local) = self.store.data_mut().contexts.get_mut(&http_ctx_id).and_then(|c| c.local_response.take()) {
             info!(target: "spacegate_plugin_wasm", http_ctx_id, status = local.status, "guest local response (after headers)");
             self.invoke_log_done_delete(http_ctx_id)?;
-            return Ok(build_local_response(local));
+            return Ok(VmProcessResult::Complete(build_local_response(local)));
         }
 
         // ─── on_request_body：把请求 body 物化后喂给 guest（仅当 guest 导出该 hook）───
@@ -292,7 +321,7 @@ impl Vm {
             if let Some(local) = self.store.data_mut().contexts.get_mut(&http_ctx_id).and_then(|c| c.local_response.take()) {
                 info!(target: "spacegate_plugin_wasm", http_ctx_id, status = local.status, "guest local response (after request body)");
                 self.invoke_log_done_delete(http_ctx_id)?;
-                return Ok(build_local_response(local));
+                return Ok(VmProcessResult::Complete(build_local_response(local)));
             }
             let final_body = self.store.data().contexts.get(&http_ctx_id).and_then(|c| c.request_body.clone()).unwrap_or(collected);
             (None, Some(final_body))
@@ -318,7 +347,7 @@ impl Vm {
             if let Some(local) = self.store.data_mut().contexts.get_mut(&http_ctx_id).and_then(|c| c.local_response.take()) {
                 info!(target: "spacegate_plugin_wasm", http_ctx_id, status = local.status, "guest local response (after request trailers)");
                 self.invoke_log_done_delete(http_ctx_id)?;
-                return Ok(build_local_response(local));
+                return Ok(VmProcessResult::Complete(build_local_response(local)));
             }
         }
 
@@ -362,6 +391,7 @@ impl Vm {
             }
         }
         let want_response_body = self.fn_on_response_body.is_some();
+        let stream_response_body = want_response_body && content_type_is_event_stream(&resp_headers);
         let end_of_stream_for_resp_hdr: u32 = if want_response_body { 0 } else { 1 };
         let on_resp_hdr = self.fn_on_response_headers.clone();
         self.prepare_guest_call()?;
@@ -375,7 +405,18 @@ impl Vm {
         if let Some(local) = self.store.data_mut().contexts.get_mut(&http_ctx_id).and_then(|c| c.local_response.take()) {
             info!(target: "spacegate_plugin_wasm", http_ctx_id, status = local.status, "guest local response (after response headers)");
             self.invoke_log_done_delete(http_ctx_id)?;
-            return Ok(build_local_response(local));
+            return Ok(VmProcessResult::Complete(build_local_response(local)));
+        }
+
+        if stream_response_body {
+            let mut stream_parts = resp_parts;
+            stream_parts.headers = self.store.data().contexts.get(&http_ctx_id).map(|ctx| ctx.response_headers.clone()).unwrap_or(resp_headers);
+            stream_parts.headers.remove(http::header::CONTENT_LENGTH);
+            return Ok(VmProcessResult::Streaming(PreparedWasmResponseStream {
+                parts: stream_parts,
+                upstream_body: resp_body,
+                http_context_id: http_ctx_id,
+            }));
         }
 
         // ─── on_response_body ───
@@ -430,7 +471,90 @@ impl Vm {
 
         let mut new_resp_parts = resp_parts;
         new_resp_parts.headers = final_headers;
-        Ok(SgResponse::from_parts(new_resp_parts, final_body))
+        Ok(VmProcessResult::Complete(SgResponse::from_parts(new_resp_parts, final_body)))
+    }
+
+    /// 对一个 SSE 数据 chunk 或终止信号执行 response-body hook。
+    pub async fn process_response_chunk(&mut self, http_context_id: u32, bytes: Bytes, end_of_stream: bool) -> Result<ProcessedResponseChunk, WasmHostError> {
+        if let Some(limit) = self.store.data().shell_cfg.limits.max_body_bytes {
+            if bytes.len() > limit {
+                return Err(WasmHostError::BodyTooLarge { actual: bytes.len(), limit });
+            }
+        }
+        {
+            let state = self.store.data_mut();
+            state.effective_context = http_context_id;
+            let context = state.contexts.get_mut(&http_context_id).ok_or_else(|| WasmHostError::AbiViolation(format!("ctx {http_context_id} gone")))?;
+            context.stage = ContextStage::ResponseBody;
+            context.response_body = Some(bytes.clone());
+            context.response_size = context.response_size.saturating_add(bytes.len() as u64);
+            context.continue_requested = false;
+        }
+
+        let Some(callback) = self.fn_on_response_body.clone() else {
+            return Ok(ProcessedResponseChunk {
+                bytes,
+                action: Action::Continue,
+            });
+        };
+        self.prepare_guest_call()?;
+        let action = Action::from_u32(
+            callback
+                .call(&mut self.store, (http_context_id, bytes.len() as u32, u32::from(end_of_stream)))
+                .map_err(|source| WasmHostError::GuestTrap {
+                    hook: "on_response_body",
+                    source,
+                })?,
+        );
+        if action == Action::Pause {
+            self.drive_until_continue(http_context_id).await?;
+        }
+        let bytes = self.store.data().contexts.get(&http_context_id).and_then(|context| context.response_body.clone()).unwrap_or(bytes);
+        Ok(ProcessedResponseChunk { bytes, action })
+    }
+
+    /// 保存 upstream trailers，执行 response-trailer hook，并返回 guest 修改后的 trailers。
+    pub async fn process_response_trailers(&mut self, http_context_id: u32, trailers: HeaderMap) -> Result<HeaderMap, WasmHostError> {
+        {
+            let state = self.store.data_mut();
+            state.effective_context = http_context_id;
+            let context = state.contexts.get_mut(&http_context_id).ok_or_else(|| WasmHostError::AbiViolation(format!("ctx {http_context_id} gone")))?;
+            context.stage = ContextStage::ResponseTrailers;
+            context.response_trailers = trailers;
+            context.continue_requested = false;
+        }
+        if let Some(callback) = self.fn_on_response_trailers.clone() {
+            let trailer_count = self.store.data().contexts.get(&http_context_id).map(|context| context.response_trailers.len()).unwrap_or(0) as u32;
+            self.prepare_guest_call()?;
+            let action = Action::from_u32(
+                callback
+                    .call(&mut self.store, (http_context_id, trailer_count))
+                    .map_err(|source| WasmHostError::GuestTrap {
+                        hook: "on_response_trailers",
+                        source,
+                    })?,
+            );
+            if action == Action::Pause {
+                self.drive_until_continue(http_context_id).await?;
+            }
+        }
+        Ok(self.store.data().contexts.get(&http_context_id).map(|context| context.response_trailers.clone()).unwrap_or_default())
+    }
+
+    /// 完成 streaming response 的 trailer、log、done、delete 生命周期，且可安全重复调用。
+    pub async fn finish_response_stream(&mut self, http_context_id: u32) -> Result<(), WasmHostError> {
+        let Some(stage) = self.store.data().contexts.get(&http_context_id).map(|context| context.stage) else {
+            return Ok(());
+        };
+        if stage != ContextStage::ResponseTrailers {
+            self.process_response_trailers(http_context_id, HeaderMap::new()).await?;
+        }
+        self.invoke_log_done_delete(http_context_id)
+    }
+
+    /// 在异常或客户端取消后的兜底路径中强制释放 streaming HTTP context。
+    pub fn abort_response_stream(&mut self, http_context_id: u32) {
+        self.store.data_mut().contexts.remove(&http_context_id);
     }
 
     /// 在 guest 返回 Pause 之后，不停地 await dispatch_rx 来驱动状态机，
@@ -552,6 +676,15 @@ fn prepare_store_for_guest_call(store: &mut Store<HostState>) -> Result<(), Wasm
     store.set_epoch_deadline(deadline);
     store.epoch_deadline_trap();
     Ok(())
+}
+
+/// 判断 upstream Content-Type 是否为 SSE，允许标准参数如 `charset=utf-8`。
+fn content_type_is_event_stream(headers: &HeaderMap) -> bool {
+    headers
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.split(';').next().unwrap_or_default().trim().eq_ignore_ascii_case("text/event-stream"))
+        .unwrap_or(false)
 }
 
 async fn collect_body_limited(body: SgBody, limit: Option<usize>) -> Result<Bytes, WasmHostError> {

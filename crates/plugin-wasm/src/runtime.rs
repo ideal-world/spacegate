@@ -10,7 +10,7 @@ use wasmtime::Module;
 use crate::config::WasmPluginShellConfig;
 use crate::engine::shared_engine;
 use crate::error::WasmHostError;
-use crate::fetch::fetch_wasm_bytes_sync_with_auth;
+use crate::fetch::fetch_wasm_bytes_sync_with_source_auth;
 
 /// 进程内模块缓存（键：wasm `url` 字符串）。
 pub struct WasmModuleCache {
@@ -34,7 +34,7 @@ impl WasmModuleCache {
                 return Ok(m);
             }
         }
-        let bytes = fetch_wasm_bytes_sync_with_auth(cfg.url.trim(), cfg.oci_auth.as_ref())?;
+        let bytes = fetch_wasm_bytes_sync_with_source_auth(cfg.url.trim(), cfg.oci_auth.as_ref(), Some(&cfg.http_headers))?;
         verify_sha256(&bytes, cfg.sha256.as_deref())?;
         let m = Arc::new(Module::new(self.engine, &bytes)?);
         if cfg.use_cache {

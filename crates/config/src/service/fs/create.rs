@@ -32,28 +32,28 @@ where
         .await
     }
     async fn create_config_item_gateway(&self, gateway_name: &str, gateway: SgGateway) -> Result<(), BoxError> {
-        self.create_config_item(
-            gateway_name,
-            ConfigItem {
-                gateway,
-                routes: Default::default(),
-            },
-        )
-        .await
+        if self.existing_gateway_config_path(gateway_name).is_some() {
+            return Err("item existed".into());
+        }
+        let path = self.gateway_main_config_path(gateway_name);
+        let config = ConfigItem {
+            gateway,
+            routes: Default::default(),
+        };
+        tokio::fs::create_dir_all(path.parent().expect("gateway config path has a parent")).await?;
+        tokio::fs::write(path, self.format.ser(&config)?).await?;
+        Ok(())
     }
     async fn create_config_item_route(&self, gateway_name: &str, route_name: &str, route: SgRoute) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            if let Some(item) = config.gateways.get_mut(gateway_name) {
-                if item.routes.contains_key(gateway_name) {
-                    Err("route existed".into())
-                } else {
-                    item.routes.insert(route_name.to_string(), route);
-                    Ok(())
-                }
-            } else {
-                Err("gateway not exists".into())
-            }
-        })
-        .await
+        if self.existing_gateway_config_path(gateway_name).is_none() {
+            return Err("gateway not exists".into());
+        }
+        let path = self.route_path(gateway_name, route_name);
+        if path.exists() {
+            return Err("route existed".into());
+        }
+        tokio::fs::create_dir_all(self.routes_dir(gateway_name)).await?;
+        tokio::fs::write(path, self.format.ser(&route)?).await?;
+        Ok(())
     }
 }

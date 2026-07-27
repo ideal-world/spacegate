@@ -171,7 +171,7 @@ async fn run(auth_byte: u8) -> (u16, Bytes) {
         .body(SgBody::full(Bytes::from_static(b"protected payload")))
         .expect("build req");
 
-    let resp = vm.process(req, echo_inner()).await.expect("process");
+    let resp = vm.process(req, echo_inner()).await.expect("process").into_complete_response().expect("complete response");
     let (resp, body) = full_body(resp).await;
     (resp.status().as_u16(), body)
 }

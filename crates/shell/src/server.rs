@@ -11,7 +11,7 @@ use spacegate_config::{
     BackendHost, Config, ConfigItem, McpSessionAffinity, SgBalancePolicy, SgHttpMethodMatch, SgHttpPathMatch, SgHttpRouteMatch, SgMcpRoute, SgMcpTransport, SgRoute, TimeoutMode,
 };
 use spacegate_kernel::{
-    helper_layers::map_request::MapRequestLayer,
+    helper_layers::mcp_proxy::{McpProxyLayer, McpTransport},
     helper_layers::reload::Reloader,
     listener::SgListen,
     service::http_gateway::{builder::default_gateway_route_fallback, create_http_router, HttpRouterService},
@@ -52,15 +52,12 @@ fn collect_http_route(
                     };
                     let mut builder = spacegate_kernel::service::http_route::HttpRouteRule::builder();
                     if let Some(transport) = mcp_transport.clone() {
-                        builder = builder.plugin(BoxLayer::new(MapRequestLayer::new(move |mut req: spacegate_kernel::SgRequest| {
-                            let session_id_present = req.headers().contains_key("Mcp-Session-Id");
-                            req.extensions_mut().insert(spacegate_kernel::extension::McpProxyMeta {
-                                transport: transport.clone(),
-                                route_type: "MCPRoute",
-                                session_id_present,
-                            });
-                            req
-                        })));
+                        let transport = if transport == "streamable_http" {
+                            McpTransport::StreamableHttp
+                        } else {
+                            McpTransport::LegacySse
+                        };
+                        builder = builder.plugin(BoxLayer::new(McpProxyLayer::new(transport)));
                     }
                     builder = if let Some(matches) = route_rule.matches {
                         builder.matches(matches.into_iter().map(convert_config_to_kernel).collect::<Result<Vec<_>, _>>()?)
@@ -155,7 +152,11 @@ fn compile_route(route: SgRoute) -> (crate::SgHttpRoute, Option<String>) {
 fn compile_mcp_route_to_http_route(route: SgMcpRoute) -> (crate::SgHttpRoute, Option<String>) {
     let transport = route.transport.clone();
     let matches = match route.transport {
-        SgMcpTransport::StreamableHttp => vec![mcp_path_method_match(route.path.clone(), "GET"), mcp_path_method_match(route.path.clone(), "POST")],
+        SgMcpTransport::StreamableHttp => vec![
+            mcp_path_method_match(route.path.clone(), "GET"),
+            mcp_path_method_match(route.path.clone(), "POST"),
+            mcp_path_method_match(route.path.clone(), "DELETE"),
+        ],
         SgMcpTransport::LegacySse => {
             let legacy = route.legacy_sse.unwrap_or_else(|| spacegate_config::SgMcpLegacySse {
                 sse_path: "/sse".to_string(),
@@ -451,7 +452,7 @@ impl RunningSgGateway {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spacegate_config::{SgBackendRef, SgMcpLegacySse};
+    use spacegate_config::{PluginBinding, PluginInstanceName, SgBackendRef, SgMcpLegacySse};
 
     fn backend() -> SgBackendRef {
         SgBackendRef {
@@ -468,6 +469,29 @@ mod tests {
         };
         let method = route_match.method.as_ref().expect("method match")[0].0.as_str();
         (path, method)
+    }
+
+    /// Verifies that MCP route compilation retains plugin identities and their configured priorities.
+    #[test]
+    fn mcp_route_preserves_plugin_bindings_and_priority() {
+        let plugins = vec![
+            PluginBinding::new("native", PluginInstanceName::named("auth"), 100),
+            PluginBinding::new("wasm", PluginInstanceName::named("hai-filter"), 20),
+        ];
+        let (route, _transport) = compile_mcp_route_to_http_route(SgMcpRoute {
+            kind: spacegate_config::SgRouteKind::McpRoute,
+            route_name: "mcp".to_string(),
+            hostnames: None,
+            transport: SgMcpTransport::StreamableHttp,
+            path: "/mcp".to_string(),
+            legacy_sse: None,
+            backends: vec![backend()],
+            plugins: plugins.clone(),
+            timeout_mode: TimeoutMode::Disabled,
+            session_affinity: McpSessionAffinity::McpSession,
+        });
+
+        assert_eq!(route.plugins, plugins);
     }
 
     #[test]
@@ -488,7 +512,7 @@ mod tests {
         assert_eq!(transport.as_deref(), Some("streamable_http"));
         let rule = route.rules.first().expect("compiled rule");
         let matches = rule.matches.as_ref().expect("compiled matches");
-        assert_eq!(matches.iter().map(match_path_method).collect::<Vec<_>>(), vec![("/mcp", "GET"), ("/mcp", "POST")]);
+        assert_eq!(matches.iter().map(match_path_method).collect::<Vec<_>>(), vec![("/mcp", "GET"), ("/mcp", "POST"), ("/mcp", "DELETE")]);
         assert_eq!(rule.timeout_mode, Some(TimeoutMode::Disabled));
         assert_eq!(rule.backends[0].timeout_mode, Some(TimeoutMode::Disabled));
         assert_eq!(rule.balance_policy, Some(SgBalancePolicy::McpSession));

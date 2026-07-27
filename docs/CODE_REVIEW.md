@@ -107,7 +107,7 @@ Spacegate 是基于 Rust 与 hyper 的 **库优先（library-first）** API 网�
 ### 5.1 主要功能
 
 - Trait：`Create`、`Retrieve`、`Update`、`Delete`；`CreateListener` + `Listen`；`ConfigType` / `ConfigEventType`。
-- **实现**：`Memory`（静态）、`Fs`（目录布局 + Unix SIGHUP / Windows notify）、`K8s`（多资源 watch + SIGHUP 全局重载）、`Redis`（hash + pubsub）。
+- **实现**：`Memory`（静态）、`Fs`（目录布局 + Unix/Windows notify，Unix 保留 SIGHUP 全局重载）、`K8s`（多资源 watch + SIGHUP 全局重载）、`Redis`（hash + pubsub）。
 - **Discovery**：实例列表与可选后端发现（如 fs 下读 `/var/www`）。
 
 ### 5.2 风险与问题

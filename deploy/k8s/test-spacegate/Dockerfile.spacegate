@@ -11,19 +11,25 @@ RUN cargo build --release -p spacegate --features build-k8s,wasm,dylib,static-op
 FROM builder AS hai-plugin-builder
 
 COPY --from=hai_hub . /hai-hub
-RUN mkdir -p /hai-hub/.cargo \
-    && printf '%s\n' \
-        '[patch."https://github.com/ideal-world/spacegate"]' \
-        'spacegate-config = { path = "/app/crates/config" }' \
-        'spacegate-ext-axum = { path = "/app/crates/extension/axum" }' \
-        'spacegate-ext-redis = { path = "/app/crates/extension/redis" }' \
-        'spacegate-kernel = { path = "/app/crates/kernel" }' \
-        'spacegate-model = { path = "/app/crates/model" }' \
-        'spacegate-plugin = { path = "/app/crates/plugin" }' \
-        'spacegate-shell = { path = "/app/crates/shell" }' \
-        > /hai-hub/.cargo/config.toml \
-    && cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins \
-    && test -f /hai-hub/target/release/libhai_hub_spacegate_plugins.so
+# Resolve shared Rust crates from the same lockfile as the embedded gateway runtime.
+COPY --from=builder /app/Cargo.lock /hai-hub/Cargo.lock
+RUN mkdir -p /hai-hub/.cargo
+# Keep the static HAI gateway member and trim only unrelated workspace members
+# whose path dependencies are not part of the gateway image build.
+RUN sed -i '/"backend\/hai-hub-resource"/d;/"services\/hai-hub-all"/d;/"services\/hai-hub-auth-plugin"/d' /hai-hub/Cargo.toml
+RUN printf '%s\n' \
+    '[patch."https://github.com/ideal-world/spacegate"]' \
+    'spacegate-config = { path = "/app/crates/config" }' \
+    'spacegate-ext-axum = { path = "/app/crates/extension/axum" }' \
+    'spacegate-ext-redis = { path = "/app/crates/extension/redis" }' \
+    'spacegate-kernel = { path = "/app/crates/kernel" }' \
+    'spacegate-model = { path = "/app/crates/model" }' \
+    'spacegate-plugin = { path = "/app/crates/plugin" }' \
+    'spacegate-shell = { path = "/app/crates/shell" }' \
+    > /hai-hub/.cargo/config.toml
+WORKDIR /hai-hub
+RUN cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate --config /hai-hub/.cargo/config.toml \
+    && install -Dm755 target/release/hai-hub-spacegate /hai-plugin/hai-hub-spacegate
 
 FROM debian:bookworm-slim
 
@@ -31,8 +37,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/spacegate /usr/local/bin/spacegate
-COPY --from=hai-plugin-builder /hai-hub/target/release/libhai_hub_spacegate_plugins.so /lib/spacegate/plugins/
+COPY --from=hai-plugin-builder /hai-plugin/hai-hub-spacegate /usr/local/bin/spacegate
 
 ENV CONFIG=k8s:spacegate
 ENV RUST_LOG=info

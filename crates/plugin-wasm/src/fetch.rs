@@ -14,16 +14,24 @@ use tar::Archive;
 const OCI_MANIFEST_ACCEPT: &str = "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.artifact.manifest.v1+json";
 const OCI_BLOB_ACCEPT: &str = "application/vnd.module.wasm.content.layer.v1+wasm, application/wasm, application/vnd.wasm.content.layer.v1+wasm, application/json, application/yaml, application/x-yaml, text/yaml, application/octet-stream, application/vnd.docker.image.rootfs.diff.tar.gzip, application/vnd.oci.image.layer.v1.tar+gzip";
 
-fn fetch_http_wasm_bytes_sync(url: &str) -> Result<Vec<u8>, WasmHostError> {
+fn fetch_http_wasm_bytes_sync(url: &str, headers: Option<&HashMap<String, String>>) -> Result<Vec<u8>, WasmHostError> {
     let url = url.to_string();
+    let headers = headers.cloned();
     std::thread::Builder::new()
         .name("spacegate-wasm-fetch".to_string())
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|e| WasmHostError::Fetch(format!("build fetch runtime: {e}")))?;
             rt.block_on(async move {
                 let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build().map_err(|e| WasmHostError::Fetch(format!("build http client: {e}")))?;
-                let resp = client
-                    .get(&url)
+                let mut request = client.get(&url);
+                if let Some(headers) = headers.as_ref() {
+                    for (name, value) in headers {
+                        let name = reqwest::header::HeaderName::from_bytes(name.as_bytes()).map_err(|_| WasmHostError::Fetch("invalid HTTP Wasm header name".to_string()))?;
+                        let value = reqwest::header::HeaderValue::from_str(value).map_err(|_| WasmHostError::Fetch(format!("invalid HTTP Wasm header value for `{name}`")))?;
+                        request = request.header(name, value);
+                    }
+                }
+                let resp = request
                     .send()
                     .await
                     .map_err(|e| WasmHostError::Fetch(format!("GET {url}: {e}")))?
@@ -94,12 +102,23 @@ pub fn fetch_wasm_bytes_sync(url_or_path: &str) -> Result<Vec<u8>, WasmHostError
 }
 
 pub fn fetch_wasm_bytes_sync_with_auth(url_or_path: &str, oci_auth: Option<&OciAuthConfig>) -> Result<Vec<u8>, WasmHostError> {
+    fetch_wasm_bytes_sync_with_source_auth(url_or_path, oci_auth, None)
+}
+
+/// 拉取 Wasm 制品，并按照来源类型应用对应认证信息。
+///
+/// `http_headers` 仅会透传给 HTTP(S) 请求；OCI registry 继续只使用 `oci_auth`。
+pub fn fetch_wasm_bytes_sync_with_source_auth(
+    url_or_path: &str,
+    oci_auth: Option<&OciAuthConfig>,
+    http_headers: Option<&HashMap<String, String>>,
+) -> Result<Vec<u8>, WasmHostError> {
     let trim = url_or_path.trim();
     if let Some(rest) = trim.strip_prefix("file://") {
         return std::fs::read(rest).map_err(|e| WasmHostError::Fetch(format!("read file {rest}: {e}")));
     }
     if trim.starts_with("http://") || trim.starts_with("https://") {
-        return fetch_http_wasm_bytes_sync(trim);
+        return fetch_http_wasm_bytes_sync(trim, http_headers);
     }
     if is_oci_url(trim) {
         return fetch_oci_wasm_bytes_sync(trim, oci_auth.cloned());
@@ -107,7 +126,24 @@ pub fn fetch_wasm_bytes_sync_with_auth(url_or_path: &str, oci_auth: Option<&OciA
     std::fs::read(trim).map_err(|e| WasmHostError::Fetch(format!("read path {trim}: {e}")))
 }
 
+/// 使用给定 HTTP(S) 请求头拉取 Wasm；保留无认证和 OCI 认证 API 的兼容性。
+pub fn fetch_wasm_bytes_sync_with_http_headers(url_or_path: &str, http_headers: &HashMap<String, String>) -> Result<Vec<u8>, WasmHostError> {
+    fetch_wasm_bytes_sync_with_source_auth(url_or_path, None, Some(http_headers))
+}
+
 pub fn fetch_wasm_image_file_sync_with_auth(url_or_path: &str, file_path: &str, oci_auth: Option<&OciAuthConfig>) -> Result<Vec<u8>, WasmHostError> {
+    fetch_wasm_image_file_sync_with_source_auth(url_or_path, file_path, oci_auth, None)
+}
+
+/// 拉取 Wasm 制品旁的文件，并按照来源类型应用对应认证信息。
+///
+/// 该入口用于读取 Schema；HTTP(S) Schema 会复用制品下载的请求头，OCI Schema 继续使用 registry 认证。
+pub fn fetch_wasm_image_file_sync_with_source_auth(
+    url_or_path: &str,
+    file_path: &str,
+    oci_auth: Option<&OciAuthConfig>,
+    http_headers: Option<&HashMap<String, String>>,
+) -> Result<Vec<u8>, WasmHostError> {
     let trim = url_or_path.trim();
     let file_path = normalize_lookup_path(file_path);
     if file_path.is_empty() {
@@ -122,9 +158,14 @@ pub fn fetch_wasm_image_file_sync_with_auth(url_or_path: &str, file_path: &str, 
     if trim.starts_with("http://") || trim.starts_with("https://") {
         let base = trim.trim_end_matches('/');
         let parent = base.rsplit_once('/').map(|(prefix, _)| prefix).unwrap_or(base);
-        return fetch_http_wasm_bytes_sync(&format!("{parent}/{file_path}"));
+        return fetch_http_wasm_bytes_sync(&format!("{parent}/{file_path}"), http_headers);
     }
     read_local_related_file(trim, &file_path)
+}
+
+/// 使用给定 HTTP(S) 请求头读取 Wasm 制品旁的文件；主要供 Schema 读取场景使用。
+pub fn fetch_wasm_image_file_sync_with_http_headers(url_or_path: &str, file_path: &str, http_headers: &HashMap<String, String>) -> Result<Vec<u8>, WasmHostError> {
+    fetch_wasm_image_file_sync_with_source_auth(url_or_path, file_path, None, Some(http_headers))
 }
 
 pub fn is_oci_url(url: &str) -> bool {

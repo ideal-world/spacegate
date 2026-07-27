@@ -150,7 +150,7 @@ test -d "$ADMIN_FE_ROOT"
 
 ### 5.1 构建 SpaceGate K8S 镜像
 
-如果生产镜像需要包含 `hai-hub-spacegate-plugins` dylib，使用当前仓库已有 Dockerfile：
+生产网关镜像使用当前仓库已有 Dockerfile；它会把 HAI 插件静态链接到网关二进制：
 
 ```bash
 docker build \
@@ -165,10 +165,9 @@ docker push "$SPACEGATE_IMAGE"
 说明：
 
 - 该 Dockerfile 会构建 `spacegate`，启用 `build-k8s,wasm,dylib,static-openssl`。
-- 该 Dockerfile 会从 `hai_hub` build context 构建 `libhai_hub_spacegate_plugins.so` 并复制到 `/lib/spacegate/plugins/`。
-- 生产 DaemonSet 可通过 `PLUGINS=/lib/spacegate/plugins,/var/lib/spacegate/plugins` 同时扫描镜像内置插件和 K8s 挂载插件；不要把 volume 直接挂载覆盖 `/lib/spacegate/plugins`。
-- 动态库只在 SpaceGate 进程启动时扫描加载；插件代码更新后必须重新构建镜像并滚动重启 DaemonSet。
-- 如果生产不需要 HAI dylib，请使用不含 `hai-plugin-builder` 阶段的生产 Dockerfile，并保持启动参数 `-c k8s:spacegate`。
+- 该 Dockerfile 会从 `hai_hub` build context 构建 `hai-hub-spacegate`，并复制为 `/usr/local/bin/spacegate`；HAI 插件不再作为 `.so` 交付。
+- `/lib/spacegate/plugins` 仍可用于可选的第三方 native dylib，但不要通过覆盖该目录更新 HAI。
+- 更新 HAI 插件代码后必须重新构建镜像并滚动重启 DaemonSet。
 
 ### 5.2 构建 AI Gateway Service 镜像
 
@@ -667,7 +666,7 @@ export ADMIN_NGINX_IMAGE="nginx:1.27-bookworm"
 export ADMIN_JWT_KEY="c3BhY2VnYXRlLWFkbWluLWp3dC1zZWNyZXQ="
 export ADMIN_LOGIN_SK="admin-123456-change-me"
 
-mkdir -p "$ARTIFACT_DIR" "$ARTIFACT_DIR/native-plugins" "$ARTIFACT_DIR/wasm" "$SPACEGATE_ADMIN_CONFIG_DIR"
+mkdir -p "$ARTIFACT_DIR" "$ARTIFACT_DIR/wasm" "$SPACEGATE_ADMIN_CONFIG_DIR"
 
 test -d "$SPACEGATE_ROOT"
 test -d "$ADMIN_FE_ROOT"
@@ -685,7 +684,7 @@ spacegate-workspace/image-artifacts/
 该镜像同时内置：
 
 - SpaceGate 二进制：`/usr/local/bin/spacegate`
-- native 插件：`/lib/spacegate/plugins/hai_hub_spacegate_plugins.so`
+- HAI 插件：静态链接到 `spacegate` 二进制
 - `ai-gateway-queue` Wasm 插件：`/lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm`
 
 执行命令：
@@ -709,9 +708,9 @@ docker save "$SPACEGATE_IMAGE" \
 | --- | --- |
 | `spacegate-${VERSION}.tar` | `spacegate-workspace/image-artifacts/` |
 
-### 16.3 内置插件归档
+### 16.3 系统 Wasm 插件归档
 
-`hai-hub-spacegate-plugin` native 插件和 `ai-gateway-queue` Wasm 插件都由 SpaceGate 镜像构建过程生成并内置到镜像中。单独归档时，从已经构建好的 SpaceGate 镜像中复制出来，便于 U 盘离线交付和校验。
+HAI 插件已包含在网关二进制中，无须也不能作为单独 `.so` 归档。`ai-gateway-queue` Wasm 插件可以从已经构建好的 SpaceGate 镜像中复制出来，便于 U 盘离线交付和校验。
 
 执行命令：
 
@@ -719,13 +718,10 @@ docker save "$SPACEGATE_IMAGE" \
 cd "$WORKSPACE_ROOT"
 
 plugin_container_id="$(docker create "$SPACEGATE_IMAGE")"
-docker cp "$plugin_container_id:/lib/spacegate/plugins/hai_hub_spacegate_plugins.so" \
-  "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
 docker cp "$plugin_container_id:/lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm" \
   "$ARTIFACT_DIR/wasm/spacegate_plugin_ai_gateway_queue.wasm"
 docker rm -f "$plugin_container_id"
 
-test -f "$ARTIFACT_DIR/native-plugins/hai_hub_spacegate_plugins.so"
 test -f "$ARTIFACT_DIR/wasm/spacegate_plugin_ai_gateway_queue.wasm"
 ```
 
@@ -733,7 +729,6 @@ test -f "$ARTIFACT_DIR/wasm/spacegate_plugin_ai_gateway_queue.wasm"
 
 | 制品 | 放置目录 |
 | --- | --- |
-| `hai_hub_spacegate_plugins.so` | `spacegate-workspace/image-artifacts/native-plugins/` |
 | `spacegate_plugin_ai_gateway_queue.wasm` | `spacegate-workspace/image-artifacts/wasm/` |
 
 ### 16.4 SpaceGate Admin 合并镜像
@@ -973,7 +968,6 @@ cd "$WORKSPACE_ROOT"
 
 shasum -a 256 \
   "$ARTIFACT_DIR"/*.tar \
-  "$ARTIFACT_DIR/native-plugins"/*.so \
   "$ARTIFACT_DIR/wasm"/*.wasm \
   > "$ARTIFACT_DIR/SHA256SUMS"
 
@@ -982,7 +976,6 @@ VERSION=${VERSION}
 SPACEGATE_IMAGE=${SPACEGATE_IMAGE}
 SPACEGATE_ADMIN_IMAGE=${SPACEGATE_ADMIN_IMAGE}
 AI_GATEWAY_SERVICE_IMAGE=${AI_GATEWAY_SERVICE_IMAGE}
-HAI_PLUGIN_ARTIFACT=native-plugins/hai_hub_spacegate_plugins.so
 WASM_ARTIFACT=wasm/spacegate_plugin_ai_gateway_queue.wasm
 WASM_SOURCE_IN_IMAGE_PATH=/lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm
 WASM_SYSTEM_IMAGE_PATH=/lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm
@@ -1007,7 +1000,6 @@ spacegate-workspace/image-artifacts/
   spacegate-<version>.tar
   spacegate-admin-<version>.tar
   ai-gateway-service-<version>.tar
-  native-plugins/hai_hub_spacegate_plugins.so
   wasm/spacegate_plugin_ai_gateway_queue.wasm
   wasm/spacegate_plugin_ai_gateway_queue-<version>.wasm  # 可选，执行 16.6 后生成
   WASM-OCI.txt                                           # 可选，执行 16.6 后生成

@@ -191,14 +191,11 @@ curl -i http://<node-ip>:9993/
 
 ## HAI 插件如何加载
 
-当前测试镜像通过 SpaceGate 的 native dylib 路径加载 HAI 插件：
+当前测试镜像将 HAI 插件静态链接到由 `HAI_HUB_ROOT` 构建的 `hai-hub-spacegate` 二进制；最终镜像以该二进制作为 `/usr/local/bin/spacegate` 启动。
 
-- `binary/spacegate` 启用 `dylib` feature 后，会扫描启动参数 `--plugins/-p` 指向的目录。
-- Linux 镜像中默认插件目录是 `/lib/spacegate/plugins`。
-- Dockerfile 会从 `HAI_HUB_ROOT` 对应的仓库构建 `hai-hub-spacegate-plugins`，并复制 `libhai_hub_spacegate_plugins.so` 到该目录。
-- 该 dylib 暴露 `register(repo: &PluginRepository)`，一次性注册 `hub-request-id`、`hai-observe`、`hai-auth`、`hai-asset`、`hai-quota`、`hai-dispatch`。
-
-注意：动态库只在 SpaceGate 进程启动时扫描加载。更新 HAI 插件代码后，需要重新构建镜像并滚动重启 DaemonSet。
+- HAI 静态注册 `hub-request-id`、`hai-observe`、`hai-auth`、`hai-asset`、`hai-quota`、`hai-dispatch`。
+- `/lib/spacegate/plugins` 只保留给可选的第三方 native dylib；不要通过挂载 `.so` 更新 HAI。
+- 更新 HAI 插件代码后，需要重新构建镜像并滚动重启 DaemonSet。
 
 ## OTLP 配置如何引入
 

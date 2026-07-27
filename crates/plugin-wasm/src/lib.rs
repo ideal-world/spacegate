@@ -81,6 +81,7 @@ pub mod host_state;
 pub mod runtime;
 pub mod shared;
 pub mod shell;
+pub mod streaming_body;
 pub mod vm;
 
 pub use config::WasmPluginShellConfig;

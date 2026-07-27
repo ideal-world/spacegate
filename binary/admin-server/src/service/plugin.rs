@@ -15,7 +15,7 @@ use spacegate_config::{
     service::{Discovery, Retrieve},
     BoxError, PluginAttributes, PluginConfig, PluginInstanceId,
 };
-use spacegate_plugin_wasm::{config::OciAuthConfig, error::WasmHostError, fetch::fetch_wasm_image_file_sync_with_auth};
+use spacegate_plugin_wasm::{config::OciAuthConfig, error::WasmHostError, fetch::fetch_wasm_image_file_sync_with_source_auth};
 use std::{collections::HashMap, future::Future, sync::OnceLock, time::Duration};
 use tokio::{
     sync::{Mutex, RwLock},
@@ -86,6 +86,9 @@ struct WasmImageSchemaRequest {
     schema_path: Option<String>,
     #[serde(default)]
     oci_auth: Option<OciAuthConfig>,
+    /// HTTP(S) Schema 下载的认证或签名请求头。
+    #[serde(default)]
+    http_headers: HashMap<String, String>,
 }
 
 async fn sync_attr_cache<B: Discovery>(backend: &B, refresh: bool) -> Result<(), BoxError> {
@@ -117,7 +120,7 @@ async fn preview_wasm_image_schema(Json(req): Json<WasmImageSchemaRequest>) -> R
 fn load_wasm_schema(req: WasmImageSchemaRequest) -> Result<Value, InternalError> {
     let image_url = req.image_url.trim();
     let schema_path = req.schema_path.as_deref().map(str::trim).filter(|v| !v.is_empty()).unwrap_or("schema.json");
-    let bytes = match fetch_wasm_image_file_sync_with_auth(image_url, schema_path, req.oci_auth.as_ref()) {
+    let bytes = match fetch_wasm_image_file_sync_with_source_auth(image_url, schema_path, req.oci_auth.as_ref(), Some(&req.http_headers)) {
         Ok(bytes) => bytes,
         Err(error) if is_missing_schema_file_error(&error) => return Ok(empty_schema()),
         Err(error) => return Err(InternalError::boxed(error)),
@@ -134,7 +137,13 @@ fn wasm_schema_request_from_plugin_config(config: &PluginConfig) -> Option<WasmI
     }
     let schema_path = spec.get("schema_path").and_then(Value::as_str).map(ToOwned::to_owned);
     let oci_auth = spec.get("oci_auth").cloned().and_then(|value| serde_json::from_value(value).ok());
-    Some(WasmImageSchemaRequest { image_url, schema_path, oci_auth })
+    let http_headers = spec.get("http_headers").cloned().and_then(|value| serde_json::from_value(value).ok()).unwrap_or_default();
+    Some(WasmImageSchemaRequest {
+        image_url,
+        schema_path,
+        oci_auth,
+        http_headers,
+    })
 }
 
 fn empty_schema() -> Value {
@@ -269,7 +278,8 @@ mod tests {
                     "registry": "localhost:5001",
                     "username": "user",
                     "password": "pass"
-                }
+                },
+                "http_headers": { "Authorization": "Bearer test-token" }
             }),
         };
 
@@ -277,5 +287,6 @@ mod tests {
         assert_eq!(req.image_url, "oci+http://localhost:5001/hai-process-mix:dev");
         assert_eq!(req.schema_path.as_deref(), Some("schema.json"));
         assert_eq!(req.oci_auth.as_ref().and_then(|auth| auth.registry.as_deref()), Some("localhost:5001"));
+        assert_eq!(req.http_headers.get("Authorization"), Some(&"Bearer test-token".to_string()));
     }
 }

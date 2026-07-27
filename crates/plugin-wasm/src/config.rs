@@ -65,6 +65,12 @@ pub struct WasmPluginShellConfig {
     /// Optional OCI registry auth. Usually populated from Higress `imagePullSecret`.
     #[serde(default)]
     pub oci_auth: Option<OciAuthConfig>,
+    /// HTTP(S) Wasm 下载时附带的请求头。
+    ///
+    /// 仅用于 `http://` 与 `https://` 源，可承载 Bearer、Basic 或对象存储自定义认证头；
+    /// 不参与 OCI registry 的鉴权流程。
+    #[serde(default)]
+    pub http_headers: HashMap<String, String>,
     /// 可选 SHA-256 校验值，支持裸 hex 或 `sha256:<hex>`。
     ///
     /// 配置该字段后，host 会在编译前校验拉取到的 wasm 字节；字段变化也会自动让模块缓存失效。
@@ -133,6 +139,7 @@ impl Default for WasmPluginShellConfig {
         Self {
             url: String::new(),
             oci_auth: None,
+            http_headers: HashMap::new(),
             sha256: None,
             module_cache_key: None,
             use_cache: default_use_cache(),

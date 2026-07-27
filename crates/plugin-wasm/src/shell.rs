@@ -21,7 +21,8 @@ use tokio::sync::{Mutex as AsyncMutex, MutexGuard};
 
 use crate::config::{FailStrategy, WasmPluginShellConfig};
 use crate::runtime::default_module_cache;
-use crate::vm::Vm;
+use crate::streaming_body::spawn_response_stream;
+use crate::vm::{Vm, VmProcessResult};
 
 /// Drop 时 abort 关联的 tokio 任务；保证后台 tick 不会在 shell 析构后继续持有 Vm 引用。
 struct AbortOnDrop(tokio::task::JoinHandle<()>);
@@ -116,16 +117,18 @@ impl Plugin for WasmPluginShell {
 
             for offset in 0..slots.len() {
                 let index = start_index.wrapping_add(offset) % slots.len();
-                if let Ok(guard) = slots[index].vm.try_lock() {
-                    let _inflight = InflightGuard::new(&slots[index], pool_name, index);
-                    return process_with_vm(module, cfg, req, inner, guard, pool_name, index).await;
-                }
+                let vm = slots[index].vm.clone();
+                if let Ok(guard) = vm.try_lock() {
+                    let inflight = InflightGuard::new(&slots[index], pool_name, index);
+                    return process_with_vm(module, cfg, req, inner, vm.clone(), guard, inflight, pool_name, index).await;
+                };
             }
 
             let index = start_index % slots.len();
-            let _inflight = InflightGuard::new(&slots[index], pool_name, index);
-            let guard = slots[index].vm.lock().await;
-            process_with_vm(module, cfg, req, inner, guard, pool_name, index).await
+            let vm = slots[index].vm.clone();
+            let inflight = InflightGuard::new(&slots[index], pool_name, index);
+            let guard = vm.lock().await;
+            process_with_vm(module, cfg, req, inner, vm.clone(), guard, inflight, pool_name, index).await
         }
     }
 
@@ -195,14 +198,23 @@ async fn process_with_vm(
     cfg: Arc<WasmPluginShellConfig>,
     req: SgRequest,
     inner: Inner,
+    vm: Arc<AsyncMutex<Vm>>,
     mut guard: MutexGuard<'_, Vm>,
+    inflight: InflightGuard,
     pool_name: &'static str,
     vm_index: usize,
 ) -> Result<SgResponse, BoxError> {
     match guard.process(req, inner).await {
-        Ok(resp) => {
+        Ok(VmProcessResult::Complete(resp)) => {
             tracing::info!(target: "spacegate_plugin_wasm", vm_pool = pool_name, vm_index, status = %resp.status(), "Vm::process ok");
             Ok(resp)
+        }
+        Ok(VmProcessResult::Streaming(prepared)) => {
+            let status = prepared.parts.status;
+            drop(guard);
+            let response = spawn_response_stream(vm, prepared, move || drop(inflight));
+            tracing::info!(target: "spacegate_plugin_wasm", vm_pool = pool_name, vm_index, status = %status, "Vm::process streaming response prepared");
+            Ok(response)
         }
         Err(e) => {
             tracing::error!(target: "spacegate_plugin_wasm", vm_pool = pool_name, vm_index, error = %e, "wasm plugin failed");

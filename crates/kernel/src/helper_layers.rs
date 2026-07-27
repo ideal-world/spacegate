@@ -4,6 +4,8 @@ pub mod map_future;
 /// Map service's response.
 pub mod map_request;
 
+pub mod mcp_proxy;
+
 /// Create a function or closure layer.
 pub mod function;
 

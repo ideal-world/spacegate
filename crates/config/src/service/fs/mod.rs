@@ -288,6 +288,22 @@ where
         self.gateway_dir().join(gateway_name).join(MODULE_FILE_NAME).with_extension(self.format.extension())
     }
 
+    /// Returns the legacy flat gateway configuration path kept for backward-compatible reads.
+    pub fn legacy_gateway_config_path(&self, gateway_name: &str) -> PathBuf {
+        self.gateway_dir().join(gateway_name).with_extension(self.format.extension())
+    }
+
+    /// Selects the persisted gateway configuration path without migrating legacy files during an update.
+    pub fn existing_gateway_config_path(&self, gateway_name: &str) -> Option<PathBuf> {
+        let current = self.gateway_main_config_path(gateway_name);
+        if current.exists() {
+            Some(current)
+        } else {
+            let legacy = self.legacy_gateway_config_path(gateway_name);
+            legacy.exists().then_some(legacy)
+        }
+    }
+
     pub fn routes_dir(&self, gateway_name: &str) -> PathBuf {
         self.gateway_dir().join(gateway_name).join(ROUTE_DIR)
     }
@@ -305,8 +321,8 @@ where
         self.plugin_dir().join(file_name)
     }
     pub fn extract_gateway_name_from_route_dir(&self, path: &Path) -> Option<String> {
-        if path.extension()? == OsStr::from_bytes(ROUTE_DIR.as_bytes()) {
-            path.file_stem().and_then(OsStr::to_str).map(|f| f.to_string())
+        if path.file_name()? == OsStr::from_bytes(ROUTE_DIR.as_bytes()) {
+            path.parent()?.file_name().and_then(OsStr::to_str).map(|f| f.to_string())
         } else {
             None
         }
@@ -332,9 +348,9 @@ mod update;
 #[cfg(test)]
 mod tests {
     use super::Fs;
-    use crate::service::{config_format::Json, Create, Delete, Retrieve};
+    use crate::service::{config_format::Json, Create, Delete, Retrieve, Update};
     use serde_json::json;
-    use spacegate_model::{Config, PluginConfig, PluginInstanceId, PluginInstanceName};
+    use spacegate_model::{Config, PluginConfig, PluginInstanceId, PluginInstanceName, SgGateway, SgHttpRoute, SgRoute};
     use std::{
         fs,
         path::PathBuf,
@@ -354,6 +370,21 @@ mod tests {
             code: "wasm".into(),
             name: PluginInstanceName::Named { name: name.to_string() },
         }
+    }
+
+    fn test_gateway(name: &str) -> SgGateway {
+        SgGateway {
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn test_route(name: &str) -> SgRoute {
+        SgHttpRoute {
+            route_name: name.to_string(),
+            ..Default::default()
+        }
+        .into()
     }
 
     #[test]
@@ -484,6 +515,55 @@ mod tests {
             let got = fs_backend.retrieve_plugin(&id).await.unwrap().unwrap();
             assert_eq!(got.display_name.as_deref(), Some("生产鉴权"));
             assert_eq!(got.spec, json!({ "plugin_name": "authn" }));
+
+            fs::remove_dir_all(dir).unwrap();
+        });
+    }
+
+    #[test]
+    fn fs_route_update_only_writes_the_target_route_file() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let dir = temp_config_dir("route-update");
+            let fs_backend = Fs::new(&dir, Json::default());
+            fs_backend.create_config_item_gateway("gateway-a", test_gateway("gateway-a")).await.unwrap();
+            fs_backend.create_config_item_route("gateway-a", "route-a", test_route("route-a")).await.unwrap();
+            fs_backend.create_config_item_route("gateway-a", "route-b", test_route("route-b")).await.unwrap();
+
+            let main_config_before = fs::read(dir.join("config.json")).unwrap();
+            let sibling_route_before = fs::read(dir.join("gateway/gateway-a/route/route-b.json")).unwrap();
+            let marker_path = dir.join("operator-managed-marker.txt");
+            fs::write(&marker_path, b"must not be removed by a route update").unwrap();
+
+            fs_backend.update_config_item_route("gateway-a", "route-a", test_route("route-a-updated")).await.unwrap();
+
+            assert_eq!(fs::read(dir.join("config.json")).unwrap(), main_config_before);
+            assert_eq!(fs::read(dir.join("gateway/gateway-a/route/route-b.json")).unwrap(), sibling_route_before);
+            assert!(marker_path.exists());
+            let route = fs_backend.retrieve_config_item_route("gateway-a", "route-a").await.unwrap().unwrap();
+            assert_eq!(route.route_name(), "route-a-updated");
+
+            fs::remove_dir_all(dir).unwrap();
+        });
+    }
+
+    #[test]
+    fn fs_route_delete_keeps_sibling_routes_and_gateway_config() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let dir = temp_config_dir("route-delete");
+            let fs_backend = Fs::new(&dir, Json::default());
+            fs_backend.create_config_item_gateway("gateway-a", test_gateway("gateway-a")).await.unwrap();
+            fs_backend.create_config_item_route("gateway-a", "route-a", test_route("route-a")).await.unwrap();
+            fs_backend.create_config_item_route("gateway-a", "route-b", test_route("route-b")).await.unwrap();
+            let marker_path = dir.join("operator-managed-marker.txt");
+            fs::write(&marker_path, b"must not be removed by a route delete").unwrap();
+
+            fs_backend.delete_config_item_route("gateway-a", "route-a").await.unwrap();
+
+            assert!(!dir.join("gateway/gateway-a/route/route-a.json").exists());
+            assert!(dir.join("gateway/gateway-a/route/route-b.json").exists());
+            assert!(dir.join("gateway/gateway-a/config.json").exists());
+            assert!(marker_path.exists());
+            assert_eq!(fs_backend.retrieve_config_item_route_names("gateway-a").await.unwrap(), vec!["route-b"]);
 
             fs::remove_dir_all(dir).unwrap();
         });

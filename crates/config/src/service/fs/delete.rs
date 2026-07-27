@@ -16,21 +16,28 @@ where
     }
 
     async fn delete_config_item_gateway(&self, gateway_name: &str) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            config.gateways.remove(gateway_name);
-            Ok(())
-        })
-        .await
+        let current_dir = self.gateway_dir().join(gateway_name);
+        match tokio::fs::remove_dir_all(&current_dir).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let legacy_path = self.legacy_gateway_config_path(gateway_name);
+        match tokio::fs::remove_file(legacy_path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        Ok(())
     }
 
     async fn delete_config_item_route(&self, gateway_name: &str, route_name: &str) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            if let Some(gw) = config.gateways.get_mut(gateway_name) {
-                gw.routes.remove(route_name);
-            }
-            Ok(())
-        })
-        .await
+        let path = self.route_path(gateway_name, route_name);
+        match tokio::fs::remove_file(path).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
     }
 
     async fn delete_config_item(&self, gateway_name: &str) -> Result<(), BoxError> {
@@ -42,12 +49,11 @@ where
     }
 
     async fn delete_config_item_all_routes(&self, gateway_name: &str) -> Result<(), BoxError> {
-        self.modify_cached(|config| {
-            if let Some(gw) = config.gateways.get_mut(gateway_name) {
-                gw.routes.clear()
-            }
-            Ok(())
-        })
-        .await
+        let routes_dir = self.routes_dir(gateway_name);
+        match tokio::fs::remove_dir_all(routes_dir).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
     }
 }

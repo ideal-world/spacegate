@@ -76,13 +76,22 @@ fn release_workflow_builds_wasm_and_dylib_capable_gateway() {
     assert_eq!(workflow.matches(expected).count(), 2);
 }
 
-/// Ensures the bundled HAI dylib exposes plugin-owned schemas to the Admin API.
+/// Ensures every K8s image embeds HAI plugins in the gateway binary instead of a dylib.
 #[test]
-fn gateway_image_builds_hai_plugins_with_schema_metadata() {
-    let dockerfile = include_str!("../../../resource/docker/spacegate-k8s/Dockerfile");
-    let command = dockerfile.split_whitespace().collect::<Vec<_>>().join(" ");
+fn gateway_images_embed_hai_plugins_in_gateway_binary() {
+    let dockerfiles = [
+        include_str!("../../../resource/docker/spacegate-k8s/Dockerfile"),
+        include_str!("../../../deploy/k8s/test-spacegate/Dockerfile.spacegate"),
+    ];
 
-    assert!(command.contains("cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate-plugins --features schema"));
+    for dockerfile in dockerfiles {
+        let command = dockerfile.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(command.contains("cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate"));
+        assert!(dockerfile.contains("COPY --from=hai-plugin-builder"));
+        assert!(dockerfile.contains("/usr/local/bin/spacegate"));
+        assert!(!dockerfile.contains("libhai_hub_spacegate_plugins.so"));
+    }
 }
 
 /// Ensures the base DaemonSet keeps the image-bundled plugin directory and exposes a mount directory.
@@ -128,10 +137,27 @@ fn all_in_one_uses_k8s_compatible_plugin_directories() {
     assert!(dockerfile.contains("EXTERNAL_WASM_PLUGIN_DIR=/plugins"));
     assert!(start_script.contains("BUILTIN_NATIVE_PLUGIN_DIR=\"${BUILTIN_NATIVE_PLUGIN_DIR:-/lib/spacegate/plugins}\""));
     assert!(start_script.contains("EXTERNAL_NATIVE_PLUGIN_DIR=\"${EXTERNAL_NATIVE_PLUGIN_DIR:-/var/lib/spacegate/plugins}\""));
-    assert!(start_script.contains("-p \"$BUILTIN_NATIVE_PLUGIN_DIR,$EXTERNAL_NATIVE_PLUGIN_DIR\""));
+    assert!(start_script.contains("PLUGIN_DIR=\"$EXTERNAL_NATIVE_PLUGIN_DIR\""));
+    assert!(!start_script.contains("-p \"$BUILTIN_NATIVE_PLUGIN_DIR,$EXTERNAL_NATIVE_PLUGIN_DIR\""));
     assert!(readme.contains("spacegate-native-plugins:/var/lib/spacegate/plugins"));
     assert!(readme.contains("spacegate-wasm:/plugins"));
     assert!(!readme.contains("spacegate-plugins:/lib/spacegate/plugins"));
+}
+
+/// all-in-one must use a caller-provided Redis instead of starting an ephemeral in-container server.
+#[test]
+fn all_in_one_uses_external_redis() {
+    let dockerfile = include_str!("../../../../Dockerfile.all-in-one");
+    let start_script = include_str!("../../../../docker/all-in-one/start.sh");
+    let readme = include_str!("../../../../README.md");
+
+    assert!(!dockerfile.contains("redis-server"));
+    assert!(!start_script.contains("redis-server --"));
+    assert!(!start_script.contains("redis_pid="));
+    assert!(dockerfile.contains("REDIS_URL=redis://host.docker.internal:6379/0"));
+    assert!(start_script.contains("REDIS_URL=\"${REDIS_URL:-redis://host.docker.internal:6379/0}\""));
+    assert!(readme.contains("--add-host=host.docker.internal:host-gateway"));
+    assert!(readme.contains("redis://:password@host.docker.internal:6379/0"));
 }
 
 /// Keeps non-runnable Wasm examples out of the directory used for base manifests.
