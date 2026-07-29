@@ -7,6 +7,10 @@ fn observability_annotations_roundtrip() {
     use spacegate_model::{ObservabilityConfig, OtlpProtocol, SgParameters};
 
     let params = SgParameters {
+        redis_pool_max_size: Some(48),
+        redis_pool_wait_timeout_ms: Some(750),
+        redis_pool_create_timeout_ms: Some(1250),
+        redis_pool_recycle_timeout_ms: Some(1500),
         observability: ObservabilityConfig {
             enabled: true,
             service_name: "spacegate-k8s".to_string(),
@@ -45,6 +49,10 @@ fn observability_annotations_roundtrip() {
 
     let parsed = SgParameters::from_kube_gateway(&gateway);
 
+    assert_eq!(parsed.redis_pool_max_size, Some(48));
+    assert_eq!(parsed.redis_pool_wait_timeout_ms, Some(750));
+    assert_eq!(parsed.redis_pool_create_timeout_ms, Some(1250));
+    assert_eq!(parsed.redis_pool_recycle_timeout_ms, Some(1500));
     assert!(parsed.observability.enabled);
     assert_eq!(parsed.observability.service_name, "spacegate-k8s");
     assert_eq!(parsed.observability.otlp_endpoint, "http://otel-collector:4317");

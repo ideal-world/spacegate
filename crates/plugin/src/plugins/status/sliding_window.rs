@@ -196,12 +196,13 @@ impl SlidingWindowCounter {
 
     #[cfg(feature = "cache")]
     pub async fn add_and_count(&self, now: DateTime<Utc>, client: &spacegate_ext_redis::RedisClient) -> TardisResult<u64> {
+        let mut conn = client.get_conn().await.map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Status] redis pool error : {e}"), ""))?;
         let result: u64 = script()
             .key((if self.window_key.is_empty() { DEFAULT_CONF_WINDOW_KEY } else { &self.window_key }).to_string())
             .arg(self.window_size.num_milliseconds())
             .arg(now.timestamp())
             .arg(now.timestamp_subsec_micros())
-            .invoke_async(&mut client.get_conn().await)
+            .invoke_async(&mut conn)
             .await
             .map_err(|e| TardisError::internal_error(&format!("[SG.Filter.Status] redis error : {e}"), ""))?;
         Ok(result)

@@ -81,7 +81,8 @@ impl Plugin for RedisTimeRangePlugin {
         let Some(key) = redis_format_key(&req, matched, &self.header) else {
             return Ok(PluginError::status::<Self, { code::UNAUTHORIZED }>(format!("missing header {}", self.header.as_str())).into());
         };
-        let pass: bool = redis_call(client.get_conn().await, format!("{}:{}", self.prefix, key)).await?;
+        let conn = client.get_conn().await?;
+        let pass: bool = redis_call(conn, format!("{}:{}", self.prefix, key)).await?;
         if !pass {
             return Ok(PluginError::status::<RedisTimeRangePlugin, { code::FORBIDDEN }>("request cumulative count reached the limit").into());
         }
@@ -131,7 +132,7 @@ mod test {
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");
-        let mut conn = client.get_conn().await;
+        let mut conn = client.get_conn().await.expect("Redis connection");
         let current_year = chrono::Utc::now().year();
         let next_year = current_year + 1;
         let next_next_year = next_year + 1;

@@ -79,13 +79,20 @@ impl Plugin for RedisCountPlugin {
         let Some(key) = redis_format_key(&req, matched, &self.header) else {
             return Ok(PluginError::status::<RedisCountPlugin, { code::UNAUTHORIZED }>(format!("missing header {}", self.header.as_str())).into());
         };
-        let pass: bool = redis_call(client.get_conn().await, format!("{}:{}", self.prefix, key)).await?;
+        let conn = client.get_conn().await?;
+        let pass: bool = redis_call(conn, format!("{}:{}", self.prefix, key)).await?;
         if !pass {
             return Ok(PluginError::status::<RedisCountPlugin, { code::FORBIDDEN }>("request cumulative count reached the limit").into());
         }
         let resp = inner.call(req).await;
         if resp.status().is_server_error() || resp.status().is_client_error() {
-            if let Err(e) = redis_call_on_resp(client.get_conn().await, format!("{}:{}", self.prefix, key)).await {
+            let rollback: Result<(), BoxError> = async {
+                let conn = client.get_conn().await?;
+                redis_call_on_resp(conn, format!("{}:{}", self.prefix, key)).await?;
+                Ok(())
+            }
+            .await;
+            if let Err(e) = rollback {
                 tracing::error!("redis execution error: {e}")
             }
         }
@@ -134,7 +141,7 @@ mod test {
         .expect("invalid config");
         global_repo().add(GW_NAME, url.as_str());
         let client = global_repo().get(GW_NAME).expect("missing client");
-        let mut conn = client.get_conn().await;
+        let mut conn = client.get_conn().await.expect("Redis connection");
         let _: () = conn.set(format!("sg:plugin:redis-count:test:*:op-res:{AK}"), 3).await.expect("fail to set");
         let inner = Inner::new(get_echo_service());
         let _backend_service = get_echo_service();

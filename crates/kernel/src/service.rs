@@ -1,7 +1,16 @@
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{
+    convert::Infallible,
+    net::SocketAddr,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use futures_util::future::BoxFuture;
-use hyper::{body::Incoming, Request, Response};
+use hyper::{
+    body::{Body, Bytes, Frame, Incoming},
+    Request, Response, StatusCode,
+};
 use hyper_util::rt::TokioIo;
 use opentelemetry::trace::TraceContextExt;
 use tokio::net::TcpStream;
@@ -17,6 +26,147 @@ use crate::{
     },
     ArcHyperService, BoxResult, SgBody,
 };
+
+/// 在响应 body 完成或客户端断开时输出 access log 的收尾状态。
+struct AccessLogFinalizer {
+    finalized: bool,
+    enter_time: EnterTime,
+    span: tracing::Span,
+    telemetry_context: TelemetryContext,
+    gateway: String,
+    method: String,
+    path: String,
+    host: String,
+    client_ip: String,
+    x_forwarded_for: String,
+    user_agent: String,
+    authority: String,
+    downstream_remote_address: String,
+    route_name: String,
+    upstream_host: String,
+    protocol_version: String,
+    status: StatusCode,
+    request_id: String,
+    peer_addr: String,
+    request_body_size: Option<u64>,
+    response_body_size: Option<u64>,
+    active_request_labels: HttpMetricLabels,
+}
+
+impl AccessLogFinalizer {
+    /// 只执行一次日志、指标和活动请求收尾，保证 EOF 与 Drop 不会重复记录。
+    fn finish(&mut self) {
+        if self.finalized {
+            return;
+        }
+        self.finalized = true;
+        let latency = self.enter_time.elapsed();
+        self.span.record("http.status_code", self.status.as_u16());
+        self.span.record("duration_ms", latency.as_millis() as u64);
+        let span_context = self.span.context();
+        let span = span_context.span();
+        let otel_span_context = span.span_context();
+        let trace_id = otel_span_context.is_valid().then(|| otel_span_context.trace_id().to_string()).unwrap_or_default();
+        record_http_server_metrics_with_labels(
+            HttpMetricLabels {
+                gateway: self.gateway.clone(),
+                method: self.method.clone(),
+                status_code: self.status.as_u16().to_string(),
+                protocol_name: "http".to_string(),
+                protocol_version: self.protocol_version.clone(),
+                request_body_size: self.request_body_size,
+                response_body_size: self.response_body_size,
+            },
+            latency,
+            self.status.is_server_error() || self.status.is_client_error(),
+        );
+        let access_log = access_log_fields(
+            self.gateway.clone(),
+            self.method.clone(),
+            self.path.clone(),
+            self.host.clone(),
+            self.client_ip.clone(),
+            self.x_forwarded_for.clone(),
+            self.user_agent.clone(),
+            self.authority.clone(),
+            self.downstream_remote_address.clone(),
+            self.route_name.clone(),
+            self.upstream_host.clone(),
+            trace_id,
+            self.protocol_version.clone(),
+            self.status,
+            self.request_id.clone(),
+            self.peer_addr.clone(),
+            latency,
+            self.request_body_size,
+            self.response_body_size,
+            self.telemetry_context.snapshot(),
+        );
+        let telemetry = telemetry_json(&access_log.telemetry);
+        tracing::info!(
+            event = "http_access",
+            gateway = %access_log.gateway,
+            method = %access_log.method,
+            path = %access_log.path,
+            host = %access_log.host,
+            authority = %access_log.authority,
+            client_ip = %access_log.client_ip,
+            x_forwarded_for = %access_log.x_forwarded_for,
+            user_agent = %access_log.user_agent,
+            downstream_remote_address = %access_log.downstream_remote_address,
+            route_name = %access_log.route_name,
+            upstream_host = %access_log.upstream_host,
+            trace_id = %access_log.trace_id,
+            protocol_name = %access_log.protocol_name,
+            protocol_version = %access_log.protocol_version,
+            status_code = access_log.status_code,
+            request_id = %access_log.request_id,
+            peer_addr = %access_log.peer_addr,
+            duration_ms = access_log.duration_ms,
+            bytes_received = ?access_log.request_body_size,
+            bytes_sent = ?access_log.response_body_size,
+            request_body_size = ?access_log.request_body_size,
+            response_body_size = ?access_log.response_body_size,
+            telemetry = %telemetry,
+            "http access log"
+        );
+        record_http_server_active_request(self.active_request_labels.clone(), -1);
+    }
+}
+
+/// 保持响应数据原样透传，并将 access-log 收尾推迟到 body 生命周期结束。
+struct AccessLogBody {
+    inner: SgBody,
+    finalizer: AccessLogFinalizer,
+}
+
+impl Body for AccessLogBody {
+    type Data = Bytes;
+    type Error = crate::BoxError;
+
+    fn poll_frame(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        let this = self.as_mut().get_mut();
+        let poll = Pin::new(&mut this.inner).poll_frame(cx);
+        if matches!(poll, Poll::Ready(None) | Poll::Ready(Some(Err(_)))) {
+            this.finalizer.finish();
+        }
+        poll
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> hyper::body::SizeHint {
+        self.inner.size_hint()
+    }
+}
+
+impl Drop for AccessLogBody {
+    fn drop(&mut self) {
+        self.finalizer.finish();
+    }
+}
 
 pub mod http_route;
 
@@ -234,88 +384,37 @@ where
                 } else if status.is_success() {
                     tracing::trace!(status = ?status, headers = ?resp.headers(), "success response");
                 }
-                let latency = enter_time.elapsed();
-                span_for_recording.record("http.status_code", status.as_u16());
-                span_for_recording.record("duration_ms", latency.as_millis() as u64);
                 let response_body_size = content_length(resp.headers());
                 let access_request_id = resp.headers().get("x-request-id").and_then(|v| v.to_str().ok()).map(str::to_string).unwrap_or(request_id);
-                tracing::trace!(latency = ?latency, "request finished");
                 let authority = host.clone();
                 let route_name = resp.extensions().get::<RouteName>().map(|route| route.to_string()).unwrap_or_else(|| access_log_context.route_name());
                 let upstream_host = resp.extensions().get::<BackendHost>().map(|host| host.to_string()).unwrap_or_else(|| access_log_context.upstream_host());
-                let span_context = span_for_recording.context();
-                let span = span_context.span();
-                let otel_span_context = span.span_context();
-                let trace_id = if otel_span_context.is_valid() {
-                    otel_span_context.trace_id().to_string()
-                } else {
-                    String::new()
-                };
-                record_http_server_metrics_with_labels(
-                    HttpMetricLabels {
-                        gateway: gateway_label.clone(),
-                        method: method_label.clone(),
-                        status_code: status.as_u16().to_string(),
-                        protocol_name: "http".to_string(),
-                        protocol_version: protocol_version_label.clone(),
-                        request_body_size,
-                        response_body_size,
-                    },
-                    latency,
-                    status.is_server_error() || status.is_client_error(),
-                );
-                let access_log = access_log_fields(
-                    gateway_label,
-                    method_label,
+                let finalizer = AccessLogFinalizer {
+                    finalized: false,
+                    enter_time,
+                    span: span_for_recording,
+                    telemetry_context,
+                    gateway: gateway_label,
+                    method: method_label,
                     path,
                     host,
-                    client_ip_label,
+                    client_ip: client_ip_label,
                     x_forwarded_for,
                     user_agent,
                     authority,
-                    peer_addr_label.clone(),
+                    downstream_remote_address: peer_addr_label.clone(),
                     route_name,
                     upstream_host,
-                    trace_id,
-                    protocol_version_label,
+                    protocol_version: protocol_version_label,
                     status,
-                    access_request_id,
-                    peer_addr_label,
-                    latency,
+                    request_id: access_request_id,
+                    peer_addr: peer_addr_label,
                     request_body_size,
                     response_body_size,
-                    telemetry_context.snapshot(),
-                );
-                let telemetry = telemetry_json(&access_log.telemetry);
-                tracing::info!(
-                    event = "http_access",
-                    gateway = %access_log.gateway,
-                    method = %access_log.method,
-                    path = %access_log.path,
-                    host = %access_log.host,
-                    authority = %access_log.authority,
-                    client_ip = %access_log.client_ip,
-                    x_forwarded_for = %access_log.x_forwarded_for,
-                    user_agent = %access_log.user_agent,
-                    downstream_remote_address = %access_log.downstream_remote_address,
-                    route_name = %access_log.route_name,
-                    upstream_host = %access_log.upstream_host,
-                    trace_id = %access_log.trace_id,
-                    protocol_name = %access_log.protocol_name,
-                    protocol_version = %access_log.protocol_version,
-                    status_code = access_log.status_code,
-                    request_id = %access_log.request_id,
-                    peer_addr = %access_log.peer_addr,
-                    duration_ms = access_log.duration_ms,
-                    bytes_received = ?access_log.request_body_size,
-                    bytes_sent = ?access_log.response_body_size,
-                    request_body_size = ?access_log.request_body_size,
-                    response_body_size = ?access_log.response_body_size,
-                    telemetry = %telemetry,
-                    "http access log"
-                );
-                record_http_server_active_request(active_request_labels, -1);
-                Ok(resp)
+                    active_request_labels,
+                };
+                let (parts, body) = resp.into_parts();
+                Ok(Response::from_parts(parts, SgBody::new(AccessLogBody { inner: body, finalizer })))
             }
             .instrument(span),
         )
@@ -341,6 +440,41 @@ impl ArcHyperService {
 mod tests {
     use super::*;
 
+    fn test_access_log_finalizer() -> AccessLogFinalizer {
+        AccessLogFinalizer {
+            finalized: false,
+            enter_time: EnterTime::new(),
+            span: tracing::info_span!("access_log_body_test"),
+            telemetry_context: TelemetryContext::default(),
+            gateway: "test".to_string(),
+            method: "GET".to_string(),
+            path: "/".to_string(),
+            host: "test".to_string(),
+            client_ip: "127.0.0.1".to_string(),
+            x_forwarded_for: String::new(),
+            user_agent: String::new(),
+            authority: "test".to_string(),
+            downstream_remote_address: "127.0.0.1:12345".to_string(),
+            route_name: String::new(),
+            upstream_host: String::new(),
+            protocol_version: "1.1".to_string(),
+            status: StatusCode::OK,
+            request_id: "request-1".to_string(),
+            peer_addr: "127.0.0.1:12345".to_string(),
+            request_body_size: None,
+            response_body_size: Some(1),
+            active_request_labels: HttpMetricLabels {
+                gateway: "test".to_string(),
+                method: "GET".to_string(),
+                status_code: "active".to_string(),
+                protocol_name: "http".to_string(),
+                protocol_version: "1.1".to_string(),
+                request_body_size: None,
+                response_body_size: None,
+            },
+        }
+    }
+
     #[test]
     fn hyper_service_adapter_keeps_gateway_name_from_listener() {
         let service = hyper::service::service_fn(|_req: Request<SgBody>| async { Ok::<_, Infallible>(Response::new(SgBody::empty())) });
@@ -349,5 +483,24 @@ mod tests {
         let adapter = HyperServiceAdapter::with_gateway_name(service, peer, Arc::<str>::from("gw-a"));
 
         assert_eq!(adapter.gateway_name(), "gw-a");
+    }
+
+    #[test]
+    fn access_log_body_finishes_only_after_response_eof() {
+        let mut body = AccessLogBody {
+            inner: SgBody::full("x"),
+            finalizer: test_access_log_finalizer(),
+        };
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        let Poll::Ready(Some(Ok(frame))) = Pin::new(&mut body).poll_frame(&mut context) else {
+            panic!("first response frame must be ready");
+        };
+        assert_eq!(frame.into_data().expect("response data"), b"x"[..]);
+        assert!(!body.finalizer.finalized);
+
+        assert!(matches!(Pin::new(&mut body).poll_frame(&mut context), Poll::Ready(None)));
+        assert!(body.finalizer.finalized);
     }
 }

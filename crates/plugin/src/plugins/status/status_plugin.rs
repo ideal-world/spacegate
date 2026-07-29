@@ -90,7 +90,8 @@ pub(crate) async fn create_status_html<B>(
 
 #[cfg(feature = "cache")]
 pub(crate) async fn update_status(server_name: &str, _cache_key: &str, client: &spacegate_ext_redis::RedisClient, status: Status) -> BoxResult<()> {
-    client.get_conn().await.hset(_cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
+    let mut conn = client.get_conn().await?;
+    conn.hset(_cache_key, server_name, &TardisFuns::json.obj_to_string(&status)?).await?;
     Ok(())
 }
 #[cfg(not(feature = "cache"))]
@@ -102,7 +103,8 @@ pub(crate) async fn update_status(server_name: &str, status: Status) -> BoxResul
 
 #[cfg(feature = "cache")]
 pub(crate) async fn get_status(server_name: &str, cache_key: &str, client: &spacegate_ext_redis::RedisClient) -> BoxResult<Option<Status>> {
-    match client.get_conn().await.hget(cache_key, server_name).await? {
+    let mut conn = client.get_conn().await?;
+    match conn.hget(cache_key, server_name).await? {
         Some(result) => Ok(Some(TardisFuns::json.str_to_obj(&result)?)),
         None => Ok(None),
     }

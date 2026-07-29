@@ -325,11 +325,20 @@ impl RunningSgGateway {
         {
             if let Some(url) = &config_item.gateway.parameters.redis_url {
                 let url: Arc<str> = url.clone().into();
+                let parameters = &config_item.gateway.parameters;
+                let defaults = spacegate_ext_redis::RedisPoolConfig::default();
+                let pool_config = spacegate_ext_redis::RedisPoolConfig {
+                    max_size: parameters.redis_pool_max_size.unwrap_or(defaults.max_size),
+                    wait_timeout: Duration::from_millis(parameters.redis_pool_wait_timeout_ms.unwrap_or(defaults.wait_timeout.as_millis() as u64)),
+                    create_timeout: Duration::from_millis(parameters.redis_pool_create_timeout_ms.unwrap_or(defaults.create_timeout.as_millis() as u64)),
+                    recycle_timeout: Duration::from_millis(parameters.redis_pool_recycle_timeout_ms.unwrap_or(defaults.recycle_timeout.as_millis() as u64)),
+                };
                 // builder_ext.insert(crate::extension::redis_url::RedisUrl(url.clone()));
                 // builder_ext.insert(spacegate_kernel::extension::GatewayName(config.gateway.name.clone().into()));
                 // Initialize cache instances
                 tracing::trace!("Initialize cache client...url:{url}");
-                spacegate_ext_redis::RedisClientRepo::global().add(&config_item.gateway.name, url.as_ref());
+                let client = spacegate_ext_redis::RedisClient::new_with_pool_config(url.as_ref(), pool_config)?;
+                spacegate_ext_redis::RedisClientRepo::global().add(&config_item.gateway.name, client);
             }
         }
         tracing::info!("[SG.Server] start gateway");

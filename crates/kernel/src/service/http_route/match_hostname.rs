@@ -52,7 +52,7 @@ impl<T> HostnameTree<T> {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn iter(&self) -> HostnameTreeIter<T> {
+    pub fn iter(&self) -> HostnameTreeIter<'_, T> {
         HostnameTreeIter {
             ipv4: self.ipv4.values(),
             ipv6: self.ipv6.values(),
@@ -60,7 +60,7 @@ impl<T> HostnameTree<T> {
             fallback: self.fallback.iter(),
         }
     }
-    pub fn iter_mut(&mut self) -> HostnameTreeIterMut<T> {
+    pub fn iter_mut(&mut self) -> HostnameTreeIterMut<'_, T> {
         HostnameTreeIterMut {
             ipv4: self.ipv4.values_mut(),
             ipv6: self.ipv6.values_mut(),

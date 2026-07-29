@@ -20,3 +20,8 @@ redis = { version = "0.27", features = [
     "tokio-comp",
     "tokio-native-tls-comp",
 ] }
+
+[dev-dependencies]
+testcontainers = "0.15.0"
+testcontainers-modules = { workspace = true, features = ["redis"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

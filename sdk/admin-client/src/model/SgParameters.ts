@@ -7,6 +7,22 @@ export type SgParameters = {
  */
 redis_url: string | null,
 /**
+ * Maximum number of Redis connections this gateway may borrow concurrently.
+ */
+redis_pool_max_size: number | null,
+/**
+ * Maximum time in milliseconds to wait for an available Redis connection.
+ */
+redis_pool_wait_timeout_ms: number | null,
+/**
+ * Maximum time in milliseconds to establish a Redis connection.
+ */
+redis_pool_create_timeout_ms: number | null,
+/**
+ * Maximum time in milliseconds to validate a Redis connection before reuse.
+ */
+redis_pool_recycle_timeout_ms: number | null,
+/**
  * Gateway Log_Level
  */
 log_level: string | null,

@@ -58,6 +58,18 @@ pub struct SgParameters {
     /// Redis access Url, Url with permission information.
     pub redis_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Maximum number of Redis connections this gateway may borrow concurrently.
+    pub redis_pool_max_size: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Maximum time in milliseconds to wait for an available Redis connection.
+    pub redis_pool_wait_timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Maximum time in milliseconds to establish a Redis connection.
+    pub redis_pool_create_timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Maximum time in milliseconds to validate a Redis connection before reuse.
+    pub redis_pool_recycle_timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     /// Gateway Log_Level
     pub log_level: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -92,6 +92,21 @@ impl SgParametersConv for SgParameters {
         if let Some(redis_url) = self.redis_url {
             ann.insert(crate::constants::GATEWAY_ANNOTATION_REDIS_URL.to_string(), redis_url);
         }
+        if let Some(max_size) = self.redis_pool_max_size {
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_MAX_SIZE.to_string(), max_size.to_string());
+        }
+        if let Some(wait_timeout_ms) = self.redis_pool_wait_timeout_ms {
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_WAIT_TIMEOUT_MS.to_string(), wait_timeout_ms.to_string());
+        }
+        if let Some(create_timeout_ms) = self.redis_pool_create_timeout_ms {
+            ann.insert(crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_CREATE_TIMEOUT_MS.to_string(), create_timeout_ms.to_string());
+        }
+        if let Some(recycle_timeout_ms) = self.redis_pool_recycle_timeout_ms {
+            ann.insert(
+                crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_RECYCLE_TIMEOUT_MS.to_string(),
+                recycle_timeout_ms.to_string(),
+            );
+        }
         if let Some(log_level) = self.log_level {
             ann.insert(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL.to_string(), log_level);
         }
@@ -167,6 +182,10 @@ impl SgParametersConv for SgParameters {
                 gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_OTEL_LOGS_LEVEL).cloned().unwrap_or_else(|| ObservabilityConfig::default().logs.level);
             SgParameters {
                 redis_url: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_URL).map(|v| v.to_string()),
+                redis_pool_max_size: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_MAX_SIZE).and_then(|v| v.parse::<usize>().ok()),
+                redis_pool_wait_timeout_ms: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_WAIT_TIMEOUT_MS).and_then(|v| v.parse::<u64>().ok()),
+                redis_pool_create_timeout_ms: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_CREATE_TIMEOUT_MS).and_then(|v| v.parse::<u64>().ok()),
+                redis_pool_recycle_timeout_ms: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_REDIS_POOL_RECYCLE_TIMEOUT_MS).and_then(|v| v.parse::<u64>().ok()),
                 log_level: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LOG_LEVEL).map(|v| v.to_string()),
                 lang: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_LANGUAGE).map(|v| v.to_string()),
                 ignore_tls_verification: gateway_annotations.get(crate::constants::GATEWAY_ANNOTATION_IGNORE_TLS_VERIFICATION).and_then(|v| v.parse::<bool>().ok()),
@@ -176,6 +195,10 @@ impl SgParametersConv for SgParameters {
         } else {
             SgParameters {
                 redis_url: None,
+                redis_pool_max_size: None,
+                redis_pool_wait_timeout_ms: None,
+                redis_pool_create_timeout_ms: None,
+                redis_pool_recycle_timeout_ms: None,
                 log_level: None,
                 lang: None,
                 ignore_tls_verification: None,
