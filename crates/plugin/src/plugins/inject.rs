@@ -13,7 +13,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "注入插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "inject_schema_example", title = "注入插件配置"))]
 pub struct InjectPlugin {
     #[cfg_attr(feature = "schema", schemars(title = "请求注入URL"))]
     pub req_inject_url: Option<String>,
@@ -23,6 +23,17 @@ pub struct InjectPlugin {
     pub resp_inject_url: Option<String>,
     #[cfg_attr(feature = "schema", schemars(title = "响应超时时间"))]
     pub resp_timeout: Duration,
+}
+
+/// Provides a complete injection configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn inject_schema_example() -> serde_json::Value {
+    serde_json::json!({
+        "req_inject_url": "http://127.0.0.1:8081/request",
+        "req_timeout": {"secs": 5, "nanos": 0},
+        "resp_inject_url": "http://127.0.0.1:8081/response",
+        "resp_timeout": {"secs": 5, "nanos": 0}
+    })
 }
 
 impl Default for InjectPlugin {

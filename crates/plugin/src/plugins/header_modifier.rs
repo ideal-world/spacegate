@@ -21,7 +21,7 @@ pub enum SgFilterHeaderModifierKind {
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "头部修改插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "header_modifier_schema_example", title = "头部修改插件配置"))]
 pub struct SgFilterHeaderModifier {
     #[cfg_attr(feature = "schema", schemars(title = "类型"))]
     pub kind: SgFilterHeaderModifierKind,
@@ -29,6 +29,16 @@ pub struct SgFilterHeaderModifier {
     pub sets: Option<HashMap<String, String>>,
     #[cfg_attr(feature = "schema", schemars(title = "移除头部"))]
     pub remove: Option<Vec<String>>,
+}
+
+/// Provides a complete header-modifier configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn header_modifier_schema_example() -> serde_json::Value {
+    serde_json::json!({
+        "kind": "Request",
+        "sets": {"x-example-source": "spacegate"},
+        "remove": ["x-debug"]
+    })
 }
 
 pub struct HeaderModifierPlugin {

@@ -14,13 +14,19 @@ use super::redis_format_key;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "Redis限流插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "redis_limit_schema_example", title = "Redis限流插件配置"))]
 pub struct RedisLimitConfig {
     #[cfg_attr(feature = "schema", schemars(title = "实例ID"))]
     pub id: Option<String>,
     #[serde(default = "default_header")]
     #[cfg_attr(feature = "schema", schemars(default = "default_header", title = "身份标识头部"))]
     pub header: String,
+}
+
+/// Provides a complete Redis rate-limit configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn redis_limit_schema_example() -> serde_json::Value {
+    serde_json::json!({"id": "demo-limit", "header": "authorization"})
 }
 
 fn default_header() -> String {

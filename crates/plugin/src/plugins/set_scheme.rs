@@ -6,11 +6,17 @@ use spacegate_kernel::{helper_layers::function::Inner, SgBody};
 use crate::Plugin;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "设置协议插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "set_scheme_schema_example", title = "设置协议插件配置"))]
 pub struct SetSchemePluginConfig {
     /// scheme to set
     #[cfg_attr(feature = "schema", schemars(title = "协议"))]
     pub scheme: String,
+}
+
+/// Provides a complete scheme configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn set_scheme_schema_example() -> serde_json::Value {
+    serde_json::json!({"scheme": "https"})
 }
 
 #[derive(Debug, Clone)]

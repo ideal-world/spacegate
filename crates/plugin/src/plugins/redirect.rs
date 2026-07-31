@@ -12,7 +12,7 @@ use crate::{model::SgHttpPathModifier, Plugin};
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "重定向插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "redirect_schema_example", title = "重定向插件配置"))]
 pub struct RedirectPlugin {
     /// Scheme is the scheme to be used in the value of the Location header in the response. When empty, the scheme of the request is used.
     #[cfg_attr(feature = "schema", schemars(title = "协议"))]
@@ -29,6 +29,18 @@ pub struct RedirectPlugin {
     /// StatusCode is the HTTP status code to be used in response.
     #[cfg_attr(feature = "schema", schemars(title = "状态码"))]
     pub status_code: Option<u16>,
+}
+
+/// Provides a complete redirect configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn redirect_schema_example() -> serde_json::Value {
+    serde_json::json!({
+        "scheme": "https",
+        "hostname": "www.example.com",
+        "path": {"kind": "ReplaceFullPath", "value": "/maintenance"},
+        "port": 443,
+        "status_code": 307
+    })
 }
 
 impl Plugin for RedirectPlugin {

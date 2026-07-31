@@ -166,6 +166,16 @@ async fn put_config_item_route<B: Update>(
     backend.update_config_item_route(&name, &route_name, route).await.map_err(InternalError)
 }
 
+/// Renames a route through the backend coordinator so all route bindings move with the full configuration.
+async fn rename_config_item_route<B: Rename>(
+    Path((name, route_name)): Path<(String, String)>,
+    State(AppState { backend, .. }): State<AppState<B>>,
+    Json(route): Json<SgRoute>,
+) -> Result<(), InternalError<BoxError>> {
+    let new_route_name = route.route_name().to_string();
+    backend.rename_config_item_route(&name, &route_name, &new_route_name, route).await.map_err(InternalError)
+}
+
 async fn put_config_item<B: Update>(
     Path(name): Path<String>,
     State(AppState { backend, .. }): State<AppState<B>>,
@@ -238,6 +248,7 @@ where
                     "/{name}/route/item/{route}",
                     get(get_config_item_route::<B>).post(post_config_item_route::<B>).put(put_config_item_route::<B>).delete(delete_config_item_route::<B>),
                 )
+                .route("/{name}/route/item/{route}/rename", axum::routing::post(rename_config_item_route::<B>))
                 .route("/{name}/route/all", get(get_config_item_all_routes::<B>).delete(delete_config_item_all_routes))
                 .route("/{name}/route/names", get(get_config_item_route_names::<B>))
                 .route(

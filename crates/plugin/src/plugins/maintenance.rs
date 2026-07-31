@@ -15,7 +15,7 @@ use crate::{Plugin, PluginError};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "维护插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "maintenance_schema_example", title = "维护插件配置"))]
 #[serde(default)]
 pub struct MaintenancePluginConfig {
     /// enable time range
@@ -33,6 +33,18 @@ pub struct MaintenancePluginConfig {
     /// return code 307 to redirect to a specified path
     #[cfg_attr(feature = "schema", schemars(title = "重定向路径"))]
     redirect: Option<String>,
+}
+
+/// Provides a complete maintenance configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn maintenance_schema_example() -> serde_json::Value {
+    serde_json::json!({
+        "enabled_time_range": [{"start": "09:00:00", "end": "18:00:00"}],
+        "exclude_ip_range": ["192.0.2.0/24"],
+        "title": "Scheduled maintenance",
+        "msg": "The service is temporarily unavailable for maintenance.",
+        "redirect": "/maintenance"
+    })
 }
 
 #[derive(Debug, Clone)]

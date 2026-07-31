@@ -144,6 +144,32 @@ pub trait Delete: Sync + Send {
     fn delete_plugin(&self, id: &PluginInstanceId) -> impl Future<Output = Result<(), BoxError>> + Send;
 }
 
+/// Coordinates a route identity change while keeping the complete replacement route intact.
+pub trait Rename: Create + Delete + Retrieve {
+    /// Creates the new route identity before removing the old identity.
+    fn rename_config_item_route(&self, gateway_name: &str, old_route_name: &str, new_route_name: &str, route: SgRoute) -> impl Future<Output = Result<(), BoxError>> + Send {
+        async move {
+            if old_route_name == new_route_name {
+                return Err("route rename requires different names".into());
+            }
+            if route.route_name() != new_route_name {
+                return Err("route payload name does not match rename target".into());
+            }
+            if self.retrieve_config_item_route(gateway_name, old_route_name).await?.is_none() {
+                return Err(format!("route [{old_route_name}] not found").into());
+            }
+            if self.retrieve_config_item_route(gateway_name, new_route_name).await?.is_some() {
+                return Err(format!("route [{new_route_name}] already exists").into());
+            }
+
+            self.create_config_item_route(gateway_name, new_route_name, route).await?;
+            self.delete_config_item_route(gateway_name, old_route_name).await
+        }
+    }
+}
+
+impl<T> Rename for T where T: Create + Delete + Retrieve {}
+
 pub trait Retrieve: Sync + Send {
     fn retrieve_config_item_gateway(&self, gateway_name: &str) -> impl Future<Output = Result<Option<SgGateway>, BoxError>> + Send;
     fn retrieve_config_item_route(&self, gateway_name: &str, route_name: &str) -> impl Future<Output = Result<Option<SgRoute>, BoxError>> + Send;
@@ -339,5 +365,127 @@ where
 impl Listen for tokio::sync::mpsc::Receiver<ListenEvent> {
     fn poll_next(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<ListenEvent, BoxError>> {
         self.poll_recv(cx).map(|r| r.ok_or("channel closed".into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct RenameTestBackend {
+        routes: Mutex<BTreeMap<String, SgRoute>>,
+        operations: Mutex<Vec<&'static str>>,
+    }
+
+    impl Create for RenameTestBackend {
+        async fn create_config_item_gateway(&self, _gateway_name: &str, _gateway: SgGateway) -> Result<(), BoxError> {
+            Ok(())
+        }
+
+        async fn create_config_item_route(&self, _gateway_name: &str, route_name: &str, route: SgRoute) -> Result<(), BoxError> {
+            self.routes.lock().expect("routes lock").insert(route_name.to_string(), route);
+            self.operations.lock().expect("operations lock").push("create");
+            Ok(())
+        }
+
+        async fn create_plugin(&self, _config: PluginConfig) -> Result<(), BoxError> {
+            Ok(())
+        }
+    }
+
+    impl Delete for RenameTestBackend {
+        async fn delete_config_item_gateway(&self, _gateway_name: &str) -> Result<(), BoxError> {
+            Ok(())
+        }
+
+        async fn delete_config_item_route(&self, _gateway_name: &str, route_name: &str) -> Result<(), BoxError> {
+            self.routes.lock().expect("routes lock").remove(route_name);
+            self.operations.lock().expect("operations lock").push("delete");
+            Ok(())
+        }
+
+        async fn delete_plugin(&self, _id: &PluginInstanceId) -> Result<(), BoxError> {
+            Ok(())
+        }
+    }
+
+    impl Retrieve for RenameTestBackend {
+        async fn retrieve_config_item_gateway(&self, _gateway_name: &str) -> Result<Option<SgGateway>, BoxError> {
+            Ok(None)
+        }
+
+        async fn retrieve_config_item_route(&self, _gateway_name: &str, route_name: &str) -> Result<Option<SgRoute>, BoxError> {
+            Ok(self.routes.lock().expect("routes lock").get(route_name).cloned())
+        }
+
+        async fn retrieve_config_item_route_names(&self, _name: &str) -> Result<Vec<String>, BoxError> {
+            Ok(self.routes.lock().expect("routes lock").keys().cloned().collect())
+        }
+
+        async fn retrieve_config_names(&self) -> Result<Vec<String>, BoxError> {
+            Ok(vec![])
+        }
+
+        async fn retrieve_all_plugins(&self) -> Result<Vec<PluginConfig>, BoxError> {
+            Ok(vec![])
+        }
+
+        async fn retrieve_plugin(&self, _id: &PluginInstanceId) -> Result<Option<PluginConfig>, BoxError> {
+            Ok(None)
+        }
+
+        async fn retrieve_plugins_by_code(&self, _code: &str) -> Result<Vec<PluginConfig>, BoxError> {
+            Ok(vec![])
+        }
+    }
+
+    fn route(name: &str) -> SgRoute {
+        let mut route = SgHttpRoute::default();
+        route.route_name = name.to_string();
+        route.into()
+    }
+
+    #[test]
+    fn rename_creates_the_complete_new_route_before_removing_the_old_route() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().expect("runtime").block_on(async {
+            let backend = RenameTestBackend::default();
+            backend.routes.lock().expect("routes lock").insert("orders-v1".to_string(), route("orders-v1"));
+            let replacement = route("orders-v2");
+
+            backend.rename_config_item_route("edge", "orders-v1", "orders-v2", replacement.clone()).await.unwrap();
+
+            let routes = backend.routes.lock().expect("routes lock");
+            assert!(routes.get("orders-v1").is_none());
+            assert_eq!(serde_json::to_value(routes.get("orders-v2")).unwrap(), serde_json::to_value(Some(replacement)).unwrap());
+            assert_eq!(*backend.operations.lock().expect("operations lock"), ["create", "delete"]);
+        });
+    }
+
+    #[test]
+    fn rename_rejects_an_existing_target_without_touching_the_old_route() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().expect("runtime").block_on(async {
+            let backend = RenameTestBackend::default();
+            backend.routes.lock().expect("routes lock").extend([("orders-v1".to_string(), route("orders-v1")), ("orders-v2".to_string(), route("orders-v2"))]);
+
+            assert!(backend.rename_config_item_route("edge", "orders-v1", "orders-v2", route("orders-v2")).await.is_err());
+
+            assert_eq!(backend.routes.lock().expect("routes lock").len(), 2);
+            assert!(backend.operations.lock().expect("operations lock").is_empty());
+        });
+    }
+
+    #[test]
+    fn rename_rejects_a_payload_name_that_does_not_match_the_target() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().expect("runtime").block_on(async {
+            let backend = RenameTestBackend::default();
+            backend.routes.lock().expect("routes lock").insert("orders-v1".to_string(), route("orders-v1"));
+
+            assert!(backend.rename_config_item_route("edge", "orders-v1", "orders-v2", route("orders-v3")).await.is_err());
+            assert_eq!(backend.routes.lock().expect("routes lock").len(), 1);
+            assert!(backend.operations.lock().expect("operations lock").is_empty());
+        });
     }
 }

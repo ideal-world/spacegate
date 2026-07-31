@@ -9,9 +9,9 @@ pub mod error;
 pub mod mw;
 pub mod service;
 pub mod state;
-pub trait Backend: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
+pub trait Backend: Create + Retrieve + Update + Delete + Rename + Send + Sync + 'static {}
 
-impl<T> Backend for T where T: Create + Retrieve + Update + Delete + Send + Sync + 'static {}
+impl<T> Backend for T where T: Create + Retrieve + Update + Delete + Rename + Send + Sync + 'static {}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -15,7 +15,7 @@ use spacegate_ext_redis::redis::Script;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "限流插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "limit_schema_example", title = "限流插件配置"))]
 pub struct RateLimitPluginConfig {
     /// Maximum number of requests, default is 100
     #[serde(default, deserialize_with = "deserialize_optional_u64_from_number_or_string")]
@@ -29,6 +29,16 @@ pub struct RateLimitPluginConfig {
     #[serde(default = "default_report_ext")]
     #[cfg_attr(feature = "schema", schemars(title = "上报扩展"))]
     pub report_ext: Value,
+}
+
+/// Provides a complete rate-limit configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn limit_schema_example() -> serde_json::Value {
+    serde_json::json!({
+        "max_request_number": 100,
+        "time_window_ms": 1000,
+        "report_ext": {"source": "gateway"}
+    })
 }
 
 fn default_report_ext() -> Value {

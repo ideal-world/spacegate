@@ -14,7 +14,7 @@ use crate::{Plugin, PluginError};
 /// StaticResourceConfig
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "静态资源插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "static_resource_schema_example", title = "静态资源插件配置"))]
 pub struct StaticResourceConfig {
     /// response status code
     #[cfg_attr(feature = "schema", schemars(title = "状态码"))]
@@ -25,6 +25,16 @@ pub struct StaticResourceConfig {
     /// response body
     #[cfg_attr(feature = "schema", schemars(title = "响应体"))]
     pub body: BodyEnum,
+}
+
+/// Provides a complete static-resource configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn static_resource_schema_example() -> serde_json::Value {
+    serde_json::json!({
+        "code": 503,
+        "content_type": "application/json",
+        "body": {"kind": "Json", "value": {"message": "service unavailable"}}
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -16,11 +16,17 @@ schema!(EastWestTrafficWhiteListPlugin, EastWestTrafficWhiteListConfig);
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "白名单配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "east_west_traffic_white_list_schema_example", title = "白名单配置"))]
 #[serde(default)]
 pub struct EastWestTrafficWhiteListConfig {
     #[cfg_attr(feature = "schema", schemars(title = "IP白名单列表"))]
     pub ip_list: Vec<String>,
+}
+
+/// Provides a complete east-west allow-list configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn east_west_traffic_white_list_schema_example() -> serde_json::Value {
+    serde_json::json!({"ip_list": ["10.0.0.0/8"]})
 }
 
 pub struct EastWestTrafficWhiteListPlugin {

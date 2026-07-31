@@ -6,11 +6,17 @@ use spacegate_kernel::SgBody;
 use crate::Plugin;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "设置版本插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "set_version_schema_example", title = "设置版本插件配置"))]
 pub struct SetVersionPluginConfig {
     /// version to set
     #[cfg_attr(feature = "schema", schemars(title = "HTTP版本"))]
     pub version: PluginSupportedVersion,
+}
+
+/// Provides a complete HTTP-version configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn set_version_schema_example() -> serde_json::Value {
+    serde_json::json!({"version": "Http11"})
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

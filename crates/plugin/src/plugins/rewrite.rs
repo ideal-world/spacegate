@@ -13,7 +13,7 @@ use crate::{Plugin, PluginError};
 /// https://gateway-api.sigs.k8s.io/geps/gep-726/
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(title = "重写插件配置"))]
+#[cfg_attr(feature = "schema", schemars(example = "rewrite_schema_example", title = "重写插件配置"))]
 pub struct SgFilterRewriteConfig {
     /// Hostname is the value to be used to replace the Host header value during forwarding.
     #[cfg_attr(feature = "schema", schemars(title = "主机名"))]
@@ -21,6 +21,15 @@ pub struct SgFilterRewriteConfig {
     /// Path defines parameters used to modify the path of the incoming request. The modified path is then used to construct the Location header. When empty, the request path is used as-is.
     #[cfg_attr(feature = "schema", schemars(title = "路径修改"))]
     pub path: Option<SgHttpPathModifier>,
+}
+
+/// Provides a complete rewrite configuration for the generated plugin example.
+#[cfg(feature = "schema")]
+fn rewrite_schema_example() -> serde_json::Value {
+    serde_json::json!({
+        "hostname": "upstream.example.com",
+        "path": {"kind": "ReplacePrefixMatch", "value": "/v2"}
+    })
 }
 
 #[derive(Default, Debug, Clone)]

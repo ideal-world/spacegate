@@ -183,6 +183,15 @@ export async function putConfigItemRoute(
     return getClient().axiosInstance.put(`/config/item/${gateway_name}/route/item/${route_name}`, route)
 }
 
+/** Renames a route while preserving its complete configuration and backend bindings. */
+export async function renameConfigItemRoute(
+    gateway_name: string,
+    route_name: string,
+    route: SgRoute,
+): Promise<AxiosResponse> {
+    return getClient().axiosInstance.post(`/config/item/${gateway_name}/route/item/${route_name}/rename`, route)
+}
+
 export async function putConfigItem(
     gatewayName: string,
 

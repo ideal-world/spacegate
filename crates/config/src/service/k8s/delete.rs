@@ -42,10 +42,8 @@ impl Delete for K8s {
         if let Some(sg_http_route) = self.retrieve_config_item_route(gateway_name, route_name).await? {
             let route = sg_http_route.to_kube_route(gateway_name, route_name, &self.namespace);
             let target_ref = route.to_target_ref();
-            for binding in route.plugin_bindings() {
-                binding.id.remove_filter_target(target_ref.clone(), self).await?;
-            }
-            match route {
+            let plugin_bindings = route.plugin_bindings().to_vec();
+            let delete_result = match &route {
                 KubeRoute::Http(_, _) => match http_spaceroute_api.delete(route_name, &DeleteParams::default()).await {
                     Ok(_) => Ok(()),
                     Err(f_e) => match httproute_api.delete(route_name, &DeleteParams::default()).await {
@@ -53,8 +51,13 @@ impl Delete for K8s {
                         Err(s_e) => Err(format!("Failed to delete route {}: httpspaceroute: {}, httproute: {}", route_name, f_e, s_e).into()),
                     },
                 },
-                KubeRoute::Mcp(_, _) => mcp_route_api.delete(route_name, &DeleteParams::default()).await.map(|_| ()).map_err(Into::into),
+                KubeRoute::Mcp(_, _) => mcp_route_api.delete(route_name, &DeleteParams::default()).await.map(|_| ()).map_err(|error| -> spacegate_model::BoxError { error.into() }),
+            };
+            delete_result?;
+            for binding in plugin_bindings {
+                binding.id.remove_filter_target(target_ref.clone(), self).await?;
             }
+            Ok(())
         } else {
             Ok(())
         }
