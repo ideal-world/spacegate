@@ -34,7 +34,7 @@ rewrite = []
 set-version = []
 set-scheme = []
 maintenance = ["ipnet", "chrono/serde"]
-# decompression = ["tower-http/decompression-full"]
+decompression = ["dep:tower-http", "tower-http/decompression-full"]
 status = ["hyper-util"]
 east-west-traffic-white-list = ["ipnet"]
 full = [
@@ -48,7 +48,7 @@ full = [
   "maintenance",
   "set-version",
   "set-scheme",
-  # "decompression",
+  "decompression",
   "status",
   "east-west-traffic-white-list",
 ]
@@ -62,8 +62,10 @@ tracing = { workspace = true }
 hyper = { workspace = true }
 http-body-util = { workspace = true }
 tower-layer = { workspace = true }
+tower = { workspace = true, features = ["util"] }
 pin-project-lite = { workspace = true }
 hyper-util = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
 # serde
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -90,6 +92,7 @@ arc-swap = "1"
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util"] }
 async-compression = { version = "0.4", features = [
   "tokio",
   "gzip",
