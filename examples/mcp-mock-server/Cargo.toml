@@ -1,0 +1,15 @@
+[package]
+name = "mcp-mock-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bytes = { workspace = true }
+futures-util = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true, features = ["full"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

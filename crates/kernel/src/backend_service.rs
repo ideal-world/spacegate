@@ -118,7 +118,7 @@ pub async fn http_backend_service_inner(mut req: Request<SgBody>) -> Result<SgRe
     Ok(response)
 }
 
-#[instrument]
+#[instrument(skip(req), fields(http.method = %req.method(), http.path = %req.uri().path()))]
 pub async fn http_backend_service(req: Request<SgBody>) -> Result<Response<SgBody>, Infallible> {
     match http_backend_service_inner(req).await {
         Ok(resp) => Ok(resp),

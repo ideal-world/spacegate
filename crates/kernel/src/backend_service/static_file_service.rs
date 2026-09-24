@@ -39,7 +39,7 @@ pub fn cache_policy(metadata: &Metadata) -> bool {
     size < (1 << 20)
 }
 
-#[instrument()]
+#[instrument(skip(request), fields(http.method = %request.method(), http.path = %request.uri().path()))]
 pub async fn static_file_service(mut request: SgRequest, dir: &Path) -> SgResponse {
     let mut response = Response::builder().body(SgBody::empty()).expect("failed to build response");
     if let Some(reflect) = request.extensions_mut().remove::<Reflect>() {

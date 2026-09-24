@@ -11,6 +11,7 @@ members = [
   "crates/config",
   "crates/shell",
   "examples/sayhello",
+  "examples/mcp-mock-server",
   "examples/socks5-proxy",
   "examples/mitm-proxy", 
 ]

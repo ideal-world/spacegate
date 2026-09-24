@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use crate::{extension::Reflect, SgBody, SgResponseExt};
 
-#[instrument]
+#[instrument(skip(req), fields(http.method = %req.method(), http.path = %req.uri().path()))]
 #[cold]
 /// just return the body, you may use this service for test
 pub async fn echo(mut req: Request<SgBody>) -> Result<Response<SgBody>, Infallible> {

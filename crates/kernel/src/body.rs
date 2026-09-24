@@ -3,15 +3,21 @@ pub mod observer;
 use crate::BoxError;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::{Body, Bytes};
+use std::fmt;
 
 use crate::utils::never;
 
 /// # Clone
 /// Always clone after ensure the body is dumped
-#[derive(Debug)]
 pub struct SgBody {
     pub(crate) body: BoxBody<Bytes, BoxError>,
     pub(crate) dump: Option<Bytes>,
+}
+
+impl fmt::Debug for SgBody {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SgBody").field("body_type", &std::any::type_name::<Self>()).field("len", &self.dump.as_ref().map(Bytes::len)).finish()
+    }
 }
 
 impl Default for SgBody {
@@ -91,5 +97,20 @@ impl Clone for SgBody {
         } else {
             panic!("SgBody can't be cloned before dump")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SgBody;
+
+    #[test]
+    fn debug_does_not_include_dumped_body_bytes() {
+        let body = SgBody::full("secret-body-sentinel");
+
+        let debug = format!("{body:?}");
+
+        assert!(!debug.contains("secret-body-sentinel"));
+        assert!(debug.contains("len: Some(20)"));
     }
 }
