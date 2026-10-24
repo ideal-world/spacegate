@@ -1,0 +1,29 @@
+{
+  "appid": "touristappid",
+  "projectname": "spacegate-admin-miniapp",
+  "description": "SpaceGate Hai 管理端微信小程序（原生 TypeScript/WXML）",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "srcMiniprogramRoot": "miniprogram/",
+  "useCompilerPlugins": ["typescript"],
+  "libVersion": "3.5.7",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "compileHotReLoad": false,
+    "ignoreUploadUnusedFiles": true,
+    "useApiHook": true,
+    "useApiHostProcess": true
+  },
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {
+    "tabIndent": "space",
+    "tabSize": 2
+  }
+}

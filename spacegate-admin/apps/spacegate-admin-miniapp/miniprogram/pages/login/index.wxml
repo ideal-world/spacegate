@@ -1,0 +1,55 @@
+<view class="page login-page">
+  <view class="login-head">
+    <view class="brand">{{labels.mini_app_name}}</view>
+    <view class="brand-sub">{{labels.login_description}}</view>
+  </view>
+
+  <view class="card">
+    <view class="title">{{labels.login_title}}</view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_login_identifier}}</text>
+      <input
+        class="input"
+        value="{{identifier}}"
+        placeholder="{{labels.mini_login_identifier_placeholder}}"
+        bindinput="onIdentifierInput"
+        confirm-type="next"
+      />
+    </view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_login_password}}</text>
+      <input
+        class="input"
+        password
+        value="{{password}}"
+        placeholder="••••••••"
+        bindinput="onPasswordInput"
+        confirm-type="done"
+        bindconfirm="onSubmit"
+      />
+    </view>
+
+    <view class="mode-row">
+      <view class="mode {{ldapMode ? '' : 'mode-active'}}" bindtap="onToggleMode">
+        {{labels.mini_login_password_mode}}
+      </view>
+      <view class="mode {{ldapMode ? 'mode-active' : ''}}" bindtap="onToggleMode">
+        {{labels.mini_login_ldap}}
+      </view>
+    </view>
+    <view wx:if="{{ldapMode}}" class="muted">{{labels.mini_login_ldap_hint}}</view>
+
+    <view wx:if="{{error}}" class="error">{{error}}</view>
+
+    <button class="btn btn-primary btn-block login-submit" loading="{{loading}}" disabled="{{loading}}" bindtap="onSubmit">
+      {{labels.mini_login_submit}}
+    </button>
+  </view>
+
+  <view class="login-footer">
+    <view class="muted">{{labels.mini_language}}：{{locales[localeIndex].label}}</view>
+    <view class="btn btn-ghost" bindtap="onCycleLocale">{{labels.mini_language}}</view>
+  </view>
+</view>

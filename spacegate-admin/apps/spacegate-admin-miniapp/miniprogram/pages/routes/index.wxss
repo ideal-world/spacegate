@@ -1,0 +1,19 @@
+.gateway-picker {
+  margin-bottom: 18rpx;
+}
+
+.route-empty {
+  padding: 20rpx 0;
+}
+
+.hint {
+  margin-top: 8rpx;
+}
+
+.rename-block {
+  margin-top: 16rpx;
+}
+
+.rename-input {
+  flex: 1;
+}

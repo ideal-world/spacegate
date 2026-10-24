@@ -1,0 +1,20 @@
+.gateway-picker {
+  margin-top: 18rpx;
+  margin-bottom: 10rpx;
+}
+
+.stat {
+  padding: 22rpx;
+}
+
+.stat-value {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 30rpx 0;
+}

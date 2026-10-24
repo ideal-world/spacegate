@@ -1,0 +1,117 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <view class="title">{{labels.mini_nav_plugins}}</view>
+      <view class="subtitle">{{labels.mini_label_version}}：{{version}}</view>
+    </view>
+    <view class="row">
+      <view class="btn btn-ghost" bindtap="onBack">{{labels.mini_back}}</view>
+      <view class="btn btn-ghost" bindtap="onRefresh">{{labels.mini_button_refresh}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{error}}" class="card error">{{error}}</view>
+
+  <view class="card">
+    <view class="row">
+      <view class="item-title">{{labels.mini_nav_plugins}}</view>
+      <view class="btn btn-primary" bindtap="onStartCreate">{{labels.mini_button_create}}</view>
+    </view>
+    <view class="row filter-row">
+      <input class="input filter-input" value="{{filterCode}}" bindinput="onFilterInput" placeholder="{{labels.mini_search_plugin_code}}" />
+      <view class="btn" bindtap="load">{{labels.mini_button_refresh}}</view>
+    </view>
+    <view wx:if="{{pluginRows.length}}">
+      <view wx:for="{{pluginRows}}" wx:key="idJson" class="list-item">
+        <view class="row">
+          <view class="item-title">{{item.label}}</view>
+          <view class="btn" data-index="{{index}}" bindtap="onSelectPlugin">{{labels.mini_button_edit}}</view>
+        </view>
+        <view wx:if="{{item.displayName}}" class="item-meta">{{item.displayName}}</view>
+        <view class="item-meta">{{item.preview}}</view>
+      </view>
+    </view>
+    <view wx:else class="muted">{{labels.mini_empty}}</view>
+    <view wx:if="{{catalog.length}}" class="toolbar catalog">
+      <view wx:for="{{catalog}}" wx:key="*this" class="chip" data-index="{{index}}" bindtap="onCatalogTap">{{item}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="item-title">{{labels.mini_section_plugin_editor}}</view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_label_kind}}</text>
+      <picker range="{{kinds}}" range-key="label" value="{{kindIndex}}" bindchange="onKindChange">
+        <view class="picker">{{kinds[kindIndex].label}}</view>
+      </picker>
+    </view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_label_code}}</text>
+      <input class="input" value="{{code}}" bindinput="onCodeInput" placeholder="wasm" />
+    </view>
+
+    <view wx:if="{{kindIndex === 0}}" class="field">
+      <text class="label">{{labels.mini_label_name}}</text>
+      <input class="input" value="{{name}}" bindinput="onNameInput" placeholder="instance-name" />
+    </view>
+    <view wx:else class="field">
+      <text class="label">{{labels.mini_label_uid}}</text>
+      <input class="input" value="{{uid}}" bindinput="onUidInput" placeholder="uid" />
+    </view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_label_display_name}}</text>
+      <input class="input" value="{{displayName}}" bindinput="onDisplayNameInput" placeholder="" />
+    </view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_label_spec}}</text>
+      <textarea class="textarea textarea-tall" value="{{specJson}}" bindinput="onSpecInput" maxlength="-1" ></textarea>
+      <view class="muted hint">{{labels.mini_spec_hint}}</view>
+    </view>
+
+    <view class="toolbar">
+      <view class="btn" bindtap="onSchema">{{labels.mini_button_view_schema}}</view>
+      <view class="btn" bindtap="onWasmSchema">{{labels.mini_button_wasm_schema}}</view>
+      <view wx:if="{{editingIdJson}}" class="btn btn-danger" bindtap="onDelete">{{labels.mini_button_delete}}</view>
+      <button class="btn btn-primary" loading="{{saving}}" disabled="{{saving}}" bindtap="onSave">{{labels.mini_button_save}}</button>
+    </view>
+
+    <view wx:if="{{schemaJson}}" class="result-block">
+      <view class="label">{{labels.mini_schema}}</view>
+      <view class="pre">{{schemaJson}}</view>
+    </view>
+    <view wx:if="{{wasmJson}}" class="result-block">
+      <view class="label">Wasm Schema</view>
+      <view class="pre">{{wasmJson}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="item-title">{{labels.mini_section_plugin_tools}}</view>
+    <view class="field">
+      <text class="label">{{labels.mini_label_image_url}}</text>
+      <input class="input" value="{{imageUrl}}" bindinput="onImageUrlInput" placeholder="oci://registry/image:tag" />
+    </view>
+    <view class="field">
+      <text class="label">{{labels.mini_label_schema_path}}</text>
+      <input class="input" value="{{schemaPath}}" bindinput="onSchemaPathInput" placeholder="/schema.json" />
+    </view>
+    <view class="field">
+      <text class="label">{{labels.mini_label_http_headers}}</text>
+      <textarea class="textarea" value="{{headersJson}}" bindinput="onHeadersInput" maxlength="-1" placeholder="{}" ></textarea>
+    </view>
+    <view class="field">
+      <text class="label">OCI Auth JSON</text>
+      <textarea class="textarea" value="{{ociAuthJson}}" bindinput="onOciAuthInput" maxlength="-1" placeholder="{}" ></textarea>
+    </view>
+    <view class="btn btn-primary" bindtap="onPreview">{{labels.mini_button_preview}}</view>
+    <view wx:if="{{previewJson}}" class="result-block">
+      <view class="label">Wasm preview</view>
+      <view class="pre">{{previewJson}}</view>
+    </view>
+  </view>
+  <view class="footer-space" ></view>
+</view>

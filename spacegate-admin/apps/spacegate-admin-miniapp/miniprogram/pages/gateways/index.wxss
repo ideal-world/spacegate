@@ -1,0 +1,12 @@
+.gateway-picker {
+  margin-top: 16rpx;
+}
+
+.list-toolbar {
+  margin-top: 12rpx;
+  margin-bottom: 0;
+}
+
+.list-toolbar .btn {
+  margin-left: 0;
+}

@@ -1,0 +1,109 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <view class="title">{{labels.mini_nav_ai_queue}}</view>
+      <view class="subtitle">AI Gateway</view>
+    </view>
+    <view class="row">
+      <view class="btn btn-ghost" bindtap="onBack">{{labels.mini_back}}</view>
+      <view class="btn btn-ghost" bindtap="loadRules">{{labels.mini_button_refresh}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{error}}" class="card error">{{error}}</view>
+
+  <view class="card">
+    <view class="item-title">{{labels.mini_section_ai_rules}}</view>
+    <view class="grid filter-grid">
+      <input class="input" value="{{filterTenant}}" bindinput="onFilterTenantInput" placeholder="{{labels.mini_label_tenant}}" />
+      <input class="input" value="{{filterModel}}" bindinput="onFilterModelInput" placeholder="{{labels.mini_label_model}}" />
+      <input class="input" value="{{filterPath}}" bindinput="onFilterPathInput" placeholder="{{labels.mini_label_path}}" />
+      <picker range="{{policies}}" range-key="label" value="{{policyIndex}}" bindchange="onFilterPolicyChange">
+        <view class="picker">{{policies[policyIndex].label}}</view>
+      </picker>
+    </view>
+    <view class="toolbar">
+      <view class="btn" bindtap="loadRules">{{labels.search}}</view>
+      <view class="btn" bindtap="onResolve">{{labels.mini_button_resolve}}</view>
+      <view class="btn btn-primary" bindtap="onStartCreate">{{labels.mini_button_create}}</view>
+    </view>
+
+    <view wx:if="{{rules.length}}">
+      <view wx:for="{{rules}}" wx:key="index" class="list-item">
+        <view class="row">
+          <view class="item-title">{{item.summary}}</view>
+          <view class="btn" data-index="{{index}}" bindtap="onSelectRule">{{labels.mini_button_edit}}</view>
+        </view>
+        <view class="item-meta">{{item.preview}}</view>
+      </view>
+    </view>
+    <view wx:else class="muted">{{labels.mini_empty}}</view>
+  </view>
+
+  <view class="card">
+    <view class="row">
+      <view class="item-title">{{editingIndex >= 0 ? labels.mini_rule_editing : labels.mini_rule_new}}</view>
+      <view class="muted">#{{editingIndex + 1}}</view>
+    </view>
+    <view class="grid">
+      <view class="field">
+        <text class="label">{{labels.mini_label_tenant}}</text>
+        <input class="input" value="{{tenant}}" bindinput="onTenantInput" placeholder="tenant" />
+      </view>
+      <view class="field">
+        <text class="label">{{labels.mini_label_model}}</text>
+        <input class="input" value="{{model}}" bindinput="onModelInput" placeholder="model" />
+      </view>
+      <view class="field">
+        <text class="label">{{labels.mini_label_path}}</text>
+        <input class="input" value="{{path}}" bindinput="onPathInput" placeholder="/v1/chat" />
+      </view>
+      <view class="field">
+        <text class="label">{{labels.mini_label_policy}}</text>
+        <picker range="{{policies}}" range-key="label" value="{{policyIndex}}" bindchange="onPolicyChange">
+          <view class="picker">{{policies[policyIndex].label}}</view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_label_rule}}</text>
+      <textarea class="textarea textarea-tall" value="{{ruleJson}}" bindinput="onRuleJsonInput" maxlength="-1" ></textarea>
+    </view>
+    <view class="field">
+      <text class="label">{{labels.mini_label_extra}}</text>
+      <textarea class="textarea" value="{{extraJson}}" bindinput="onExtraInput" maxlength="-1" placeholder="{}" ></textarea>
+      <view class="muted hint">{{labels.mini_ai_extra_hint}}</view>
+    </view>
+
+    <view class="toolbar">
+      <view class="btn btn-danger" bindtap="onDeleteRule">{{labels.mini_button_delete}}</view>
+      <button class="btn btn-primary" loading="{{saving}}" disabled="{{saving}}" bindtap="onSaveRule">{{labels.mini_button_save}}</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="item-title">{{labels.mini_section_ai_tools}}</view>
+    <view class="field">
+      <text class="label">Plugin</text>
+      <input class="input" value="{{pluginName}}" bindinput="onPluginInput" placeholder="ai-gateway-queue" />
+    </view>
+    <view class="toolbar">
+      <view class="btn" bindtap="onReadme">{{labels.mini_button_readme}}</view>
+      <view class="btn" bindtap="onSchema">{{labels.mini_button_rule_schema}}</view>
+    </view>
+    <view wx:if="{{resolveJson}}">
+      <view class="label">{{labels.mini_resolve_result}}</view>
+      <view class="pre">{{resolveJson}}</view>
+    </view>
+    <view wx:if="{{schemaJson}}">
+      <view class="label">{{labels.mini_schema}}</view>
+      <view class="pre">{{schemaJson}}</view>
+    </view>
+    <view wx:if="{{readme}}">
+      <view class="label">{{labels.mini_readme}}</view>
+      <view class="pre">{{readme}}</view>
+    </view>
+  </view>
+  <view class="footer-space" ></view>
+</view>

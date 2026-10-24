@@ -1,0 +1,67 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <view class="title">{{labels.mini_nav_profile}}</view>
+      <view class="subtitle">{{username}}</view>
+    </view>
+    <view class="row">
+      <view class="btn btn-ghost" bindtap="onBack">{{labels.mini_back}}</view>
+      <view class="btn btn-ghost" bindtap="load">{{labels.home_refresh}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{error}}" class="card error">{{error}}</view>
+
+  <view class="card">
+    <view class="item-title">{{labels.mini_section_profile}}</view>
+    <view class="row account-row">
+      <view>
+        <view class="label">{{labels.mini_account}}</view>
+        <view class="item-title">{{username}}</view>
+      </view>
+      <view>
+        <view class="label">{{labels.mini_roles}}</view>
+        <view class="toolbar roles">
+          <view wx:for="{{roles}}" wx:key="*this" class="chip">{{item}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="label">{{labels.user_display_name}}</text>
+      <input class="input" value="{{displayName}}" bindinput="onDisplayNameInput" />
+    </view>
+    <view class="field">
+      <text class="label">{{labels.user_email}}</text>
+      <input class="input" type="text" value="{{email}}" bindinput="onEmailInput" />
+    </view>
+    <button class="btn btn-primary" loading="{{saving}}" disabled="{{saving}}" bindtap="onSaveProfile">{{labels.mini_button_save}}</button>
+  </view>
+
+  <view class="card">
+    <view class="item-title">{{labels.mini_language}}</view>
+    <picker range="{{locales}}" range-key="label" value="{{localeIndex}}" bindchange="onLocaleChange">
+      <view class="picker">{{locales[localeIndex].label}}</view>
+    </picker>
+  </view>
+
+  <view class="card">
+    <view class="item-title">{{labels.mini_section_security}}</view>
+    <view class="field">
+      <text class="label">{{labels.mini_old_password}}</text>
+      <input class="input" password value="{{oldPassword}}" bindinput="onOldPasswordInput" />
+    </view>
+    <view class="field">
+      <text class="label">{{labels.mini_new_password}}</text>
+      <input class="input" password value="{{newPassword}}" bindinput="onNewPasswordInput" />
+    </view>
+    <view class="muted">{{labels.password_rules}}</view>
+    <button class="btn btn-primary change-button" loading="{{saving}}" disabled="{{saving}}" bindtap="onChangePassword">{{labels.mini_button_change_password}}</button>
+  </view>
+
+  <view class="card danger-card">
+    <view class="item-title">{{labels.mini_danger_zone}}</view>
+    <view class="btn btn-danger btn-block logout-button" bindtap="onLogout">{{labels.mini_button_logout}}</view>
+  </view>
+  <view class="footer-space" ></view>
+</view>

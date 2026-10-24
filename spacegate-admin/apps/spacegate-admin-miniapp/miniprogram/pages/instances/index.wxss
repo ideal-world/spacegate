@@ -1,0 +1,14 @@
+.gateway-picker {
+  margin-top: 16rpx;
+}
+
+.instance-actions {
+  margin-top: 12rpx;
+  margin-bottom: 0;
+}
+
+.instance-actions .btn {
+  margin-left: 0;
+  padding: 10rpx 16rpx;
+  font-size: 23rpx;
+}

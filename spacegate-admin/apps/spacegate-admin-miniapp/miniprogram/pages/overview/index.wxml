@@ -1,0 +1,74 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <view class="title">{{labels.mini_nav_overview}}</view>
+      <view class="subtitle">{{labels.mini_app_name}}</view>
+    </view>
+    <view class="btn btn-ghost" bindtap="onRefresh">{{labels.home_refresh}}</view>
+  </view>
+
+  <view wx:if="{{error}}" class="card error">{{error}}</view>
+
+  <view class="card">
+    <view class="row">
+      <view>
+        <view class="label">{{labels.mini_current_gateway}}</view>
+        <view wx:if="{{gatewayName}}" class="item-title">{{gatewayName}}</view>
+        <view wx:else class="muted">{{labels.mini_no_gateway}}</view>
+      </view>
+      <view class="btn btn-primary" bindtap="onManageGateways">{{labels.mini_overview_manage}}</view>
+    </view>
+    <view wx:if="{{gatewayNames.length}}" class="field gateway-picker">
+      <picker range="{{gatewayNames}}" value="{{gatewayIndex}}" bindchange="onGatewayChange">
+        <view class="picker">{{gatewayName || labels.mini_no_gateway}}</view>
+      </picker>
+    </view>
+    <view wx:if="{{gatewayName}}" class="chip {{gatewayExists ? 'chip-ok' : 'chip-bad'}}">
+      {{gatewayExists ? labels.mini_status_online : labels.mini_status_offline}}
+    </view>
+  </view>
+
+  <view class="grid">
+    <view class="card stat">
+      <view class="stat-value">{{routeCount}}</view>
+      <view class="muted">{{labels.mini_route_count}}</view>
+    </view>
+    <view class="card stat">
+      <view class="stat-value">{{pluginCount}}</view>
+      <view class="muted">{{labels.mini_plugin_count}}</view>
+    </view>
+    <view class="card stat">
+      <view class="stat-value">{{onlineCount}}/{{instanceTotal}}</view>
+      <view class="muted">{{labels.mini_instance_online}}</view>
+    </view>
+    <view class="card stat">
+      <view class="stat-value">{{instanceTotal}}</view>
+      <view class="muted">{{labels.mini_instance_total}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="row">
+      <view class="item-title">{{labels.mini_section_health}}</view>
+      <view class="chip {{onlineCount === instanceTotal && instanceTotal > 0 ? 'chip-ok' : 'chip-bad'}}">
+        {{onlineCount}}/{{instanceTotal}}
+      </view>
+    </view>
+  </view>
+
+  <view class="nav-grid">
+    <view
+      wx:for="{{navItems}}"
+      wx:key="page"
+      class="nav-item"
+      data-page="{{item.page}}"
+      bindtap="onOpenModule"
+    >
+      <view class="nav-item-title">{{item.title}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="muted loading">{{labels.mini_loading}}</view>
+  <view wx:if="{{!gatewayNames.length && !loading}}" class="muted empty">{{labels.mini_empty}}</view>
+  <view class="footer-space" ></view>
+</view>

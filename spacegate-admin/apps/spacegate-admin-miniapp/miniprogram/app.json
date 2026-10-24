@@ -1,0 +1,22 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/overview/index",
+    "pages/gateways/index",
+    "pages/routes/index",
+    "pages/plugins/index",
+    "pages/ai-queue/index",
+    "pages/instances/index",
+    "pages/profile/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "SpaceGate Admin",
+    "navigationBarBackgroundColor": "#0f172a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f7fb",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

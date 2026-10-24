@@ -1,0 +1,20 @@
+.account-row {
+  align-items: flex-start;
+  margin: 18rpx 0;
+}
+
+.roles {
+  margin-bottom: 0;
+}
+
+.change-button {
+  margin-top: 18rpx;
+}
+
+.logout-button {
+  margin-top: 18rpx;
+}
+
+.danger-card {
+  border: 1rpx solid #fecaca;
+}

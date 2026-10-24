@@ -1,0 +1,20 @@
+.filter-row {
+  margin-top: 16rpx;
+}
+
+.filter-input {
+  flex: 1;
+}
+
+.hint {
+  margin-top: 8rpx;
+}
+
+.catalog {
+  margin-top: 16rpx;
+  margin-bottom: 0;
+}
+
+.result-block {
+  margin-top: 20rpx;
+}

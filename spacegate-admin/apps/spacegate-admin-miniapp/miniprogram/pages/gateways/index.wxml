@@ -1,0 +1,65 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <view class="title">{{labels.mini_nav_gateways}}</view>
+      <view class="subtitle">{{labels.mini_label_version}}：{{version}}</view>
+    </view>
+    <view class="row">
+      <view class="btn btn-ghost" bindtap="onBack">{{labels.mini_back}}</view>
+      <view class="btn btn-ghost" bindtap="onRefresh">{{labels.mini_button_refresh}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{error}}" class="card error">{{error}}</view>
+
+  <view class="card">
+    <view class="row">
+      <view class="item-title">{{labels.mini_section_gateway}}</view>
+      <view class="btn btn-primary" bindtap="onStartCreate">{{labels.mini_button_create}}</view>
+    </view>
+    <view wx:if="{{gatewayNames.length}}" class="field gateway-picker">
+      <picker range="{{gatewayNames}}" value="{{gatewayIndex}}" bindchange="onGatewayChange">
+        <view class="picker">{{currentGateway || labels.mini_select_gateway}}</view>
+      </picker>
+    </view>
+    <view wx:if="{{gatewayNames.length}}" class="toolbar list-toolbar">
+      <view
+        wx:for="{{gatewayNames}}"
+        wx:key="*this"
+        class="btn {{item === editingName ? 'btn-primary' : ''}}"
+        data-name="{{item}}"
+        bindtap="onSelectGateway"
+      >
+        {{item}}
+      </view>
+    </view>
+    <view wx:else class="muted">{{labels.mini_empty}}</view>
+  </view>
+
+  <view class="card">
+    <view class="field">
+      <text class="label">{{labels.mini_label_name}}</text>
+      <input class="input" value="{{name}}" bindinput="onNameInput" placeholder="prod-gateway" />
+    </view>
+
+    <view class="field">
+      <text class="label">{{labels.mini_label_json}}</text>
+      <textarea
+        class="textarea textarea-tall"
+        value="{{gatewayJson}}"
+        bindinput="onJsonInput"
+        auto-height="{{false}}"
+        maxlength="-1"
+      ></textarea>
+    </view>
+
+    <view class="row">
+      <view class="muted">{{labels.mini_label_version}}：{{version}}</view>
+      <view class="row">
+        <view wx:if="{{editingName}}" class="btn btn-danger" bindtap="onDelete">{{labels.mini_button_delete}}</view>
+        <button class="btn btn-primary" loading="{{saving}}" disabled="{{saving}}" bindtap="onSave">{{labels.mini_button_save}}</button>
+      </view>
+    </view>
+  </view>
+  <view class="footer-space" ></view>
+</view>

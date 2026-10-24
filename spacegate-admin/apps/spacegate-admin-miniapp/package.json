@@ -1,0 +1,26 @@
+{
+  "name": "spacegate-admin-miniapp",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "scripts": {
+    "check": "pnpm typecheck",
+    "pretypecheck": "node scripts/sync-i18n.mjs",
+    "typecheck": "tsc --noEmit",
+    "pretest": "node scripts/sync-i18n.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "sync-i18n": "node scripts/sync-i18n.mjs"
+  },
+  "dependencies": {
+    "spacegate-admin-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
