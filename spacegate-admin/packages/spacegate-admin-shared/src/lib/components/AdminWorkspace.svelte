@@ -12,6 +12,7 @@
   import { createManagementGuide } from '../stores/guide-store.js'
   import { ManagementStore } from '../stores/management-store.svelte.js'
   import AppShell from './AppShell.svelte'
+  import VersionConflictBanner from './spacegate/VersionConflictBanner.svelte'
 
   interface Props {
     platform: 'web' | 'app' | 'desktop'
@@ -20,7 +21,7 @@
   }
   const { platform, apiOptions = {}, onLocaleChange }: Props = $props()
   const pages = import.meta.glob<{ default: Component<{ store: ManagementStore }> }>('../pages/**/*.svelte')
-  const router = new HashRouter(Object.keys(pages), '/users')
+  const router = new HashRouter(Object.keys(pages), '/overview')
   const store = new ManagementStore(router)
   // 宿主平台在组件生命周期中固定，引导控制器只创建一次。
   const guide = untrack(() => createManagementGuide(store, platform))
@@ -79,6 +80,7 @@
   {:else}
     <AppShell {platform} {store} onhelp={() => guide.openHelp()}>
       <div class='flex min-h-0 flex-1 flex-col gap-5'>
+        <VersionConflictBanner {store} />
         {#if store.error}<Alert variant='error' data-testid='error'>{store.error}</Alert>{/if}
         {#if store.notice}<Alert variant='success' data-testid='notice'>{store.notice}</Alert>{/if}
         {#await pageComponent}

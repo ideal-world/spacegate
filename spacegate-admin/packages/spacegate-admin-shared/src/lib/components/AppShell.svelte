@@ -15,6 +15,12 @@
   const items = $derived([
     ...(store.isAdmin
 ? [
+      { id: 'overview' as const, label: m.nav_overview(), icon: 'icon-[tabler--layout-dashboard]' },
+      { id: 'gateways' as const, label: m.nav_gateways(), icon: 'icon-[tabler--network]' },
+      { id: 'routes' as const, label: m.nav_routes(), icon: 'icon-[tabler--route]' },
+      { id: 'plugins' as const, label: m.nav_plugins(), icon: 'icon-[tabler--plug]' },
+      { id: 'ai-queue' as const, label: m.nav_ai_queue(), icon: 'icon-[tabler--clock-hour-4]' },
+      { id: 'instances' as const, label: m.nav_instances(), icon: 'icon-[tabler--server-2]' },
       { id: 'users' as const, label: m.nav_users(), icon: 'icon-[tabler--users]' },
       { id: 'roles' as const, label: m.nav_roles(), icon: 'icon-[tabler--shield-lock]' },
       { id: 'audit' as const, label: m.nav_audit(), icon: 'icon-[tabler--file-text]' },
@@ -39,7 +45,7 @@
       <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-content"><span class="icon-[tabler--hexagon-letter-h] size-5"></span></span>
       <span class="truncate text-sm font-semibold" data-testid="app-name">{store.info?.name}</span>
     </div>
-    <nav class="flex-1 space-y-1 p-3" aria-label={m.navigation()}>
+    <nav class="flex-1 space-y-1 overflow-y-auto p-3" aria-label={m.navigation()}>
       {#each items as item (item.id)}
         <BareButton class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors {store.page === item.id ? 'bg-primary/10 font-medium text-primary' : 'text-base-content/60 hover:bg-base-content/4'}" onclick={() => navigate(item.id)} data-testid="nav-{item.id}">
           <span class="{item.icon} size-4.5"></span>{item.label}
