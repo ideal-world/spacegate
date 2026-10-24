@@ -1,0 +1,20 @@
+# 部署已有镜像；运行 pnpm run deploy --build 可先构建再发布。
+# SSH 参数由向导保存在本机 .env.local；离线打包不要求 SSH。
+provider:
+  type: ${HAI_DEPLOY_PROVIDER_TYPE:docker-ssh}
+  remote:
+    baseDir: ${HAI_DEPLOY_PROVIDER_REMOTE_BASEDIR:/opt/hai/apps}
+    runtime: ${HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME:auto} # 优先 Podman，其次 Docker
+  expose:
+    hostPort: ${HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT:18080}
+    containerPort: ${HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT:3000}
+
+container:
+  s3Engine: ${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs} # rustfs | minio
+
+# 完整包包含自建中间件镜像，服务器启动禁止拉取。
+# 外部数据库/存储等连接在对应模块配置和环境文件中设置。
+# Vercel 仅消费已有 .vercel/output，云 Provider/Provisioner 不适用于完全离线。
+# provider:
+#   type: vercel
+#   token: ${HAI_DEPLOY_PROVIDER_TOKEN}

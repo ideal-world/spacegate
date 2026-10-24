@@ -1,0 +1,32 @@
+# =============================================================================
+# 缓存配置
+# =============================================================================
+
+# 缓存类型: memory | redis
+type: ${HAI_CACHE_TYPE:memory}
+
+# Redis 配置；memory 时不生效；跨环境切换 type 后自动使用连接项。
+host: ${HAI_CACHE_HOST:localhost}
+port: ${HAI_CACHE_PORT:6379}
+password: ${HAI_CACHE_PASSWORD:}
+keyPrefix: ${HAI_CACHE_KEYPREFIX:"hai:"}
+url: ${HAI_CACHE_URL:}
+db: ${HAI_CACHE_DB:0}
+connectTimeout: ${HAI_CACHE_CONNECTTIMEOUT:10000}
+commandTimeout: ${HAI_CACHE_COMMANDTIMEOUT:5000}
+tls: ${HAI_CACHE_TLS:false}
+maxRetries: ${HAI_CACHE_MAXRETRIES:3}
+retryDelay: ${HAI_CACHE_RETRYDELAY:50}
+readOnly: ${HAI_CACHE_READONLY:false}
+
+# 集群与 Sentinel 二选一；普通 Redis 不需要这两块。
+# cluster:
+#   - host: redis-1.internal
+#     port: 6379
+#   - host: redis-2.internal
+#     port: 6379
+# sentinel:
+#   sentinels:
+#     - host: sentinel.internal
+#       port: 26379
+#   name: mymaster

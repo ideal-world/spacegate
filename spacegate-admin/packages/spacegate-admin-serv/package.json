@@ -1,0 +1,50 @@
+{
+  "engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" },
+  "name": "spacegate-admin-serv",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "config",
+    "data",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "check": "pnpm typecheck",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo",
+    "dev": "pnpm build && node --env-file=../../.env --env-file=../../.env.dev --env-file-if-exists=../../.env.local dist/index.js",
+    "start": "node --env-file=../../.env --env-file=../../.env.prod --env-file-if-exists=../../.env.local dist/index.js",
+    "dev:test": "pnpm build && node --env-file=../../.env --env-file=../../.env.test --env-file-if-exists=../../.env.local dist/index.js",
+    "dev:prod": "pnpm build && pnpm start",
+    "start:test": "node --env-file=../../.env --env-file=../../.env.test --env-file-if-exists=../../.env.local dist/index.js",
+    "start:prod": "pnpm start"
+  },
+  "dependencies": {
+    "@h-ai/audit": "catalog:",
+    "@h-ai/cache": "catalog:",
+    "@h-ai/core": "catalog:",
+    "@h-ai/crypto": "catalog:",
+    "@h-ai/iam": "catalog:",
+    "@h-ai/reach": "catalog:",
+    "@h-ai/reldb": "catalog:",
+    "@h-ai/serv": "catalog:",
+    "@h-ai/storage": "catalog:",
+    "zod": "catalog:",
+    "spacegate-admin-contract": "workspace:*"
+  }
+}

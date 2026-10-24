@@ -1,0 +1,25 @@
+**/.git
+**/node_modules
+**/.pnpm-store
+**/.cache
+**/.svelte-kit
+**/.turbo
+**/build
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+**/src-tauri/target
+**/hash-core/target
+tmp
+**/*.tar
+.github
+.agents
+.claude
+.codex
+.opencode
+**/data
+*.log
+# 仅保留公共基础 .env；分环境配置、私有覆盖及已有交付包不进入构建上下文。
+**/.env.*
+**/.hai

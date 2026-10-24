@@ -1,0 +1,170 @@
+# # 未启用：安装对应模块并在服务端 runtime 中初始化，再取消所需配置的注释。
+# # =============================================================================
+# # AI 配置
+# # =============================================================================
+
+# # LLM 配置（必填）
+# llm:
+#   # API Key（约定环境变量 HAI_AI_LLM_APIKEY 优先）
+#   apiKey: ${HAI_AI_LLM_APIKEY:}
+#   # Base URL（约定环境变量 HAI_AI_LLM_BASEURL 优先）
+#   # baseUrl: https://api.openai.com/v1
+#   # 默认模型
+#   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+#   api: ${HAI_AI_LLM_API:chat} # chat | responses | anthropic
+#   # 全局最大 Token 数（默认 4096）
+#   # maxTokens: 4096
+#   # 采样温度（0-2，默认 0.7）
+#   # temperature: 0.7
+#   # 请求超时（毫秒，默认 60000）
+#   # timeout: 60000
+#   # tempModelCacheTtl: 600000
+
+#   # 多模型配置（可选，用于场景路由）
+#   # models:
+#   #   - id: fast
+#   #     model: gpt-4o-mini
+#   #     api: chat
+#   #     apiKey: ''
+#   #     baseUrl: https://api.openai.com/v1
+#   #     maxTokens: 4096
+#   #     temperature: 0.7
+#   #     timeout: 60000
+#   #   - id: smart
+#   #     model: gpt-4o
+#   #     apiKey: ''
+
+#   # 场景模型映射（可选）
+#   # scenarios:
+#   #   default: fast
+#   #   chat: fast
+#   #   reasoning: smart
+#   #   plan: smart
+#   #   execute: fast
+#   #   extraction: fast
+#   #   summary: fast
+#   #   embedding: embedding
+#   #   rerank: rerank
+#   #   ocr: vision
+#   #   fast: fast
+#   # embedding / rerank / vision 须在 models 中声明对应厂商模型，不能只填写场景 ID。
+
+#   # 可选子模块只取消需要的块；生产环境先初始化共享数据库与网络向量库，再初始化 AI。
+#   # mcp:
+#   #   server:
+#   #     name: my-app
+#   #     version: 1.0.0
+#   #     capabilities:
+#   #       tools: true
+#   #       resources: true
+#   #       prompts: true
+#   # embedding:
+#   #   dimensions: 1536
+#   #   batchSize: 100
+#   # knowledge:
+#   #   collection: hai_ai_knowledge
+#   #   dimension: 1536
+#   #   enableEntityExtraction: true
+#   #   entityBoostWeight: 0.15
+#   #   entityTypes: [person, organization, location]
+#   #   systemPrompt: 'Extract entities from the input.'
+#   #   cleanOptions:
+#   #     removeHtml: true
+#   #     removeUrls: false
+#   #     removeEmails: false
+#   #     normalizeWhitespace: true
+#   #     trim: true
+#   #     customReplacements:
+#   #       - pattern: '\t+'
+#   #         replacement: ' '
+#   #   chunkOptions:
+#   #     mode: markdown # sentence | paragraph | markdown | page | word | character | custom
+#   #     maxSize: 1500
+#   #     overlap: 200
+#   #     separator: '\n\n' # 仅 custom 模式使用
+#   #     markdownMinLevel: 2
+#   #     markdownKeepTitle: true
+#   # memory:
+#   #   provider: native # native | mem0
+#   #   allowEphemeralFallback: false
+#   #   maxEntriesPerObject: 1000
+#   #   maxEntriesGlobal: 100000
+#   #   systemPrompt: 'Extract useful memories from the conversation.'
+#   #   recencyDecay: 0.95
+#   #   embeddingEnabled: true
+#   #   defaultTopK: 10
+#   #   candidateMultiplier: 5
+#   #   writebackRelatedTopK: 20
+#   # token:
+#   #   tokenRatio: 0.25
+#   # summary:
+#   #   systemPrompt: 'Summarize the conversation.'
+#   # compress:
+#   #   defaultStrategy: hybrid # summary | sliding-window | hybrid
+#   #   defaultMaxTokens: 0
+#   #   preserveLastN: 4
+#   # retrieval:
+#   #   sources:
+#   #     - id: docs
+#   #       collection: documentation
+#   #       name: Product documentation
+#   #       url: https://docs.example.com
+#   #       topK: 5
+#   #       minScore: 0.7
+#   #       filter:
+#   #         published: true
+#   # file:
+#   #   systemPrompt: 'Extract text from the image.'
+#   # a2a:
+#   #   agentCard:
+#   #     name: my-agent
+#   #     description: Application agent
+#   #     url: https://agent.example.com
+#   #     version: 1.0.0
+#   #     skills:
+#   #       - id: chat
+#   #         name: Chat
+#   #         description: General conversation
+#   #         tags: [chat]
+#   #   security:
+#   #     apiKey:
+#   #       in: header # header | query
+#   #       name: x-api-key
+#   #   execution:
+#   #     leaseMs: 30000
+#   #     pollIntervalMs: 250
+#   #     maxExecutionMs: 300000
+#   # audio:
+#   #   inheritLlmApiKey: false
+#   #   transcribeModel: asr
+#   #   synthesizeModel: tts
+#   #   maxAudioBytes: 10485760
+#   #   maxStreamDurationMs: 300000
+#   #   models:
+#   #     - id: asr
+#   #       provider: openai # openai | mimo | qwen | doubao | whisper | indextts
+#   #       model: whisper-1
+#   #       operations: [transcribe]
+#   #       apiKey: ''
+#   #       baseUrl: https://api.openai.com/v1
+#   #       timeout: 60000
+#   #       appKey: '' # 豆包旧版控制台 ASR 使用
+#   #       accessKey: ''
+#   #       resourceId: ''
+#   #       workspaceId: '' # 百炼业务空间
+#   #     - id: tts
+#   #       provider: openai
+#   #       model: tts-1
+#   #       operations: [synthesize]
+#   # image:
+#   #   maxImageBytes: 20971520 # 单张图片/参考图字节上限；JSON 上限为 max(64KiB, 两倍该值)
+#   #   maxImages: 4 # 图片/参考图数量上限，临时 URL 串行下载
+#   #   generateModel: image
+#   #   models:
+#   #     - id: image
+#   #       provider: openai # openai | google | qwen | seedream | pollinations
+#   #       model: gpt-image-1
+#   #       apiKey: ''
+#   #       baseUrl: https://api.openai.com/v1
+#   #       workspaceId: ''
+#   #       timeout: 120000

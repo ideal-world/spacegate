@@ -1,0 +1,50 @@
+{
+  "name": "spacegate-admin-web",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" },
+  "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "paraglide:watch": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --watch",
+    "dev:test": "vite --mode test",
+    "dev:prod": "vite --mode prod",
+    "dev": "vite dev --host 127.0.0.1 --port 4173",
+    "build": "pnpm paraglide:compile && vite build",
+    "package": "pnpm build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "check": "pnpm typecheck",
+    "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "clean": "rimraf dist build .turbo src/lib/paraglide"
+  },
+  "dependencies": {
+    "@h-ai/ui": "catalog:",
+    "spacegate-admin-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:",
+    "@h-ai/core": "catalog:",
+    "@iconify-json/tabler": "catalog:",
+    "@iconify/tailwind4": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "bits-ui": "catalog:",
+    "daisyui": "catalog:",
+    "eslint": "catalog:",
+    "eslint-plugin-format": "catalog:",
+    "eslint-plugin-svelte": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "svelte-eslint-parser": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

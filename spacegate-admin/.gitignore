@@ -1,0 +1,38 @@
+# 构建产物目录
+node_modules
+build
+dist
+.turbo
+android
+ios
+**/src/lib/paraglide
+**/src-tauri/gen/
+**/src-tauri/target/
+**/hash-core/target/
+
+# 日志测试目录
+*.log
+test-results/
+playwright-report/
+
+
+# 系统文件
+.DS_Store
+
+# 本地数据目录
+**/data/
+
+# 构建与部署产物（镜像 / Compose tar / 私有运行配置）
+.hai/
+*.tar
+
+# 本机私有配置；公共 .env 与 dev/test/prod 环境文件纳入版本控制。
+.env.local
+.env.*.local
+
+# 构建器生成的安装输入快照
+**/images/dependencies/
+
+# 项目本地缓存
+**/.pnpm-store/
+**/.cache/

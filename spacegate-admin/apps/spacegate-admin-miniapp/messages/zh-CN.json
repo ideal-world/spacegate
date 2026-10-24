@@ -1,0 +1,9 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "mini_title": "spacegate-admin 小程序端",
+  "mini_status": "预留占位",
+  "mini_description": "小程序端暂不生成可构建 package，但已经按 inlang 标准预置 project.inlang 与 messages，后续接入真实小程序框架时可直接迁移。",
+  "mini_shared_contract": "复用 packages/spacegate-admin-contract 的 Schema 与路径常量。",
+  "mini_own_messages": "小程序独有文案放在 apps/spacegate-admin-miniapp/messages。",
+  "mini_customize": "保持 locale 列表与 shared 一致，跨端语言切换才能保持同步。"
+}

@@ -1,0 +1,37 @@
+# =============================================================================
+# 数据库配置
+# =============================================================================
+
+# 数据库类型: sqlite | postgresql | mysql
+type: ${HAI_DB_TYPE:sqlite}
+
+# SQLite 使用文件路径，PostgreSQL/MySQL 使用数据库名称。
+database: ${HAI_DB_DATABASE:./data/app.db}
+
+host: ${HAI_DB_HOST:localhost}
+port: ${HAI_DB_PORT:5432}
+user: ${HAI_DB_USER:postgres}
+password: ${HAI_DB_PASSWORD:}
+url: ${HAI_DB_URL:}
+ssl: ${HAI_DB_SSL:false}
+
+# url: ${HAI_DB_URL} # 可用连接串替代 host/port/user/password
+# PostgreSQL ssl：布尔值、require/prefer/allow/disable 或 TLS 对象。
+# MySQL ssl：false 或严格对象；{} 默认校验证书链和 DNS 身份，不能用 true 或 PostgreSQL 字符串模式。
+# MySQL 自定义 CA / mTLS 使用 ca/cert/key 的 PEM 内容；cert/key 必须成对，私钥仅注入私有环境。
+# pool:
+#   min: 1
+#   max: 10
+#   idleTimeout: 30000
+#   acquireTimeout: 10000
+# MySQL 专用；PostgreSQL 无需此块。
+# mysql:
+#   charset: utf8mb4
+#   timezone: '+08:00'
+
+# SQL 日志按需开启；maxLength 限制 SQL / 参数输出长度。
+# operationLog:
+#   read: false
+#   write: false
+#   maxLength: 1000
+#   level: debug # trace | debug | info

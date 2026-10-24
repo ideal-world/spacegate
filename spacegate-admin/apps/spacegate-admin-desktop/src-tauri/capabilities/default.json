@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "spacegate-admin Desktop 默认权限",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open"
+  ]
+}

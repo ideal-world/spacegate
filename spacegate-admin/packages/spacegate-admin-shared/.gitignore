@@ -1,0 +1,10 @@
+node_modules
+.turbo
+src/lib/paraglide
+
+# 构建器生成的安装输入快照
+**/images/dependencies/
+
+# 项目本地缓存
+**/.pnpm-store/
+**/.cache/

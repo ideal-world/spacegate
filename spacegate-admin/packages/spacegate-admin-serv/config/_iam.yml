@@ -1,0 +1,101 @@
+# =============================================================================
+# IAM 配置
+# =============================================================================
+
+# 登录配置
+login:
+  password: ${HAI_IAM_LOGIN_PASSWORD:true}
+  otp: ${HAI_IAM_LOGIN_OTP:false}
+  ldap: ${HAI_IAM_LOGIN_LDAP:false}
+  apikey: ${HAI_IAM_LOGIN_APIKEY:false}
+
+# 注册与登录安全
+register:
+  enabled: ${HAI_IAM_REGISTER_ENABLED:true}
+  defaultEnabled: ${HAI_IAM_REGISTER_DEFAULTENABLED:true}
+security:
+  maxLoginAttempts: ${HAI_IAM_SECURITY_MAXLOGINATTEMPTS:5}
+  lockoutDuration: ${HAI_IAM_SECURITY_LOCKOUTDURATION:900}
+
+# LDAP 可选：安装 ldapts 后开启 login.ldap；也可在 iam.init 中注入 ldapClientFactory。
+# ldap:
+#   url: ldaps://ldap.example.com:636
+#   bindDn: cn=service,dc=example,dc=com
+#   bindPassword: ${HAI_IAM_LDAP_BINDPASSWORD}
+#   searchBase: ou=users,dc=example,dc=com
+#   searchFilter: '(uid={{username}})'
+#   usernameAttribute: uid
+#   emailAttribute: mail
+#   displayNameAttribute: cn
+#   useTls: false # ldap:// 连接可开启 STARTTLS；ldaps:// 已使用 TLS
+#   connectTimeout: 5000
+# API Key 登录可选；密钥管理入口由应用按权限接入。
+# apikey:
+#   maxKeysPerUser: 10
+#   defaultExpirationDays: 0 # 0 表示不限制有效期
+#   prefix: hai_
+# OTP 需启用 login.otp，并选择 Reach 标准模板或自定义发送回调。
+# 保留默认策略入口，单独切换 login.otp 即可启用验证码登录。
+otp: {}
+# 定制策略时用下方配置块替换空对象，或通过 HAI_IAM_OTP 整体覆盖。
+# otp:
+#   email: true
+#   sms: true
+#   length: 6
+#   expiresIn: 300
+#   maxAttempts: 3
+#   resendInterval: 60
+passwordReset:
+  enabled: ${HAI_IAM_PASSWORDRESET_ENABLED:true}
+  mode: ${HAI_IAM_PASSWORDRESET_MODE:email} # phone 使用 password_reset_sms 模板
+  tokenExpiresIn: ${HAI_IAM_PASSWORDRESET_TOKENEXPIRESIN:3600}
+  maxAttempts: ${HAI_IAM_PASSWORDRESET_MAXATTEMPTS:3}
+  # resetUrl: https://example.com/auth/reset-password
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  # 用 | 配置 Markdown 正文；同主题同时提供 URL 时优先显示正文。
+  userAgreementMarkdown: |
+    # 用户协议示例
+
+    请妥善保管账户凭据，并按应用提供的功能使用服务。
+  privacyPolicyMarkdown: |
+    # 隐私政策示例
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+ui:
+  variant: split
+  # title: Account center
+  # subtitle: Welcome back
+  # brandTitle: Your application
+  # brandText: Sign in securely
+  # logoUrl: /logo.svg
+  # illustrationUrl: /auth-illustration.svg
+
+  # 密码策略
+password:
+  minLength: ${HAI_IAM_PASSWORD_MINLENGTH:8}
+  maxLength: ${HAI_IAM_PASSWORD_MAXLENGTH:128}
+  requireUppercase: ${HAI_IAM_PASSWORD_REQUIREUPPERCASE:false}
+  requireLowercase: ${HAI_IAM_PASSWORD_REQUIRELOWERCASE:false}
+  requireNumber: ${HAI_IAM_PASSWORD_REQUIRENUMBER:false}
+  requireSpecialChar: ${HAI_IAM_PASSWORD_REQUIRESPECIALCHAR:false}
+  expirationDays: ${HAI_IAM_PASSWORD_EXPIRATIONDAYS:0} # 0 表示不限制密码有效期
+
+# 会话配置
+session:
+  maxAge: ${HAI_IAM_SESSION_MAXAGE:86400} # 会话超时（秒），默认 24 小时
+  sliding: ${HAI_IAM_SESSION_SLIDING:true} # 滑动窗口（每次请求刷新过期时间）
+  singleDevice: ${HAI_IAM_SESSION_SINGLEDEVICE:false} # 单设备登录
+  refreshTokenMaxAge: ${HAI_IAM_SESSION_REFRESHTOKENMAXAGE:604800} # refreshToken 过期（秒），默认 7 天
+
+# RBAC 配置
+rbac:
+  enabled: true
+  superAdminRole: super_admin
+  defaultRole: user
+
+# 是否自动创建默认数据
+seedDefaultData: ${HAI_IAM_SEEDDEFAULTDATA:false}

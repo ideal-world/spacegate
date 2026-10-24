@@ -1,0 +1,23 @@
+# 存储配置；HAI_STORAGE 可整体替换连接配置。
+type: ${HAI_STORAGE_TYPE:local}
+root: ${HAI_STORAGE_ROOT:./data/uploads}
+# directoryMode: 493 # 0o755
+# fileMode: 420 # 0o644
+bucket: ${HAI_STORAGE_BUCKET:}
+region: ${HAI_STORAGE_REGION:us-east-1}
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID:}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY:}
+endpoint: ${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
+forcePathStyle: ${HAI_STORAGE_FORCEPATHSTYLE:false}
+
+# prefix: ''
+# publicUrl: https://cdn.example.com
+
+# type 选择 Provider；未选分支字段由模块 Schema 忽略。
+# S3 兼容服务由环境注入 endpoint / forcePathStyle；默认端点用于 us-east-1。
+
+# operationLog:
+#   read: false
+#   write: false
+#   maxLength: 1000
+#   level: debug # trace | debug | info

@@ -1,0 +1,53 @@
+# =============================================================================
+# spacegate-admin-serv - Serv / HTTP 入口配置
+# =============================================================================
+#
+# 业务接口路径直接写在对应 *-contract.ts；公共 HTTP 传输配置以本文件为准。
+# =============================================================================
+
+server:
+  host: ${HAI_SERV_SERVER_HOST:127.0.0.1}
+  port: ${HAI_SERV_SERVER_PORT:3000}
+
+http:
+  # 仅列出会清洗/追加转发头的代理 IP/CIDR；空数组忽略 X-Forwarded-For/X-Real-IP。
+  trustedProxies: []
+  apiPrefix: ${HAI_SERV_HTTP_APIPREFIX:/api/v1}
+  openapi:
+    path: ${HAI_SERV_HTTP_OPENAPI_PATH:/openapi.json}
+  docs:
+    path: ${HAI_SERV_HTTP_DOCS_PATH:/docs}
+    # requireAuth: true
+  health:
+    path: ${HAI_SERV_HTTP_HEALTH_PATH:/health}
+    readyPath: ${HAI_SERV_HTTP_HEALTH_READYPATH:/ready}
+  rpc: ${HAI_SERV_HTTP_RPC:false}
+  # 内部 RPC 可选；启用时用对象替换 false，gateway-only 必须配置网关密钥。
+  # rpc:
+  #   prefix: /api/rpc
+  #   access: gateway-only # loopback | private-network | gateway-only
+  #   gatewayHeader: X-Gateway-Key
+  #   gatewaySecret: ${HAI_SERV_HTTP_RPC_GATEWAYSECRET}
+
+cors:
+  origin: ${HAI_SERV_CORS_ORIGIN:*}
+  nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  credentials: ${HAI_SERV_CORS_CREDENTIALS:true}
+  allowedHeaders:
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_0:Authorization}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_1:Content-Type}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_2:X-Request-Id}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_3:X-Requested-With}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_4:X-Request-Client}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_5:X-HAI-Token-Transport}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_6:X-Client-Id}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_7:X-Encrypted}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_8:X-Hai-Transport}
+  exposedHeaders:
+    - ${HAI_SERV_CORS_EXPOSEDHEADERS_0:X-Request-Id}
+    - ${HAI_SERV_CORS_EXPOSEDHEADERS_1:X-Encrypted}
+    - ${HAI_SERV_CORS_EXPOSEDHEADERS_2:X-Hai-Transport}
+
+transport:
+  keyExchangePath: ${HAI_SERV_TRANSPORT_KEYEXCHANGEPATH:/_hai/key-exchange}
+  # excludePaths: [/health, /ready]

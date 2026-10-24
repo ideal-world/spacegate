@@ -1,0 +1,26 @@
+[package]
+name = "spacegateadmin_desktop"
+version = "0.1.0"
+description = "spacegate-admin Desktop App"
+authors = ["hai"]
+edition = "2021"
+
+[lib]
+name = "spacegateadmin_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[build-dependencies]
+tauri-build = { version = "2.7.2", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.3", features = [] }
+tauri-plugin-shell = "2.5.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.152"

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "mini_title": "spacegate-admin Mini App",
+  "mini_status": "Reserved placeholder",
+  "mini_description": "The mini app target does not generate a buildable package yet, but it includes standard inlang project.inlang and messages so a real mini app framework can adopt them later.",
+  "mini_shared_contract": "Reuse Schema and route constants from packages/spacegate-admin-contract.",
+  "mini_own_messages": "Mini-app-only copy lives in apps/spacegate-admin-miniapp/messages.",
+  "mini_customize": "Keep locale lists aligned with shared so cross-platform locale switching remains consistent."
+}

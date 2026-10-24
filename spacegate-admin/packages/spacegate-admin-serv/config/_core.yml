@@ -1,0 +1,22 @@
+# =============================================================================
+# spacegate-admin-serv - 应用配置
+# =============================================================================
+#
+# 后端服务的应用级配置，由 core.config 在启动时加载。
+# 每个叶子项都可由约定式 HAI 环境变量覆盖，敏感值不要写入文件。
+# =============================================================================
+
+name: ${HAI_CORE_NAME:spacegate-admin}
+version: ${HAI_CORE_VERSION:0.1.0}
+env: ${HAI_CORE_ENV:development}
+
+defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}
+logging:
+  level: ${HAI_CORE_LOGGING_LEVEL:info}
+  format: ${HAI_CORE_LOGGING_FORMAT:json}
+  # context:
+  #   service: api
+  redact:
+    - password
+    - token
+    - secret

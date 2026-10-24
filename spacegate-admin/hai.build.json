@@ -1,0 +1,7 @@
+{
+  "images": [
+    { "name": "app", "dockerfile": "images/app.Dockerfile", "containerPort": 3000 },
+    { "name": "web", "dockerfile": "images/web.Dockerfile", "containerPort": 8080 }
+  ],
+  "desktop": ["apps/spacegate-admin-desktop"]
+}

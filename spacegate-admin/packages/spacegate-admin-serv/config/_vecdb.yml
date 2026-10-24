@@ -1,0 +1,48 @@
+# # 未启用：安装对应模块并在服务端 runtime 中初始化，再取消所需配置的注释。
+# # =============================================================================
+# # 向量数据库配置 (@h-ai/vecdb)
+# # =============================================================================
+
+# # 数据库类型: lancedb | pgvector | qdrant | chroma
+# type: ${HAI_VECDB_TYPE:lancedb}
+
+# # LanceDB 数据目录
+# path: ${HAI_VECDB_PATH:./data/vecdb}
+# url: ${HAI_VECDB_URL:http://localhost:6333}
+# apiKey: ${HAI_VECDB_APIKEY:}
+
+# # 距离度量: cosine | euclidean | dot
+# # metric: cosine
+
+# # pgvector 配置（当 type 为 pgvector 时使用）
+# # type: pgvector
+# # url: ${HAI_VECDB_URL}
+# # host: localhost
+# # port: 5432
+# # database: hai
+# # user: postgres
+# # password: ''
+# # indexType: hnsw
+# # tablePrefix: vec_
+
+# # Qdrant 配置（当 type 为 qdrant 时使用）
+# # type: qdrant
+# # url: http://localhost:6333
+# # apiKey: ''
+
+# # Chroma 配置（替换 type；url 指向已有服务，path 用于本地子进程数据目录）
+# # 直连仅支持 HTTP(S) 根 url；apiKey 按 Bearer 网关协议发送，不提供 Chroma Cloud 配置。
+# # type: chroma
+# # path: ./data/chroma
+# # url: http://localhost:8000
+# # host: localhost
+# # port: 8000
+# # apiKey: ''
+# # serverCommand: chroma
+# # startupTimeout: 30000
+
+# # operationLog:
+# #   read: false
+# #   write: false
+# #   maxLength: 1000
+# #   level: debug # trace | debug | info

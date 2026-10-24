@@ -29,6 +29,7 @@ util/gh-pages/lints.json
 devsh/*
 .uuid
 scripts
+# Generated Hai workspace keeps its build/e2e scripts under version control.
+!spacegate-admin/scripts/
 mix
-superpowers/
 dist/

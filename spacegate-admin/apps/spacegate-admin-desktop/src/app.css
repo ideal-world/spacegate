@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+@import '@h-ai/ui/styles/global.css';
+@import '@h-ai/ui/styles/theme.css';
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+@source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+@source "../../../packages/spacegate-admin-shared/src/**/*.{svelte,js,ts}";
+
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark;
+}
+@plugin "@iconify/tailwind4" {
+  prefixes: tabler;
+}

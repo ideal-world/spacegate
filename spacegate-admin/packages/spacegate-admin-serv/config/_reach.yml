@@ -1,0 +1,60 @@
+# 开发触达示例；生产环境改为 SMTP、短信或 API Provider。
+providers:
+  - name: email
+    type: ${HAI_REACH_PROVIDERS_0_TYPE:console}
+  - name: sms
+    type: ${HAI_REACH_PROVIDERS_1_TYPE:console}
+  # SMTP 替换 email 控制台 Provider；同名 Provider 只保留一个。
+  # - name: email
+  #   type: smtp
+  #   host: ${HAI_REACH_PROVIDERS_0_HOST:smtp.example.com}
+  #   port: ${HAI_REACH_PROVIDERS_0_PORT:465}
+  #   secure: true
+  #   user: ${HAI_REACH_PROVIDERS_0_USER:}
+  #   pass: ${HAI_REACH_PROVIDERS_0_PASS:}
+  #   from: ${HAI_REACH_PROVIDERS_0_FROM:noreply@example.com}
+  # 阿里云短信替换 sms 控制台 Provider。
+  # - name: sms
+  #   type: aliyun-sms
+  #   accessKeyId: ${HAI_REACH_PROVIDERS_0_ACCESSKEYID}
+  #   accessKeySecret: ${HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET}
+  #   signName: MyApp
+  #   endpoint: dysmsapi.aliyuncs.com
+  # 自有发送服务：按需将 template.provider 改为 custom。
+  # - name: custom
+  #   type: api
+  #   url: https://notify.example.com/send
+  #   method: POST # POST | PUT
+  #   headers:
+  #     Authorization: '${HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION}'
+  #   timeout: 10000
+  #   idempotent: ${HAI_REACH_PROVIDERS_0_IDEMPOTENT:false} # 仅接收端具备原子持久去重时启用；默认在途不明结果转 unknown
+templates:
+  - name: otp_email
+    provider: email
+    subject: Verification code
+    body: 'Your verification code is {code}.'
+  - name: otp_sms
+    provider: sms
+    body: 'Your verification code is {code}.'
+  - name: password_reset
+    provider: email
+    subject: Password reset
+    body: 'Reset your password: {resetUrl}. Expires at {expiresAt}.'
+  - name: password_reset_sms
+    provider: sms
+    body: 'Reset your password: {resetUrl}. Expires at {expiresAt}.'
+
+# 免打扰可选；验证码应避免 delay，以免延迟到失效后投递。
+# dnd:
+#   enabled: false
+#   strategy: discard # discard | delay
+#   start: '22:00'
+#   end: '08:00'
+
+# 延迟队列策略随每条消息保存；最多领取 5 次，指数退避 1 分钟至 1 小时。
+# 超限 dead 只经可信服务端人工恢复；unknown 不允许自动重发。
+queue:
+  maxAttempts: ${HAI_REACH_QUEUE_MAXATTEMPTS:5}
+  retryDelayMs: ${HAI_REACH_QUEUE_RETRYDELAYMS:60000}
+  maxRetryDelayMs: ${HAI_REACH_QUEUE_MAXRETRYDELAYMS:3600000}

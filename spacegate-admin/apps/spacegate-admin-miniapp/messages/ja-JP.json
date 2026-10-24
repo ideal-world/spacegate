@@ -1,0 +1,9 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "mini_title": "spacegate-admin ミニアプリ",
+  "mini_status": "予約済みのプレースホルダー",
+  "mini_description": "ミニアプリの対象では、まだビルド可能なパッケージは生成しません。標準のinlang project.inlangとmessagesを用意しているため、後でミニアプリ用フレームワークに組み込めます。",
+  "mini_shared_contract": "packages/spacegate-admin-contractのスキーマとルート定数を再利用してください。",
+  "mini_own_messages": "ミニアプリ固有の文案はapps/spacegate-admin-miniapp/messagesに配置します。",
+  "mini_customize": "端末間の言語切り替えを揃えるため、言語一覧をsharedと一致させてください。"
+}

@@ -1,0 +1,52 @@
+{
+  "engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" },
+  "name": "spacegate-admin-shared",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared frontend code (AppShell / theme / i18n / API) for spacegate-admin web/app/desktop/mini.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/*": "./src/lib/components/*",
+    "./stores/*": "./src/lib/stores/*",
+    "./api": "./src/lib/api/api-client.ts",
+    "./project.inlang/settings.json": "./project.inlang/settings.json",
+    "./messages/*": "./messages/*",
+    "./paraglide/messages": "./src/lib/paraglide/messages.js",
+    "./paraglide/runtime": "./src/lib/paraglide/runtime.js"
+  },
+  "files": [
+    "src",
+    "project.inlang",
+    "messages"
+  ],
+  "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "paraglide:watch": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --watch",
+    "prepare": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "check": "pnpm typecheck",
+    "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf .turbo src/lib/paraglide"
+  },
+  "dependencies": {
+    "@h-ai/api-client": "catalog:",
+    "@h-ai/api-contract": "catalog:",
+    "@h-ai/core": "catalog:",
+    "@h-ai/crypto": "catalog:",
+    "@h-ai/ui": "catalog:",
+    "spacegate-admin-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
