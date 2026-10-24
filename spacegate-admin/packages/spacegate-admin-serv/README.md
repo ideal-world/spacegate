@@ -50,6 +50,42 @@ CLI 已生成根目录 `.env.local`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项�
 
 上游 JWT 只缓存在服务进程内存；日志只记录 method/path/status，不输出 ak/sk、JWT 或 LDAP 凭据。写操作成功后按 Rust 协议重新读取 `GET /config/names` 获取新版本，409 冲突不会重试。
 
+### IAM 与 LDAP 登录
+
+密码登录默认启用；公开注册默认关闭（`register.enabled=false`）。`register.defaultEnabled=true` 只决定新建（含 LDAP 自动同步）用户默认启用，不等于开放公开注册。`config/_iam.yml` 保留完整注释，LDAP 默认 `login.ldap: false`。服务包显式依赖 catalog 中的 `ldapts@9.2.0`，启用 LDAP 且未注入 `ldapClientFactory` 时由 IAM 加载默认客户端；测试只注入工厂，不访问真实目录。
+
+| 配置键 | 环境变量 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `login.ldap` | `HAI_IAM_LOGIN_LDAP` | `false` | 是否启用 LDAP 登录 |
+| `ldap.url` | `HAI_IAM_LDAP_URL` | 示例占位 | LDAP URL；`ldaps://` 或配合 `useTls` 的 `ldap://` |
+| `ldap.bindDn` | `HAI_IAM_LDAP_BINDDN` | 示例占位 | 只读检索服务账号 DN |
+| `ldap.bindPassword` | `HAI_IAM_LDAP_BINDPASSWORD` | 空 | 绑定密码；仅部署环境/Secret Manager 注入，不写入 YAML 或镜像 |
+| `ldap.searchBase` | `HAI_IAM_LDAP_SEARCHBASE` | 示例占位 | 用户搜索 base DN |
+| `ldap.searchFilter` | `HAI_IAM_LDAP_SEARCHFILTER` | `(uid={{username}})` | `{{username}}` 由 IAM 转义后替换 |
+| `ldap.usernameAttribute` | `HAI_IAM_LDAP_USERNAMEATTRIBUTE` | `uid` | 同步到本地用户名的属性 |
+| `ldap.emailAttribute` | `HAI_IAM_LDAP_EMAILATTRIBUTE` | `mail` | 同步到邮箱的属性 |
+| `ldap.displayNameAttribute` | `HAI_IAM_LDAP_DISPLAYNAMEATTRIBUTE` | `cn` | 同步到显示名的属性 |
+| `ldap.useTls` | `HAI_IAM_LDAP_USETLS` | `false` | `ldap://` 时启用 STARTTLS；`ldaps://` 已使用 TLS |
+| `ldap.connectTimeout` | `HAI_IAM_LDAP_CONNECTTIMEOUT` | `5000` | 连接/操作超时（毫秒） |
+
+首次 LDAP 登录按 `rbac.defaultRole` 同步为普通 `user`，不会按用户名或邮件域自动提权；管理员需在现有用户/角色管理中显式授予 `admin`。IAM 的 LDAP 自动同步沿用 `register.defaultEnabled`，默认已为 `true`，保证同步用户可登录；公开注册仍由 `register.enabled=false` 保持关闭。密码登录与 LDAP 登录都写入审计（`action=login`、`resource=auth`），LDAP 记录附带 `{ strategy: 'ldap' }`；审计与日志不包含密码或绑定密码。首个管理员仍由 `HAI_ADMIN_DEFAULT_PASSWORD` 在用户表为空时创建，已有用户时不会重设密码。
+
+### 微信小程序原生通道
+
+微信 `wx.request` 无法实现主通道的 SM2 双向加密。服务端提供第二个 `serv.createApp` 实例，只有设置 `HAI_SERV_MINIAPP_PORT` 时才在 `server.host` 上额外监听：
+
+| 项 | 值 |
+| --- | --- |
+| 环境变量 | `HAI_SERV_MINIAPP_PORT`（例如 `3001`）；未设置则关闭通道 |
+| API 前缀 | `/api/miniapp/v1` |
+| contract / procedures / IAM | 与主通道完全相同；SpaceGate 管理路由仍要求 `admin` 角色 |
+| 传输加密 | 关闭（仅此通道）；主通道 `/api/v1` 仍强制 SM2 |
+| refresh token | 仅 `X-Request-Client: spacegate-admin-miniapp` + `X-HAI-Token-Transport: body` 的请求从 JSON body 读写 |
+| 客户端约束 | 所有 `/api/miniapp/v1/*` 业务请求必须携带上述客户端标识，否则 403 |
+| OpenAPI/docs | 不暴露 |
+
+安全前置条件：该通道必须置于同一受信 origin 的 HTTPS 反向代理之后，端口只绑定回环/内网，反向代理只接受受信来源；禁止直接暴露公网。不需要小程序时不要设置 `HAI_SERV_MINIAPP_PORT`。主 `serv.listen` 独占 `closeModules`，小程序通道只关闭自身 HTTP 句柄以避免模块重复释放。测试见 `tests/miniapp-channel.test.ts`（login body refresh token、未认证业务路由 401、主/小程序通道加密面差异）。
+
 ### 开发
 
 所有配置字段以模块 Schema 为准；未使用字段和替代 Provider 用注释保留。叶子环境变量只覆盖已有 YAML 路径，先取消相应键的注释，或用 `HAI_DB` / `HAI_CACHE` 等整体对象覆盖；`connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。凭据示例在根 `.env.example`，实际密钥保存在忽略的 `.env.local` 或部署环境。`.gitignore` 的 `**/data/` 忽略所有运行数据及 `.gitkeep`；运行时会创建目录。`crypto.init()` 无配置参数，datapipe 为纯函数，不提供虚构配置。
@@ -73,7 +109,7 @@ CLI 同时在根 `.env.local` 一次性生成独立开发用 `HAI_CRYPTO_TRANSPO
 
 服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。单实例可使用 Memory；多实例需共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
 
-LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
+LDAP/Reach 均可选：基础认证无需 Reach。服务端已安装 `ldapts`，启用 LDAP 后可使用默认客户端；测试通过注入 `ldapClientFactory` 隔离外部目录。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 

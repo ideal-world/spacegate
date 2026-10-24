@@ -44,6 +44,7 @@
     "@h-ai/reldb": "catalog:",
     "@h-ai/serv": "catalog:",
     "@h-ai/storage": "catalog:",
+    "ldapts": "catalog:",
     "zod": "catalog:",
     "spacegate-admin-contract": "workspace:*"
   }

@@ -10,25 +10,40 @@ login:
   apikey: ${HAI_IAM_LOGIN_APIKEY:false}
 
 # 注册与登录安全
+# 公开注册默认关闭：账号由管理员通过现有用户管理创建；需要自助注册时显式设为 true。
 register:
-  enabled: ${HAI_IAM_REGISTER_ENABLED:true}
+  enabled: ${HAI_IAM_REGISTER_ENABLED:false}
   defaultEnabled: ${HAI_IAM_REGISTER_DEFAULTENABLED:true}
 security:
   maxLoginAttempts: ${HAI_IAM_SECURITY_MAXLOGINATTEMPTS:5}
   lockoutDuration: ${HAI_IAM_SECURITY_LOCKOUTDURATION:900}
 
-# LDAP 可选：安装 ldapts 后开启 login.ldap；也可在 iam.init 中注入 ldapClientFactory。
+# LDAP 可选认证：默认关闭（login.ldap: false）。服务包已显式依赖 ldapts，
+# 启用后 IAM 在未注入 ldapClientFactory 时自动加载默认客户端；测试可通过 iam.init 注入工厂。
+#
+# 启用步骤：
+#   1. 将 login.ldap 设为 true（或设置 HAI_IAM_LOGIN_LDAP=true）。
+#   2. 取消下方 ldap 配置块注释，按目录实际值填写连接与属性映射。
+#   3. 保持 register.defaultEnabled 为 true（HAI_IAM_REGISTER_DEFAULTENABLED=true），
+#      IAM 自动同步的 LDAP 用户才可登录；公开注册仍由 register.enabled=false 关闭。
+#      如确实需要新用户默认禁用，可显式设为 false，但 LDAP 首次登录将无法完成。
+#   4. 仅通过服务端环境或 Secret Manager 注入 HAI_IAM_LDAP_BINDPASSWORD；
+#      不要把绑定密码写入 YAML、镜像、前端构建变量或日志。
+#
+# 绑定账号（bindDn）用于只读检索用户目录；终端用户仍以检索到的 DN + 用户密码再次绑定认证。
+# 首次 LDAP 登录按 rbac.defaultRole 同步为普通 user，不会按用户名、邮箱或域名自动提权；
+# 管理员必须通过现有用户/角色管理显式授予 admin。
 # ldap:
-#   url: ldaps://ldap.example.com:636
-#   bindDn: cn=service,dc=example,dc=com
-#   bindPassword: ${HAI_IAM_LDAP_BINDPASSWORD}
-#   searchBase: ou=users,dc=example,dc=com
-#   searchFilter: '(uid={{username}})'
+#   url: ${HAI_IAM_LDAP_URL:ldaps://ldap.example.com:636}
+#   bindDn: ${HAI_IAM_LDAP_BINDDN:cn=service,dc=example,dc=com} # 只读检索服务账号 DN
+#   bindPassword: ${HAI_IAM_LDAP_BINDPASSWORD:} # 仅环境/Secret 注入，YAML 不保存真实值
+#   searchBase: ${HAI_IAM_LDAP_SEARCHBASE:ou=users,dc=example,dc=com} # 用户搜索 base DN
+#   searchFilter: '(uid={{username}})' # {{username}} 由 IAM 转义后替换，不要拼接原始输入
 #   usernameAttribute: uid
 #   emailAttribute: mail
 #   displayNameAttribute: cn
 #   useTls: false # ldap:// 连接可开启 STARTTLS；ldaps:// 已使用 TLS
-#   connectTimeout: 5000
+#   connectTimeout: 5000 # 连接/操作超时，单位毫秒
 # API Key 登录可选；密钥管理入口由应用按权限接入。
 # apikey:
 #   maxKeysPerUser: 10

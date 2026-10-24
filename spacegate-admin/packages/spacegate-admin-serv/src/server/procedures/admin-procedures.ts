@@ -1,7 +1,7 @@
 import type { ServContext } from '@h-ai/serv'
 import { audit } from '@h-ai/audit'
 import { err, HaiCommonError, ok } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
+import { HaiIamError, iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { adminContract, authContract, profileContract } from 'spacegate-admin-contract'
@@ -20,14 +20,26 @@ import { serverM } from '../messages.js'
 
 /** 身份认证沿用框架公共契约与 refresh-cookie 传输。 */
 export function createAuthProcedures() {
-  const { currentUser, refresh, publicConfig, loginWithOtp, loginWithLdap, register, sendOtp, requestPasswordReset, confirmPasswordReset } = createIamProcedures({ iam }).auth
-  const { login, logout, changePassword } = authContract
+  const { currentUser, refresh, publicConfig, loginWithOtp, register, sendOtp, requestPasswordReset, confirmPasswordReset } = createIamProcedures({ iam }).auth
+  const { login, logout, changePassword, loginWithLdap } = authContract
   // 仅覆写需要业务审计的认证操作，其余直接复用框架；未选认证入口不挂载。
-  const audited = serv.implement({ login, logout, changePassword }).context<ServContext>().route('login', async ({ input, context }) => {
+  const audited = serv.implement({ login, logout, changePassword, loginWithLdap }).context<ServContext>().route('login', async ({ input, context }) => {
     const result = await iam.auth.login(input)
     if (!result.success)
       return result
     await recordAudit({ ...context, session: { userId: result.data.user.id, roles: result.data.roles, permissions: result.data.permissions } }, 'login', 'auth')
+    return result
+  }).route('loginWithLdap', async ({ input, context }) => {
+    // LDAP 工厂契约返回 HaiResult；若驱动或工厂仍抛错，按连接失败收敛，且日志不含密码或绑定密码。
+    const result = await iam.auth.loginWithLdap(input).catch(() => {
+      context.logger.error('LDAP login failed unexpectedly', { reason: 'ldap_client_error' })
+      return null
+    })
+    if (!result)
+      return err(HaiIamError.LDAP_CONNECTION_FAILED)
+    if (!result.success)
+      return result
+    await recordAudit({ ...context, session: { userId: result.data.user.id, roles: result.data.roles, permissions: result.data.permissions } }, 'login', 'auth', undefined, { strategy: 'ldap' })
     return result
   }).route('logout', async ({ input, context }) => {
     const token = input.accessToken ?? context.accessToken
@@ -46,7 +58,7 @@ export function createAuthProcedures() {
     await recordAudit(context, 'password-change', 'profile', context.session.userId)
     return result
   }).build()
-  return { ...audited, currentUser, refresh, publicConfig, loginWithOtp, loginWithLdap, register, sendOtp, requestPasswordReset, confirmPasswordReset }
+  return { ...audited, currentUser, refresh, publicConfig, loginWithOtp, register, sendOtp, requestPasswordReset, confirmPasswordReset }
 }
 
 export function createAdminProcedures() {
