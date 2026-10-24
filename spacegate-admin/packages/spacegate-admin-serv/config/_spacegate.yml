@@ -1,0 +1,27 @@
+# =============================================================================
+# SpaceGate 上游适配器配置
+# =============================================================================
+#
+# 新控制面通过本配置调用既有 Rust admin-server 和 AI Gateway 管理接口。
+# 凭据只来自服务端环境变量或 Secret 管理；不要把 ak/sk 写入 YAML、镜像或前端变量。
+# 键名采用 camelCase，core.config 会自动映射为 HAI_SPACEGATE_<KEY> 环境变量。
+# =============================================================================
+
+# Rust admin-server 基地址；生产应只在内网可达。
+adminBaseUrl: ${HAI_SPACEGATE_ADMINBASEURL:http://127.0.0.1:9992}
+
+# 服务身份 ak/sk；两者必须同时配置，否则 allowInsecure 必须为 true。
+adminAk: ${HAI_SPACEGATE_ADMINAK:}
+adminSk: ${HAI_SPACEGATE_ADMINSK:}
+
+# AI Gateway 管理接口基地址（/v1/admin/...），独立于 Rust admin-server。
+aiGatewayBaseUrl: ${HAI_SPACEGATE_AIGATEWAYBASEURL:http://127.0.0.1:18080}
+
+# 仅在本地或明确无认证的上游使用；false 时缺少 ak/sk 会直接报配置错误，不会静默降级。
+allowInsecure: ${HAI_SPACEGATE_ALLOWINSECURE:false}
+
+# 单次上游请求超时（毫秒）。
+requestTimeoutMs: ${HAI_SPACEGATE_REQUESTTIMEOUTMS:10000}
+
+# 上游 JWT 内存缓存时长（秒）；遇到 401 会提前失效并重新登录。
+tokenTtlSeconds: ${HAI_SPACEGATE_TOKENTTLSECONDS:3000}

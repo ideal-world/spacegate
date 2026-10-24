@@ -35,6 +35,21 @@ CLI 已生成根目录 `.env.local`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项�
 
 业务修改提交后的审计记录采用最大努力策略：写入失败输出包含操作及资源的结构化错误日志，业务仍返回原操作结果，避免将已经完成的变更误报为失败；应用启动时 audit 初始化失败则停止启动。
 
+### SpaceGate 上游配置
+
+`src/server/upstream/spacegate-upstream-client.ts` 适配既有 Rust `admin-server` 与 AI Gateway 管理 API。`config/_spacegate.yml` 由 `core.config` 加载，敏感值只从服务端环境变量注入，首次上游请求时才校验；`allowInsecure: false` 且缺少 ak/sk 会直接报配置错误，不会静默降级。
+
+| 配置键 | 环境变量 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `adminBaseUrl` | `HAI_SPACEGATE_ADMINBASEURL` | `http://127.0.0.1:9992` | Rust admin-server 基地址，生产应仅内网可达 |
+| `adminAk` / `adminSk` | `HAI_SPACEGATE_ADMINAK` / `HAI_SPACEGATE_ADMINSK` | 空 | 服务身份凭据；必须同时配置 |
+| `aiGatewayBaseUrl` | `HAI_SPACEGATE_AIGATEWAYBASEURL` | `http://127.0.0.1:18080` | AI Gateway `/v1/admin/...` 基地址 |
+| `allowInsecure` | `HAI_SPACEGATE_ALLOWINSECURE` | `false` | 仅无认证的本地上游可设为 `true` |
+| `requestTimeoutMs` | `HAI_SPACEGATE_REQUESTTIMEOUTMS` | `10000` | 单次上游请求超时（毫秒） |
+| `tokenTtlSeconds` | `HAI_SPACEGATE_TOKENTTLSECONDS` | `3000` | 上游 JWT 内存缓存时长（秒），401 时提前失效 |
+
+上游 JWT 只缓存在服务进程内存；日志只记录 method/path/status，不输出 ak/sk、JWT 或 LDAP 凭据。写操作成功后按 Rust 协议重新读取 `GET /config/names` 获取新版本，409 冲突不会重试。
+
 ### 开发
 
 所有配置字段以模块 Schema 为准；未使用字段和替代 Provider 用注释保留。叶子环境变量只覆盖已有 YAML 路径，先取消相应键的注释，或用 `HAI_DB` / `HAI_CACHE` 等整体对象覆盖；`connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。凭据示例在根 `.env.example`，实际密钥保存在忽略的 `.env.local` 或部署环境。`.gitignore` 的 `**/data/` 忽略所有运行数据及 `.gitkeep`；运行时会创建目录。`crypto.init()` 无配置参数，datapipe 为纯函数，不提供虚构配置。

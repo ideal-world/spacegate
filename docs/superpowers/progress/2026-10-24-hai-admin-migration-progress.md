@@ -23,11 +23,11 @@
 | Stage | Scope | Status |
 | --- | --- | --- |
 | P0 | Environment, branch, CLI generation, template gates, progress board | DONE |
-| P1 | Contract + upstream adapter + service procedures + upstream tests | IN PROGRESS |
-| P2 | IAM/LDAP/roles/audit/bootstrap hardening + tests | PENDING |
-| P3 | Shared store/domain/i18n/navigation + management pages | PENDING |
+| P1 | Contract + upstream adapter + service procedures + upstream tests | DONE / accepted |
+| P2 | IAM/LDAP/roles/audit/bootstrap hardening + tests | IN PROGRESS |
+| P3 | Shared store/domain/i18n/navigation + management pages | IN PROGRESS |
 | P4 | Web/App/Desktop wiring and browser e2e | PENDING |
-| P5 | Native WeChat miniapp (TS/WXML, wx adapter, mock e2e) | PENDING |
+| P5 | Native WeChat miniapp (TS/WXML, wx adapter, mock e2e) | IN PROGRESS |
 | P6 | Verification matrix, docs, independent startup/deploy and switch guide | PENDING |
 
 ## P0 evidence
@@ -51,6 +51,19 @@ Exit:
 - Upstream client logs in with ak/sk server-side, caches JWT in memory, sends `X-Client-Version`, maps 409 to conflict with server version, retries 401 once, never logs secrets.
 - Every write returns a fresh server version obtained by a follow-up GET; no automatic write retry.
 - `pnpm --filter spacegate-admin-contract typecheck && pnpm --filter spacegate-admin-serv typecheck && pnpm --filter spacegate-admin-serv test` green.
+
+## P1 evidence (accepted)
+
+- 34 procedures under `spacegateAdminContract.spacegate`: config (3), gateway (3), route (5), plugin (11), discovery (6), aiQueue (6).
+- Upstream client: server-side ak/sk login, memory-only JWT, 401 single re-login, 409 -> `CONFLICT` with `serverVersion=`, explicit config when credentials missing, no write retry.
+- Writes re-read `GET /config/names` for the new version; reload procedures stay version-controlled because Rust treats them as writes.
+- Review fixes applied by main agent:
+  - `plugin.list({ code? })` maps to `GET /config/plugins/{code}` or `/config/plugin-all`.
+  - `plugin.previewWasmSchema` forwards `httpHeaders` as `http_headers`.
+  - Login 200 without a JWT cookie is rejected unless the upstream is explicitly unauthenticated (no silent anonymous fallback).
+- Tests: `upstream-client.test.ts` 13 cases; serv total 31 passed; contract tests 3 passed.
+- Gates: contract/serv typecheck + lint, root `pnpm typecheck` green.
+- Legacy inventory: `2026-10-24-legacy-admin-operation-inventory.md` (per-page regression baseline, 41 endpoints, 45 quirks).
 
 ## Handoff notes
 

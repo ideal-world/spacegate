@@ -1,6 +1,7 @@
 import { apiContract } from '@h-ai/api-contract'
 import { adminContract, authContract, profileContract } from './admin-contract.js'
 import { appContract } from './app-contract.js'
+import { spacegateContract } from './spacegate-contract.js'
 
 // @hai-generator:contracts:imports
 
@@ -15,6 +16,7 @@ export const spacegateAdminContract = apiContract.create({
   iam: { auth: authContract },
   admin: adminContract,
   profile: profileContract,
+  spacegate: spacegateContract,
 })
 
 export type FullstackContract = typeof spacegateAdminContract
