@@ -24,11 +24,11 @@
 | --- | --- | --- |
 | P0 | Environment, branch, CLI generation, template gates, progress board | DONE |
 | P1 | Contract + upstream adapter + service procedures + upstream tests | DONE / accepted |
-| P2 | IAM/LDAP/roles/audit/bootstrap hardening + tests | IN PROGRESS |
-| P3 | Shared store/domain/i18n/navigation + management pages | IN PROGRESS |
-| P4 | Web/App/Desktop wiring and browser e2e | PENDING |
-| P5 | Native WeChat miniapp (TS/WXML, wx adapter, mock e2e) | IN PROGRESS |
-| P6 | Verification matrix, docs, independent startup/deploy and switch guide | PENDING |
+| P2 | IAM/LDAP/roles/audit/bootstrap hardening + tests | DONE / accepted |
+| P3 | Shared store/domain/i18n/navigation + management pages | DONE / accepted |
+| P4 | Web/App/Desktop wiring and browser e2e | IN PROGRESS |
+| P5 | Native WeChat miniapp (TS/WXML, wx adapter, mock e2e) | DONE / mock accepted; native DevTools pending |
+| P6 | Verification matrix, docs, independent startup/deploy and switch guide | IN PROGRESS |
 
 ## P0 evidence
 
@@ -64,6 +64,36 @@ Exit:
 - Tests: `upstream-client.test.ts` 13 cases; serv total 31 passed; contract tests 3 passed.
 - Gates: contract/serv typecheck + lint, root `pnpm typecheck` green.
 - Legacy inventory: `2026-10-24-legacy-admin-operation-inventory.md` (per-page regression baseline, 41 endpoints, 45 quirks).
+
+## P2/P3/P5 evidence (accepted)
+
+- P2 IAM/LDAP:
+  - `_iam.yml` documents LDAP URL/base DN/bind DN/searchFilter/attribute mapping/TLS/timeout; LDAP default off; public registration closed.
+  - `register.defaultEnabled=true` so LDAP-synced users are enabled; public registration remains closed by `register.enabled=false` (main-agent correction).
+  - `ldapts@9.2.0` catalog + service dependency; default IAM client loads it when no factory is injected.
+  - LDAP login audited with `{ strategy: 'ldap' }`; password login, logout, password change and admin writes audited.
+  - 7 LDAP/IAM tests: success as ordinary user, bind/search/connection failures, refresh, role denial, audit, bootstrap no-reset.
+- P3 shared:
+  - 6 management pages (overview/gateways/routes/plugins/ai-queue/instances), 8 focused components, 241 i18n keys per locale.
+  - Version snapshot correction by main agent: gateway/route/plugin writes use per-editor read versions, not the mutable global version; background reads cannot submit stale drafts with a newer version.
+  - 20 shared tests (version propagation, conflict/no-retry, admin gating, schema form).
+- P5 miniapp:
+  - Native TS/WXML project with 8 pages, `wx.request` adapter, memory-only tokens, single refresh, 409 `serverVersion`, i18n sync.
+  - Dedicated `/api/miniapp/v1` app with same contract/IAM/admin guards, no SM2 only on that channel, refresh token body transport, explicit client header, HTTPS/internal deployment requirement.
+  - Service channel tests: unencrypted only on miniapp app, main app still rejects plaintext, refresh rotation, auth/client rejection.
+  - 10 miniapp mock tests + page manifest; native WeChat DevTools/device acceptance NOT executed and must be reported separately.
+
+## P4 scope and exit criteria
+
+- Wire Web/App/Desktop to the shared pages (they already render `AdminWorkspace`); verify login, navigation, overview and at least one gateway/route write in Playwright for Web, App preview and Desktop preview.
+- Verify 409 UX (banner, explicit reload, no auto retry) and admin-only navigation.
+- Exit: `pnpm build` for web/app/desktop, Playwright suite green (or documented environment limits), native packaging reported separately.
+
+## P6 scope and exit criteria
+
+- Independent startup/deploy entries: service env (`SPACEGATE_*`, `HAI_SERV_MINIAPP_PORT`), web image runtime `PUBLIC_API_BASE`, current Vue deployment untouched.
+- Switch guide: explicit new image/route selection, rollback to old Vue, no production cutover in this branch.
+- Final matrix: contract/service/shared/miniapp targeted tests, root typecheck/lint, Rust targeted tests, build artifacts, native acceptance gaps.
 
 ## Handoff notes
 
