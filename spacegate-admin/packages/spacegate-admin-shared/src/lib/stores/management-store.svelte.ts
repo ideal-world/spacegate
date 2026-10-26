@@ -379,6 +379,7 @@ export class ManagementStore {
       if (gatewayResult?.success) {
         this.gateway = asRecord(gatewayResult.data.gateway)
         this.gatewayConfig = cloneRecord(gatewayResult.data.gateway)
+        this.gatewayEditVersion = gatewayResult.data.version
         this.applyVersion(gatewayResult.data.version)
       }
       if (routeResult?.success) {

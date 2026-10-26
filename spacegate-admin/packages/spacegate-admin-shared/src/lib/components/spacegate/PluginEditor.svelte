@@ -98,14 +98,21 @@
         await store.loadPlugins()
         instance = store.plugins.find(item => pluginKey(item.ref) === key) ?? null
       }
-      original = instance
-      if (instance) {
-        code = instance.ref.code
-        kind = instance.ref.kind
-        instanceName = instance.ref.kind === 'named' ? instance.ref.name : ''
-        uid = instance.ref.kind === 'anon' ? instance.ref.uid : ''
-        displayName = instance.displayName
-        spec = cloneRecord(instance.spec)
+      // 编辑器必须持有该实例的读取快照版本，不能复用列表/上一条实例的版本。
+      // mono 插件没有可寻址的 name/uid 且不可保存，只能使用列表快照。
+      if (instance && instance.ref.kind !== 'mono')
+        await store.loadPlugin(instance.ref)
+      const fresh = instance && instance.ref.kind !== 'mono' && store.plugin && pluginKey(store.plugin.ref) === key
+        ? store.plugin
+        : instance
+      original = fresh
+      if (fresh) {
+        code = fresh.ref.code
+        kind = fresh.ref.kind
+        instanceName = fresh.ref.kind === 'named' ? fresh.ref.name : ''
+        uid = fresh.ref.kind === 'anon' ? fresh.ref.uid : ''
+        displayName = fresh.displayName
+        spec = cloneRecord(fresh.spec)
         imageUrl = readString(spec, 'image_url') || readString(spec, 'url')
         schemaPath = readString(spec, 'schema_path') || 'schema.json'
         const ociAuth = asRecord(spec.oci_auth)

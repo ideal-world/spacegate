@@ -26,9 +26,9 @@
 | P1 | Contract + upstream adapter + service procedures + upstream tests | DONE / accepted |
 | P2 | IAM/LDAP/roles/audit/bootstrap hardening + tests | DONE / accepted |
 | P3 | Shared store/domain/i18n/navigation + management pages | DONE / accepted |
-| P4 | Web/App/Desktop wiring and browser e2e | IN PROGRESS |
+| P4 | Web/App/Desktop wiring and browser e2e | DONE / accepted (browser previews) |
 | P5 | Native WeChat miniapp (TS/WXML, wx adapter, mock e2e) | DONE / mock accepted; native DevTools pending |
-| P6 | Verification matrix, docs, independent startup/deploy and switch guide | IN PROGRESS |
+| P6 | Verification matrix, docs, independent startup/deploy and switch guide | DONE / accepted |
 
 ## P0 evidence
 
@@ -83,17 +83,48 @@ Exit:
   - Service channel tests: unencrypted only on miniapp app, main app still rejects plaintext, refresh rotation, auth/client rejection.
   - 10 miniapp mock tests + page manifest; native WeChat DevTools/device acceptance NOT executed and must be reported separately.
 
-## P4 scope and exit criteria
+## P4 evidence (accepted)
 
-- Wire Web/App/Desktop to the shared pages (they already render `AdminWorkspace`); verify login, navigation, overview and at least one gateway/route write in Playwright for Web, App preview and Desktop preview.
-- Verify 409 UX (banner, explicit reload, no auto retry) and admin-only navigation.
-- Exit: `pnpm build` for web/app/desktop, Playwright suite green (or documented environment limits), native packaging reported separately.
+- Deterministic mock upstream `e2e/mock-spacegate-upstream.mjs` matches Rust version semantics:
+  GET returns `X-Server-Version`; writes require `X-Client-Version`; stale writes return 409 with server version; increment only on success.
+- Playwright `e2e/spacegate.spec.ts` covers Web, App preview, Desktop preview:
+  overview counts/health, gateway JSON write, route JSON write, 409 banner + explicit reload + no auto retry, non-admin isolation.
+- Existing `fullstack.spec.ts` updated for closed public registration and default `overview` route; no IAM/profile coverage removed.
+- Final managed run: `16 passed, 1 skipped` (OTP skipped because `IAM_NOTIFICATION_URL` unset), 1.9 min.
+- Source build and all package builds pass: `pnpm build`, `pnpm compile`.
+- Native App/Desktop packaging is NOT browser preview and was not executed; see remaining gaps.
 
-## P6 scope and exit criteria
+## P6 evidence (accepted)
 
-- Independent startup/deploy entries: service env (`SPACEGATE_*`, `HAI_SERV_MINIAPP_PORT`), web image runtime `PUBLIC_API_BASE`, current Vue deployment untouched.
-- Switch guide: explicit new image/route selection, rollback to old Vue, no production cutover in this branch.
-- Final matrix: contract/service/shared/miniapp targeted tests, root typecheck/lint, Rust targeted tests, build artifacts, native acceptance gaps.
+- Independent entry: `spacegate-admin/deploy/compose.yaml` (service + web, external Rust/AI Gateway), `deploy/spacegate-admin.env.example`, `deploy/generate-transport-keyring.mjs`.
+- Switch/rollback guide: `docs/superpowers/migration/2026-10-24-spacegate-admin-independent-deploy-and-switch.md`.
+- Local end-to-end runbook with the existing all-in-one image: `docs/superpowers/migration/2026-10-24-hai-admin-local-test-with-all-in-one.md`.
+- `docker compose config` validates with the example env; build context and runtime `PUBLIC_API_BASE` are correct.
+- Old Vue and `spacegate-admin-front` untouched; no production cutover in this branch.
+
+## Final verification matrix
+
+| Check | Result |
+| --- | --- |
+| Root `pnpm typecheck` | PASS, 0 errors/warnings |
+| Root `pnpm lint` | PASS |
+| Root `pnpm test` | PASS: contract 3, serv 41, shared 20, miniapp 10 |
+| `pnpm build` / `pnpm compile` | PASS: service/contract/shared/web/app/desktop/miniapp; no native bundles |
+| `pnpm test:e2e` | PASS: 16 passed, 1 skipped (OTP fixture absent) |
+| `cargo test -p spacegate-admin-server` | PASS: 13 passed |
+| `docker compose config` | PASS |
+| WeChat DevTools compile/device | NOT RUN: CLI login check timed out / IDE not authenticated |
+| Capacitor Android/iOS | NOT RUN: `android/`/`ios/` not generated; Android SDK/Xcode unavailable |
+| Tauri desktop bundle | NOT RUN: `bundle.targets=["nsis"]` (Windows) and Xcode not installed; web build only |
+
+## Commit and handoff state
+
+- Local branch `feat/hai-admin-migration`; **no push**.
+- Local commits through P5 + progress:
+  `c024520e`, `594ffcb5`, `ca08fdba`, `4db6aee2`, `da98986f`, `ccdb5dc2`.
+- P4/P6 code and docs are intentionally **uncommitted** per user request: run full local verification first, then commit.
+- Do not commit `docs/k8s/service-image-build-runbook.md` (pre-existing user change) or untracked `docs/superpowers/plans/`, `docs/superpowers/specs/`.
+- Native acceptance and production switch remain explicit external gates; do not claim them as passed.
 
 ## Handoff notes
 

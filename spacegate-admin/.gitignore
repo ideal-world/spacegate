@@ -29,6 +29,7 @@ playwright-report/
 # 本机私有配置；公共 .env 与 dev/test/prod 环境文件纳入版本控制。
 .env.local
 .env.*.local
+deploy/spacegate-admin.env
 
 # 构建器生成的安装输入快照
 **/images/dependencies/

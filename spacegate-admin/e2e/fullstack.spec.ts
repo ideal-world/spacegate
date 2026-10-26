@@ -50,6 +50,17 @@ async function userEditor(page: Page, username: string) {
   return row
 }
 
+/** 通过管理员用户页创建账号；公开注册关闭后，这是浏览器测试的账号入口。 */
+async function createAccount(page: Page, username: string, password: string, email?: string) {
+  await page.getByTestId('create-user').click()
+  await page.getByTestId('user-username').locator('input').fill(username)
+  await page.getByTestId('user-password').locator('input').fill(password)
+  if (email)
+    await page.getByTestId('user-email').locator('input').fill(email)
+  await page.getByTestId('user-save').click()
+  await expect(page.getByTestId('user-editor')).not.toBeVisible()
+}
+
 test('service health endpoint is ready', async ({ request }) => {
   const response = await request.get(`${apiBaseUrl}/health`)
   await expect(response).toBeOK()
@@ -86,8 +97,8 @@ test('hash routing and responsive workspace preserve usable content width', asyn
   await page.goForward()
   await expect(page.getByTestId('profile-form')).toBeVisible()
   await page.goto('/#/unknown-page')
-  await expect(page).toHaveURL(/#\/users$/)
-  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page).toHaveURL(/#\/overview$/)
+  await expect(page.getByTestId('overview-page')).toBeVisible()
 })
 
 test('branded authentication, profile layout and blur validation work across screen sizes', async ({ page }, testInfo) => {
@@ -98,11 +109,10 @@ test('branded authentication, profile layout and blur validation work across scr
   await expect(page.locator('header')).toBeVisible()
   await expect(page.locator('footer')).toBeVisible()
   await capture(page, 'spacegate-admin-login-desktop.png', testInfo.outputPath('login-desktop.png'))
-  await page.getByRole('button', { name: /立即注册|Register now/, exact: true }).click()
-  await expect(page.locator('.register-form')).toBeVisible()
-  await capture(page, 'spacegate-admin-register-desktop.png', testInfo.outputPath('register-desktop.png'))
+  // 公开注册默认关闭：登录页不得再暴露注册入口或注册表单。
+  await expect(page.getByRole('button', { name: /立即注册|Register now/, exact: true })).toHaveCount(0)
+  await expect(page.locator('.register-form')).toHaveCount(0)
   await page.setViewportSize({ width: 390, height: 844 })
-  await capture(page, 'spacegate-admin-register-mobile.png', testInfo.outputPath('register-mobile.png'))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.reload()
   await expect(page.getByTestId('login-form')).toBeVisible()
@@ -258,28 +268,43 @@ for (const frontend of additionalFrontends) {
   })
 }
 
-test('shared authentication supports public registration with configuration', async ({ page }) => {
+test('public registration is closed and administrator-created accounts sign in', async ({ page }) => {
   test.setTimeout(90_000)
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
+  const username = `member${randomUUID().replaceAll('-', '').slice(0, 12)}`
+  const password = 'SignupPassword123'
   await page.goto('/')
   await expect(page.getByTestId('login-form')).toBeVisible()
+  // 公开注册默认关闭，登录页不渲染注册入口；账号由管理员创建。
+  await expect(page.getByRole('button', { name: /立即注册|Register now/i })).toHaveCount(0)
+  await expect(page.locator('.register-form')).toHaveCount(0)
   await page.screenshot({ path: path.join(evidence, 'spacegate-admin-login.png'), fullPage: true })
-  await page.getByRole('button', { name: /立即注册|Register now/i }).click()
-  const registerForm = page.locator('.register-form')
-  await expect(registerForm.locator('#register-username')).toBeVisible()
-  await page.screenshot({ path: path.join(evidence, 'spacegate-admin-register.png'), fullPage: true })
-  const username = `signup${randomUUID().replaceAll('-', '').slice(0, 12)}`
-  await registerForm.locator('#register-username').fill(username)
-  await registerForm.locator('#register-email').fill(`${username}@example.com`)
-  await registerForm.locator('#register-password').fill('SignupPassword123')
-  await registerForm.locator('#register-confirm-password').fill('SignupPassword123')
-  await registerForm.locator('button[type="submit"]').click()
+  await login(page, 'admin', adminPassword)
+  await page.getByTestId('nav-users').click()
+  await createAccount(page, username, password, `${username}@example.com`)
+  await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
+  await page.getByTestId('logout').click()
+  await login(page, username, password)
   await expect(page.getByTestId('settings-page')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  if (!process.env.IAM_NOTIFICATION_URL)
-    return
+  await page.reload()
+  await expect(page.getByTestId('settings-page')).toBeVisible()
+})
+
+test('IAM email OTP and password reset work for administrator-created accounts', async ({ page }) => {
+  test.skip(!process.env.IAM_NOTIFICATION_URL, 'IAM notification fixture is not configured')
+  test.setTimeout(120_000)
+  const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
+  await mkdir(evidence, { recursive: true })
+  const username = `otp${randomUUID().replaceAll('-', '').slice(0, 12)}`
   const email = `${username}@example.com`
+  const password = 'SignupPassword123'
+  await page.goto('/')
+  await login(page, 'admin', adminPassword)
+  await page.getByTestId('nav-users').click()
+  await createAccount(page, username, password, email)
+  await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
   await page.getByTestId('logout').click()
   await page.getByRole('button', { name: /邮件验证码|Email code/i, exact: true }).click()
   await page.screenshot({ path: path.join(evidence, 'spacegate-admin-email.png'), fullPage: true })
@@ -327,9 +352,9 @@ test('frontend displays configured core metadata and restores the administrator 
   await expect(page.getByTestId('app-version')).toHaveText(`v${configuredVersion}`)
   await expect(page.getByTestId('app-environment')).toHaveText(configuredEnv)
   await login(page, 'admin', adminPassword)
-  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page.getByTestId('overview-page')).toBeVisible()
   await page.reload()
-  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page.getByTestId('overview-page')).toBeVisible()
   await expect(page.getByTestId('nav-roles')).toBeVisible()
   await expect(page.getByTestId('nav-audit')).toBeVisible()
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
@@ -406,6 +431,8 @@ test('administrator and user complete account, avatar, preference, password and 
   })
   await page.goto('/')
   await login(page, 'admin', adminPassword)
+  await expect(page.getByTestId('overview-page')).toBeVisible()
+  await page.getByTestId('nav-users').click()
   await expect(page.getByTestId('users-page')).toBeVisible()
   await page.getByTestId('create-user').click()
   await expect(page.getByRole('dialog', { name: /新增用户|New user|Create user|Add user/ })).toBeVisible()

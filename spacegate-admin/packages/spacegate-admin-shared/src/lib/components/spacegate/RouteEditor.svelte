@@ -15,7 +15,6 @@
     readNumber,
     readRecord,
     readString,
-    routeNameOf,
     routeTypeOf,
   } from '../../spacegate/model.js'
   import JsonTextarea from './JsonTextarea.svelte'
@@ -78,8 +77,9 @@
     deleting = false
     store.error = ''
     if (name) {
-      if (!store.route || routeNameOf(store.route) !== name)
-        await store.loadRoute(name)
+      // 每次打开都重新读取，确保编辑器持有本次快照对应的版本。
+      draft = {}
+      await store.loadRoute(name)
       draft = cloneRecord(store.route)
       originalName = name
       createType = routeTypeOf(draft)
@@ -514,7 +514,7 @@
     <section class="space-y-2 border-t border-base-content/8 pt-4">
       <h3 class="text-sm font-semibold">{m.route_json()}</h3>
       <p class="text-xs text-base-content/50">{m.route_json_hint()}</p>
-      <JsonTextarea value={draft} rows={14} disabled={store.saving} onchange={setRouteJson} />
+      <JsonTextarea value={draft} rows={14} disabled={store.saving} onchange={setRouteJson} testid="route-json" />
     </section>
 
     {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}

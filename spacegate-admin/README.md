@@ -21,9 +21,24 @@
 - `apps/spacegate-admin-web`：Web 前端
 - `apps/spacegate-admin-app`：移动端 App/H5 前端
 - `apps/spacegate-admin-desktop`：桌面端前端
-- `apps/spacegate-admin-miniapp`：小程序预留说明与本端 inlang messages（占位，不参与构建）
+- `apps/spacegate-admin-miniapp`：微信原生 TypeScript/WXML 小程序，共享 contract 类型、i18n 与独立 token 通道
+- `deploy/`：独立评估栈（service + web）、环境变量示例与切换说明
 
 已启用前端：Web / App / Miniapp / Desktop
+
+### SpaceGate 管理面迁移
+
+本工程是既有 SpaceGate 管理面的新控制面：Hai service 负责 IAM、contract 和 typed procedures，
+通过服务端上游适配器调用既有 Rust `admin-server` 与 AI Gateway；Rust 数据平面、插件 ABI、
+文件/Kubernetes 配置和并发版本语义保持不变。旧 Vue 管理端 `../../spacegate-admin-fe` 继续可用，
+本工程不修改它，也不执行生产切换。
+
+- API 前缀：主通道 `/api/v1`（SM2 transport）；小程序 `/api/miniapp/v1`（仅显式启用、HTTPS 反代）。
+- 服务身份：`HAI_SPACEGATE_ADMINBASEURL` / `HAI_SPACEGATE_ADMINAK` / `HAI_SPACEGATE_ADMINSK`；
+  AI Gateway：`HAI_SPACEGATE_AIGATEWAYBASEURL`。凭据只放服务端环境。
+- 管理写操作要求 IAM `admin` 角色；LDAP 默认关闭，公开注册默认关闭。
+- 独立启动、容器评估栈、反向代理、切换与回滚：见 [deploy/README.md](./deploy/README.md) 和
+  `../docs/superpowers/migration/2026-10-24-spacegate-admin-independent-deploy-and-switch.md`。
 
 ### 页面布局与路由
 
@@ -120,7 +135,7 @@ tar 旁的部署目录提供 deploy.ps1（Windows）和 deploy.sh（Linux/macOS�
 
 - shared：`packages/spacegate-admin-shared/project.inlang` + `messages/`，只放跨端共享组件文案。
 - web/app/desktop：每个应用都有自己的 `project.inlang` + `messages/`，用于本端页面与产品文案。
-- miniapp：当前是占位，但也有自己的 `project.inlang` + `messages/`，便于后续接入真实小程序框架。
+- miniapp：原生 TS/WXML 页面，复用 shared 的 contract 类型与翻译基础文案；本地覆盖层在 `apps/spacegate-admin-miniapp/messages/`，`pnpm i18n:compile` 会同步生成物。
 - 新增 locale 时，shared 与所有启用前端的 `locales` 必须同步；语言切换器会同时更新 shared runtime 与宿主应用 runtime。
 - `pnpm i18n:compile` 会统一编译 shared 与每个启用前端的 Paraglide 输出；各前端也可单独运行 `pnpm --filter spacegate-admin-web paraglide:compile` 等命令。
 

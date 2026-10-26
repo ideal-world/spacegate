@@ -7,7 +7,6 @@
   import {
     asRecord,
     cloneRecord,
-    gatewayNameOf,
     newGateway,
     newListener,
     readBoolean,
@@ -17,6 +16,7 @@
   } from '../../spacegate/model.js'
   import JsonTextarea from './JsonTextarea.svelte'
   import PluginBindingEditor from './PluginBindingEditor.svelte'
+  import VersionConflictBanner from './VersionConflictBanner.svelte'
 
   interface Props {
     store: ManagementStore
@@ -65,8 +65,10 @@
     deleting = false
     store.error = ''
     if (name) {
-      if (!store.gatewayConfig || gatewayNameOf(store.gatewayConfig) !== name)
-        await store.loadGateway(name)
+      // 先清空旧草稿，避免重新打开时短暂显示或提交上一个快照；随后总是重新读取。
+      draft = {}
+      gatewayNameInput = name
+      await store.loadGateway(name)
       draft = cloneRecord(store.gatewayConfig ?? store.gateway)
       gatewayNameInput = name
     }
@@ -138,6 +140,8 @@
 
 <Modal bind:open title={isCreate ? m.gateway_create() : m.gateway_edit()} size="3xl" closeOnBackdrop={!store.saving} closeOnEscape={!store.saving} data-testid="gateway-editor">
   <div class="space-y-6">
+    {#if store.conflict}<VersionConflictBanner {store} />{/if}
+
     <FormLayout columns={2}>
       <FormField label={m.gateway_name()} required>
         <Input bind:value={gatewayNameInput} readonly={!isCreate} required maxlength={128} data-testid="gateway-name" />
@@ -243,7 +247,7 @@
     <section class="space-y-2">
       <h3 class="text-sm font-semibold">{m.gateway_advanced()}</h3>
       <p class="text-xs text-base-content/50">{m.gateway_json_hint()}</p>
-      <JsonTextarea value={draft} rows={14} disabled={store.saving} onchange={setGatewayJson} />
+      <JsonTextarea value={draft} rows={14} disabled={store.saving} onchange={setGatewayJson} testid="gateway-json" />
     </section>
 
     {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}

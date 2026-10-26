@@ -26,9 +26,9 @@ export ADMIN_DOCKER_DIR="$SPACEGATE_ROOT/resource/docker/spacegate-admin"
 export ARTIFACT_DIR="$WORKSPACE_ROOT/image-artifacts"
 
 # VERSION 建议使用 Git tag、日期版本或交付版本号，例如 20260709-001。
-export VERSION="1.0.3"
+export VERSION="date +%Y.%m.%d-001"
 
-export SPACEGATE_IMAGE="spacegate:$VERSION"
+export SPACEGATE_IMAGE="image.hyit.com.cn/ai-hai/spacegate:$VERSION"
 export SPACEGATE_ADMIN_IMAGE="spacegate-admin:$VERSION"
 export AI_GATEWAY_SERVICE_IMAGE="ai-gateway-service:$VERSION"
 
@@ -36,7 +36,7 @@ export AI_GATEWAY_SERVICE_IMAGE="ai-gateway-service:$VERSION"
 export ADMIN_NGINX_IMAGE="nginx:1.27-bookworm"
 
 # HAI 静态插件源码所在的 hai-hub 仓库；网关镜像构建会从此目录编译它。
-export HAI_HUB_ROOT="/path/to/hai-hub"
+export HAI_HUB_ROOT="/Users/yiye/projectSpace/huayun_project/hai-workspace/hai-hub"
 
 mkdir -p "$ARTIFACT_DIR"
 ```

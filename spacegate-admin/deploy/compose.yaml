@@ -1,0 +1,48 @@
+# 独立评估栈：新 Hai 控制面 + Web，不修改旧 Vue 或既有 SpaceGate 部署。
+#
+# 仅用于本地/预发验证：
+#   - 默认 SQLite + 内存缓存，适合单实例；
+#   - 生产多实例必须使用共享 PostgreSQL/Redis/S3/vecdb 与受管 ring，见 deploy/README.md；
+#   - 上游 Rust admin-server / AI Gateway 通过环境变量连接，不在此栈内启动。
+name: spacegate-admin
+
+services:
+  service:
+    build:
+      context: ..
+      dockerfile: images/app.Dockerfile
+    image: spacegate-admin-serv:local
+    restart: unless-stopped
+    env_file:
+      - ./spacegate-admin.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: '3000'
+      HAI_SERV_SERVER_HOST: 0.0.0.0
+      HAI_SERV_SERVER_PORT: '3000'
+    extra_hosts:
+      # Linux 下访问宿主机上的 Rust admin-server / AI Gateway；macOS/Windows 可直接使用 host.docker.internal。
+      - host.docker.internal:host-gateway
+    ports:
+      - '3000:3000'
+      # 仅在 spacegate-admin.env 设置 HAI_SERV_MINIAPP_PORT=3001 时监听。
+      - '3001:3001'
+    volumes:
+      - service-data:/app/data
+
+  web:
+    build:
+      context: ..
+      dockerfile: images/web.Dockerfile
+    image: spacegate-admin-web:local
+    restart: unless-stopped
+    environment:
+      # 运行时注入，不烘焙进镜像；同源反代时改为公网 Origin。
+      PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://127.0.0.1:3000}
+    ports:
+      - '8080:8080'
+    depends_on:
+      - service
+
+volumes:
+  service-data:

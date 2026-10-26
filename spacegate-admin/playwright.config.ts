@@ -31,6 +31,9 @@ const frontends: { target: string, name: string, url: string }[] = [
 const serviceBaseURL = process.env.SERVICE_BASE_URL || defaultServiceBaseURL
 const serviceHost = resolveHostFromBaseUrl(serviceBaseURL, '127.0.0.1')
 const servicePort = resolvePortFromBaseUrl(serviceBaseURL, '3000')
+// 确定性上游夹具：Web/App/Desktop 共用同一份配置状态，版本语义与 Rust 中间件一致。
+const mockUpstreamPort = process.env.MOCK_UPSTREAM_PORT || '3998'
+const mockUpstreamBaseURL = process.env.MOCK_UPSTREAM_BASE_URL || `http://127.0.0.1:${mockUpstreamPort}`
 
 function resolveHostFromBaseUrl(urlString: string, fallbackHost: string): string {
   try {
@@ -73,6 +76,17 @@ export default defineConfig({
   },
   webServer: [
     {
+      name: 'spacegate-mock-upstream',
+      command: 'node e2e/mock-spacegate-upstream.mjs',
+      env: {
+        MOCK_UPSTREAM_PORT: mockUpstreamPort,
+        MOCK_UPSTREAM_HOST: '127.0.0.1',
+      },
+      url: `${mockUpstreamBaseURL}/__state`,
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
       name: 'spacegate-admin-serv',
       command: 'pnpm --filter spacegate-admin-serv exec node dist/index.js',
       env: createE2eServerEnv({
@@ -82,6 +96,10 @@ export default defineConfig({
         HAI_STORAGE: JSON.stringify({ type: 'local', root: `${process.env.HAI_E2E_DATA_ROOT}/uploads` }),
         HAI_VECDB: JSON.stringify({ type: 'lancedb', path: `${process.env.HAI_E2E_DATA_ROOT}/vecdb` }),
         HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
+        // 浏览器验收固定连接本地 mock upstream；不触碰真实 Rust 配置或 Kubernetes。
+        HAI_SPACEGATE_ADMINBASEURL: mockUpstreamBaseURL,
+        HAI_SPACEGATE_AIGATEWAYBASEURL: mockUpstreamBaseURL,
+        HAI_SPACEGATE_ALLOWINSECURE: 'true',
         HOST: serviceHost,
         PORT: servicePort,
         // 仅供脚手架验收：生产启动必须由部署环境提供初始管理员密码。
