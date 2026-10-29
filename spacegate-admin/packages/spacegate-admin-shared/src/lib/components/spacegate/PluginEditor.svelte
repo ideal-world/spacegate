@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { ManagementStore } from '../../stores/management-store.svelte.js'
   import type { JsonRecord, PluginInstance, PluginReference } from '../../spacegate/model.js'
-  import { FormField, FormLayout, Modal } from '@h-ai/ui/components/compounds/index'
-  import { Button, Input, Select, Switch, Textarea } from '@h-ai/ui/components/primitives/index'
+  import { Alert, Drawer, FormField, FormLayout, Tabs } from '@h-ai/ui/components/compounds/index'
+  import { Button, Input, Select, Textarea } from '@h-ai/ui/components/primitives/index'
   import * as m from '../../paraglide/messages.js'
   import {
     asRecord,
@@ -14,7 +14,7 @@
     pluginKey,
     readString,
   } from '../../spacegate/model.js'
-  import { initSchemaDefaults, schemaKind } from '../../spacegate/schema.js'
+  import { initSchemaDefaults, schemaExample, schemaKind } from '../../spacegate/schema.js'
   import JsonTextarea from './JsonTextarea.svelte'
   import SchemaForm from './SchemaForm.svelte'
   import VersionConflictBanner from './VersionConflictBanner.svelte'
@@ -23,8 +23,12 @@
     store: ManagementStore
     open?: boolean
     instanceKey?: string | null
+    /** 新建时预选的插件代码；缺省时回退到 store.selectedPluginCode。 */
+    createCode?: string
+    /** 新建成功后回传实例引用，调用方可以立即把它加入插件链。 */
+    oncreated?: (instance: PluginInstance) => void
   }
-  let { store, open = $bindable(false), instanceKey = null }: Props = $props()
+  let { store, open = $bindable(false), instanceKey = null, createCode = '', oncreated }: Props = $props()
 
   let original = $state<PluginInstance | null>(null)
   let code = $state('')
@@ -33,7 +37,8 @@
   let uid = $state('')
   let displayName = $state('')
   let spec = $state<JsonRecord>({})
-  let rawMode = $state(false)
+  let editMode = $state<'form' | 'json'>('form')
+  let exampleCopied = $state(false)
   let deleting = $state(false)
   let previewOpen = $state(false)
   let imageUrl = $state('')
@@ -50,6 +55,30 @@
   const kindOptions = [{ value: 'named', label: m.plugin_kind_named() }, { value: 'anon', label: m.plugin_kind_anon() }, { value: 'mono', label: m.plugin_kind_mono() }]
   const schema = $derived(store.pluginSchema)
   const schemaAvailable = $derived(schema !== null && schema !== undefined && schemaKind(schema, schema) !== 'json')
+  /** 与旧管理端一致：无 schema 时只能编辑 JSON，有 schema 时默认表单并可切换。 */
+  const activeMode = $derived(schemaAvailable ? editMode : 'json')
+  const specExample = $derived(formatJson(schemaAvailable ? schemaExample(schema, schema) : {}))
+  const editModeItems = $derived([{ key: 'form', label: m.plugin_mode_form() }, { key: 'json', label: m.plugin_mode_json() }])
+
+  function applyExample() {
+    const parsed = parseJson(specExample)
+    if (!parsed.ok || !asRecord(parsed.value))
+      return
+    spec = cloneRecord(parsed.value)
+    editMode = 'json'
+  }
+
+  async function copyExample() {
+    if (typeof navigator === 'undefined' || !navigator.clipboard)
+      return
+    try {
+      await navigator.clipboard.writeText(specExample)
+      exampleCopied = true
+    }
+    catch {
+      exampleCopied = false
+    }
+  }
 
   $effect(() => {
     if (store.reloadEpoch !== seenEpoch) {
@@ -64,11 +93,11 @@
       initializedFor = null
       return
     }
-    const target = instanceKey
+    const target = instanceKey ?? (createCode ? `new:${createCode}` : null)
     if (initializedFor === target)
       return
     initializedFor = target
-    void initialize(target)
+    void initialize(instanceKey)
   })
 
   // schema 到达后补齐默认值，但不覆盖用户已填写的字段。
@@ -84,7 +113,8 @@
   async function initialize(key: string | null) {
     deleting = false
     previewOpen = false
-    rawMode = false
+    editMode = 'form'
+    exampleCopied = false
     previewError = ''
     store.error = ''
     store.wasmSchema = null
@@ -125,7 +155,7 @@
     }
     else {
       original = null
-      code = store.selectedPluginCode || store.pluginCatalog[0] || ''
+      code = createCode || store.selectedPluginCode || store.pluginCatalog[0] || ''
       kind = 'named'
       instanceName = code ? `${code}-instance` : ''
       uid = ''
@@ -139,6 +169,14 @@
     loadedSchemaFor = ''
     if (code)
       await store.loadPluginSchema(code)
+  }
+
+  function kindLabel(value: string): string {
+    if (value === 'named')
+      return m.plugin_kind_named()
+    if (value === 'anon')
+      return m.plugin_kind_anon()
+    return m.plugin_kind_mono()
   }
 
   function setCode(value: string) {
@@ -239,8 +277,14 @@
       store.error = m.validation_name()
       return
     }
-    if (await store.savePlugin(isCreate, config))
+    const created = isCreate
+    if (await store.savePlugin(created, config)) {
       open = false
+      // 保存成功后 store 已刷新实例列表；把新实例回传给调用方，避免重新查找。
+      const saved = store.plugins.find(item => pluginKey(item.ref) === pluginKey(reference)) ?? null
+      if (created && saved)
+        oncreated?.(saved)
+    }
   }
 
   async function confirmDelete() {
@@ -254,8 +298,9 @@
   }
 </script>
 
-<Modal bind:open title={isCreate ? m.plugin_create() : m.plugin_edit()} size="3xl" closeOnBackdrop={!store.saving} closeOnEscape={!store.saving} data-testid="plugin-editor">
-  <div class="space-y-6">
+<Drawer bind:open title={isCreate ? m.plugin_create() : m.plugin_edit()} position="right" size="4xl" closeOnBackdrop={!store.saving}>
+  <div class="flex h-[calc(100vh-7rem)] min-h-0 flex-col gap-4" data-testid="plugin-editor">
+    <div class="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
     {#if store.conflict}<VersionConflictBanner {store} />{/if}
 
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -271,39 +316,59 @@
     </div>
 
     <FormLayout columns={2}>
-      <FormField label={m.plugin_code()} required>
-        <Select value={code} options={codeOptions} placeholder={m.plugin_select_code()} disabled={!isCreate || store.saving} onchange={setCode} />
-      </FormField>
-      <FormField label={m.plugin_instance_kind()}>
-        <Select value={kind} options={kindOptions} disabled={!isCreate || store.saving} onchange={(value) => {
- if (value === 'named' || value === 'anon' || value === 'mono')
-kind = value
-}} />
+      <FormField label={m.plugin_display_name()}>
+        <Input bind:value={displayName} maxlength={128} disabled={store.saving} />
       </FormField>
       {#if kind === 'named'}
-        <FormField label={m.plugin_instance_name()} required>
+        <FormField label={m.plugin_instance_name()} required hint={m.plugin_instance_name_hint()}>
           <Input bind:value={instanceName} required readonly={!isCreate || store.saving} />
         </FormField>
       {:else if kind === 'anon'}
         <FormField label={m.plugin_uid()} required>
-          <Input bind:value={uid} required readonly={!isCreate || store.saving} />
+          <Input bind:value={uid} required readonly />
+        </FormField>
+      {/if}
+      {#if isCreate}
+        <FormField label={m.plugin_code()} required>
+          <Select value={code} options={codeOptions} placeholder={m.plugin_select_code()} disabled={store.saving} onchange={setCode} />
+        </FormField>
+        <FormField label={m.plugin_instance_kind()}>
+          <Select value={kind} options={kindOptions} disabled={store.saving} onchange={(value) => {
+ if (value === 'named' || value === 'anon' || value === 'mono')
+kind = value
+}} />
         </FormField>
       {:else}
-        <FormField label={m.plugin_instance_kind()}><p class="text-sm text-base-content/55">{m.plugin_mono_readonly()}</p></FormField>
+        <FormField label={m.plugin_code()}><p class="font-mono text-sm">{code}</p></FormField>
+        <FormField label={m.plugin_instance_kind()}><p class="text-sm">{kindLabel(kind)}</p></FormField>
       {/if}
-      <FormField label={m.plugin_display_name()}>
-        <Input bind:value={displayName} maxlength={128} disabled={store.saving} />
-      </FormField>
     </FormLayout>
 
+    {#if kind === 'mono'}
+      <Alert variant="info">{m.plugin_mono_hint()}</Alert>
+    {/if}
+
     <section class="space-y-3 border-t border-base-content/8 pt-4">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-semibold">{m.plugin_runtime_spec()}</h3>
-        <label class="flex items-center gap-2 text-xs">{m.plugin_raw_json()}<Switch bind:checked={rawMode} /></label>
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 class="text-sm font-semibold">{m.plugin_runtime_spec()}</h3>
+          <p class="mt-0.5 text-xs text-base-content/50">{activeMode === 'form' ? m.plugin_form_mode_desc() : m.plugin_json_mode_desc()}</p>
+        </div>
+        <div class="flex shrink-0 gap-1">
+          <Button size="xs" variant="ghost" onclick={() => void copyExample()}>{exampleCopied ? m.json_copied() : m.plugin_copy_example()}</Button>
+          <Button size="xs" variant="outline" onclick={applyExample}>{m.plugin_fill_example()}</Button>
+        </div>
       </div>
-      {#if rawMode || !schemaAvailable}
+      {#if schemaAvailable}
+        <Tabs items={editModeItems} active={editMode} onchange={(key) => { editMode = key === 'json' ? 'json' : 'form' }} />
+      {/if}
+      {#if activeMode === 'json'}
         <JsonTextarea value={spec} rows={16} disabled={store.saving} onchange={setSpecFromJson} />
-        {#if !schemaAvailable && !rawMode}<p class="text-xs text-base-content/50">{m.plugin_no_schema()}</p>{/if}
+        {#if !schemaAvailable}<p class="text-xs text-base-content/50">{m.plugin_no_schema()}</p>{/if}
+        <details class="rounded-lg border border-base-content/8">
+          <summary class="cursor-pointer list-none px-3 py-2 text-xs font-medium text-base-content/60">{m.plugin_json_example()}</summary>
+          <pre class="max-h-56 overflow-auto border-t border-base-content/8 p-3 font-mono text-xs">{specExample}</pre>
+        </details>
       {:else}
         <SchemaForm schema={schema} value={spec} root={schema} onchange={setSpecFromSchema} />
         <p class="text-xs text-base-content/45">{m.plugin_form_hint()}</p>
@@ -366,9 +431,11 @@ kind = value
       </div>
     {/if}
 
-    <div class="flex justify-end gap-2 border-t border-base-content/8 pt-4">
+    </div>
+
+    <div class="flex shrink-0 justify-end gap-2 border-t border-base-content/8 pt-3">
       <Button variant="ghost" disabled={store.saving} onclick={() => { open = false }}>{m.cancel()}</Button>
       <Button variant="primary" loading={store.saving} disabled={kind === 'mono'} onclick={() => void save()} data-testid="plugin-save">{m.save()}</Button>
     </div>
   </div>
-</Modal>
+</Drawer>

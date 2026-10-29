@@ -109,15 +109,22 @@ async function openGatewayEditor(page: Page) {
   const edit = page.getByTestId('gateways-page').locator('button:visible').filter({ hasText: /编辑|Edit/ }).first()
   await edit.click()
   await expect(page.getByTestId('gateway-editor')).toBeVisible()
-  // 编辑器打开后异步读取完整配置；等到真实网关名出现再填写，避免覆盖默认草稿。
+  // 高级 JSON 默认折叠；先展开，再等待真实网关名出现后填写，避免覆盖默认草稿。
+  const advanced = page.getByTestId('gateway-editor').locator('details').first()
+  if (await advanced.count() > 0 && !(await advanced.evaluate(element => (element as HTMLDetailsElement).open)))
+    await advanced.locator('summary').first().click()
   await expect(page.getByTestId('gateway-json').locator('textarea')).toHaveValue(/"name":\s*"gateway-a"/)
 }
 
-/** 打开唯一路由的编辑器。 */
+/** 打开唯一路由的编辑器，并切到“高级 JSON”页签。 */
 async function openRouteEditor(page: Page) {
   const edit = page.getByTestId('routes-page').locator('button:visible').filter({ hasText: /编辑|Edit/ }).first()
   await edit.click()
   await expect(page.getByTestId('route-editor')).toBeVisible()
+  // 高级 JSON 与旧管理端一致放在独立页签；先切换再等待真实路由名。
+  const jsonTab = page.getByTestId('route-editor').getByRole('tab').filter({ hasText: /高级 JSON|Advanced JSON/ })
+  if (await jsonTab.isVisible().catch(() => false))
+    await jsonTab.click()
   await expect(page.getByTestId('route-json').locator('textarea')).toHaveValue(/"route_name":\s*"route-a"/)
 }
 

@@ -55,7 +55,7 @@
     <div class="border-t border-base-content/8 p-4 text-xs text-base-content/40"><span data-testid="app-version">v{store.info?.version}</span></div>
   </aside>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-    <header class="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-base-content/8 bg-base-100/95 px-3 backdrop-blur sm:px-4 lg:px-6">
+    <header class="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-base-content/8 bg-gradient-to-r from-primary/15 via-base-100/95 to-base-100/95 px-3 backdrop-blur sm:px-4 lg:px-6">
       <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <BareButton class="rounded-lg p-2 hover:bg-base-content/5 lg:hidden" ariaLabel={m.open_menu()} onclick={() => { menuOpen = !menuOpen }} data-testid="mobile-menu"><span class="icon-[tabler--menu-2] size-5"></span></BareButton>
         <span class="truncate text-sm font-medium">{title}</span>

@@ -479,8 +479,9 @@ test('administrator and user complete account, avatar, preference, password and 
     await userPage.getByRole('option', { name: 'English', exact: true }).click()
     await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
     await expect(userPage.locator('html')).toHaveAttribute('lang', 'en-US')
-    const themes = ['light', 'dark']
-    const selectedTheme = themes.find(theme => theme !== 'light') ?? themes[0]
+    // 自定义品牌主题：选项顺序与 shared 的 AVAILABLE_THEMES 一致，第二项为夜间。
+    const themes = ['sg-soft', 'sg-night']
+    const selectedTheme = themes[1]
     await userPage.getByTestId('profile-theme').click()
     await userPage.getByRole('option').nth(themes.indexOf(selectedTheme)).click()
     await expect(userPage.locator('html')).toHaveAttribute('data-theme', selectedTheme)

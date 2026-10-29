@@ -13,3 +13,81 @@
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
+
+/* 品牌色统一走 @h-ai/ui 的共享 token；自定义主题的 primary 直接引用它。 */
+:root {
+  --hai-theme-color-default: #5b5bd6;
+  /* 柔光主题的卡片圆角比 Tailwind 默认更大一档。 */
+  --radius-xl: 1rem;
+}
+
+/* ── 品牌主题：柔光（默认）与夜间；自定义主题名需与 shared 的 AVAILABLE_THEMES 保持一致 ── */
+@plugin "daisyui/theme" {
+  name: 'sg-soft';
+  default: false;
+  prefersdark: false;
+  color-scheme: light;
+  --color-base-100: #fbfbfd;
+  --color-base-200: #eef0fa;
+  --color-base-300: #e2e5f3;
+  --color-base-content: #18181b;
+  --color-primary: var(--hai-theme-color-default);
+  --color-primary-content: #ffffff;
+  --color-secondary: #8b5cf6;
+  --color-secondary-content: #ffffff;
+  --color-accent: #0ea5e9;
+  --color-accent-content: #ffffff;
+  --color-neutral: #1f2937;
+  --color-neutral-content: #e5e7eb;
+  --color-info: #0284c7;
+  --color-info-content: #ffffff;
+  --color-success: #16a34a;
+  --color-success-content: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-content: #ffffff;
+  --color-error: #dc2626;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.75rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: 'sg-night';
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: #0b1220;
+  --color-base-200: #111a2c;
+  --color-base-300: #1b2740;
+  --color-base-content: #e6edf7;
+  --color-primary: #22d3ee;
+  --color-primary-content: #04121c;
+  --color-secondary: #818cf8;
+  --color-secondary-content: #0b1220;
+  --color-accent: #34d399;
+  --color-accent-content: #052e1c;
+  --color-neutral: #070c16;
+  --color-neutral-content: #cbd5e1;
+  --color-info: #38bdf8;
+  --color-info-content: #04121c;
+  --color-success: #34d399;
+  --color-success-content: #052e1c;
+  --color-warning: #fbbf24;
+  --color-warning-content: #241300;
+  --color-error: #fb7185;
+  --color-error-content: #1f0a0f;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}

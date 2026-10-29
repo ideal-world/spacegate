@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 480" width="720" height="480" role="img" aria-label="SpaceGate 控制面示意图">
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1526"/>
+      <stop offset="1" stop-color="#111c33"/>
+    </linearGradient>
+    <linearGradient id="gateFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6d7bff"/>
+      <stop offset="1" stop-color="#3f4ae0"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6d7bff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#8ea1ff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#5eead4" stop-opacity="0.85"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6d7bff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#6d7bff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity="0.05"/>
+    </pattern>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#050a16" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="720" height="480" rx="28" fill="url(#surface)"/>
+  <rect width="720" height="480" rx="28" fill="url(#grid)"/>
+  <circle cx="360" cy="232" r="170" fill="url(#glow)"/>
+
+  <!-- 顶部窗口条 -->
+  <g>
+    <circle cx="40" cy="36" r="5" fill="#ff6b6b" fill-opacity="0.8"/>
+    <circle cx="58" cy="36" r="5" fill="#f5c451" fill-opacity="0.8"/>
+    <circle cx="76" cy="36" r="5" fill="#4ade80" fill-opacity="0.8"/>
+    <text x="108" y="41" fill="#9fb0cd" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">spacegate · control plane</text>
+    <g transform="translate(560 22)">
+      <rect width="128" height="28" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.12"/>
+      <circle cx="18" cy="14" r="4" fill="#5eead4"/>
+      <text x="30" y="19" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">v1.0 · healthy</text>
+    </g>
+  </g>
+
+  <!-- 客户端 -->
+  <g font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <g transform="translate(44 132)" filter="url(#soft)">
+      <rect width="150" height="52" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect x="14" y="15" width="22" height="22" rx="7" fill="#6d7bff" fill-opacity="0.22"/>
+      <path d="M20 21h10v10H20z" fill="none" stroke="#a5b4fc" stroke-width="1.6"/>
+      <text x="46" y="26" fill="#e2e8f0" font-size="13" font-weight="600">Web Console</text>
+      <text x="46" y="41" fill="#8ea1ff" font-size="11" font-family="ui-monospace, Menlo, monospace">:4173</text>
+    </g>
+    <g transform="translate(44 200)" filter="url(#soft)">
+      <rect width="150" height="52" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect x="14" y="15" width="22" height="22" rx="7" fill="#5eead4" fill-opacity="0.18"/>
+      <rect x="20" y="20" width="10" height="13" rx="2.5" fill="none" stroke="#5eead4" stroke-width="1.6"/>
+      <text x="46" y="26" fill="#e2e8f0" font-size="13" font-weight="600">Mobile / App</text>
+      <text x="46" y="41" fill="#7dd3fc" font-size="11" font-family="ui-monospace, Menlo, monospace">capacitor</text>
+    </g>
+    <g transform="translate(44 268)" filter="url(#soft)">
+      <rect width="150" height="52" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect x="14" y="15" width="22" height="22" rx="7" fill="#f5c451" fill-opacity="0.18"/>
+      <path d="M21 31c0-6 10-6 10 0" fill="none" stroke="#f5c451" stroke-width="1.6"/>
+      <circle cx="26" cy="22" r="2" fill="#f5c451"/>
+      <text x="46" y="26" fill="#e2e8f0" font-size="13" font-weight="600">Miniapp / API</text>
+      <text x="46" y="41" fill="#f5c451" font-size="11" font-family="ui-monospace, Menlo, monospace">/api/v1</text>
+    </g>
+  </g>
+
+  <!-- 连接线：客户端 → 网关 -->
+  <g fill="none" stroke="url(#flow)" stroke-width="2" stroke-linecap="round">
+    <path d="M200 158 C 260 158, 268 216, 320 226"/>
+    <path d="M200 226 L 320 230"/>
+    <path d="M200 294 C 260 294, 268 244, 320 234"/>
+  </g>
+  <g fill="#9db0ff">
+    <circle cx="258" cy="190" r="3.2"/>
+    <circle cx="254" cy="230" r="3.2"/>
+    <circle cx="258" cy="270" r="3.2"/>
+  </g>
+
+  <!-- 网关节点 -->
+  <g transform="translate(360 232)">
+    <circle r="86" fill="#6d7bff" fill-opacity="0.12"/>
+    <circle r="66" fill="#6d7bff" fill-opacity="0.14" stroke="#8ea1ff" stroke-opacity="0.35"/>
+    <path d="M0 -44 L38 -22 L38 22 L0 44 L-38 22 L-38 -22 Z" fill="url(#gateFill)" stroke="#c7d2fe" stroke-opacity="0.55" stroke-width="1.5"/>
+    <path d="M-13 -16v32M13 -16v32M-13 -4h26" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round"/>
+    <text y="72" text-anchor="middle" fill="#e2e8f0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="600">SpaceGate</text>
+    <text y="90" text-anchor="middle" fill="#8b9bb8" font-family="ui-monospace, Menlo, monospace" font-size="11">rate limit · auth · route</text>
+  </g>
+
+  <!-- 连接线：网关 → 上游 -->
+  <g fill="none" stroke="url(#flow)" stroke-width="2" stroke-linecap="round">
+    <path d="M400 226 C 452 216, 462 158, 520 158"/>
+    <path d="M400 230 L 520 226"/>
+    <path d="M400 234 C 452 244, 462 294, 520 294"/>
+  </g>
+  <g fill="#5eead4">
+    <circle cx="462" cy="190" r="3.2"/>
+    <circle cx="466" cy="230" r="3.2"/>
+    <circle cx="462" cy="270" r="3.2"/>
+  </g>
+
+  <!-- 上游服务 -->
+  <g font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <g transform="translate(524 132)" filter="url(#soft)">
+      <rect width="152" height="52" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect x="14" y="15" width="22" height="22" rx="7" fill="#6d7bff" fill-opacity="0.22"/>
+      <path d="M20 26h10M25 21v10" stroke="#a5b4fc" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="46" y="26" fill="#e2e8f0" font-size="13" font-weight="600">HTTP upstream</text>
+      <text x="46" y="41" fill="#8ea1ff" font-size="11" font-family="ui-monospace, Menlo, monospace">svc-a · svc-b</text>
+    </g>
+    <g transform="translate(524 200)" filter="url(#soft)">
+      <rect width="152" height="52" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect x="14" y="15" width="22" height="22" rx="7" fill="#5eead4" fill-opacity="0.18"/>
+      <path d="M20 27l4-6 3 4 4-7" fill="none" stroke="#5eead4" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="46" y="26" fill="#e2e8f0" font-size="13" font-weight="600">AI Gateway</text>
+      <text x="46" y="41" fill="#7dd3fc" font-size="11" font-family="ui-monospace, Menlo, monospace">queue · quota</text>
+    </g>
+    <g transform="translate(524 268)" filter="url(#soft)">
+      <rect width="152" height="52" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+      <rect x="14" y="15" width="22" height="22" rx="7" fill="#f5c451" fill-opacity="0.18"/>
+      <path d="M21 30h8v-8h-8zM24 18l3 3-3 3" fill="none" stroke="#f5c451" stroke-width="1.6" stroke-linejoin="round"/>
+      <text x="46" y="26" fill="#e2e8f0" font-size="13" font-weight="600">MCP / Wasm</text>
+      <text x="46" y="41" fill="#f5c451" font-size="11" font-family="ui-monospace, Menlo, monospace">plugins</text>
+    </g>
+  </g>
+
+  <!-- 底部指标 -->
+  <g transform="translate(44 372)" font-family="ui-sans-serif, system-ui, sans-serif">
+    <g>
+      <text fill="#8b9bb8" font-size="11">路由</text>
+      <text y="24" fill="#e2e8f0" font-size="20" font-weight="600">128</text>
+    </g>
+    <g transform="translate(150 0)">
+      <text fill="#8b9bb8" font-size="11">请求 / 秒</text>
+      <text y="24" fill="#e2e8f0" font-size="20" font-weight="600">2.3k</text>
+    </g>
+    <g transform="translate(300 0)">
+      <text fill="#8b9bb8" font-size="11">在线实例</text>
+      <text y="24" fill="#e2e8f0" font-size="20" font-weight="600">3 / 3</text>
+    </g>
+    <g transform="translate(450 0)">
+      <text fill="#8b9bb8" font-size="11">版本</text>
+      <text y="24" fill="#5eead4" font-size="20" font-weight="600">v1</text>
+    </g>
+  </g>
+</svg>

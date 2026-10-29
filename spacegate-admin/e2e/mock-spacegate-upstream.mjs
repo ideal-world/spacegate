@@ -107,7 +107,7 @@ function createState() {
       policy: 'queue',
       rps: 20,
       burst: 40,
-      ttl_seconds: 60,
+      ttl_secs: 60,
     }],
   }
 }

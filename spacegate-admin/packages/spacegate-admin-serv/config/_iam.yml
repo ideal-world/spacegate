@@ -82,12 +82,12 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ui:
   variant: split
-  # title: Account center
-  # subtitle: Welcome back
-  # brandTitle: Your application
-  # brandText: Sign in securely
-  # logoUrl: /logo.svg
-  # illustrationUrl: /auth-illustration.svg
+  # title/subtitle 留空时使用框架内置的“登录/欢迎回来”文案。
+  brandTitle: SpaceGate
+  brandText: 网关、路由、插件与 AI 队列集中管理；每次变更都有版本，写入必须基于最新版本，冲突显式提示。
+  # 相对路径由各端 public/ 提供；Web/App/Desktop 各自维护同名资源，也可改为绝对 HTTPS 地址。
+  logoUrl: /logo.svg
+  illustrationUrl: /auth-illustration.svg
 
   # 密码策略
 password:

@@ -62,20 +62,27 @@
   {#if store.initializing}
     <div role='status' aria-live='polite' class='grid min-h-dvh place-items-center bg-base-200/50'><div class='w-72 space-y-4'><Skeleton variant='title' /><Skeleton count={3} /><p class='text-center text-sm text-base-content/50'>{m.home_loading()}</p></div></div>
   {:else if !store.user || resetToken}
-    <header class='border-b border-base-content/8 bg-base-100 px-6 py-3 text-sm font-medium'>{store.info?.name}</header>
-    <main data-testid='login-page'>
-      {#if !store.info || !store.authConfig}
-        <section class='mx-auto mt-20 max-w-md space-y-4 p-6'>
-          <Alert variant='error'>{store.error || m.home_error()}</Alert>
-          <Button variant='primary' onclick={() => void store.initialize(apiOptions, onLocaleChange)}>{m.home_refresh()}</Button>
-        </section>
-      {:else}
-        <div data-testid='login-form'>
-          {#if store.authConfig && store.error}<Alert variant='error' class='mx-auto max-w-lg'>{store.error}</Alert>{/if}
-          <AuthPanel config={authConfig} actions={managementAuthActions} {resetToken} initialMode={resetToken ? 'reset' : 'login'} error={store.authConfig ? '' : store.error} onretry={() => void store.initialize(apiOptions, onLocaleChange)} onauthenticated={authenticated} />
-        </div>
-        <footer class='border-t border-base-content/8 p-3 text-center text-xs text-base-content/50'><span data-testid='app-name'>{store.info.name}</span> · <span data-testid='app-version'>v{store.info.version}</span> · <span data-testid='app-environment'>{store.info.env}</span></footer>
-      {/if}
+    <!-- 认证页占满视口：头部与页脚浮在右上/右下，认证区拿到完整高度，split 插图不会被压扁裁切。 -->
+    <main class='relative flex h-dvh flex-col overflow-hidden bg-base-100' data-testid='login-page'>
+      <header class='pointer-events-none absolute inset-x-0 top-0 z-10 flex h-14 items-center justify-end px-4 sm:px-6'>
+        <h1 class='truncate text-sm font-medium text-base-content/55'>{store.info?.name}</h1>
+      </header>
+      <div class='flex min-h-0 flex-1 flex-col overflow-y-auto'>
+        {#if !store.info || !store.authConfig}
+          <section class='mx-auto mt-20 max-w-md space-y-4 p-6'>
+            <Alert variant='error'>{store.error || m.home_error()}</Alert>
+            <Button variant='primary' onclick={() => void store.initialize(apiOptions, onLocaleChange)}>{m.home_refresh()}</Button>
+          </section>
+        {:else}
+          <div data-testid='login-form' class='flex min-h-0 flex-1 flex-col'>
+            {#if store.authConfig && store.error}<Alert variant='error' class='mx-auto mt-4 max-w-lg'>{store.error}</Alert>{/if}
+            <div class='flex min-h-0 flex-1 flex-col [&>div]:min-h-0 [&>div]:flex-1'>
+              <AuthPanel config={authConfig} actions={managementAuthActions} {resetToken} initialMode={resetToken ? 'reset' : 'login'} error={store.authConfig ? '' : store.error} onretry={() => void store.initialize(apiOptions, onLocaleChange)} onauthenticated={authenticated} />
+            </div>
+          </div>
+        {/if}
+      </div>
+      <footer class='pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-end gap-1.5 p-3 text-xs text-base-content/45'><span data-testid='app-name'>{store.info?.name}</span> · <span data-testid='app-version'>v{store.info?.version}</span> · <span data-testid='app-environment'>{store.info?.env}</span></footer>
     </main>
   {:else}
     <AppShell {platform} {store} onhelp={() => guide.openHelp()}>

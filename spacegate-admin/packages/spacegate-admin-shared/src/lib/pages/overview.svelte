@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, Empty, PageHeader } from '@h-ai/ui/components/compounds/index'
+  import { Card, Empty, PageHeader, Skeleton } from '@h-ai/ui/components/compounds/index'
   import { Badge, Button } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
   import { asRecord, asRecordArray, readNumber, readString, routeMatchSummary } from '../spacegate/model.js'
+  import StatCard from '../components/layouts/StatCard.svelte'
 
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
@@ -13,6 +14,7 @@
   const listeners = $derived(asRecordArray(gateway?.listeners))
   const parameters = $derived(asRecord(gateway?.parameters))
   const routePreview = $derived(store.routes.slice(0, 6))
+  const listenerSummary = $derived(listeners.map(item => `${readString(item, 'name')}:${readNumber(item, 'port') ?? ''}`).join(', ') || '—')
 </script>
 
 <section class="space-y-5" data-testid="overview-page">
@@ -25,40 +27,47 @@
     {/snippet}
   </PageHeader>
 
-  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-    <Card bordered shadow={false}>
-      <p class="text-xs text-base-content/50">{m.overview_gateway_count()}</p>
-      <p class="mt-2 text-2xl font-semibold" data-testid="overview-gateways">{store.gateways.length}</p>
-      <Button class="mt-3" size="xs" variant="ghost" onclick={() => void store.navigate('gateways')}>{m.overview_open()}</Button>
-    </Card>
-    <Card bordered shadow={false}>
-      <p class="text-xs text-base-content/50">{m.overview_route_count()}</p>
-      <p class="mt-2 text-2xl font-semibold" data-testid="overview-routes">{store.routes.length}</p>
-      <Button class="mt-3" size="xs" variant="ghost" onclick={() => void store.navigate('routes')}>{m.overview_open()}</Button>
-    </Card>
-    <Card bordered shadow={false}>
-      <p class="text-xs text-base-content/50">{m.overview_plugin_count()}</p>
-      <p class="mt-2 text-2xl font-semibold" data-testid="overview-plugins">{store.plugins.length}</p>
-      <Button class="mt-3" size="xs" variant="ghost" onclick={() => void store.navigate('plugins')}>{m.overview_open()}</Button>
-    </Card>
-    <Card bordered shadow={false}>
-      <p class="text-xs text-base-content/50">{m.overview_instance_health()}</p>
-      <p class="mt-2 text-2xl font-semibold" data-testid="overview-health">{online}/{store.instances.length}</p>
-      <Button class="mt-3" size="xs" variant="ghost" onclick={() => void store.navigate('instances')}>{m.overview_open()}</Button>
-    </Card>
+  <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <StatCard label={m.overview_gateway_count()} value={store.gateways.length} icon="icon-[tabler--network]" valueTestId="overview-gateways">
+      {#snippet action()}
+        <Button size="xs" variant="ghost" onclick={() => void store.navigate('gateways')}>{m.overview_open()}</Button>
+      {/snippet}
+    </StatCard>
+    <StatCard label={m.overview_route_count()} value={store.routes.length} icon="icon-[tabler--route]" valueTestId="overview-routes">
+      {#snippet action()}
+        <Button size="xs" variant="ghost" onclick={() => void store.navigate('routes')}>{m.overview_open()}</Button>
+      {/snippet}
+    </StatCard>
+    <StatCard label={m.overview_plugin_count()} value={store.plugins.length} icon="icon-[tabler--plug]" valueTestId="overview-plugins">
+      {#snippet action()}
+        <Button size="xs" variant="ghost" onclick={() => void store.navigate('plugins')}>{m.overview_open()}</Button>
+      {/snippet}
+    </StatCard>
+    <StatCard label={m.overview_instance_health()} value={`${online}/${store.instances.length}`} icon="icon-[tabler--server-2]" valueTestId="overview-health">
+      {#snippet action()}
+        <Button size="xs" variant="ghost" onclick={() => void store.navigate('instances')}>{m.overview_open()}</Button>
+      {/snippet}
+    </StatCard>
   </div>
 
-  <div class="grid gap-5 xl:grid-cols-2">
-    <Card title={m.overview_current_gateway()} bordered shadow={false}>
-      {#if gateway}
-        <div class="space-y-3">
+  <div class="grid items-start gap-5 xl:grid-cols-2">
+    <Card title={m.overview_current_gateway()} bordered>
+      {#if store.loading && !gateway}
+        <div class="space-y-3"><Skeleton variant="title" /><Skeleton count={3} /></div>
+      {:else if gateway}
+        <div class="space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <span class="font-medium">{readString(gateway, 'name')}</span>
             <Badge size="sm" variant="ghost">{m.version()} {store.version}</Badge>
           </div>
-          <p class="text-sm text-base-content/60">{m.gateway_listener_summary({ listeners: listeners.map(item => `${readString(item, 'name')}:${readNumber(item, 'port') ?? ''}`).join(', ') || '—' })}</p>
-          <p class="text-sm text-base-content/60">{m.gateway_plugin_count({ count: String(asRecordArray(gateway?.plugins).length) })}</p>
-          <p class="break-all text-xs text-base-content/45">{m.gateway_redis_url()}: {readString(parameters, 'redis_url') || '—'}</p>
+          <dl class="grid gap-2 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-4 sm:gap-y-2">
+            <dt class="text-base-content/45">{m.gateway_listeners()}</dt>
+            <dd class="min-w-0 break-all font-mono text-xs sm:text-sm">{listenerSummary}</dd>
+            <dt class="text-base-content/45">{m.gateway_plugins()}</dt>
+            <dd>{asRecordArray(gateway?.plugins).length}</dd>
+            <dt class="text-base-content/45">{m.gateway_redis_url()}</dt>
+            <dd class="min-w-0 break-all font-mono text-xs">{readString(parameters, 'redis_url') || '—'}</dd>
+          </dl>
           <div class="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onclick={() => void store.navigate('gateways')}>{m.gateway_edit()}</Button>
             <Button size="sm" variant="ghost" onclick={() => void store.navigate('routes')}>{m.overview_configure_routes()}</Button>
@@ -73,9 +82,12 @@
       {/if}
     </Card>
 
-    <Card title={m.overview_instance_health()} bordered shadow={false}>
+    <Card title={m.overview_instance_health()} bordered>
+      {#snippet footer()}
+        <Button size="xs" variant="outline" onclick={() => void store.navigate('instances')}>{m.overview_open()}</Button>
+      {/snippet}
       {#if store.instances.length === 0}
-        <Empty title={m.instance_empty()} description={m.overview_health_empty()} />
+        <Empty size="sm" title={m.instance_empty()} description={m.overview_health_empty()} />
       {:else}
         <ul class="divide-y divide-base-content/8">
           {#each store.instances as instance (instance)}
@@ -87,13 +99,14 @@
             </li>
           {/each}
         </ul>
-        <Button class="mt-3" size="sm" variant="ghost" onclick={() => void store.navigate('instances')}>{m.instance_reload_global()}</Button>
       {/if}
     </Card>
   </div>
 
-  <Card title={m.overview_routes()} bordered shadow={false}>
-    {#if routePreview.length === 0}
+  <Card title={m.overview_routes()} bordered>
+    {#if store.loading && routePreview.length === 0}
+      <div class="space-y-2"><Skeleton count={3} /></div>
+    {:else if routePreview.length === 0}
       <Empty title={m.route_empty()} description={m.routes_description()} />
     {:else}
       <div class="space-y-2">

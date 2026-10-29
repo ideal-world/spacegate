@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AdminRole } from 'spacegate-admin-contract'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, Modal } from '@h-ai/ui/components/compounds/index'
+  import { Card, Modal, PageHeader } from '@h-ai/ui/components/compounds/index'
   import { Badge, Button, Textarea } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
 
@@ -22,14 +22,22 @@
 </script>
 
 <section class="space-y-5" data-testid="roles-page">
-  <div class="flex items-center justify-between gap-3">
-    <div><h1 class="text-xl font-semibold tracking-tight">{m.nav_roles()}</h1><p class="mt-1 text-sm text-base-content/50">{m.roles_description()}</p></div>
-    <Button variant="outline" loading={store.loading} onclick={() => void store.loadRoles()}>{m.home_refresh()}</Button>
-  </div>
+  <PageHeader title={m.nav_roles()} description={m.roles_description()}>
+    {#snippet actions()}
+      <Button variant="outline" size="sm" loading={store.loading} onclick={() => void store.loadRoles()}>{m.home_refresh()}</Button>
+    {/snippet}
+  </PageHeader>
+
   <div class="grid gap-5 md:grid-cols-2">
     {#each store.roles as role (role.id)}
-      <Card bordered shadow={false}>
-        <div class="flex items-center justify-between gap-3"><h2 class="text-lg font-semibold">{role.code === 'admin' ? m.role_admin() : m.role_user()}</h2><Badge variant={role.code === 'admin' ? 'primary' : 'ghost'}>{role.code}</Badge></div>
+      <Card bordered>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary" aria-hidden="true"><span class="{role.code === 'admin' ? 'icon-[tabler--shield-lock]' : 'icon-[tabler--user]'} size-4.5"></span></span>
+            <h2 class="text-lg font-semibold">{role.code === 'admin' ? m.role_admin() : m.role_user()}</h2>
+          </div>
+          <Badge variant={role.code === 'admin' ? 'primary' : 'ghost'}>{role.code}</Badge>
+        </div>
         <p class="mt-3 text-sm leading-6 text-base-content/60">{role.code === 'admin' ? m.role_admin_capabilities() : m.role_user_capabilities()}</p>
         <p class="mt-4 text-xs text-base-content/45">{m.role_members({ count: String(role.userCount) })}</p>
         {#if role.description}<p class="mt-3 text-sm text-base-content/70">{role.description}</p>{/if}

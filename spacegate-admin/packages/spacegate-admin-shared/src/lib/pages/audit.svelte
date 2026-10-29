@@ -4,6 +4,8 @@
   import { DataTable, Modal, Pagination } from '@h-ai/ui/components/compounds/index'
   import { Button, Input } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
+  import DataSurface from '../components/layouts/DataSurface.svelte'
+  import ListPageLayout from '../components/layouts/ListPageLayout.svelte'
 
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
@@ -17,19 +19,21 @@
   ])
 </script>
 
-<section class="flex min-h-0 flex-1 flex-col gap-5" data-testid="audit-page">
-  <div class="shrink-0"><h1 class="text-xl font-semibold tracking-tight">{m.nav_audit()}</h1><p class="mt-1 text-sm text-base-content/50">{m.audit_description()}</p></div>
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100">
-    <form class="grid shrink-0 items-end gap-3 border-b border-base-content/8 p-4 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] [&_.fieldset]:p-0" onsubmit={(event) => {
-      event.preventDefault()
-      void store.loadAudit()
-    }}>
-      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-action">{m.audit_action()}</label><Input id="audit-action" bind:value={store.auditAction} placeholder={m.audit_action_placeholder()} data-testid="audit-action" /></div>
-      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-resource">{m.audit_resource()}</label><Input id="audit-resource" bind:value={store.auditResource} placeholder={m.audit_resource_placeholder()} data-testid="audit-resource" /></div>
-      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-start">{m.audit_start()}</label><input id="audit-start" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditStartDate} /></div>
-      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-end">{m.audit_end()}</label><input id="audit-end" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditEndDate} /></div>
-      <Button type="submit" variant="outline" disabled={store.loading} class="h-10 w-full">{m.search()}</Button>
-    </form>
+<ListPageLayout title={m.nav_audit()} description={m.audit_description()} testid="audit-page" contentClass="min-h-0 flex-1">
+  <DataSurface class="min-h-0 flex-1">
+    {#snippet toolbar()}
+      <form class="grid w-full items-end gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] [&_.fieldset]:p-0" onsubmit={(event) => {
+        event.preventDefault()
+        void store.loadAudit()
+      }}>
+        <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-action">{m.audit_action()}</label><Input id="audit-action" bind:value={store.auditAction} placeholder={m.audit_action_placeholder()} data-testid="audit-action" /></div>
+        <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-resource">{m.audit_resource()}</label><Input id="audit-resource" bind:value={store.auditResource} placeholder={m.audit_resource_placeholder()} data-testid="audit-resource" /></div>
+        <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-start">{m.audit_start()}</label><input id="audit-start" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditStartDate} /></div>
+        <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-end">{m.audit_end()}</label><input id="audit-end" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditEndDate} /></div>
+        <Button type="submit" variant="outline" disabled={store.loading} class="h-10 w-full">{m.search()}</Button>
+      </form>
+    {/snippet}
+
     <div class="flex min-h-0 flex-1 flex-col overflow-auto">
       <DataTable data={store.audit} {columns} keyField="id" loading={store.loading} striped={false} class="min-h-0 flex-1 overflow-auto">
         {#snippet cell(entry, key)}
@@ -42,9 +46,12 @@
         {#snippet actions(entry)}<Button size="xs" variant="ghost" onclick={() => { selected = entry }}>{m.details()}</Button>{/snippet}
       </DataTable>
     </div>
-    <div class="mt-auto shrink-0 border-t border-base-content/8 p-4"><Pagination page={store.auditPage} total={store.auditTotal} pageSize={store.pageSize} onchange={page => void store.loadAudit(page)} /></div>
-  </div>
-</section>
+
+    {#snippet footer()}
+      <Pagination page={store.auditPage} total={store.auditTotal} pageSize={store.pageSize} onchange={page => void store.loadAudit(page)} />
+    {/snippet}
+  </DataSurface>
+</ListPageLayout>
 
 <Modal open={!!selected} title={m.audit_details()} onclose={() => { selected = null }}>
   {#if selected}

@@ -217,6 +217,43 @@ export function initSchemaDefaults(schema: unknown, value: unknown, root: unknow
   return record.default === undefined ? undefined : cloneValue(record.default)
 }
 
+/**
+ * 根据 schema 生成示例值，优先使用 default/example/examples，其次按类型生成占位值。
+ * 与旧管理端 PluginForm 的 `exampleValue` 行为一致，用于“填入示例 / 复制示例”按钮。
+ * @example schemaExample({ type: 'object', properties: { enabled: { type: 'boolean' } } })
+ */
+export function schemaExample(schema: unknown, root: unknown = schema, depth = 0): unknown {
+  if (depth > 4)
+    return {}
+  const record = resolveSchema(schema, root)
+  if (record.default !== undefined)
+    return cloneValue(record.default)
+  if (record.example !== undefined)
+    return cloneValue(record.example)
+  if (Array.isArray(record.examples) && record.examples.length > 0)
+    return cloneValue(record.examples[0])
+  const kind = schemaKind(record, root)
+  if (kind === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, property] of schemaProperties(record, root))
+      result[key] = schemaExample(property, root, depth + 1)
+    return result
+  }
+  if (kind === 'array')
+    return []
+  if (kind === 'boolean')
+    return record.default === undefined ? false : cloneValue(record.default)
+  if (kind === 'number' || kind === 'integer')
+    return record.default === undefined ? 0 : cloneValue(record.default)
+  if (kind === 'enum') {
+    const options = enumOptions(record, root)
+    return options[0]?.value ?? ''
+  }
+  if (kind === 'json')
+    return {}
+  return ''
+}
+
 function valueMatchesSchema(schema: SchemaRecord, value: unknown): boolean {
   const type = schemaType(schema)
   if (!type)

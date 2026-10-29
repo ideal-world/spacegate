@@ -12,7 +12,8 @@ import { SUPPORTED_LOCALES } from 'spacegate-admin-contract'
 import { serverM } from './messages.js'
 
 const ROLE_CODES = new Set<AdminRoleCode>(['admin', 'user'])
-const SUPPORTED_THEMES = ['light', 'dark'] as readonly string[]
+// 品牌主题 sg-soft / sg-night；保留 light / dark 以兼容历史用户元数据。
+const SUPPORTED_THEMES = ['sg-soft', 'sg-night', 'light', 'dark'] as readonly string[]
 let adminMutationActive = false
 
 /** 管理写操作串行化，锁内重新鉴权，防止两个管理员同时互相删除或降级。 */

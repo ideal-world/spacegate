@@ -5,6 +5,8 @@
   import { Avatar, Badge, BareInput, Button, Checkbox, Input, Select } from '@h-ai/ui/components/primitives/index'
   import { PasswordInput } from '@h-ai/ui/components/scenes/iam/index'
   import * as m from '../paraglide/messages.js'
+  import DataSurface from '../components/layouts/DataSurface.svelte'
+  import ListPageLayout from '../components/layouts/ListPageLayout.svelte'
 
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
@@ -27,6 +29,9 @@
   ])
   const roleOptions = $derived([{ value: 'admin' as const, label: m.role_admin() }, { value: 'user' as const, label: m.role_user() }])
   const statusOptions = $derived([{ value: 'all', label: m.all_statuses() }, { value: 'enabled', label: m.enabled() }, { value: 'disabled', label: m.disabled() }])
+  // 初始密码下限跟随服务端策略，避免按钮先放行、提交时被服务端拒绝。
+  const minPasswordLength = $derived(store.authConfig?.password.minLength ?? 8)
+  const canSubmit = $derived(!!editing || password.length >= minPasswordLength)
 
   function openEditor(user: AdminUser | null) {
     editing = user
@@ -63,25 +68,25 @@
   }
 </script>
 
-<section class="flex min-h-0 flex-1 flex-col gap-5" data-testid="users-page">
-  <div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-xl font-semibold tracking-tight">{m.nav_users()}</h1>
-      <p class="mt-1 text-sm text-base-content/50">{m.users_description()}</p>
-    </div>
+<ListPageLayout title={m.nav_users()} description={m.users_description()} testid="users-page" contentClass="min-h-0 flex-1">
+  {#snippet actions()}
     <Button variant="primary" onclick={() => openEditor(null)} data-testid="create-user">{m.user_create()}</Button>
-  </div>
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100">
-    <form class="flex shrink-0 flex-wrap items-center gap-3 border-b border-base-content/8 p-4" onsubmit={(event) => {
-      event.preventDefault()
-      void store.loadUsers()
-    }}>
-      <div class="min-w-52 flex-1">
-        <Input type="search" bind:value={store.usersSearch} placeholder={m.users_search()} data-testid="users-search" />
-      </div>
-      <div class="w-40"><Select bind:value={store.usersStatus} options={statusOptions} /></div>
-      <Button type="submit" variant="outline" disabled={store.loading}>{m.search()}</Button>
-    </form>
+  {/snippet}
+
+  <DataSurface class="min-h-0 flex-1">
+    {#snippet toolbar()}
+      <form class="flex w-full flex-wrap items-center gap-3" onsubmit={(event) => {
+        event.preventDefault()
+        void store.loadUsers()
+      }}>
+        <div class="min-w-0 flex-1 sm:min-w-52">
+          <Input type="search" bind:value={store.usersSearch} placeholder={m.users_search()} data-testid="users-search" />
+        </div>
+        <div class="w-full sm:w-40"><Select bind:value={store.usersStatus} options={statusOptions} /></div>
+        <Button type="submit" variant="outline" disabled={store.loading}>{m.search()}</Button>
+      </form>
+    {/snippet}
+
     <div class="hidden min-h-0 flex-1 overflow-auto md:flex md:flex-col">
       <DataTable data={store.users} {columns} keyField="id" loading={store.loading} striped={false} class="min-h-0 flex-1 overflow-auto">
         {#snippet cell(user, key)}
@@ -105,14 +110,14 @@
         {/snippet}
       </DataTable>
     </div>
-    <div class="min-h-0 flex-1 space-y-3 overflow-auto p-4 md:hidden" data-testid="user-cards">
+    <div class="min-h-0 flex-1 space-y-3 overflow-auto p-3 sm:p-4 md:hidden" data-testid="user-cards">
       {#if store.loading}
         <Skeleton count={3} />
       {:else if store.users.length === 0}
         <p class="py-8 text-center text-sm text-base-content/50">{m.users_empty()}</p>
       {:else}
         {#each store.users as user (user.id)}
-          <Card bordered shadow={false}>
+          <Card bordered>
             <div class="flex items-center gap-3">
               <Avatar name={user.displayName || user.username} src={user.avatarUrl} size="sm" />
               <div class="min-w-0 flex-1"><p class="truncate font-medium">{user.displayName || user.username}</p><p class="truncate text-xs text-base-content/45">@{user.username}</p></div>
@@ -127,11 +132,12 @@
         {/each}
       {/if}
     </div>
-    <div class="mt-auto shrink-0 border-t border-base-content/8 p-4">
+
+    {#snippet footer()}
       <Pagination page={store.usersPage} total={store.usersTotal} pageSize={store.pageSize} onchange={page => void store.loadUsers(page)} />
-    </div>
-  </div>
-</section>
+    {/snippet}
+  </DataSurface>
+</ListPageLayout>
 
 <Modal bind:open={editorOpen} title={editing ? m.user_edit() : m.user_create()} closeOnBackdrop={!store.saving} closeOnEscape={!store.saving} size="3xl" data-testid="user-editor">
   <form onsubmit={submit}>
@@ -142,14 +148,14 @@
       <FormField label={m.user_display_name()}><Input bind:value={displayName} maxlength={100} data-testid="user-display-name" /></FormField>
       <FormField label={m.user_email()}><Input type="email" bind:value={email} data-testid="user-email" /></FormField>
       {#if !editing}
-        <FormField label={m.user_password()} hint={m.initial_password_rules({ min: store.authConfig?.password.minLength ?? 8 })} required><PasswordInput required bind:value={password} autocomplete="new-password" minLength={store.authConfig?.password.minLength ?? 8} data-testid="user-password" /></FormField>
+        <FormField label={m.user_password()} hint={m.initial_password_rules({ min: minPasswordLength })} required><PasswordInput required bind:value={password} autocomplete="new-password" minLength={minPasswordLength} data-testid="user-password" /></FormField>
       {/if}
       <FormField label={m.user_role()}><Select bind:value={role} options={roleOptions} disabled={editing?.id === store.user?.id} data-testid="user-role" /></FormField>
       <Checkbox bind:checked={enabled} label={m.account_enabled()} disabled={editing?.id === store.user?.id} />
       {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}
       <div class="flex justify-end gap-2 border-t border-base-content/8 pt-4">
         <Button variant="ghost" disabled={store.saving} onclick={() => { editorOpen = false }}>{m.cancel()}</Button>
-        <Button type="submit" variant="primary" loading={store.saving} disabled={!editing && password.length < 8} data-testid="user-save">{m.save()}</Button>
+        <Button type="submit" variant="primary" loading={store.saving} disabled={!canSubmit} data-testid="user-save">{m.save()}</Button>
       </div>
     </FormLayout>
   </form>

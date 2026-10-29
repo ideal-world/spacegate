@@ -1,10 +1,13 @@
 <script lang="ts">
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, DataTable, Empty, PageHeader, Skeleton } from '@h-ai/ui/components/compounds/index'
+  import { Card, DataTable, Empty, Skeleton } from '@h-ai/ui/components/compounds/index'
   import { Badge, Button, Input } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
   import { asRecord, readNumber, readString } from '../spacegate/model.js'
   import GatewayEditor from '../components/spacegate/GatewayEditor.svelte'
+  import DataSurface from '../components/layouts/DataSurface.svelte'
+  import ListPageLayout from '../components/layouts/ListPageLayout.svelte'
+  import ResponsiveList from '../components/layouts/ResponsiveList.svelte'
 
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
@@ -49,55 +52,47 @@
   }
 </script>
 
-<section class="space-y-5" data-testid="gateways-page">
-  <PageHeader title={m.nav_gateways()} description={m.gateways_description()}>
-    {#snippet actions()}
-      <div class="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" loading={store.loading} onclick={() => void store.loadGateways()}>{m.home_refresh()}</Button>
-        <Button variant="primary" size="sm" onclick={openCreate} data-testid="gateway-create">{m.gateway_create()}</Button>
+<ListPageLayout title={m.nav_gateways()} description={m.gateways_description()} testid="gateways-page" contentClass="min-h-0 flex-1">
+  {#snippet actions()}
+    <Button variant="outline" size="sm" loading={store.loading} onclick={() => void store.loadGateways()}>{m.home_refresh()}</Button>
+    <Button variant="primary" size="sm" onclick={openCreate} data-testid="gateway-create">{m.gateway_create()}</Button>
+  {/snippet}
+
+  <DataSurface class="min-h-0 flex-1">
+    {#snippet toolbar()}
+      <div class="w-full sm:max-w-72">
+        <Input type="search" bind:value={search} placeholder={m.gateways_search()} />
       </div>
     {/snippet}
-  </PageHeader>
-
-  <div class="rounded-xl border border-base-content/8 bg-base-100">
-    <div class="border-b border-base-content/8 p-4">
-      <Input type="search" bind:value={search} placeholder={m.gateways_search()} />
-    </div>
     {#if store.loading && store.gatewaySummaries.length === 0}
       <div class="p-4"><Skeleton count={4} /></div>
-    {:else if rows.length === 0}
-      <div class="p-6">
-        <Empty title={m.gateway_empty()} description={m.gateways_description()}>
-          {#snippet action()}<Button size="sm" variant="primary" onclick={openCreate}>{m.gateway_create()}</Button>{/snippet}
-        </Empty>
-      </div>
     {:else}
-      <div class="hidden overflow-auto md:block">
-        <DataTable data={rows} {columns} keyField="name" loading={store.loading} striped={false} density="compact">
-          {#snippet cell(row, key)}
-            {#if key === 'name'}
-              <span class="font-medium">{row.name}</span>
-            {:else if key === 'listeners'}
-              <span class="font-mono text-xs">{listenerSummary(row.gateway)}</span>
-            {:else if key === 'routes'}
-              <Badge size="sm" variant="ghost">{row.routeCount}</Badge>
-            {:else if key === 'plugins'}
-              <Badge size="sm" variant="ghost">{row.pluginCount}</Badge>
-            {:else if key === 'redis'}
-              <span class="block max-w-56 truncate font-mono text-xs">{readString(asRecord(row.gateway?.parameters), 'redis_url') || '—'}</span>
-            {/if}
-          {/snippet}
-          {#snippet actions(row)}
-            <div class="flex flex-wrap items-center gap-1">
-              <Button size="xs" variant="ghost" onclick={() => void openRoutes(row.name)}>{m.route_plural()}</Button>
-              <Button size="xs" variant="ghost" onclick={() => openEdit(row.name)}>{m.edit()}</Button>
-            </div>
-          {/snippet}
-        </DataTable>
-      </div>
-      <div class="space-y-3 p-4 md:hidden">
-        {#each rows as row (row.name)}
-          <Card bordered shadow={false}>
+      <ResponsiveList items={rows} keyOf={row => row.name}>
+        {#snippet desktop()}
+          <DataTable data={rows} {columns} keyField="name" loading={store.loading} striped={false} density="compact">
+            {#snippet cell(row, key)}
+              {#if key === 'name'}
+                <span class="font-medium">{row.name}</span>
+              {:else if key === 'listeners'}
+                <span class="font-mono text-xs">{listenerSummary(row.gateway)}</span>
+              {:else if key === 'routes'}
+                <Badge size="sm" variant="ghost">{row.routeCount}</Badge>
+              {:else if key === 'plugins'}
+                <Badge size="sm" variant="ghost">{row.pluginCount}</Badge>
+              {:else if key === 'redis'}
+                <span class="block max-w-56 truncate font-mono text-xs">{readString(asRecord(row.gateway?.parameters), 'redis_url') || '—'}</span>
+              {/if}
+            {/snippet}
+            {#snippet actions(row)}
+              <div class="flex flex-wrap items-center gap-1">
+                <Button size="xs" variant="ghost" onclick={() => void openRoutes(row.name)}>{m.route_plural()}</Button>
+                <Button size="xs" variant="ghost" onclick={() => openEdit(row.name)}>{m.edit()}</Button>
+              </div>
+            {/snippet}
+          </DataTable>
+        {/snippet}
+        {#snippet mobile(row)}
+          <Card bordered>
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
                 <p class="break-all font-medium">{row.name}</p>
@@ -105,16 +100,24 @@
               </div>
               <Badge size="sm" variant="ghost">{row.routeCount} {m.route_plural()}</Badge>
             </div>
-            <p class="mt-2 truncate text-xs text-base-content/45">{readString(asRecord(row.gateway?.parameters), 'redis_url') || '—'}</p>
+            <p class="mt-2 flex items-center gap-2 text-xs text-base-content/45">
+              <span class="icon-[tabler--database] size-3.5 shrink-0"></span>
+              <span class="truncate font-mono">{readString(asRecord(row.gateway?.parameters), 'redis_url') || '—'}</span>
+            </p>
             <div class="mt-3 flex flex-wrap gap-1">
               <Button size="xs" variant="outline" onclick={() => void openRoutes(row.name)}>{m.route_plural()}</Button>
               <Button size="xs" variant="ghost" onclick={() => openEdit(row.name)}>{m.edit()}</Button>
             </div>
           </Card>
-        {/each}
-      </div>
+        {/snippet}
+        {#snippet empty()}
+          <Empty title={m.gateway_empty()} description={m.gateways_description()}>
+            {#snippet action()}<Button size="sm" variant="primary" onclick={openCreate}>{m.gateway_create()}</Button>{/snippet}
+          </Empty>
+        {/snippet}
+      </ResponsiveList>
     {/if}
-  </div>
-</section>
+  </DataSurface>
+</ListPageLayout>
 
 <GatewayEditor bind:open={editorOpen} gatewayName={editorName} {store} />

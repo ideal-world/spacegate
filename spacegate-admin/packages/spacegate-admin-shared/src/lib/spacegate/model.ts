@@ -178,6 +178,29 @@ export function pluginKey(ref: PluginReference): string {
   return `${ref.code}-m`
 }
 
+/**
+ * 判断插件代码是否属于自定义 Wasm 扩展：`wasm`、`wasm.*` 或 `wasm-*`。
+ * 原生插件（如 hai-auth、redis-limit）与内置 AI 队列插件都不满足该规则。
+ * @example isWasmPluginCode('wasm-header') // true
+ */
+export function isWasmPluginCode(code: string): boolean {
+  const normalized = code.trim().toLowerCase()
+  return normalized === 'wasm' || normalized.startsWith('wasm.') || normalized.startsWith('wasm-')
+}
+
+/**
+ * 插件中心维护的自定义 Wasm 定义：Wasm 代码 + 具名实例 + 未绑定到资源，
+ * 并排除内置的 AI 网关队列插件；绑定到网关/路由的 Wasm 配置不在插件中心显示。
+ * @example isWasmPluginDefinition({ ref: { code: 'wasm', kind: 'named', name: 'x' }, spec: {}, ... }) // true
+ */
+export function isWasmPluginDefinition(instance: PluginInstance): boolean {
+  if (instance.ref.kind !== 'named' || !isWasmPluginCode(instance.ref.code))
+    return false
+  if (instance.spec.binding_scope !== undefined)
+    return false
+  return instance.spec.plugin_name !== 'ai-gateway-queue'
+}
+
 /** 实例名称，绑定编辑器用于辨识。 */
 export function pluginReferenceName(ref: PluginReference): string {
   if (ref.kind === 'named')
@@ -221,6 +244,16 @@ export function bindingReferenceOf(value: unknown): PluginReference | null {
 /** 绑定的整数优先级；缺失时按 0 处理。 */
 export function bindingPriority(value: unknown): number {
   return readNumber(asRecord(value), 'priority') ?? 0
+}
+
+/** 插件选择器的返回结果：引用已有实例，或按插件代码新建实例。 */
+export interface PluginPick {
+  /** `instance` 表示选中已有实例；`plugin` 表示要新建该插件的实例。 */
+  type: 'instance' | 'plugin'
+  /** 选中已有实例时的实例本身。 */
+  instance?: PluginInstance
+  /** 新建实例时使用的插件代码。 */
+  code?: string
 }
 
 /** 构造绑定项，保留引用结构并显式写入优先级。 */

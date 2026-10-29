@@ -128,7 +128,79 @@ Exit:
 
 ## Handoff notes
 
+- Cross-session handoff: `docs/superpowers/handoffs/2026-10-27-spacegate-admin-handoff.md`.
 - Keep the user's pre-existing working-tree changes untouched. Stage commits include only migration files.
 - Use `source /private/var/folders/kx/71r_87k50_78zjk1nsc50zz00000gn/T/opencode/hai-env.sh` before Node/pnpm commands.
 - Rust upstream endpoints and version semantics are documented in `binary/admin-server/src/service/*` and `mw/version_control.rs`.
 - Version conflict semantics: GET responses carry `X-Server-Version`; successful writes do not return it, so the service must re-read the version after a successful write. Never auto-retry a conflicted write.
+
+## 2026-10-27 UI pass (uncommitted)
+
+- 登录页 split 插图：`packages/spacegate-admin-serv/config/_iam.yml` 的 `ui` 配置 `brandTitle/brandText/logoUrl/illustrationUrl`；
+  Web/App/Desktop 的 `public/` 各放一份 `auth-illustration.svg` 与 `logo.svg`（相对路径，仍可用绝对 HTTPS URL 覆盖）。
+- 认证页布局：`AdminWorkspace` 登录态改为占满视口的浮层页头/页脚，覆盖 `AuthShell` 的 `min-h-screen`，
+  消除页脚溢出、split 插图被裁切的问题；`header`/`footer` 与 `app-name/app-version/app-environment` 测试点保留。
+- 新增共享布局组件 `components/layouts/`：`ListPageLayout`（页头/工具条/内容/页脚）、`DataSurface`（列表容器）、
+  `ResponsiveList`（桌面表格 + 移动卡片）、`StatCard`（概览指标）。概览、网关、路由、插件、AI 队列、实例、用户、
+  角色、审计、个人设置均已改用，全部 `data-testid` 保持不变。
+- 修复：
+  - 概览“在线实例”卡片误用“全局重载”文案，改为“打开”并跳转实例页。
+  - 新建用户时密码下限硬编码 8，改为读取 `authConfig.password.minLength`。
+  - 概览加载期间误显示“尚未创建网关/路由”空态，改为 Skeleton。
+  - 实例页切换网关时未清空 `selectedRoute`，可能用旧网关的路由触发重载。
+  - e2e mock 的 AI 规则 TTL 字段 `ttl_seconds` 与 Rust/UI 使用的 `ttl_secs` 不一致，导致 TTL 恒显示“永久”。
+  - 移动端列表卡片被网格行高拉伸铺满整屏（`content-start`）。
+- 验证：`pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build` 通过；
+  `pnpm test:e2e` 16 passed / 1 skipped（OTP 夹具未配置），与既有基线一致。
+- 本次改动未提交、未 push；工作区状态见 `git status`。
+
+## 2026-10-27 视觉主线：B 柔光（已落地，未提交）
+
+- 主题：`apps/*/src/app.css` 新增 DaisyUI 自定义主题 `sg-soft`（默认，浅色）与 `sg-night`（深色），
+  品牌色通过 `--hai-theme-color-default`（@h-ai/ui 共享 token）注入，`--color-primary` 引用该 token；
+  组件、焦点色和自定义面板仍全部使用 `@h-ai/ui` 的语义 token。
+- 顶栏：`AppShell` 使用 `from-primary/10 via-base-100/95` 的渐变带，其余仍是 `PageHeader`、`Card`、
+  `DataTable`、`Badge`、`Button`、`StatCard` 等 `@h-ai/ui` 导出组件。
+- 主题工具：切换与持久化继续使用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme` / `getThemeInfo`；
+  `AVAILABLE_THEMES = ['sg-soft', 'sg-night']`，设置页名称新增 `theme_soft` / `theme_night` 三语言文案。
+- 服务端偏好白名单加入 `sg-soft` / `sg-night`，保留 `light` / `dark` 兼容历史用户元数据。
+- Playwright 主题断言改为自定义主题 id；使用备用端口（3000/4173 被本地 dev 占用）运行，16 passed / 1 skipped。
+- 对比用临时页面 `design-preview` 与 `sg-console` 主题已移除。
+
+## 2026-10-27 视觉反馈修复（未提交）
+
+- 主题可见性：`sg-soft` 的 base-200/base-300 加深为淡紫画布，`--radius-xl` 提升到 1rem，卡片恢复默认轻阴影，顶栏渐变加强到 `from-primary/15`；
+  与修改前相比是可直接看出的变化，而不仅是 primary 色相差。
+- 概览：左右两张卡片改为顶部对齐；在线实例卡改用 Card footer 放“打开”，去掉整宽幽灵按钮和多余留白。
+- 插件页：按旧 Vue 插件中心重做——`Tabs` 区分“原生插件 / Wasm 扩展”，原生插件 4 列卡片（图标、名称、代码/版本、说明、配置入口），
+  点击进入详情（元信息 + 实例列表 + 搜索/新建/编辑/删除）；Wasm 页签独立展示自定义定义、网关启用状态与绑定提示。
+- 网关编辑器：Modal 改为 `size="4xl" height="min(90vh,980px)"` 加固定底栏；顺序调整为 基础信息 → 网关参数 → 监听器 → 插件绑定 → 高级 JSON；
+  每节补充标题和说明，可选字段显示“未设置”，监听器卡片头部显示 `protocol://ip:port`，高级 JSON 默认折叠。
+- i18n：新增插件中心与网关分节文案（中/英/日），miniapp i18n 由同步脚本更新。
+- e2e：`openGatewayEditor` 先展开高级 JSON；使用备用端口全量运行，16 passed / 1 skipped。
+
+## 2026-10-27 插件交互改为“抽屉 + 选择器”（未提交）
+
+- 路由/网关编辑器改为 `@h-ai/ui` 的 `Drawer`（右侧，4xl），固定底部操作栏，内容区独立滚动。
+- 新增 `PluginPicker`：右侧抽屉内先用 `Tabs` 区分“原生插件 / Wasm 扩展”，再选已有实例（“使用”）或“新建实例”；
+  搜索同时匹配代码、名称与说明，Wasm 页签展示插件中心的自定义定义。
+- `PluginBindingEditor` 只负责展示插件链（优先级、上移/下移、移除），新增入口改为“绑定插件”按钮打开选择器；
+  选择器与新建实例抽屉由页面层渲染，避免抽屉嵌套导致定位与层级问题。
+- 新建实例链路：选择器 → “新建实例” → `PluginEditor`（抽屉，预选插件代码）→ 保存成功后自动追加到插件链。
+- 去掉规则级和后端级的独立插件配置区，插件只在“路由级插件”一节统一维护（与旧管理端插件链一致）。
+- e2e 全量：16 passed / 1 skipped（备用端口）。
+
+## 2026-10-27 路由/插件交互完全对齐旧管理端（未提交）
+
+- 路由编辑器（右侧 Drawer）按旧 `RouteEditorDrawer.vue` 复刻：
+  - 顶部 reload 提示 + “快速示例”三个模板（API / 静态文件 / K8s 服务）；
+  - `Tabs`：基础信息 / 匹配条件 / 目标后端 / 插件链 / 高级 JSON（MCP 路由替换为 MCP 传输页签）；
+  - 匹配条件与目标后端按规则用 `Accordion` 折叠，标题带“规则 N · X 个匹配”；
+  - 每条规则：匹配全部开关、匹配块（路径类型/路径/重写、方法多选、请求头与查询参数左右分栏）、规则超时与负载策略、后端列表；
+  - 底部固定“删除 / 取消 / 保存”。
+- 插件链：只在“插件链”页签维护；“绑定插件”打开右侧选择器（原生 / Wasm 两页签，可引用已有实例或新建），
+  新建实例复用右侧抽屉并在保存后自动加入链。
+- 插件页详情补齐旧版元信息表（插件代码、版本、单例、作者、主页、仓库）。
+- 插件实例抽屉按旧 `PluginForm.vue` 调整：展示名称 + 实例名称（带用途说明）、表单/JSON 双模式、复制/填入示例。
+- 修复：新建路由/网关时初始化守卫把 `null` 当成“已初始化”，导致插件属性与实例不加载、选择器空白。
+- e2e：`openRouteEditor` 先切到“高级 JSON”页签；全量 16 passed / 1 skipped。

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="SpaceGate">
+  <defs>
+    <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d7bff"/>
+      <stop offset="1" stop-color="#3f4ae0"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="12" fill="url(#sg)"/>
+  <path d="M24 8.5 37.5 16.25v15.5L24 39.5 10.5 31.75v-15.5Z" fill="none" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M24 18.5v11" fill="none" stroke="#5eead4" stroke-width="3.4" stroke-linecap="round"/>
+</svg>
