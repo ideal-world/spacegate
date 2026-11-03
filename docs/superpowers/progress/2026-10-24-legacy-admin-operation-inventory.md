@@ -1049,7 +1049,9 @@ Wasm spec 约定字段（由前端构造，后端原样保存）：
 | 40 | `DELETE /v1/admin/tenant-rate-limits` body=规则 | `deleteTenantRateLimit` | 租户配额删除 | `aiQueue.delete` | `P1-contract`；注意**DELETE 带 JSON body**，代理/小程序请求层需支持 |
 | 41 | `GET /v1/admin/tenant-rate-limits/resolve?...` | `resolveTenantRateLimit` | 解析当前请求 | `aiQueue.resolve` | `P1-contract` |
 
-### 4.3 明确缺失/需扩展的点
+### 4.3 初始 contract 审计发现的缺失/扩展点（基线，不代表当前未完成）
+
+> 以下内容是迁移前静态审计记录。按插件 code 过滤、Wasm 私有制品预览头、路由重载及后端发现等能力，已在后续实现和逐项核验中补齐或恢复；当前状态与 fixture 证据以第 7 节 Q 项、后续阶段记录及新工程源码为准。旧服务兼容、真实私有制品、重载和设备行为仍由用户人工验收。
 
 1. **按插件 code 列实例**：`plugin.list` 没有 code 过滤，而旧 UI 有 5 处依赖 `GET /config/plugins/{code}`（插件中心、插件选择、AI 队列）。这是 P1 必须补齐的 contract/上游适配能力，否则只能全量拉取，Wasm/原生实例数量大时行为和性能都会变。
 2. **Wasm schema 预览缺 HTTP 头**：`SpacegatePluginPreviewWasmSchemaInputSchema` 缺 `httpHeaders`，无法预览私有 HTTP(S) 制品；同时旧 UI 也没有“未保存预览”按钮，迁移时若实现预览需同时补 contract 和 UI。
@@ -1213,133 +1215,135 @@ Route 保存/改名/删除
 
 | # | 操作 | 旧证据 | Web | App | Desktop | 小程序 | 定制表单 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| G1 | 侧栏导航 + 折叠 | `App.vue:31-38`、`112-129` | 共享 | 共享 | 共享 | 原生 | 否 | 小程序用 tabBar/抽屉 |
-| G2 | 顶栏网关选择/刷新/管理 | `ConsoleGatewaySelect.vue:37-84` | 共享 | 共享 | 共享 | 原生 | 否 | 小程序 picker + 刷新按钮 |
-| G3 | 实例健康 5s 轮询 | `App.vue:78-98` | 共享 | 共享 | 共享 | 原生 | 否 | 小程序注意后台定时器与请求频率 |
-| G4 | 语言切换 zh/en | `App.vue:40-43` | 共享 | 共享 | 共享 | 原生 | 否 | 需决定 es 是否保留；统一 locale key |
+| G1 | 侧栏导航 + 折叠 | `App.vue:31-38`、`112-129` | 共享 | 共享 | 共享 | 原生 | 否 | 已补共享桌面侧栏收起/展开，图标导航保留 aria-label；移动抽屉独立显示标签。Web fixture E2E 覆盖桌面切换和窄屏抽屉 1/1；根 `pnpm check`、`pnpm compile` 通过。微信原生导航实际设备行为待人工验收 |
+| G2 | 顶栏网关选择/刷新/管理 | `ConsoleGatewaySelect.vue:37-84` | 共享 | 共享 | 共享 | 原生 | 否 | 已补 shared shell 顶栏选择器、刷新网关列表、直达网关管理。并发回归先复现旧请求覆盖新网关，现以 context request id 丢弃过期 gateway/route 响应；`spacegate-store.test.ts` 18/18、Web fixture 动态刷新/切换/管理 E2E 1/1 通过。fixture 仅验证 UI/本地请求边界，真实环境待人工验收 |
+| G3 | 实例健康 5s 轮询 | `App.vue:78-98` | 共享 | 共享 | 共享 | 原生 | 否 | shared store 以 5 秒轮询并避开隐藏文档；miniapp 仅 overview/instances 可见时运行。`overview-page.test.ts` 页面生命周期回归验证 onShow 后 5 秒刷新、onHide 后停止，完整 3/3 + miniapp typecheck 通过；设备挂起/恢复行为未由 mock 覆盖 |
+| G4 | 语言切换 zh/en | `App.vue:40-43` | 共享 | 共享 | 共享 | 原生 | 否 | 旧活动菜单实际只有 zh-CN/en-US；`es` 虽注册但未进入菜单，字典仍是中文且键不全，不视为可用旧功能而保留。按修订设计启用 zh-CN/en-US/ja-JP。miniapp 页测即时切换及 profile 偏好同步成功/失败提示；isolated fullstack fixture 账号/偏好流程已运行并有 `test-results/run-4RlcNS/group-1/results/.last-run.json: status=passed`。均非真实 IAM/设备验收 |
 | G5 | 主题 | 无 | — | — | — | — | 否 | 旧版没有；新框架可提供，但不属于回归项 |
-| G6 | 401 登录弹窗 ak/sk | `main.ts:41-59` | 共享 | 共享 | 共享 | 原生 | 是（登录表单） | 新架构改 Hai IAM；旧 ak/sk 仅迁移期 |
-| G7 | 409 冲突提示 | `main.ts:63-66` | 共享 | 共享 | 共享 | 原生 | 否 | 必须提示“刷新后重试”，不能自动重试 |
-| G8 | 剪贴板复制/读取 | `utils/index.ts:100-184` | 共享 | 原生适配 | 共享 | 原生 | 否 | 小程序用 `wx.setClipboardData/getClipboardData` |
-| G9 | 文件下载/上传 JSON | `GatewayForm.vue:38-53` | 共享 | 原生适配 | 共享 | 原生 | 否 | 小程序用 `wx.chooseMessageFile`/`wx.saveFile`，或改为文本导入导出 |
-| G10 | 拖拽排序 | `PluginListForm.vue:115-126` | 共享 | 原生适配 | 共享 | 原生 | 是（排序） | 小程序用上/下移按钮，不能依赖 HTML5 drag |
-| G11 | `window.open` 插件主页/仓库 | `PluginPanel.vue:584-590` | 共享 | 原生适配 | 共享 | 原生 | 否 | 小程序需复制链接或 web-view 白名单 |
-| G12 | `location.assign('/instances')` | `PluginPanel.vue:612-614` | 共享 | 共享 | 共享 | 原生 | 否 | 小程序用 `wx.navigateTo` |
+| G6 | 401 登录弹窗 ak/sk | `main.ts:41-59` | 共享 | 共享 | 共享 | 原生 | 是（登录表单） | 按修订设计改用 Hai IAM；新增 shared store 401 回归验证登录态/敏感页面状态清理、回到设置态、过期提示和 auth.clear；`spacegate-store.test.ts` 18/18 通过。真实 IAM/LDAP 会话过期与各端交互待人工验收 |
+| G7 | 409 冲突提示 | `main.ts:63-66` | 共享 | 共享 | 共享 | 原生 | 否 | 按设计禁止盲重试；shared conflict banner 需显式确认 reload。本轮重跑 Web fixture 覆盖单次写尝试、取消不回读、确认后重新加载 1/1；fixture 不能证明真实并发 CAS，后端限制仍需保留 |
+| G8 | 剪贴板复制/读取 | `utils/index.ts:100-184` | 共享 | 原生适配 | 共享 | 原生 | 否 | shared 浏览器组件使用 navigator.clipboard；miniapp 网关/路由/插件链接用 wx get/setClipboardData。G9 round-trip 与插件外链 clipboard 测试已覆盖主要显式操作；真实权限弹窗和设备 clipboard 待人工验收 |
+| G9 | 文件下载/上传 JSON | `GatewayForm.vue:38-53` | 共享 | 原生适配 | 共享 | 原生 | 否 | miniapp 采用文本 JSON + clipboard paste/copy 适配，不提供 file picker；Gateway/Route 显式配置 JSON 导出或复制前提示可能含密钥、凭据或令牌，取消不导出/不写剪贴板；miniapp 页面测试覆盖确认/取消及 clipboard round-trip，Web fixture E2E 覆盖 Gateway 文件导出与 Route JSON 复制确认/取消（2/2）。真实微信剪贴板/文件系统能力仍待设备验收 |
+| G10 | 拖拽排序 | `PluginListForm.vue:115-126` | 共享 | 原生适配 | 共享 | 原生 | 是（排序） | shared 与 miniapp 均有上/下移操作维持数组顺序，避免依赖 HTML5 drag；miniapp gateway 页面回归检查 move 后 binding 顺序及优先级/opaque 字段保留 |
+| G11 | `window.open` 插件主页/仓库 | `PluginPanel.vue:584-590` | 共享 | 原生适配 | 共享 | 原生 | 否 | shared 使用安全新标签链接；miniapp 用 `wx.setClipboardData` 复制链接并 toast，`plugin-page.test.ts` 已覆盖 homepage/repository 两链接；外部浏览器/白名单体验待设备验收 |
+| G12 | `location.assign('/instances')` | `PluginPanel.vue:612-614` | 共享 | 共享 | 共享 | 原生 | 否 | miniapp 用 `wx.navigateTo('/pages/instances/index')`；plugin-page 定向用例验证 handler 目标；微信路由栈待设备验收 |
 
 ### 6.2 概览
 
 | # | 操作 | 旧证据 | Web | App | Desktop | 小程序 | 定制表单 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| O1 | 查看四项指标 | `Overview.vue:183-204` | 共享 | 共享 | 共享 | 原生 | 否 | 明确“插件配置”含绑定配置 |
-| O2 | 点击指标跳转 | `184-203` | 共享 | 共享 | 共享 | 原生 | 否 | 保留 gatewayName |
-| O3 | 当前网关摘要 | `206-221` | 共享 | 共享 | 共享 | 原生 | 否 | 监听/插件/Redis |
-| O4 | 实例健康表 | `223-239` | 共享 | 共享 | 共享 | 原生 | 否 | 空态/未知态 |
-| O5 | 路由概况前 6 条 | `242-267` | 共享 | 共享 | 共享 | 原生 | 否 | 匹配/后端摘要逻辑要复用纯函数 |
-| O6 | AI 治理说明 | `269-277` | 共享 | 共享 | 共享 | 原生 | 否 | 静态文案 |
+| O1 | 查看四项指标 | `Overview.vue:183-204` | 共享 | 共享 | 共享 | 原生 | 否 | 已对齐在线实例/网关/路由/插件配置；小程序此前错用实例总数占位，已修复并测指标映射 |
+| O2 | 点击指标跳转 | `184-203` | 共享 | 共享 | 共享 | 原生 | 否 | 已为小程序四张指标卡接管理页跳转；共享/小程序维持当前网关上下文；真实环境待人工验收 |
+| O3 | 当前网关摘要 | `206-221` | 共享 | 共享 | 共享 | 原生 | 否 | 已核对并补齐：miniapp 增监听器/网关级插件数/Redis；共享与原生监听器摘要补协议后缀；miniapp 页面测试 4/4、全套 26 files / 181 tests、typecheck、WXML/WXSS 编译通过；Web fixture E2E 1/1。真实环境待人工验收 |
+| O4 | 实例健康表 | `223-239` | 共享 | 共享 | 共享 | 原生 | 否 | 已核对；小程序补逐实例状态/空态/管理入口和轮询；真实环境待人工验收 |
+| O5 | 路由概况前 6 条 | `242-267` | 共享 | 共享 | 共享 | 原生 | 否 | 已补共享页与小程序类型/匹配/后端/优先级；共享与 miniapp 分别补 match-all/custom、HTTP match types、多规则和 MCP transport 旧语义回归；共享包 48/48、小程序 26 files / 182 tests、typecheck、全仓 check/build 通过；Web fixture E2E 覆盖概览摘要；真实环境待人工验收 |
+| O6 | AI 治理说明 | `269-277` | 共享 | 共享 | 共享 | 原生 | 否 | 已补共享三语言静态说明和小程序入口；Web fixture E2E；真实环境待人工验收 |
 
 ### 6.3 网关
 
 | # | 操作 | 旧证据 | Web | App | Desktop | 小程序 | 定制表单 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| W1 | 网关列表/刷新 | `Gateways.vue:119-145`、`239` | 共享 | 共享 | 共享 | 原生 | 否 | 避免 N+1，新服务聚合 |
-| W2 | 新建网关 | `147-153`、`83-117` | 共享 | 共享 | 共享 | 原生 | 是（完整网关表单） | 名称 + 默认监听 |
-| W3 | 编辑网关（名称只读） | `155-161`、`GatewayForm.vue:124-126` | 共享 | 共享 | 共享 | 原生 | 是 | 明确是否支持改运行时名称；旧版不支持 |
-| W4 | 删除网关（含级联提示） | `182-196` | 共享 | 共享 | 共享 | 原生 | 否 | 需显示路由数影响 |
-| W5 | 监听器增删 | `GatewayForm.vue:22-36`、`242-254` | 共享 | 共享 | 共享 | 原生 | 是 | 至少一个？旧版无保存校验 |
-| W6 | 监听器 IP/端口/协议/主机名 | `ListenerForm.vue:56-84` | 共享 | 共享 | 共享 | 原生 | 是 | 端口 0-65535 |
-| W7 | TLS mode/key/cert | `ListenerForm.vue:85-92` | 共享 | 共享 | 共享 | 原生 | 是 | 大文本 key/cert；小程序注意输入长度 |
-| W8 | TLS http2 | 无 UI | 共享 | 共享 | 共享 | 原生 | 是 | 旧版只能 JSON；迁移应补显式开关 |
-| W9 | Redis URL + 4 个连接池参数 | `GatewayForm.vue:137-187` | 共享 | 共享 | 共享 | 原生 | 是 | 单位 ms/连接数；仅 redis_url 有值时显示 |
-| W10 | 日志级别/语言 | `189-217` | 共享 | 共享 | 共享 | 原生 | 是 | 下拉枚举 |
-| W11 | x-request-id / ignore TLS | `218-229` | 共享 | 共享 | 共享 | 原生 | 是 | 注意 null/false 语义 |
-| W12 | 网关级插件绑定 | `264-268` | 共享 | 共享 | 共享 | 原生 | 是 | 优先级/拖拽/实例选择 |
-| W13 | 网关 JSON 导入/导出 | `278-309` | 共享 | 原生适配 | 共享 | 原生 | 是（文本 JSON） | 保留“编辑模式强制保留名称” |
-| W14 | 未保存关闭确认 | `209-223` | 共享 | 共享 | 共享 | 原生 | 否 | 修正“取消”绕过问题 |
-| W15 | 可观测性配置 | 模型有、UI 无 | 共享 | 共享 | 共享 | 原生 | 是 | 旧版缺失；若要保留需补表单 |
+| W1 | 网关列表/刷新 | `Gateways.vue:119-145`、`239` | 共享 | 共享 | 共享 | 原生 | 否 | 本轮复核：共享列表有名称/listener/route/plugin/Redis 摘要、路由/编辑入口和 `loadGateways` 刷新；miniapp 用 gateway picker 选上下文并显式刷新（原生列表交互适配）；fixture E2E 已覆盖保存后摘要更新及刷新。新旧均需取 gateway/route 详情；contract 无批量摘要 operation，N+1 减少未实现，作为性能差异记录；真实服务未验收 |
+| W2 | 新建网关 | `147-153`、`83-117` | 共享 | 共享 | 共享 | 原生 | 是（完整网关表单） | 已逐字段对比旧版 `newGateway()`；miniapp 页面测试覆盖默认完整对象，新增 shared `newGateway()` 旧默认 regression（shared 全套 10 files / 50 tests 通过）；空库存和显式新建均有页面覆盖 |
+| W3 | 编辑网关（名称只读） | `155-161`、`GatewayForm.vue:124-126` | 共享 | 共享 | 共享 | 原生 | 是 | Web 内部 input 只读，导入带异名 JSON 后导出文件名/保存资源名仍为原名；mock E2E 1/1。小程序保存使用 `editingName`，页面 mock 同样覆盖异名 JSON；原生设备交互未验收 |
+| W4 | 删除网关（含级联提示） | `182-196` | 共享 | 共享 | 共享 | 原生 | 否 | 已核：共享页显示路由数与上游级联提示；小程序删除前查询当前路由数、提示级联影响；mini mock 测试通过，真实环境待验收 |
+| W5 | 监听器增删 | `GatewayForm.vue:22-36`、`242-254` | 共享 | 共享 | 共享 | 原生 | 是 | 已核并修复：共享新增监听器名称改为旧默认 `new listener`（原先误用 `listener-{index}`）；shared 默认回归 2/2、全包 50 tests、typecheck/build 通过，Web HTTP/HTTPS listener fixture E2E 1/1；小程序原已对齐 `new listener`/8080、null optional fields 且可删最后一条，页面 mock 通过 |
+| W6 | 监听器 IP/端口/协议/主机名 | `ListenerForm.vue:56-84` | 共享 | 共享 | 共享 | 原生 | 是 | 再核共享表单：IP/hostname 空值写 null、placeholder 对应旧 optional 语义；端口 min 0/max 65535/step 1；http↔https 切换策略与旧 watcher 一致。miniapp 回归覆盖 0/65535 接受、65536 拒绝；Web listener fixture 覆盖添加/保存；真实设备待验收 |
+| W7 | TLS mode/key/cert | `ListenerForm.vue:85-92` | 共享 | 共享 | 共享 | 原生 | 是 | 共享 `setProtocol` 按旧 watcher 在切换时重置 TLS；HTTPS/Passthrough、cert/key 保存往返 E2E 通过；大文本输入未做微信 DevTools/设备验证 |
+| W8 | TLS http2 | 无 UI | 共享 | 共享 | 共享 | 原生 | 是 | 已补旧版无 UI 的显式开关；page mock 验证 `true` 保留到保存；真实 TLS 仍待验收 |
+| W9 | Redis URL + 4 个连接池参数 | `GatewayForm.vue:137-187` | 共享 | 共享 | 共享 | 原生 | 是 | 再核共享字段与旧 OptionalField：仅 redis_url 有值时显示四项，清空 URL 时隐藏但保留池值；单位 ms/连接数。miniapp 测试覆盖开关显隐/保值与正整数校验；真实 Redis 后台行为待验收 |
+| W10 | 日志级别/语言 | `189-217` | 共享 | 共享 | 共享 | 原生 | 是 | 已核：mini 原先文本输入，现改为 `trace/debug/info/warn/error` 与 `zh-CN/en` 下拉；未配置/null 仍保持可选语义；定向测试通过 |
+| W11 | x-request-id / ignore TLS | `218-229` | 共享 | 共享 | 共享 | 原生 | 是 | 已加 mini 回归断言显式 false/null 原值保留、缺失 bool 不被补写；页面 mock 范围 |
+| W12 | 网关级插件绑定 | `264-268` | 共享 | 共享 | 共享 | 原生 | 是 | 旧版支持实例选择、优先级编辑、拖拽排序、删除；新共享组件提供实例选择、优先级与上下移，小程序已有页面 mock 覆盖增删/改优先级/重排。修复网关编辑 Modal 下 Drawer 层级：通过 Drawer 内容 class 识别其 `.drawer-side` 并将 z-index 提升至 `--hai-z-modal + 1`；Web fixture E2E 断言 z-index=1101 并选择实例、保存优先级，1/1 通过。真实服务/设备验收未做 |
+| W13 | 网关 JSON 导入/导出 | `278-309` | 共享 | 原生适配 | 共享 | 原生 | 是（文本 JSON） | 已测：编辑模式导入含其他名称的 JSON 后仍以原网关名提交；Gateway 文件导出前明确警告配置可能含敏感值并需用户确认（Web fixture E2E），小程序导出复制同样要求确认；确认/取消、剪贴板和脏草稿取消有回归。E2E 使用本地 fixture，不是实际 Rust 后台验收 |
+| W14 | 未保存关闭确认 | `209-223` | 共享 | 共享 | 共享 | 原生 | 否 | 已测：取消新建/导入/刷新/选择均不丢未保存草稿，真实原生弹窗仍待设备验收 |
+| W15 | 可观测性配置（新模型字段） | 旧 Vue UI 无此项 | 共享 | 共享 | 共享 | 原生 JSON | 否 | 修订设计未要求独立可观测性表单；Web 以 `JsonTextarea` 编辑该参数，miniapp 通过完整网关 JSON 编辑，符合小程序与其他端同一功能集合要求。Web fixture 导入/保存 E2E 与 miniapp 页面 mock 均验证完整 observability 配置可编辑并写入；生产配置/真实上游未验收 |
 
 ### 6.4 路由
 
 | # | 操作 | 旧证据 | Web | App | Desktop | 小程序 | 定制表单 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| R1 | 路由列表/搜索 | `Routes.vue:91-101`、`163-179` | 共享 | 共享 | 共享 | 原生 | 否 | 搜索路由/主机/后端 |
-| R2 | 新建 HTTP/MCP | `181-186`、`RouteEditorDrawer.vue:273-282` | 共享 | 共享 | 共享 | 原生 | 是 | 类型切换会重置模型，迁移应确认后再切 |
-| R3 | 编辑路由 | `188-193` | 共享 | 共享 | 共享 | 原生 | 是 | 完整抽屉 |
-| R4 | 复制路由 | `195-201` | 共享 | 共享 | 共享 | 原生 | 是 | 名称 `-copy`，需处理冲突 |
-| R5 | 改名并保存 | `213-214`、`service.rs:145-162` | 共享 | 共享 | 共享 | 原生 | 是 | 非原子；冲突/404 语义 |
-| R6 | 删除路由 | `228-241` | 共享 | 共享 | 共享 | 原生 | 否 | 确认；建议提示绑定影响 |
-| R7 | hostnames 开关/增删 | `284-289`、`406-414` | 共享 | 共享 | 共享 | 原生 | 是 | `null` vs `[]` |
-| R8 | 多规则/多匹配 | `416-451`、`797-918` | 共享 | 共享 | 共享 | 原生 | 是 | 折叠面板、规则删除至少保留一条 |
-| R9 | 路径 kind/value/rewrite | `828-845` | 共享 | 共享 | 共享 | 原生 | 是 | Prefix/Exact/RegExp |
-| R10 | 方法多选 | `847-851` | 共享 | 共享 | 共享 | 原生 | 是 | 7 个方法 |
-| R11 | Header 匹配/重写 | `871-883` | 共享 | 共享 | 共享 | 原生 | 是 | exact/reg_exp |
-| R12 | Query 匹配 | `895-906` | 共享 | 共享 | 共享 | 原生 | 是 | exact/regular |
-| R13 | 规则级 timeout/timeout_mode/balance | 无 UI | 共享 | 共享 | 共享 | 原生 | 是 | 旧版只能 JSON；迁移应补 |
-| R14 | 后端增删 | `997-1003`、`1077-1083` | 共享 | 共享 | 共享 | 原生 | 是 | HTTP 可 0 个；MCP 至少 1 个 |
-| R15 | 后端 Host/K8s/File | `933-968` | 共享 | 共享 | 共享 | 原生 | 是 | 切换 kind 重置 host |
-| R16 | 后端端口/协议/权重/超时/HTTP2 | `970-993` | 共享 | 共享 | 共享 | 原生 | 是 | 端口 1-65535；权重≥0 |
-| R17 | 后端插件 | `995-1001`、`1075-1081` | 共享 | 共享 | 共享 | 原生 | 是 | 每个后端独立 |
-| R18 | MCP transport/path/SSE | `747-795` | 共享 | 共享 | 共享 | 原生 | 是 | 两套路径 |
-| R19 | MCP timeout/session affinity | `777-791` | 共享 | 共享 | 共享 | 原生 | 是 | 枚举 |
-| R20 | 路由/规则插件链 | `1089-1114` | 共享 | 共享 | 共享 | 原生 | 是 | 三层插件 |
-| R21 | 快速示例 | `694-699`、`510-563` | 共享 | 共享 | 共享 | 原生 | 是 | 建议保留 |
-| R22 | 高级 JSON 复制/读取/应用 | `1116-1129` | 共享 | 原生适配 | 共享 | 原生 | 是（文本 JSON） | 不要用 Monaco 作为唯一入口 |
-| R23 | 保存校验 | `565-603` | 共享 | 共享 | 共享 | 原生 | 是 | 路径/端口/权重 |
-| R24 | 未保存关闭确认 | `655-661` | 共享 | 共享 | 共享 | 原生 | 否 | 修正“取消”绕过 |
-| R25 | 后端发现选择器 | `BackendForm.vue:32-67`（死代码） | 共享 | 共享 | 共享 | 原生 | 是 | 活动 UI 已丢失；建议恢复 |
+| R1 | 路由列表/搜索 | `Routes.vue:91-101`、`163-179` | 共享 | 共享 | 共享 | 原生 | 否 | 搜索名称、主机名、全部匹配条件（path/method/header/query）和后端；Web/App/Desktop 共享列表显示 hostnames 列/窄屏卡片，空 hostname 显示 `*`、match-all 显示摘要、backend 显示 host/port 和 `+N more`；miniapp 编辑/复制事件按 WXML 实际渲染过滤结果索引定位，且加载期间忽略旧 route row 点击，列表显示结构化类型/主机/匹配/后端/priority/路由插件数并对齐 wildcard/port/count；`route-page.test.ts` 覆盖编辑/复制定位和行摘要，route-search test 覆盖实际 row builder 构造的 hostname/path/backend 搜索和多 backend/wildcard；Web fixture E2E 按名称、hostname、path、method、header、query 及两个 backend 地址逐项命中并断言多 backend summary 与桌面/窄屏主机显示（1/1）。真实服务/微信设备仍待人工验收 |
+| R2 | 新建 HTTP/MCP | `181-186`、`RouteEditorDrawer.vue:273-282` | 共享 | 共享 | 共享 | 原生 | 是 | 依旧版 `switchRouteType`，切换立即重置模型并保留路由名，不显示额外确认；最新 Web fixture E2E 验证修改后切 MCP、JSON 读回 MCP 默认形状。旧历史实现的确认分支现已移除。小程序行为需再按旧源码核对；fixture 不替代真实设备/服务验收 |
+| R3 | 编辑路由 | `188-193` | 共享 | 共享 | 共享 | 原生 | 是 | Web 保存测试验证 route/rule/backend 三层插件链彼此独立；miniapp 同一页面以结构化表单编辑并保留 MCP/未知字段；全量 E2E 与 miniapp page tests 为 fixture/mock |
+| R4 | 复制路由 | `195-201` | 共享 | 共享 | 共享 | 原生 | 是 | 名称 `-copy`。Web fixture E2E 验证新草稿保留源配置且保存不改源；miniapp 先刷新并验证源仍存在，搜索过滤结果索引映射和消失源均有页面测试；Wasm route binding 复制为独立实例后再写入也有 Web/miniapp 覆盖。均为 fixture/mock |
+| R5 | 改名并保存 | `213-214`、`service.rs:145-162` | 共享 | 共享 | 共享 | 原生 | 是 | 新端专用 rename endpoint 覆盖完整 route；失败标“可能已部分执行”并阻断重试，fixture E2E 1/1。Rust 先 create 新 route 再 delete 旧 route；Redis 等后端事件发布失败可使结果不确定，不可通用盲目 rollback。强原子性需 backend 事务契约，真实服务端人工验收 |
+| R6 | 删除路由 | `228-241` | 共享 | 共享 | 共享 | 原生 | 否 | 新旧均为确认后删除；新增新端确认/取消及仅删除选中 route 的 fixture E2E 1/1。K8s backend 删除 route 后清理该 route 的 filter target refs、保留共享 filter/插件定义；Redis/FS 随 route 配置移除绑定但不删独立定义。K8s target-ref 写失败可能部分完成，UI 不做级联删除；真实 backend/shared-ref 验收待人工 |
+| R7 | hostnames 开关/增删 | `284-289`、`406-414` | 共享 | 共享 | 共享 | 原生 | 是 | `null` vs `[]`；miniapp 测试保留 null/空数组开关语义，Web E2E 验证 hostnames/priority 保存和搜索/摘要展示；fixture 仅在搜索用例内设置 hostname，避免污染其他路由用例 |
+| R8 | 多规则/多匹配 | `416-451`、`797-918` | 共享 | 共享 | 共享 | 原生 | 是 | 折叠面板、多匹配/规则新增、最终规则不可删除；Web `route editor saves additional path matches and rules`、match-all 最后一规则保护，miniapp `edits HTTP rules...with a last-rule guard` 覆盖 |
+| R9 | 路径 kind/value/rewrite | `828-845` | 共享 | 共享 | 共享 | 原生 | 是 | Prefix/Exact/RegExp；Web E2E 与 miniapp form test 覆盖 Exact/RegExp/value/rewrite，稳定 selector scoped 到 match index |
+| R10 | 方法多选 | `847-851` | 共享 | 共享 | 共享 | 原生 | 是 | 7 个方法；Web E2E 保存 GET 与 header/query 组合，miniapp 编辑页面测试覆盖 method/rule 写入 |
+| R11 | Header 匹配/重写 | `871-883` | 共享 | 共享 | 共享 | 原生 | 是 | exact/reg_exp；Web 保存 exact 与正则/替换值，miniapp 规则表单覆盖字段更新；E2E 使用 header 专属 test id 避免与 K8s backend 的“名称”控件歧义 |
+| R12 | Query 匹配 | `895-906` | 共享 | 共享 | 共享 | 原生 | 是 | exact/regular；Web E2E 保存 exact 和 regular 键值/正则，miniapp 结构化表单覆盖；搜索 E2E 所需 match fixture 现由单一用例显式写入，不再改变通用种子 |
+| R13 | 规则级 timeout/timeout_mode/balance | 无 UI | 共享 | 共享 | 共享 | 原生 | 是 | 旧版只能 JSON；新表单补结构化设置。Web E2E 验证 rule timeout 与 weighted backends 落在各自正确层级；miniapp route page 覆盖 rule timeout/balance 操作 |
+| R14 | 后端增删 | `997-1003`、`1077-1083` | 共享 | 共享 | 共享 | 原生 | 是 | Web MCP E2E 创建双 backend；miniapp page test 验证 MCP 最后一 backend 不能删除、HTTP 编辑可增删 backend，覆盖为 mock |
+| R15 | 后端 Host/K8s/File | `933-968` | 共享 | 共享 | 共享 | 原生 | 是 | Web E2E 覆盖 Host 手工编辑/发现失败保留输入、K8s discovery 保留端口、File discovery 清空网络端口及 File 无 port 保存；miniapp 覆盖 Host/K8s/File kind 字段写回 |
+| R16 | 后端端口/协议/权重/超时/HTTP2 | `970-993` | 共享 | 共享 | 共享 | 原生 | 是 | Web E2E 验证 1–65535 端口、非负权重和 rule-level timeout/balance scope；miniapp helper/page 测试覆盖端口、权重、backend protocol 与 `downgrade_http2` 字段写回。TLS/HTTP2 真实网络语义待用户验收 |
+| R17 | 后端插件 | `995-1001`、`1075-1081` | 共享 | 共享 | 共享 | 原生 | 是 | route-page 用例验证普通插件选入 backend、priority 编辑、链内排序/删除且 route/rule 链不变；另测 Wasm backend binding owner 与引用只写入所选 backend。均为 mock，不等于设备/上游验收 |
+| R18 | MCP transport/path/SSE | `747-795` | 共享 | 共享 | 共享 | 原生 | 是 | Web E2E 覆盖 streamable HTTP path 与 legacy SSE 双路径/多 backend，miniapp page test 覆盖 transport/path 且保留 backend |
+| R19 | MCP timeout/session affinity | `777-791` | 共享 | 共享 | 共享 | 原生 | 是 | Web legacy SSE E2E 保存 timeout `request` 和 session affinity `none`；miniapp 同页测试覆盖枚举写回。均为 fixture/page mock |
+| R20 | 路由/规则插件链 | `1089-1114` | 共享 | 共享 | 共享 | 原生 | 是 | route/rule/backend 三层插件独立、排序/删除、重复 code 限制及 Wasm 资源 scope 均有 Web E2E 与 miniapp page tests；真实 runtime 未验收 |
+| R21 | 快速示例 | `694-699`、`510-563` | 共享 | 共享 | 共享 | 原生 | 是 | API/静态/K8s 示例立即覆盖当前 HTTP 草稿并保留有效路由名；无效 JSON 也可直接被示例替换、恢复可保存状态；示例不自动写服务端，最终由显式保存提交。最新 Web E2E 验证无效 JSON 后应用 API 并保存对应旧版 payload；旧有确认分支已删除 |
+| R22 | 高级 JSON 复制/读取/应用 | `1116-1129` | 共享 | 原生适配 | 共享 | 原生 | 是（文本 JSON） | Web `JsonTextarea` 提供 JSON 编辑、校验及确认后剪贴板复制；miniapp page mock 覆盖剪贴板复制/粘贴、取消不复制；非法 JSON/结构不得保存旧 draft 有 Web E2E。未把 Monaco 当唯一入口 |
+| R23 | 保存校验 | `565-603` | 共享 | 共享 | 共享 | 原生 | 是 | Web E2E 验证 route JSON 结构和 backend 端口/权重范围，失败不提交；miniapp route page 同样断言非法端口阻止 upsert |
+| R24 | 未保存关闭确认 | `655-661` | 共享 | 共享 | 共享 | 原生 | 否 | Web route editor E2E 验证取消退出时取消丢弃保留草稿、确认后关闭；miniapp 草稿保护与确认按 page mock 测试，原生弹窗仍需用户设备验收 |
+| R25 | 后端发现选择器 | `BackendForm.vue:32-67`（死代码） | 共享 | 共享 | 共享 | 原生 | 是 | 恢复为发现 drawer/候选选择；Web E2E 覆盖失败后保留手填值、K8s 保留端口与 File 清空端口；miniapp page mock 覆盖选择候选和失败保留当前 host |
+
+- 2026-10-30 fixture E2E 逐项复核：全套 89 项中 88 passed、1 skipped（未配邮件 OTP）；后补的正常路由改名回归单独 1/1 通过，断言旧资源删除、新资源完整保留配置。R1-R6 覆盖列表/搜索、HTTP/MCP 创建编辑、复制、改名及部分失败阻止重试、删除；R7-R13 覆盖 hostname、match 规则、path/method/header/query、timeout/balance；R14-R19 覆盖后端 Host/K8s/File、端口/权重、插件、MCP SSE/streamable HTTP、timeout/session；R20-R25 覆盖插件链排序、示例、JSON/校验、类型切换/未保存确认、后端发现。详细用例位于 `spacegate-admin/e2e/spacegate.spec.ts`，均为本地服务 + mock upstream，不构成真实服务验收。
 
 ### 6.5 插件
 
 | # | 操作 | 旧证据 | Web | App | Desktop | 小程序 | 定制表单 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | P1 | 原生插件目录/搜索 | `PluginPanel.vue:632-682` | 共享 | 共享 | 共享 | 原生 | 否 | 卡片列表 |
-| P2 | 原生插件元数据/主页/仓库 | `772-788`、`584-590` | 共享 | 共享 | 共享 | 原生 | 否 | 外链适配 |
-| P3 | 原生实例列表/搜索 | `791-815` | 共享 | 共享 | 共享 | 原生 | 否 | 仅 named |
-| P4 | 创建原生实例（schema 表单/JSON） | `464-521`、`PluginForm.vue:206-274` | 共享 | 共享 | 共享 | 原生 | 是 | Monaco 仅 Web/Desktop；小程序用原生表单/文本 JSON |
-| P5 | 编辑原生实例 | `516-521` | 共享 | 共享 | 共享 | 原生 | 是 | 同上 |
-| P6 | 删除原生实例 | `522-539` | 共享 | 共享 | 共享 | 原生 | 否 | 确认 + 引用影响提示 |
-| P7 | 原生 mono 实例管理 | 旧版缺失 | 共享 | 共享 | 共享 | 原生 | 是 | 需补，不然 mono 无法管理 |
-| P8 | Wasm 定义卡片/排序 | `PluginPanel.vue:252-264`、`wasmPlugin.ts:97-127` | 共享 | 共享 | 共享 | 原生 | 否 | priority 降序 |
-| P9 | Wasm 全局启停 | `PluginPanel.vue:361-405` | 共享 | 共享 | 共享 | 原生 | 是（开关） | PUT 网关 plugins |
-| P10 | 添加/编辑自定义 Wasm | `407-420`、`ThirdPartyWasmDrawer.vue:301-554` | 共享 | 共享 | 共享 | 原生 | 是 | 5 个页签、JSON 大文本、密码字段 |
-| P11 | 删除 Wasm 定义 | `541-560` | 共享 | 共享 | 共享 | 原生 | 否 | 确认 + 重载提示 |
-| P12 | Wasm 绑定选择 | `PluginSelect.vue:233-254` | 共享 | 共享 | 共享 | 原生 | 是 | 基础配置下拉 |
-| P13 | Wasm 绑定方式 default/schema/yaml | `PluginSelect.vue:702-752` | 共享 | 共享 | 共享 | 原生 | 是 | xml 代码支持但 UI 未提供 |
-| P14 | 从镜像读取 schema 生成表单 | `PluginSelect.vue:392-409` | 共享 | 共享 | 共享 | 原生 | 是 | 依赖 admin-server 读 OCI/HTTP/file |
-| P15 | 绑定优先级 | `PluginListForm.vue:214-226` | 共享 | 共享 | 共享 | 原生 | 是 | int32；默认 0 |
-| P16 | 绑定拖拽排序 | `PluginListForm.vue:115-126` | 共享 | 原生适配 | 共享 | 原生 | 是 | 小程序用上/下移 |
-| P17 | 绑定详情/运行时配置 | `PluginBindingDetail.vue:70-144`、`PluginRuntimeConfigEditor.vue:163-206` | 共享 | 共享 | 共享 | 原生 | 是 | schema/json/yaml/xml |
-| P18 | 展示名称编辑 | `PluginBindingDetail.vue:102-105`、`PluginForm.vue:207-209` | 共享 | 共享 | 共享 | 原生 | 是 | 注意改的是共享实例 |
-| P19 | 插件刷新 | `Plugins.vue:26-28` | 共享 | 共享 | 共享 | 原生 | 否 | 需区分本地/服务端缓存 |
-| P20 | schema 表单（嵌套对象/数组） | `SchemaForm.vue:135-192` | 共享 | 共享 | 共享 | 原生 | 是 | 深度≤3；enum/oneOf 需补 |
-| P21 | schema JSON 字段 | `SchemaJsonField.vue:33-44` | 共享 | 共享 | 共享 | 原生 | 是 | 文本 JSON |
-| P22 | OCI/HTTP(S) 认证输入 | `ThirdPartyWasmDrawer.vue:493-546` | 共享 | 共享 | 共享 | 原生 | 是 | 密码掩码；不要日志泄露 |
+| P2 | 原生插件元数据/主页/仓库 | `772-788`、`584-590` | 共享 | 共享 | 共享 | 原生 | 否 | miniapp 展示主页/仓库并用 `wx.setClipboardData` 复制链接；`plugin-page.test.ts` 新增两种 URL 都复制且成功提示的页面 handler regression，1 passed。微信设备剪贴板/外链真实体验仍待人工验收 |
+| P3 | 原生实例列表/搜索 | `791-815` | 共享 | 共享 | 共享 | 原生 | 否 | 仅 named；miniapp 页面回归覆盖 display name 大小写不敏感搜索和前后空格处理，完整 `plugin-page.test.ts` 23/23、typecheck 通过；过滤还兼容 code/预览文本。真实目录列表仍依赖后台 |
+| P4 | 创建原生实例（schema 表单/JSON） | `464-521`、`PluginForm.vue:206-274` | 共享 | 共享 | 共享 | 原生 | 是 | Monaco 仅 Web/Desktop；小程序用原生表单/文本 JSON。schema field title 回退规则及 `x-title-i18n`、`x-description-i18n` 已与旧表单对齐；description 作为说明和输入提示，数字字段拒绝负数（旧版 `min=0`）；`schema-form.test.ts` 覆盖本地 ref、oneOf const picker、嵌套默认值和未知字段保留 |
+| P5 | 编辑原生实例 | `516-521` | 共享 | 共享 | 共享 | 原生 | 是 | 同上；编辑 schema 表单的 plugin 页面测试与 schema-form/plugin-page 定向测试通过；`schema-form.test.ts` 覆盖本地 ref 展开后的默认值/enum 保存语义，真实后台 schema 和微信 DevTools/真机仍待验收 |
+| P6 | 删除原生实例 | `522-539` | 共享 | 共享 | 共享 | 原生 | 否 | 旧版确认文案警示仍被引用的资源可能无法加载；新 miniapp 同样提示网关/路由引用影响。新增原生实例删除用例验证取消保留编辑态、确认后按最新草稿版本删除并清空表单；与 schema/plugin/gateway 定向测试合计 3 files / 51 tests、miniapp typecheck 通过 |
+| P7 | 原生 mono 实例管理 | 旧版缺失；修订设计 §R3 | 共享 | 共享 | 共享 | 原生 | 是 | mono 唯一身份可读/编辑；新增时按已加载目录阻止重复 code，并提示编辑已有实例；页面 regression 验证无 upsert。真实并发重复仍由后端约束，未做真实验收 |
+| P8 | Wasm 定义卡片/排序 | `PluginPanel.vue:252-264`、`wasmPlugin.ts:97-127` | 共享 | 共享 | 共享 | 原生 | 否 | priority 降序；同优先级按 spec `display_name` → `title` → `plugin_name` → 实例名排序。miniapp 原先用顶层 display name 排序，已补回归并修正 |
+| P9 | Wasm 全局启停 | `PluginPanel.vue:361-405` | 共享 | 共享 | 共享 | 原生 | 是（开关） | 与旧版一致读当前网关、只增删目标 Wasm 引用并保留其他字段。新增 miniapp 页面停用回归验证按读回版本写入，保留其他插件及 opaque 配置；既有启用/失败刷新和 helper 测试通过。仅 mock 写入 |
+| P10 | 添加/编辑自定义 Wasm | `407-420`、`ThirdPartyWasmDrawer.vue:301-554` | 共享 | 共享 | 共享 | 原生 | 是 | 旧版 5 个页签、JSON 大文本、密码字段；miniapp 六页签与凭据空值清除/preview 不触发 upsert 已定向覆盖 27/27。Web 本轮补齐旧版 OCI/header trim 与全空移除语义，新增 `wasm-auth.test.ts` 2/2；secret inputs 为密码框但当前仍从读取配置水合值。真实上游/代理日志、管理端存取、DevTools/真机未验收，详见迁移进度 |
+| P11 | 删除 Wasm 定义 | `541-560` | 共享 | 共享 | 共享 | 原生 | 否 | 页级回归验证确认后删除、清空旧草稿并显示全局重载提示；mock API，不是真实实例删除验收 |
+| P12 | Wasm 绑定选择 | `PluginSelect.vue:233-254` | 共享 | 共享 | 共享 | 原生 | 是 | route/gateway 页回归覆盖选择基础定义、resource-scoped Wasm binding 与引用链写入；mock only |
+| P13 | Wasm 绑定方式 default/schema/JSON/YAML/XML | `PluginSelect.vue:702-752` | 共享 | 共享 | 共享 | 原生 | 是 | Web 与 miniapp 均提供 default/schema/JSON/YAML/XML 模式选择；miniapp route/gateway 页面回归覆盖 YAML 对象 round-trip、XML 原文编辑与 `binding_config_mode` 保留，Web E2E 覆盖既有 XML 绑定原文保存。仅 fixture/page mock；真实 runtime 仍待人工验收 |
+| P14 | 从镜像读取 schema 生成表单 | `PluginSelect.vue:392-409` | 共享 | 共享 | 共享 | 原生 | 是 | contract/API 将 image/schema 请求转发 admin-server；route 创建与版本不匹配阻断有 fixture。真实 OCI/HTTP/file 拉取仍依赖后台和镜像，未验收 |
+| P15 | 绑定优先级 | `PluginListForm.vue:214-226` | 共享 | 共享 | 共享 | 原生 | 是 | gateway 回归覆盖新增/编辑 priority、溢出 int32 拒绝并保留值 |
+| P16 | 绑定拖拽排序 | `PluginListForm.vue:115-126` | 共享 | 原生适配 | 共享 | 原生 | 是 | 小程序用上/下移；gateway page 测试覆盖重排并保存引用链 |
+| P17 | 绑定详情/运行时配置 | `PluginBindingDetail.vue:70-144`、`PluginRuntimeConfigEditor.vue:163-206` | 共享 | 共享 | 共享 | 原生 | 是 | route/gateway 覆盖 default/schema/json/yaml/xml 编辑/保存或原文保留；新增 rule/backend scope 既有绑定 JSON 编辑回归，miniapp 与 Web fixture 均验证只更新目标嵌套引用并保留 priority；受 mock 限制 |
+| P18 | 展示名称编辑 | `PluginBindingDetail.vue:102-105`、`PluginForm.vue:207-209` | 共享 | 共享 | 共享 | 原生 | 是 | 插件实例编辑走共享 instance upsert；route/gateway 绑定显示名编辑保留 binding 身份，需真实服务确认共享资源影响范围 |
+| P19 | 插件刷新 | `Plugins.vue:26-28` | 共享 | 共享 | 共享 | 原生 | 否 | 插件页刷新回归覆盖清缓存/重载列表及不确定版本恢复；服务端缓存失效仍依赖后台行为，未做真实验收 |
+| P20 | schema 表单（嵌套对象/数组） | `SchemaForm.vue:135-192` | 共享 | 共享 | 共享 | 原生 | 是 | 嵌套字段/数组项、enum/nullable anyOf/同类型 oneOf 覆盖；复杂组合回退 JSON，详见进度记录 |
+| P21 | schema JSON 字段 | `SchemaJsonField.vue:33-44` | 共享 | 共享 | 共享 | 原生 | 是 | 非法 JSON 保留可修复文本并阻止保存，有 page/helper regression |
+| P22 | OCI/HTTP(S) 认证输入 | `ThirdPartyWasmDrawer.vue:493-546` | 共享 | 共享 | 共享 | 原生 | 是 | password 输入、列表预览脱敏、确认后展开、preview request payload 覆盖；Web fixture E2E 验证编辑清空全部已知 OCI 字段时删除空 `oci_auth`、保留未改 HTTP header、重复名称后行覆盖、空行忽略；不完整 name/value 仍禁用保存。Miniapp `wasm-definition.test.ts` 验证空行忽略/重复名称后行覆盖（9/9，typecheck 通过）。真实网络/服务日志/WXML/设备行为不在这些夹具证明范围 |
 
 ### 6.6 AI 队列
 
 | # | 操作 | 旧证据 | Web | App | Desktop | 小程序 | 定制表单 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A1 | 宿主配置打开/保存 | `AiQueueRateLimit.vue:75-101`、`AiGatewayQueueDrawer.vue:214-229` | 共享 | 共享 | 共享 | 原生 | 是 | Wasm URL/服务地址/VM 池 |
-| A2 | 宿主 schema 表单 | `AiGatewayQueueDrawer.vue:310-318` | 共享 | 共享 | 共享 | 原生 | 是 | AI Gateway schema |
-| A3 | 文档页签 | `323-333` | 共享 | 共享 | 共享 | 原生 | 否 | 旧版 `<pre>` 原文 |
-| A4 | 队列观测空态 | `334-336` | 共享 | 共享 | 共享 | 原生 | 否 | 预留 |
-| A5 | 配额列表/过滤 | `TenantRateLimitTable.vue:373-432` | 共享 | 共享 | 共享 | 原生 | 是（筛选表单） | 固定高 520 |
-| A6 | 配额新增/编辑 | `435-513` | 共享 | 共享 | 共享 | 原生 | 是 | 内联编辑器，不是弹窗 |
-| A7 | 配额删除 | `325-345` | 共享 | 共享 | 共享 | 原生 | 否 | 确认 |
-| A8 | Redis key 预览 | `172-183`、`479-482` | 共享 | 共享 | 共享 | 原生 | 否 | 纯函数复用 |
-| A9 | 解析当前请求 | `299-323`、`484-507` | 共享 | 共享 | 共享 | 原生 | 是（结果面板） | 命中/回退/候选 key |
-| A10 | TTL 永久/有限 | `475-478` | 共享 | 共享 | 共享 | 原生 | 是 | 旧版清除能力弱，需改进 |
+| A1 | 宿主配置打开/保存 | `AiQueueRateLimit.vue:75-101`、`AiGatewayQueueDrawer.vue:214-229` | 共享 | 共享 | 共享 | 原生 | 是 | AI host 页回归覆盖读版本更新并保留其他 clusters/fields；mock only |
+| A2 | 宿主 schema 表单 | `AiGatewayQueueDrawer.vue:310-318` | 共享 | 共享 | 共享 | 原生 | 是 | schema 字段 round-trip 有 page regression；浏览器 E2E 覆盖 schema 失败后仍可保存手工配置；真实镜像/schema 未验收 |
+| A3 | 文档页签 | `323-333` | 共享 | 共享 | 共享 | 原生 | 否 | Web E2E 覆盖 README 读取和 API 失败时独立提示；miniapp 提供 `<pre>`，真实 admin-server 文档源未验收 |
+| A4 | 队列观测空态 | `334-336` | 共享 | 共享 | 共享 | 原生 | 否 | 空态/预留不承诺实时队列指标；Web 页面为空数据态和错误态有 E2E fixture |
+| A5 | 配额列表/过滤 | `TenantRateLimitTable.vue:373-432` | 共享 | 共享 | 共享 | 原生 | 是（筛选表单） | Web E2E 覆盖筛选与 reset；受控 mock API |
+| A6 | 配额新增/编辑 | `435-513` | 共享 | 共享 | 共享 | 原生 | 是 | Web E2E 覆盖编辑/新建字段与数据写回；TTL/数值校验有回归；fixture only |
+| A7 | 配额删除 | `325-345` | 共享 | 共享 | 共享 | 原生 | 否 | Web E2E 覆盖确认删除后列表移除；fixture only |
+| A8 | Redis key 预览 | `172-183`、`479-482` | 共享 | 共享 | 共享 | 原生 | 否 | Web E2E 与 miniapp `ai-rule-page.test.ts` 覆盖空租户占位及动态 sanitize key；与真实 Redis 键未核对 |
+| A9 | 解析当前请求 | `299-323`、`484-507` | 共享 | 共享 | 共享 | 原生 | 是（结果面板） | Web E2E 覆盖匹配限制/候选 Redis key 结果面板；fixture only |
+| A10 | TTL 永久/有限 | `475-478` | 共享 | 共享 | 共享 | 原生 | 是 | Web E2E 覆盖非正 TTL 拒绝；miniapp 新增有限 TTL 输入/正数校验，留空删除 `ttl_secs` 并清掉只读 `ttl_remaining_secs`，页面回归覆盖 |
 
 ### 6.7 实例与登录
 
 | # | 操作 | 旧证据 | Web | App | Desktop | 小程序 | 定制表单 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| I1 | 实例列表/健康 | `Instances.vue:70-85`、`170-188` | 共享 | 共享 | 共享 | 原生 | 否 | 未知态 |
-| I2 | 复制实例 ID | `134-141` | 共享 | 原生适配 | 共享 | 原生 | 否 | 剪贴板 |
-| I3 | 网关重载 | `113-132` | 共享 | 共享 | 共享 | 原生 | 否 | 建议加确认 |
-| I4 | 全局重载 | `99-111` | 共享 | 共享 | 共享 | 原生 | 否 | 建议加确认 |
-| I5 | 路由级重载 | 旧版缺失 | 共享 | 共享 | 共享 | 原生 | 是（选网关+路由） | 后端已有接口 |
-| I6 | 登录 ak/sk | `Login.vue:18-31` | 共享 | 共享 | 共享 | 原生 | 是 | 新架构 Hai IAM；旧入口仅兼容期 |
-| I7 | 登录错误提示 | 旧版缺失 | 共享 | 共享 | 共享 | 原生 | 否 | 必须补 |
+| I1 | 实例列表/健康 | `Instances.vue:70-85`、`170-188` | 共享 | 共享 | 共享 | 原生 | 否 | 健康不可用或缺少单实例状态时列仍可见且标为“未知”；`instances-page.test.ts` 覆盖健康请求失败场景，未在微信 DevTools 验收样式 |
+| I2 | 复制实例 ID | `134-141` | 共享 | 原生适配 | 共享 | 原生 | 否 | 新增实例行复制按钮；回归验证剪贴板收到目标 ID，真机剪贴板能力未验收 |
+| I3 | 网关重载 | `113-132` | 共享 | 共享 | 共享 | 原生 | 否 | `instances-page.test.ts` 验证目标实例/当前 gateway/version 与回读版本；真实操作和确认仍待人工验收 |
+| I4 | 全局重载 | `99-111` | 共享 | 共享 | 共享 | 原生 | 否 | Web 确认框展示目标实例并覆盖取消无请求/确认发请求；小程序 `confirmAction` 覆盖取消无请求/确认后提交目标实例/version。新工程 E2E + mock 单测通过；真实操作仍待人工验收 |
+| I5 | 路由级重载 | 旧版缺失 | 共享 | 共享 | 共享 | 原生 | 是（选网关+路由） | 新增 `instances-page.test.ts` 覆盖目标实例、当前网关/路由/版本随版本化写请求提交及新版本读回；mock only，真实 reload 未验收 |
+| I6 | 登录 ak/sk | `Login.vue:18-31` | 共享 | 共享 | 共享 | 原生 | 是 | mini flow 覆盖登录 API/会话生命周期，login page regression 覆盖 trim 后的凭据提交；实际 Hai IAM 账号未验收 |
+| I7 | 登录错误提示 | 旧版缺失 | 共享 | 共享 | 共享 | 原生 | 否 | login page regression 覆盖认证失败可见错误、loading 恢复且不导航；真实 IAM 拒绝响应未验收 |
 
 ---
 
@@ -1367,55 +1371,57 @@ Route 保存/改名/删除
 
 | # | 怪癖 | 影响 | 证据 | 建议 |
 | --- | --- | --- | --- | --- |
-| Q1 | 抽屉“取消”直接 `drawerOpen=false`，绕过 `before-close` | 未保存内容丢失且无确认 | `Gateways.vue:285`、`RouteEditorDrawer.vue:1134`、`216-223`、`655-661` | 取消也走统一确认 |
-| Q2 | 网关表单注释说可改运行时名称，但编辑模式 `readonly` | 无法重命名网关 | `Gateways.vue:22`、`GatewayForm.vue:125` | 明确产品决策；若要支持需后端 rename |
-| Q3 | 路由类型 HTTP↔MCP 切换整体重置模型 | 误切会丢失已填内容 | `RouteEditorDrawer.vue:273-282` | 切换前确认，或保留可映射字段 |
-| Q4 | HTTP 规则级 timeout/timeout_mode/balance_policy 无 UI | 只能 JSON 编辑，普通用户不可见 | `RouteEditorDrawer.vue:920-1087`、`343-345` | 补控件 |
-| Q5 | 网关 observability 无 UI | 只能 JSON 导入 | `Gateways.vue:96-104`、`GatewayForm.vue` 无字段 | 补表单或明确不支持 |
-| Q6 | 监听器 TLS `http2` 无 UI | 只能 JSON 编辑 | `ListenerForm.vue:40-45`、`85-92` | 补开关 |
-| Q7 | 高级 JSON “应用”无结构校验 | 可写入缺字段模型，后续渲染报错 | `RouteEditorDrawer.vue:609-617`、`GatewayForm.vue:42-53` | 加 Zod/JSON Schema 校验 |
-| Q8 | 路由创建/复制无重名检查 | 后端 500，提示不明确 | `Routes.vue:203-226`、`fs/create.rs:37-46` | 前端预检 + 冲突错误码 |
-| Q9 | 路由 rename 非原子 | 失败可能新旧并存 | `service.rs:145-162` | 服务端事务/补偿 |
-| Q10 | 路由改名/删除不清理 Wasm 绑定配置 | 孤儿配置 | `wasmPlugin.ts:351-394`、`Routes.vue:228-241` | 明确级联或清理任务 |
-| Q11 | 路由插件重复限制只在 route 范围 | rule/backend/gateway 可重复 code | `PluginListForm.vue:99-109` | 统一策略或明确允许 |
-| Q12 | 点击 tag 关闭立即本地删除，无确认 | 误删绑定 | `PluginListForm.vue:168-175` | 加确认/撤销 |
-| Q13 | 绑定详情改展示名会改共享实例 | 影响其他资源 | `PluginBindingDetail.vue:46-65` | UI 明示“全局改名” |
-| Q14 | mono 插件在插件中心无法列/编辑 | 功能缺失 | `PluginPanel.vue:789-791`、`791-842` | 补 mono 实例页 |
-| Q15 | PluginSelect 自定义保存固定 `kind:'named'` | mono 插件创建错误 | `PluginSelect.vue:461-483`、`PluginForm.vue:146-153` | 按 attr.mono 写 kind |
-| Q16 | 插件属性缓存 1 小时，页面刷新不强制刷新 | 新插件/删除不即时可见 | `admin-server/src/service/plugin.rs:26`、`Plugins.vue:26-28` | 提供“刷新服务端缓存”或缩短 TTL |
-| Q17 | Wasm 绑定复制 `oci_auth`/`http_headers` | 敏感信息多份存储 | `wasmPlugin.ts:351-394` | 绑定只存引用，不复制 secret；或服务端加密 |
-| Q18 | 未保存预览 API 未接 + contract 缺 httpHeaders | 无法预览私有 HTTP 制品 | `api/aiGateway.ts:96-101`、`spacegate-schemas.ts:162-166` | 补 contract + UI |
-| Q19 | 写成功不返回版本，靠后续 GET 同步 | 连续写易 409 | `version_control.rs:32-57`、`dist/api/index.js:62-74` | 按设计文档 P1：写后服务端重新读取版本并显式返回 |
-| Q20 | reload POST 推进版本 | 重载导致其他标签页冲突 | `version_control.rs:59-65`、`discovery.rs:155-213` | 重载应只读语义，或单独版本域 |
-| Q21 | 409 后客户端版本不更新 | 必须刷新整页 | `dist/api/index.js:75-83`、`main.ts:63-66` | 冲突错误携带 serverVersion，前端刷新快照 |
-| Q22 | 登录失败静默且仍 reload | 可能循环弹窗 | `Login.vue:8-14`、`main.ts:54-57` | 显示错误、不 reload |
-| Q23 | `en-US` 与消息 key `en` 不一致 | 英文可能回退失败 | `App.vue:40-43`、`locales/index.ts:5-10` | 统一 locale key + fallback |
-| Q24 | es 文案不完整且不可选 | 第三种语言形同虚设 | `locales/es.ts:2-6`、`65-110` | 要么补全并暴露，要么移除 |
+| Q1 | 旧抽屉“取消”绕过未保存确认 | 未保存内容丢失且无确认 | 旧 `Gateways.vue:285`、`RouteEditorDrawer.vue:1134` | 新 Gateway/Route editor 关闭时比较初始草稿并提示确认；miniapp `mayDiscard` 同步覆盖返回/切换，已有回归 |
+| Q2 | 网关编辑模式名称只读 | 不能重命名运行时网关 | 旧 `Gateways.vue:22`、`GatewayForm.vue:125` | 新工程保留只读编辑约束；重命名需服务端 rename 能力，属于后端限制而非 UI 漏迁 |
+| Q3 | HTTP↔MCP 切换重置模型 | 误切会丢失已填内容 | 旧 `RouteEditorDrawer.vue:273-282` | 新 shared 和 miniapp 在切换前请求确认；miniapp route regression 覆盖确认与默认模型 |
+| Q4 | HTTP 规则级 timeout/timeout_mode/balance_policy 无 UI | 普通用户只能 JSON 编辑 | 旧 `RouteEditorDrawer.vue:920-1087`、`343-345` | 新 shared RouteEditor 有规则级字段；miniapp routes 原生页面也暴露超时/负载选择器 |
+| Q5 | 旧网关 observability 无专用 UI | 仅可 JSON 导入 | 旧 `Gateways.vue:96-104`、`GatewayForm.vue` | 新 shared 表单提供 observability JSON 编辑；miniapp 仍以高级 JSON 编辑，不是旧活动 UI 功能回退 |
+| Q6 | 监听器 TLS `http2` 无专用 UI | 只能 JSON 编辑 | 旧 `ListenerForm.vue:40-45`、`85-92` | 新 shared Switch 与 miniapp switch 均映射 TLS `http2`，保留启停操作 |
+| Q7 | 高级 JSON “应用”缺少完整 schema 校验 | 可写入字段缺失或类型错误的模型 | 旧 `RouteEditorDrawer.vue:609-617`、`GatewayForm.vue:42-53` | Gateway 与 Route JSON 均校验 Rust 已知字段结构/类型，覆盖监听器/TLS/Observability/plugin binding，以及 HTTP/MCP 路由、嵌套 rule/match/backend/plugin binding；未知扩展字段原样保留。shared gateway/route schema 测试 6 项、相关 store 测试 16 项通过，typecheck 0 errors/warnings、改动文件定向 lint 通过；Gateway/Route fixture E2E 各 1/1。仍无真实服务端导入验收 |
+| Q8 | 路由创建/复制无重名检查 | 后端异常，提示不明确 | 旧 `Routes.vue:203-226`、`fs/create.rs:37-46` | shared 路由创建入口和 miniapp 创建/复制入口均先刷新当前网关路由，再开放草稿；miniapp 刷新失败、加载中、网关切换或复制源已消失时不继续，写入仍用开始草稿时的 `draftVersion`。Web `blocks creating a duplicate route name before sending the write request` E2E 修复后 1/1；miniapp 创建/复制、刷新失败和源 route 消失页面用例 4/4；当前 `route-page.test.ts` 42/42、miniapp 全量 26 files / 176 tests 通过、typecheck 通过。服务端仍需处理列表刷新后的并发冲突，真实后端未验收 |
+| Q9 | 路由 rename 非原子 | 失败可能新旧并存 | `service.rs:145-162` | 新管理端跟踪 rename 失败并提示检查/刷新；新增 Rust 删除失败回归，确认 create-new 成功后 delete-old 返回错误时新旧 route 都保留，4 个 rename 单测通过。无事务保证，通用层盲目回滚会有并发风险；新端 E2E 1/1 覆盖失败后阻止重试至刷新。真实后端/存储故障仍未实测 |
+| Q10 | 路由改名/删除不清理 Wasm 绑定配置 | 孤儿配置 | `wasmPlugin.ts:351-394`、`Routes.vue:228-241` | Redis route delete 只删 route hash；K8s delete 先移除 route target 的 filter binding 再删 Route CRD，但不删独立 plugin config。配置可能共享多 target，未有引用计数/级联契约，迁移 UI 不猜测清理以免误删共享实例 |
+| Q11 | 路由插件重复限制只在 route 范围 | rule/backend/gateway 可重复 code | `PluginListForm.vue:99-109` | 源码语义已核实：`crates/shell/src/server.rs` 分别把 gateway/route/rule/backend plugins mount 到不同 `MountPointIndex`，`PluginRepository::mount` 按 binding ID 挂载且不按 code 跨 scope 去重；同一 code 的独立实例可作用于不同层。新端保留 route chain 内去重、允许不同 scope 分别绑定，符合运行时结构，不属于缺失限制；真实执行仍由用户验收 |
+| Q12 | 旧 tag 关闭会本地移除绑定 | 草稿误操作 | `PluginListForm.vue:168-175` | 新 RouteEditor 在未保存草稿中移除，需保存资源才持久化；关闭时会进入未保存确认，不会立即删除服务端绑定 |
+| Q13 | 绑定详情改展示名会改共享实例 | 影响其他资源 | `PluginBindingDetail.vue:46-65` | 新 PluginEditor 与 miniapp 实例编辑表单已增加三语言说明，提示此展示名称共享到引用该实例的网关/路由；Web E2E 断言提示可见 |
+| Q14 | 旧插件中心不列/编辑 mono 插件 | 功能缺失 | `PluginPanel.vue:789-791`、`791-842` | 新 shared 插件实例区列出并编辑 mono；miniapp regression 覆盖 mono 实例更新 |
+| Q15 | 旧 PluginSelect 保存固定 `kind:'named'` | mono 插件创建错误 | `PluginSelect.vue:461-483`、`PluginForm.vue:146-153` | 新工程按 `attr.mono` 生成 mono 身份；miniapp regression 覆盖 mono 更新并阻止同 code 重复创建 |
+| Q16 | 插件属性缓存 1 小时，页面刷新不强制刷新 | 新插件/删除不即时可见 | 旧实现 `admin-server/src/service/plugin.rs:26`、`Plugins.vue:26-28` | 新共享页提供“刷新插件缓存”并调用 `plugin.refresh`，更新属性列表和版本；小程序插件页 `onRefresh` 也先刷新服务端缓存再刷新目录。shared store 权限/缓存/版本测试 2 项，miniapp 页面 handler 测试 1 项通过；均为 mock，真实上游缓存行为仍待人工验收 |
+| Q17 | Wasm 绑定复制 `oci_auth`/`http_headers` | 敏感信息多份存储 | 旧 `wasmPlugin.ts:351-394`、新 `spacegate-admin-shared/src/lib/spacegate/wasm-binding.ts:createWasmBindingConfig` | 旧、新端都从定义 `spec` 复制模块来源与认证字段，再覆盖绑定身份和资源专属 `default_config`/`plugin_config`；这是 Rust runtime 加载独立绑定所需兼容数据，不能仅为去重而删。新 shared test 现断言 `oci_auth`、HTTP Authorization header 被保留；新 Web UI 对 OCI password/token 和 HTTP header value 用 password input 掩码，服务端 SpaceGate request debug log 只记 method/path/status，不记 body。真实上游存储与日志仍待用户验收 |
+| Q18 | 未保存预览 API 未接 + contract 缺 httpHeaders | 无法预览私有 HTTP 制品 | `api/aiGateway.ts:96-101`、`spacegate-schemas.ts:162-166` | 新 contract 与 `previewWasmSchema` 已接通并转发 `httpHeaders`；Web/miniapp 预览路径有 mock 覆盖，私有制品的真实上游验收待人工完成 |
+| Q19 | 写成功不返回版本，靠后续 GET 同步 | 连续写易 409 | `version_control.rs:32-57`、`dist/api/index.js:62-74` | 新服务端适配器在成功写后重读 `/config/names` 取得版本；适配器测试覆盖。真实 Rust 部署的连续写/版本头仍待人工验收 |
+| Q20 | reload POST 推进版本 | 重载导致其他标签页冲突 | `version_control.rs:59-65`、`discovery.rs:155-213` | 新端按版本化写请求处理 reload，并同步保存后的版本，不将 reload 当只读请求；符合当前 Rust 语义。重载后跨标签页并发行为仍待人工验收 |
+| Q21 | 409 后客户端版本不更新 | 必须刷新整页 | `dist/api/index.js:75-83`、`main.ts:63-66` | 新适配器将 409 与 `serverVersion` 映射为冲突，页面可提示重载最新快照后继续；adapter/UI 测试为 mock，真实并发冲突交由人工验收 |
+| Q22 | 登录失败静默且仍 reload | 可能循环弹窗 | `Login.vue:8-14`、`main.ts:54-57` | 新 miniapp 登录页捕获错误并显示错误态，不触发 `reLaunch`；`login-page.test.ts` 覆盖 unauthorized。Web `@h-ai/ui` AuthPanel 新增 fullstack E2E：错误凭据后仍停留登录面板、显示 alert、不出现 logout，1 passed（本地集成夹具，真实认证服务仍由用户验收） |
+| Q23 | `en-US` 与消息 key `en` 不一致 | 英文可能回退失败 | 旧版 `App.vue:40-43`、`locales/index.ts:5-10` | 新工程共享层与四端均用完整 `zh-CN`/`en-US`/`ja-JP` locale key；miniapp 页面切换及文案刷新已测，Web fullstack isolated fixture 账号/偏好用例已运行并通过 |
+| Q24 | es 文案不完整且不可选 | 第三种语言形同虚设 | 旧版 `locales/es.ts:2-6`、`65-110` | 已决策移除不可用 `es` 菜单项/迁移；旧活动菜单仅 zh-CN/en-US，新版按修订设计支持 zh-CN/en-US/ja-JP |
 | Q25 | 无主题切换 | 设计文档只要求语言/主题共享层，旧版无 | `App.vue:105-161` | 新框架可新增，不算回归缺失 |
-| Q26 | AI Gateway fetch 绕过 SDK/401/版本 | 认证/错误语义不一致 | `api/aiGateway.ts:60-77` | 由服务端代理，统一错误码 |
-| Q27 | `.env` 的 `VITE_API_BASE_PATH='admin'` 与 `aiGateway.ts` 默认 `/api` 冲突 | 开发构建可能把 schema 请求发到相对 `admin/...` | `.env:1`、`api/aiGateway.ts:52-58` | 统一环境变量名与值 |
-| Q28 | DELETE 携带 JSON body | 某些代理/小程序请求层会丢 body | `api/aiGateway.ts:139-144` | 改为 path/query 标识或 POST |
-| Q29 | TTL `clearable` 用在 input-number | 无法清空为永久 | `TenantRateLimitTable.vue:475-478` | 显式永久开关 |
-| Q30 | 两处 TenantRateLimitTable 独立状态 | 数据不同步 | `AiQueueRateLimit.vue:94`、`AiGatewayQueueDrawer.vue:321` | 共享 store 或只保留一处 |
-| Q31 | 策略下拉英文界面仍中文 | i18n 不一致 | `TenantRateLimitTable.vue:378-381`、`455-458` | 统一 i18n key |
-| Q32 | “取消”重置为新增而非恢复 | 编辑误操作丢原值 | `TenantRateLimitTable.vue:511` | 恢复快照 |
-| Q33 | 路由页无刷新按钮 | 只能切网关/重进 | `Routes.vue:253-261` | 补刷新 |
-| Q34 | 概览切网关不刷新指标 | 数据可能陈旧 | `Overview.vue:169` | 统一切换刷新 |
-| Q35 | 顶栏刷新不校正失效选择 | 可能保留已删除网关 | `ConsoleGatewaySelect.vue:54-56`、`79-81` | 刷新后校验并回退 |
-| Q36 | 实例 ID 直接拼 `http://` | 依赖 ID 为 host:port | `Instances.vue:179-183` | 服务端返回 api_url |
-| Q37 | 实例页网关选择与顶栏不同步 | 重载目标易错 | `Instances.vue:19`、`73-74` | 共享选择器或明确独立 |
-| Q38 | 全局重载无确认 | 误点影响全量配置 | `Instances.vue:201-208` | 加确认/二次确认 |
-| Q39 | 后端发现入口丢失 | 用户无法从已发现后端选择 | `BackendForm.vue:32-67`、活动抽屉无引用 | 恢复或明确移除 |
-| Q40 | 概览“插件配置”含绑定配置 | 指标语义误导 | `Overview.vue:128-135` | 明确“实例配置”还是“插件类型” |
-| Q41 | 插件删除无成功提示 | 用户不确定是否成功 | `PluginPanel.vue:522-539` | 统一 toast |
-| Q42 | 保存失败多处只显示通用文案 | 排障困难 | `Gateways.vue:177-179`、`Routes.vue:221-223` | 透传错误码/文本 |
-| Q43 | 删除取消靠字符串比较 | Element Plus 版本差异风险 | `Gateways.vue:192-195`、`Routes.vue:237-240` | 用 Promise reject 类型判断 |
-| Q44 | `Api.getClient()` 依赖 `self` 全局 | 非浏览器环境不可用 | `dist/api/index.js:16-21` | 新客户端显式实例化 |
-| Q45 | Monaco schema URI 写死 `http:///api/...` | 依赖代理/协议 | `hooks/index.ts:8-22` | 用 contract 客户端或去掉 Monaco 依赖 |
+| Q26 | AI Gateway fetch 绕过 SDK/401/版本 | 认证/错误语义不一致 | `api/aiGateway.ts:60-77` | 新端由服务端 `aiRequest` 代理，统一 timeout/transport/upstream error 映射且浏览器不直连；该 AI Gateway API 当前 contract 无 SpaceGate 配置版本语义，服务端认证/部署授权仍待真实环境核验 |
+| Q27 | `.env` 的 `VITE_API_BASE_PATH='admin'` 与 `aiGateway.ts` 默认 `/api` 冲突 | 开发构建可能把 schema 请求发到相对 `admin/...` | `.env:1`、`api/aiGateway.ts:52-58` | 新端 AI Gateway base URL 为服务端配置 `aiGatewayBaseUrl`，管理 contract 通过同源服务端路由；不存在旧 `VITE_API_BASE_PATH` 拼接路径，已从新端源码/config 核对 |
+| Q28 | DELETE 携带 JSON body | 某些代理/小程序请求层会丢 body | `api/aiGateway.ts:139-144` | 旧 Vue 与新端同为 `DELETE /v1/admin/tenant-rate-limits` + rule JSON body；补强 upstream client 单测，断言 method/body 精确，16/16 passed。只证明请求形状与旧端一致，不证明真实 gateway/代理兼容；未发现可替代契约，待用户真实环境核验后再调整 |
+| Q29 | TTL `clearable` 用在 input-number | 无法清空为永久 | `TenantRateLimitTable.vue:475-478` | 新 shared/miniapp 表单把空 TTL 映射为删除 `ttl_secs`，并清掉只读 `ttl_remaining_secs`；miniapp 回归验证，服务端永久语义待人工确认 |
+| Q30 | 两处 TenantRateLimitTable 独立状态 | 数据不同步 | `AiQueueRateLimit.vue:94`、`AiGatewayQueueDrawer.vue:321` | 新端统一由 shared AI Queue 页面/store 管理规则列表与编辑，无双表副本；miniapp 只有一个规则页。源码核对 |
+| Q31 | 策略下拉英文界面仍中文 | i18n 不一致 | `TenantRateLimitTable.vue:378-381`、`455-458` | Web 新增 abandon/queue/wait 的 zh-CN/en-US/ja-JP 说明键，覆盖 AI Queue 筛选、规则编辑、服务端解析选择器；miniapp 原有三语选项已核对。共享/Web typecheck、shared 45 tests、i18n compile 通过。E2E 三语筛选和编辑选项 1/1 通过（`HAI_E2E_WEB_URL` 需与本轮 preview 端口一致）；真实环境显示仍由用户人工验收 |
+| Q32 | “取消”重置为新增而非恢复 | 编辑误操作丢原值 | `TenantRateLimitTable.vue:511` | 新端编辑器只维护独立草稿，保存才调用 upsert；miniapp 回归验证编辑已保存规则后尝试切换到新建、取消确认时保留编辑索引、已存 snapshot 与当前草稿且不触发写入 |
+| Q33 | 路由页无刷新按钮 | 只能切网关/重进 | `Routes.vue:253-261` | 新 shared 路由页有刷新动作；miniapp `onRefresh` 重读当前所选 gateway 路由列表。新增 page regression 验证更新读回项，1 passed / 33 skipped |
+| Q34 | 概览切网关不刷新指标 | 数据可能陈旧 | `Overview.vue:169` | miniapp `onGatewayChange` 写共享选择并重新读当前 gateway、routes、metrics；新增 page regression 验证新网关读数及 route count。shared store `loadOverview` 也重读当前 gateway/routes。测试为 mock |
+| Q35 | 顶栏刷新不校正失效选择 | 可能保留已删除网关 | `ConsoleGatewaySelect.vue:54-56`、`79-81` | 新 miniapp 共享选择 helper 在网关列表变化时把失效选择回退到首项，新增 regression 覆盖；shared `loadOverview` 也校验 selected gateway 是否仍存在。Web 当前无顶栏网关选择器 |
+| Q36 | 实例 ID 直接拼 `http://` | 依赖 ID 为 host:port | `Instances.vue:179-183` | 新客户端不在前端拼接 instance URL；将 instance 标识传给服务端代理 `/discovery/instance/reload/{scope}` query。实例页测试覆盖选中 instance/gateway/route 参数；Rust discovery 的真实寻址待人工验收 |
+| Q37 | 实例页网关选择与顶栏不同步 | 重载目标易错 | `Instances.vue:19`、`73-74` | 新 shared 实例页直接更新全局 store 的 `selectedGateway` 并清空旧 route；miniapp overview/instances 复用同一 gateway state/helper，新增概览切换 regression 断言当前选择同步。设备导航行为仍待验收 |
+| Q38 | 全局重载无确认 | 误点影响全量配置 | `Instances.vue:201-208` | shared 实例页全局重载先打开目标实例确认 Modal，取消不发请求，确认后才 reload；Web fixture E2E 覆盖确认/取消及目标参数（mock 验证，不替代真实环境验收） |
+| Q39 | 后端发现入口差异待确认 | 后端编辑时需能从服务端发现结果选择 | `BackendForm.vue:32-67`、新 `RouteEditor.svelte` 与小程序路由页 | 已核新 shared 与小程序都提供发现/选取入口；miniapp handler 回归和 Web E2E 覆盖选择 K8s/File backend 并保留/清除 port 语义，不需补行为 |
+| Q40 | 概览“插件配置”指标名称含混 | 容易与网关/路由绑定混淆 | `Overview.vue:128-135` | 核对旧版 `getConfigPluginAll()` 与新 `plugin.list()` 均统计插件实例；共享三语言统一改称“插件实例”，小程序对应指标已是该文案 |
+| Q41 | 插件删除无成功提示 | 用户不确定是否成功 | `PluginPanel.vue:522-539` | 新工程 shared store 在删除并刷新后写入成功 notice，小程序成功后 toast；已核源确认，不需额外行为修改 |
+| Q42 | 保存失败多处只显示通用文案 | 排障困难 | `Gateways.vue:177-179`、`Routes.vue:221-223` | shared mutation 错误现按 HTTP 类别显示本地化提示并附后端错误码；网关/路由 503 回归验证错误码可见且不回显后端 message |
+| Q43 | 旧删除取消靠字符串比较 | Element Plus 版本差异风险 | `Gateways.vue:192-195`、`Routes.vue:237-240` | 新 shared Gateway/Route editor 使用显式确认状态和确定/取消按钮，不依赖 Promise reject 文案；miniapp 使用 boolean `confirmAction` |
+| Q44 | `Api.getClient()` 依赖 `self` 全局 | 非浏览器环境不可用 | `dist/api/index.js:16-21` | 新工程使用 `apiClient.create(spacegateAdminContract)` 显式实例化并通过 `globalThis`/依赖注入解析配置；不再调用旧 `getClient()` |
+| Q45 | Monaco schema URI 写死 `http:///api/...` | 依赖代理/协议 | `hooks/index.ts:8-22` | 新工程无 Monaco/硬编码 schema URI；通过管理 contract 的 `wasmSchema` / `previewWasmSchema` 请求，schema 以只读文本显示 |
 
 ---
 
-## 8. 最高风险迁移项（按风险排序）
+## 8. 迁移前最高风险项（历史风险分析；当前结论见逐项核验记录）
+
+> 本节描述的是迁移前可能发生的风险，不是当前待办清单。后续补回能力及修复见第 7 节 Q 项（包括 contract/filter、Wasm 预览、并发版本语义、专用表单、路由生命周期、发现与路由级重载）；fixture 覆盖仍不等同真实环境验收。
 
 1. **Contract 能力缺口：按 code 查插件实例。** 旧 UI 的插件中心、插件选择器、AI 队列都依赖 `GET /config/plugins/{code}`；P1 contract 的 `plugin.list` 没有 code 过滤。若不补，迁移后要么全量拉取（行为/性能变化），要么在 serv 端做隐式过滤（contract 不显式）。这是最容易在“页面能打开”之后才暴露的缺口。
 2. **Wasm 绑定复制 secret 的模型。** `buildBoundWasmPluginConfig` 用 `...baseSpec` 把 `oci_auth`、`http_headers` 复制到每个资源绑定配置；旧 UI 只做显示掩码。迁移若继续复制，会把私有仓库密码/Authorization 分散到大量配置文件；若改为引用，又必须兼容旧绑定字段。需要在 P1/P3 明确数据模型和迁移/脱敏策略。
@@ -1426,11 +1432,11 @@ Route 保存/改名/删除
 7. **跨页失效与重载。** 旧版保存后不自动重载，靠提示和手动实例页；切网关只刷新部分页面；插件缓存 1 小时。新共享 store 如果做成“全局响应式自动刷新”，可能改变语义；如果完全照旧，又会出现陈旧数据。需要明确“保存→刷新列表→提示重载→实例页执行”的状态机。
 8. **AI Gateway 旁路。** 旧版 schema/readme/租户规则直接 `fetch('/ai-gateway')`，不带 SDK 版本/401 处理，同源时可能携带 admin JWT Cookie，且 DELETE 带 body。新架构应由 serv 代理并统一鉴权/错误码，同时保留 readme 原文、schema 表单、resolve 结果和 TTL 语义。
 9. **i18n 与平台能力。** `en-US` vs `en`、es 不完整、无主题、无持久化；小程序还需要 `wx` 剪贴板/文件/导航/定时器适配。迁移前应确定 locale 清单（zh-CN/en-US/是否保留 es）和回退策略，避免“英文界面一半 key”。
-10. **缺失的旧能力。** 后端发现选择器（`/discovery/backends`）和路由级重载（`/discovery/.../reload/route`）在活动 UI 中已丢失；设计文档要求保留“各范围重载”和既有交互，建议在 P3 作为显式补回项，而不是当作新功能。
+10. **旧活动 UI 缺失、迁移中补回的能力。** 后端发现选择器（`/discovery/backends`）和路由级重载（`/discovery/.../reload/route`）在旧活动 UI 中缺失；新工程已经补回发现/选取及实例页路由范围重载，并有 miniapp 页面 regression 和 Web fixture E2E 覆盖。fixture 不代表生产上游/真实实例验收。
 
 ---
 
-## 9. 迁移验收建议（直接可执行）
+## 9. 迁移初期验收建议（历史方案；当前验证结果见逐项记录）
 
 1. **逐页对照本文件第 2 节**，在 Web 先实现完整闭环，再用同一 contract/store 接 App/Desktop；小程序按第 6 节“原生”列逐项实现。
 2. **为纯函数建立快照测试**：`routeMatchSummary`/`backendSummary`/`hostnameSummary`（`console-utils.ts:3-76`）、`pluginInstanceDisplayName`/`pluginConfigOptionName`（`pluginInstance.ts:28-56`）、`resolveSchema`/`schemaFieldEditorMode`/`isSchemaJsonValue`（`schemaEditor.ts:36-103`）、`buildBoundWasmPluginConfig`/`buildThirdPartyWasmPluginConfig`/`refreshBoundWasmPluginSource`（`wasmPlugin.ts:309-468`）、Redis key 预览（`TenantRateLimitTable.vue:172-183`）。旧工程已有部分 Node 测试可作输入：`tests/*.test.mjs`、`components/config/src/utils/*.test.ts`。
@@ -1443,4 +1449,11 @@ Route 保存/改名/删除
 
 ## 10. 一句话总结
 
-旧管理端的核心价值不在页面数量，而在**一套围绕 gatewayName 的配置编辑状态机 + 三层插件绑定 + Wasm 双形态（定义/绑定）+ 版本冲突语义**。迁移的最大风险不是“页面画不出来”，而是把专用表单退化成 JSON、把版本冲突做成自动重试、把 Wasm 认证信息复制得到处都是，以及丢掉路由改名、Redis 池、展示名称这些已在工作树中的能力，和后端发现、路由级重载这些已存在于旧代码/后端但活动 UI 缺失的能力。
+旧管理端的核心价值不在页面数量，而在**一套围绕 gatewayName 的配置编辑状态机 + 三层插件绑定 + Wasm 双形态（定义/绑定）+ 版本冲突语义**。迁移的最大风险不是“页面画不出来”，而是把专用表单退化成 JSON、把版本冲突做成自动重试、把 Wasm 认证信息复制得到处都是，以及丢掉路由改名、Redis 池、展示名称这些已在工作树中的能力，后端发现和路由级重载曾在旧活动 UI 缺失，已由新工程补回，但仍需区分 fixture 与真实服务验收证据。
+
+
+### R2 多规则/多后端插件链复核（2026-10-31）
+
+- 旧页面功能清单的 route/rule/backend 作用域插件操作补充了跨层次复验：Web fixture 在同一条路由内使用 2 条 HTTP rule 和每条 2 个 backend，分别操作每条 rule 和 4 条 backend chain 的添加、priority 修改、重排和移除，并在保存后通过上游 fixture 重读，断言 route 插件链未变且每个 binding 留在原 scope。新 E2E `rule and backend plugin edits stay scoped across multiple rules and backends` 通过 1/1。
+- Miniapp 另外对 2 条规则、4 个 backend 的事件处理器增加相同状态矩阵测试，验证 add/priority/move/remove 只修改目标链并保留其它 scope。`route-page.test.ts -t "keeps rule and backend plugin operations"` 通过 1 passed / 34 skipped，miniapp typecheck 通过。
+- 以上是 Web browser 与 miniapp handler 的 fixture/本地证据，不证明真实 Rust route 写入或运行时插件执行；真实环境仍由用户人工验收。

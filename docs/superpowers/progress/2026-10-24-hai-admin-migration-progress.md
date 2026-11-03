@@ -1,5 +1,7 @@
 # SpaceGate Hai Admin Migration — Execution Progress
 
+> **2026-10-29 说明：** 下列 P0–P6 是历史记录，不代表修订设计已验收；本轮状态以文末“独立仓库与旧版对齐返修”为准。
+
 - Design: `docs/superpowers/specs/2026-10-15-spacegate-hai-framework-migration-design.md`
 - Repository: `spacegate` (parent Git is the only version boundary)
 - Branch: `feat/hai-admin-migration`
@@ -204,3 +206,1075 @@ Exit:
 - 插件实例抽屉按旧 `PluginForm.vue` 调整：展示名称 + 实例名称（带用途说明）、表单/JSON 双模式、复制/填入示例。
 - 修复：新建路由/网关时初始化守卫把 `null` 当成“已初始化”，导致插件属性与实例不加载、选择器空白。
 - e2e：`openRouteEditor` 先切到“高级 JSON”页签；全量 16 passed / 1 skipped。
+
+## 2026-10-29 独立仓库与旧版对齐返修（进行中）
+
+- 目标文档：`docs/superpowers/specs/2026-10-15-spacegate-hai-framework-migration-design.md` 本轮工作树修订；集成起点 `15cb9b9f7503808459013be779bf3dd0f1e72ab0`，尚未提交；不能用 HEAD 表示修订后的文档。
+- 原旧版操作清单与用户指定文档为功能来源；旧 Web `8acde7dff147affe290c727643676a9ef59b4218` 和配置子模块 `c41e108bc5c29e78b5b6fe0fe36b9022be87ab22`，旧父仓库有未提交的子模块指针及 `.gitmodules` 改动。旧清单与本轮静态检视均不是整体验收；已验收文档基线未建立。
+- R0 独立仓库：待准备独立目录、迁移文档/CI 并验证；不初始化嵌套仓库、不删除父仓库内容、不推送。
+- R1 交互、版本、JSON：待逐项核验。上游版本中间件先判断再递增，非原子 compare-and-swap；服务的写后 GET 可能包含其他写入，不能把它无条件用于旧草稿。
+- R2 路由：上轮恢复规则与后端插件入口并有一条 mock Web 用例；复制、搜索、草稿保护、MCP、Wasm、失败路径及各端待核验。
+- R3 插件：待补 Wasm 定义与绑定的分离、独立配置、来源同步、绑定详情、mono 和多步写入恢复；当前直接引用定义不等价于旧版。
+- R4 网关、AI、概览、实例：待按旧操作清单逐项核对；AI 宿主配置入口和小程序专用表单已确认欠缺。
+- R5 原生端、真实上游、独立干净检出与整体验收：未执行；不能沿用历史通过结论。
+- 返修 R2 已开始：共享 Web/App/Desktop 路由列表恢复复制入口，读取源路由后使用 `-copy` 创建新草稿；Web mock 浏览器验证源配置不变并成功新建。原有规则/后端插件链用例同轮通过；重名、读取失败、原生端及真实服务未验证。
+- 本轮证据：独立目录使用离线缓存执行 `pnpm install --offline --frozen-lockfile`，首次因父仓库忽略小程序 i18n 同步脚本失败；在 `.gitignore` 明确放开该脚本并将其加入快照后通过，随后 contract、service、Web 构建通过。此为临时目录快照及缓存验证，未创建 Git 仓库，Web 有大 chunk 提示。
+- 共享路由/网关编辑器已使用单次草稿版本，新建插件写入后仅在版本恰好加一时推进草稿；写入成功但写后版本读取失败或缺少版本时，服务返回明确的待核验冲突，Web 与小程序展示提示；服务定向测试覆盖读取失败及版本缺失。Rust 读改递增仍非原子，真实上游并发与端到端行为仍待验证。
+- mock Web 验证：路由复制、源路由已删除时拒绝复制；原生插件编辑器内创建后保存路由；单例实例创建/编辑；Wasm 路由、规则、后端独立绑定与 ID 冲突防覆盖；AI 宿主创建/编辑及其他 cluster/未知字段保留；AI 新建规则不残留旧草稿；无效路由 JSON 不发写请求。各测试不能代表 App/Desktop 原生、微信真机或真实上游。
+- schema 已补嵌套必填初步检查；复杂 oneOf、非对象规则和全部 JSON schema 约束仍需逐项验证；嵌套 JSON 的无效状态已传播到插件、Wasm 绑定、AI 宿主保存入口，AI 宿主 mock Web 测试通过。Wasm 默认/Schema/JSON/YAML/XML 基本路径已有实现；YAML 对象解析与非法输入、已有 XML 编辑保存分别通过 mock Web 用例。网关、路由、规则和后端插件链已提供符合绑定元数据与 ID 的 Wasm 配置编辑入口，路由编辑后无重复绑定的 mock Web 用例通过；定义编辑后逐个同步绑定来源，保留绑定配置；成功及中途失败并提示已完成数量的 mock Web 用例通过。定义常用来源表单与新建默认值已有实现，并通过 mock Web 新建测试；旧版高级字段的专用控件、绑定详情完整信息及冲突恢复仍未完成。
+- 小程序插件列表已修复上游扁平 ID 解析并支持 mono ID；网关、路由、插件写入失败保留草稿；路由和插件编辑使用选中时的版本快照，路由改名走 rename 接口，页面 mock 测试通过。仍缺完整原生专用表单、未保存草稿离开确认与逐页回归。AI 宿主小程序入口已补基础字段、schema 查看和 JSON 参数，页面测试验证版本快照、未知字段保留与无效 JSON 拦截；schema 动态表单与微信真机验证仍待完成。小程序网关、路由、插件及 AI 队列的草稿切换保护已开始覆盖；路由刷新固定使用草稿所属网关。AI 队列筛选策略与编辑策略分离，清空维度不再带回旧值，删除固定选中规则，以上有页面模拟测试。以上待办不因历史验收而关闭。
+
+- 追加验证：版本冲突刷新前二次确认及取消保留草稿、Wasm 定义的网关启停、无效路由 JSON 切换页签保护均通过 mock Web 用例；小程序插件编辑固定已选实例 ID 的页面测试通过。写后版本不可读处理的服务和小程序定向测试通过。
+
+- 补充：Web mock 验证原生插件绑定内编辑及过期路由版本拦截；路由类型切换、路由/网关/插件关闭未保存草稿与取消保留均通过。当前独立目录快照在离线锁定安装后通过 contract、service、Web 构建；快照不是独立仓库的干净检出。
+
+## 2026-10-30 最小评估版本收拢与交接
+
+- 新交接文档：`spacegate-admin/docs/superpowers/handoffs/2026-10-30-spacegate-admin-handoff.md`；包含当前未提交状态、验证边界及分步待办。现状仍为本地评估，非旧版功能完整验收，未拆出真实 Git 库。
+- 本轮小程序路由改名支持按目标作用域复制 Wasm 绑定并保留配置，部分结果不明时要求重新读取；无 Wasm 改名时同步更新草稿中的路由名。小程序全部 10 个测试文件（18 项）及 typecheck 通过；shared 全部 5 个测试文件（30 项）通过。
+- Web build 通过，有大 chunk 警告。独立于构建串行执行的三项 mock 浏览器测试通过：Wasm 来源同步部分失败、路由复制部分失败与恢复、改名部分失败后禁止重试。首次测试与构建同时运行时 1 项在登录后页面加载失败，串行重跑通过，根因未确认。
+
+## 2026-10-30 继续逐项核验
+
+- 小程序概览 O4 原先仅显示在线数，未呈现实例逐行健康状态；现从实例列表和健康映射构建实例名/在线状态行，未知或缺失状态按离线显示，并保留空态、实例管理入口。5 秒健康轮询同步更新行与汇总数。
+- 验证：`apps/spacegate-admin-miniapp` 的 `vitest run tests/health-poll.test.ts` 3/3 通过；`tsc --noEmit` 通过。该项是本地代码和单元测试验证，不代表真实 SpaceGate 环境验收。
+- 继续待办：完成旧版全功能操作逐项核验和修复，继续网关/AI/实例等清单；其后完成独立仓库可行性、干净检出和拆分验证。工作树仍未提交/推送。
+
+### 概览 O4–O6 阶段核验
+
+- O4：小程序补实例逐行健康状态、空态和实例管理入口；轮询刷新行与统计。
+- O5：共享概览补匹配/后端/优先级，小程序增加前六条 HTTP/MCP 路由摘要；小程序摘要处理空规则、缺少状态、MCP SSE、多个规则/后端。
+- O6：共享概览增加三语言 AI 治理说明和插件入口，小程序显示同一说明并可跳转插件页。
+- 验证：miniapp 全量 21 个测试文件、121 项通过，`typecheck` 通过；shared `check` 通过；Web fixture E2E 对路由匹配/后端/优先级与 AI 提示断言通过；根 `pnpm compile` 通过（有既有大 chunk 警告）。直接 Playwright 启动先遇到端口占用，使用隔离端口且先编译后通过。所有浏览器验收使用确定性 mock fixture，不属于真实环境验收。
+- 下一阶段仍需继续旧版全量操作清单的逐项对照、修复和验证，之后验证独立仓库结构/快照/干净检出；真实环境由用户人工验收。未提交、未推送。
+- 真实上游、原生端和独立仓库干净检出尚未验证；后续以交接文档的任务顺序继续，不得将模拟测试当作整体验收。
+
+- 2026-10-30 追加：完成旧版 `ThirdPartyWasmDrawer.vue` 与新 `PluginEditor.svelte` Wasm 定义字段静态核验；在新表单补齐 phase、priority、image pull policy/secret、sha256、fail strategy 六项及中英日文案。`pnpm i18n:compile` 和 shared typecheck 通过；尚未浏览器验证保存往返。秘密字段及默认配置/运行资源字段仍待核验与实现，详见 `spacegate-admin/docs/superpowers/handoffs/2026-10-30-spacegate-admin-handoff.md`。
+- 2026-10-30 追加：Wasm 定义表单再补 default_config_disable、default_config 对象和 match_rules 数组；非法结构禁用保存。旧版对应 `ThirdPartyWasmDrawer.vue` 读取/校验/序列化已对照。shared typecheck、Web build 与创建定义的单条浏览器 mock E2E 通过，mock 中确认字段写入且非法 match_rules 无法保存；不代表真实 Rust 上游验收。VM/cache/cluster/limits 和秘密字段处理仍未完成。
+- 2026-10-30 追加：Wasm 定义表单新增 root/vm id、模块缓存键/开关、两类 VM 池大小及 clusters/limits 对象输入，非法对象 JSON 阻止保存。i18n compile 与 shared typecheck 通过；尚无这一组字段的浏览器往返用例，仍不能算旧版等价或完整验收。
+- 2026-10-30 追加：Wasm 定义字段浏览器 mock 用例覆盖新增的来源、运行策略、默认配置、匹配规则、VM/cache、clusters/limits 保存映射和非法规则禁用保存，1 项通过；priority/VM 池边界保护已加入，shared typecheck 通过。未验证真实上游。
+- 2026-10-30 追加：继续对照旧 `ThirdPartyWasmDrawer.vue` 后发现 OCI/HTTP 认证此前仅用于 schema 预览，没有定义表单保存映射。新版已增加 OCI registry、username、password、bearer/identity token 与 HTTP 请求头控件；密码类输入掩码，保存到 Wasm 定义 `oci_auth`/`http_headers`，保留已有 OCI 对象中的未知字段。`pnpm i18n:compile`、shared typecheck、Web build 通过；创建与编辑 mock E2E 2 项通过，编辑用例验证密码遮罩、清空单项凭据、未知 OCI 字段和已有 HTTP header 保留。第一次 E2E 使用过期 Web `dist` 而超时，build 后重跑通过。真实 Rust 与真实凭据验收未做；清空全部 OCI 字段、未知 HTTP header 属性和输入边界仍待核验，R0–R5 继续开放。
+- 2026-10-30 追加：R3 对照旧版 `PluginBindingDetail.vue` 发现新版 Wasm 绑定编辑缺少共享实例展示名。已在 Wasm 绑定编辑器补展示名输入与“影响所有引用处”说明，并纳入草稿保护和实例保存；扩展既有绑定编辑 mock E2E 验证实例 ID 不变且展示名/runtime config 写回，1 项通过。i18n compile、shared typecheck、Web build 通过（vendor chunk 警告仍在）。完整绑定详情、priority int32 边界、重排输入方式和真实共享引用刷新仍待核验；未影响旧后台工作树，迁移任务继续开放。
+- 2026-10-30 追加：绑定优先级输入对照旧清单发现缺少 int32 min/max 且允许小数进入草稿。新版已加入 `step=1`、int32 范围以及截断/夹紧；在已有 Wasm route 绑定编辑 E2E 增加边界属性断言，旧 bundle 下按预期失败，shared typecheck、Web build 后定向 E2E 1 项通过。暂未验证越界实际提交值、其他 scope 与原生端；Wasm 定义认证字段和绑定详情遗留项仍开放。
+- 2026-10-30 追加：OCI 编辑边界用例改为清空全部五个已知认证值，同时保留数值型未知 `oci_auth` 属性。首轮测试复现了保存时未知字段被整体删除；已改为保留对象内任何未知属性，并允许删除全空的已知凭据。shared typecheck、Web build 与回归 E2E 1 项通过。HTTP header 部分填写仍被静默忽略，下一项继续修；本项是 mock 保存映射证据，不代表真实上游验收。
+- 2026-10-30 追加：Wasm 定义表单对 HTTP header 部分填写新增共享校验：名称和值不成对时显示错误、禁用定义保存并阻止 schema 预览。扩展创建 E2E 验证部分输入禁用保存、补全后启用，1 项通过；i18n compile、shared typecheck、Web build 通过。尚未验证重复 header 名及各原生端交互；R3 和整体迁移仍未完成。
+- 2026-10-30 追加：R3 继续对照旧绑定详情，发现新版 unresolved binding 无显式缺失状态，Wasm 绑定编辑也缺镜像/插件名/fail strategy 摘要。已补保留引用的缺失提示和只读 Wasm 定义摘要；两条定向 route mock E2E 各 1 项通过，shared typecheck/Web build 通过。真实绑定加载错误、跨 scope 排序/删除、原生端及真实上游仍待核验。
+- 2026-10-30 追加：绑定 priority 实际边界回归证实 `onchange` 时机未夹紧输入值，已改为 `oninput`；Wasm route E2E 现在验证 int32 上下界、小数截断与保存后优先级，1 项通过。shared typecheck/Web build 通过。该证据只覆盖 Web mock route 流程，其他绑定作用域、原生端和真实上游仍待。
+- 2026-10-30 追加：补路由插件链顺序操作 mock E2E：两个同 priority 插件绑定上移后保存，读取到的资源数组顺序与操作一致，1 项通过。其他作用域与触摸/键盘操作仍待；迁移全功能核验未结束。
+- 2026-10-30 追加：继续核验 R2，新增 MCP 创建 mock E2E，设置 `legacy_sse`、SSE/message paths、timeout mode、session affinity 和两个 Host backend，保存后从 mock state 读回并核对完整配置，定向用例 1 项通过。直接 Playwright 入口缺绝对 `HAI_E2E_DATA_ROOT` 时按项目要求改用 `scripts/run-e2e.mjs`。证据仅限测试夹具，不是 Rust、真实 MCP 或部署验收；MCP 编辑、streamable_http、多后端插件绑定等仍待，整体迁移与 R0 独立仓库验证未完成。
+- 2026-10-30 追加：R2 路由核验新增已有 HTTP route 的多匹配项/多规则 mock E2E：增加 `/admin` Prefix match 和一条新规则，保存后读回两条规则及默认后端，1 项通过。Exact/RegExp、header/query/method 条件及规则独立 timeout/balance/backend 操作、真实 Rust 验收仍未覆盖；完整清单与 R0 仍开放。
+- 2026-10-30 追加：对照旧版路由保存校验补 HTTP backend 端口 1..65535、weight 非负验证：输入 70000 与 -1 均阻止保存并保留编辑器，修正为 8080/1 后保存、读回通过，定向 E2E 1 项通过。起初两条断言与新 UI 文案格式不符，按实测本地化提示修正后通过；属于测试断言问题。File backend/MCP port 边界和真实上游仍未验证。
+- 2026-10-30 追加：扩展 MCP mock 用例，在第二后端单独绑定 Basic auth；保存读回确认插件引用只落到该后端，未污染首后端，定向 E2E 1 项通过。仍不代表真实上游或运行时验收。
+- 2026-10-30 追加：R2 HTTP match 新增 GET + exact header + exact query mock E2E，保存后结构和值读回正确（1 项通过）；File backend 新增路由不需网络端口，保存读回 `port: null`（1 项通过）。这两项仅是 mock 往返。Path/RegExp/rewrite、MCP streamable_http 编辑、MCP port、域名/优先级、多 scope 及真实上游待做，R0 与整体清单仍未完成。
+- 2026-10-30 追加：Path Exact `/exact` + rewrite `/target` 和 RegExp `/v[0-9]+` 保存读回通过（mock E2E 1 项）。首轮 `^/v[0-9]+$` 被客户端校验拒绝；源码核对旧版同样要求所有 path value 以 `/` 开头，遂按既有约束换成 slash 开头样例。未验证真实运行时的正则语法行为。
+- 2026-10-30 追加：MCP legacy SSE 多 backend 回归加入端口 70000 拒绝保存后修正，且新增 streamable_http MCP 新建/重开编辑/path 更新读回；受管 E2E 两项通过。HTTP 基础页 priority=42、添加 hostname 并保存读回 E2E 1 项通过。测试首次曾停留 Advanced JSON 导致找不到表单，切回 Basic 后通过。均为 mock 验证，真实 MCP/路由运行时尚未验收。
+- 2026-10-30 追加：HTTP 单条规则 timeout=3500、balance=`ip_hash` 与其两个后端地址/权重 3、7 分层保存读回 mock E2E 通过（1 项）。仍未覆盖规则/backend 插件链分别排序删除、最后规则删除边界和真实运行时。
+- 2026-10-30 追加：HTTP match-all UI 保存为 `matches: null`，尝试删除唯一规则会提示保留一条并阻止删除；mock E2E 1 项通过。初始定位器不匹配 Switch 的 role 和实际文案，调整后通过。
+- 2026-10-30 追加：HTTP rule 与 backend 插件链分别种入同优先级两项、各自上移，并仅删除 backend 链首项；保存读回确认 route 链不受影响、rule 链顺序保留、backend 链只删除自身项目。mock E2E 1 项通过；gateway/MCP/多 rule/backend 及多请求失败恢复未覆盖。
+- 2026-10-30 追加：新路由未保存草稿输入名称后点 API 示例会要求确认，取消后名称保留；应用静态文件示例后保存，mock 读回 File backend 默认路径。定向 E2E 1 项通过。K8s 示例及编辑已有 route 模板保护仍待。
+- 2026-10-30 追加：扩展快速示例回归，K8s 示例在已有草稿输入后需确认，应用后读回 `K8sService`、服务名/namespace 和端口，和 API 取消、静态文件保存共用一项 E2E，1 项通过。编辑已有路由上的模板保护仍待。
+- 2026-10-30 追加：路由删除二次确认 mock E2E 验证取消后 `routes[gateway-a].route-a` 保留，确认后键被删除且编辑器关闭，1 项通过。首轮测试误将夹具路由映射当数组，按实际对象结构修正断言后通过。
+- 2026-10-30 追加：对照旧 `BackendForm.vue` 与活动路由抽屉、旧迁移盘点确认后端发现 picker 是死代码入口，旧活动路由也没有该项；新版虽有 discovery contract/service 调用但没有 UI。现已在 HTTP/MCP backend 表单接上已有 `/spacegate/discovery/backends`，按 File/Host/K8sService 分组选择；发现失败有可重试错误提示且不清空手工值，选 File 置 `port:null`，选 Host/K8s 保留端口。mock E2E 3 项通过（失败保留手输、K8s 保留 9000、File 清空网络端口）；i18n compile、shared typecheck、Web build 通过（vendor 大 chunk 警告）。不代表真实发现服务验收；R2、旧功能清单和 R0 仍开放。
+- 2026-10-30 追加：网关对照旧 `GatewayForm.vue`/盘点 W9，发现新版无条件展示 Redis pool 四字段，已改为仅 `redis_url` 非空时显示。E2E 初次仍显示字段，核实原因是 runner 使用 `vite preview` 读取既有 `dist` 而不重建；显式 Web build 后，清空 URL 隐藏参数、重新输入并保存读回的 mock E2E 通过（1 项）。另增 HTTPS listener 表单 E2E，选择 TLS Passthrough、写入 cert/key、启用 HTTP/2 后保存读回，mock E2E 通过（1 项）。shared typecheck、Web build 通过（vendor UI 大 chunk 警告）。这些不是 Redis/TLS 真实运行时验收；多 listener、网关其他字段、其余旧功能、原生端和独立仓库干净检出验证仍待办。旧工作树未改动；详见新工程 handoff。
+- 2026-10-30 追加：旧 `GatewayForm.vue` 支持 JSON 文件上传/下载，而新版此前只有 JSON 文本粘贴/复制。高级 JSON 现增加文件导入/导出；无效文件不会覆盖当前草稿，编辑模式导入保留原网关名，未知字段随 JSON 保留，创建模式从导入内容同步名称。mock E2E 验证坏 JSON保护、编辑名保护、未知字段及配置读回和导出文件名，通过（1 项）。shared typecheck、Web build、i18n compile 通过。以上为 Web/mock 验证，原生端等价操作和真实网关仍待人工/专项验收；迁移整体和独立仓库拆分未完成。
+- 2026-10-30 追加：旧网关删除确认展示路由影响数量，新版补入来自 `gatewaySummaries.routeCount` 的正数计数并保留上游后端决定级联范围的说明；查询失败/零值不作确定的“无路由”提示。mock Web E2E 验证提示显示 1 条路由，取消后 gateway 与 route 均保留，通过（1 项）。Web build 后运行 `node scripts/run-e2e.mjs e2e/spacegate.spec.ts --grep 'gateway delete confirmation reports'` 通过；shared typecheck、Web build、i18n compile 已通过。本项不是后端级联删除语义的真实验收。
+- 2026-10-30 追加：对照旧 `AiGatewayQueueDrawer.vue`，新版此前未展示 README，且 schema/readme 请求失败没有独立状态。现 store 分开保存并清理两类错误/内容，宿主抽屉显示安全 Markdown 文档、schema/readme 各自的失败/空态；schema 失败时基础宿主仍可保存。两个独立 mock 故障用例通过（schema 503 时 README 仍可读且基础宿主保存成功；readme 503 时 SchemaForm 仍在且显示 README 错误）。扩展宿主配置往返测试验证 fail_strategy、vm_pool_size、wait_vm_pool_size、cluster 地址、未知字段和 plugin_config 保留（1 项通过）；nested schema 无效值阻止保存用例通过（1 项）。shared typecheck、Web build、i18n compile 通过（vendor UI 大 chunk 警告）。不等同真实 AI Gateway 鉴权/README/重载验收；小程序宿主 schema 动态表单及租户规则其他操作还未完整覆盖。
+- 2026-10-30 追加：AI 配额解析由原始 JSON 改为命中/全局回退、命中 key、RPS/Burst/Cost 和候选 key 的结构化结果；修正 mock 响应形状以遵循实际 upstream client 的包装逻辑。新增解析展示 E2E 通过。规则编辑器补齐 Redis key 实时预览，验证空 tenant 占位及非法字符 `_` 替换；定向 E2E 通过。shared typecheck（0 errors/warnings）、Web build、i18n compile 通过（vendor UI 大 chunk 警告）。仍仅为夹具验证；旧表格 scope/TTL 剩余、完整 CRUD/筛选、小程序/桌面、真实 AI Gateway 和独立仓库干净检出/拆分验证未完成。
+- 2026-10-30 追加：AI 配额表补齐旧版匹配范围和 TTL 剩余列，并补足 mock 规则字段；定向创建/删除用例先暴露夹具错误套用配置版本校验，豁免 AI Gateway 配额 endpoint 后，创建、删除及状态读回通过（1 项）。当前 AI 配额 mock 核验包含解析、预览、列表、创建/删除；多字段筛选、所有字段校验、错误分支及其他客户端/真实服务仍未完成。
+- 2026-10-30 追加：补 AI 配额 tenant/model 筛选及 Reset 恢复列表的 mock E2E（1 项通过）。Path/policy 组合筛选与失败状态尚未完整核验。
+- 2026-10-30 追加：AI 配额保存校验新增 mock E2E，确认 Cost 大于 Burst 和 TTL=0 会阻止保存（1 项）。path/policy 筛选、其他校验/错误分支及非 Web 客户端仍待核验。
+- 2026-10-30 追加：AI 配额列表 API 失败/重试补齐独立状态，避免与 schema/README 错误混淆；一次性 mock 503 后点击刷新恢复规则列表，定向 E2E 通过（1 项）。shared typecheck、Web build、i18n compile 通过。真实服务不可用与重试语义尚未验收。
+- 2026-10-30 追加：AI 配额筛选用例扩展至 tenant/model/path/policy 四维，验证空结果、命中结果与 Reset；受管 mock E2E 通过（1 项）。真实 API 筛选仍待人工/集成验收。
+- 2026-10-30 追加：本轮共享 AI 页面修改后 Web/App/Desktop builds 通过；miniapp typecheck 与测试通过（10 files / 18 tests）。这是构建与既有小程序测试结果，不能作为 AI 宿主动态 schema 表单或真实服务验收。
+- 2026-10-30 追加：网关多 Listener 补 Web mock 保存往返 E2E，两个 listener 的名称/端口/HTTP 协议读回正确（1 项）；不代表 Rust 或真实网关运行时验收。
+- 2026-10-30 追加：新增网关运行参数往返 mock E2E，验证 log level、language、X-Request-Id、backend TLS verification 和 Redis 三种 timeout；另覆盖多 listener 新增及删除后保留原 listener。两项定向 E2E 通过，shared typecheck、Web build 通过；真实运行时仍待人工验收。
+- 2026-10-30 追加：实例页面新增 mock E2E，核对 `instance-a` 在线状态以及 gateway/route/global 三种 reload 请求的目标参数（1 项通过）。测试仅证实 mock 上游收到请求，不代表真实实例已应用配置。
+- 2026-10-30 追加：概览 mock E2E 验证 Gateway/Route 数量、在线实例、route preview 及跳转到路由页（1 项通过）；不验证部署数据的准确性或实时刷新环境。
+- 2026-10-30 追加：在已有 HTTP header/query 正则匹配 mock E2E 中补充 header replacement 编辑与保存读回，定向用例 1 项通过。仅为 mock 配置往返；真实转发重写行为待人工验收。
+- 2026-10-30 追加：全量 `spacegate.spec.ts` 首轮 72/75，定位 2 项 Wasm 同步测试把 OCI 来源 URL 写错到默认配置 JSON、1 项复制抽屉初始化未完成时保存按钮可触发但被静默忽略。修正 E2E 使用专用来源控件及完整 URI；RouteEditor 增 `initializing` 门控并在准备完成前禁用保存。shared typecheck 0 errors/warnings、相关 3 项定向 E2E 通过；完整 `spacegate.spec.ts` 第二轮 75 passed（8.1m）。`fullstack.spec.ts` 11 passed / 1 skipped（邮件 OTP / 密码重置按环境跳过）。全部为受管 mock/预览，非真实环境验收。
+
+- 2026-10-30 追加：小程序 AI Gateway host 由仅整段 JSON 编辑补上 schema 原生表单，支持常见嵌套标量/enum 控件，复杂 leaf 使用局部 JSON，默认值与未知字段保留；新增必填、数值/整数及 JSON 输入校验和 mock 页面往返测试。`pnpm --filter spacegate-admin-miniapp check` 通过，Vitest 12 files / 23 tests passed。微信 DevTools/真机与真实 AI Gateway 人工验收仍未完成；全小程序旧功能逐项核验和 R0 独立仓库验证继续开放。
+- 2026-10-30 追加：schema 表单复核发现 required boolean 缺省时字段显示 `false`、配置对象却没有该属性；现在初始化并保存 `false`，helper 单测覆盖。重新执行 miniapp check + 全量测试仍为 12 files / 23 tests passed，`git diff --check` 通过。
+- 2026-10-30 追加：对照旧版 `Routes.vue::openCopy`，小程序增加路由 Copy 操作，复制为新建草稿并默认后缀 `-copy`；含 Wasm 绑定时先创建新路由作用域绑定，再保存复制路由。页面 mock 覆盖普通复制和 Wasm 绑定隔离/版本顺序。miniapp check 通过、12 files / 25 tests passed、`git diff --check` 通过。真实微信设备/API、全部其它旧交互及 R0 仍待完成。
+- 路由复制回归还确认，保存后同步更新草稿中的新 route name/Wasm binding ID，避免紧接着编辑再次提交源绑定引用；miniapp 全量验证保持 12 files / 25 tests passed。
+- 2026-10-30 追加：补齐小程序旧版路由搜索（name/hostname/backend），中英日文案齐全，筛选搜索 blob 不显示到列表。miniapp check 通过、13 files / 26 tests passed、`git diff --check` 通过。微信真机及完整旧版功能盘点、R0 仍未完成。
+- 2026-10-30 追加：网关多 Listener 增加混合协议边界用例：原 HTTP listener 保持不变，新增 HTTPS listener 保存并读回 TLS Passthrough、独立 cert/key 和 HTTP/2。受管 Playwright 定向用例 1 passed（15.2 秒）。仅验证 UI 到 mock upstream 结构往返，真实 TLS/HTTP/2 仍待人工环境验收。
+- 2026-10-30 追加：小程序网关高级 JSON 增加剪贴板导入/导出；导入解析失败不覆盖，替换脏草稿先询问；旧格式 name 在创建时导入、编辑时保留当前名称，导出包含网关名。mock 页面测试覆盖上述分支。miniapp check 通过、13 files / 27 tests passed；父仓库/新工程 diff check 通过。真实微信剪贴板权限与实机行为未验。
+- 2026-10-30 追加：小程序网关页从整份 JSON 唯一入口补成原生常用表单：Listener 增删/HTTP-HTTPS/TLS/HTTP2、Redis 池与超时、日志/语言/开关；池参数跟随 Redis URL 隐显并保留隐藏值，复杂 plugin chain/高级 JSON 保留局部 JSON 操作。校验端口、Redis 正整数和枚举选项，未知字段保留。miniapp check 通过、14 files / 33 tests passed、父仓库/新工程 diff check 通过。无 WXML DevTools 编译或实机/真实 API 验收。
+- 2026-10-30 追加：按旧插件页与新版 `PluginEditor` 差异，为小程序插件运行 spec 增加 `plugin.schema(code)` 原生字段表单，复用 schema-form helper；支持常见标量/枚举，保留未声明属性，复杂 schema 继续可切高级 JSON。mock 保存用例通过；`pnpm --filter spacegate-admin-miniapp check` 通过、14 files / 34 tests passed。无 DevTools/实机及真实 API 验收。
+- 2026-10-30 追加：补小程序网关插件绑定原生实例选择、重复项阻止、优先级编辑、顺序调整和移除，保持未知网关字段；旧 Listener 源码核验后纠正过严保存条件：名称可空、端口 0..65535。验证 `pnpm --filter spacegate-admin-miniapp check` 与 14 files / 36 tests passed。模拟 API 测试，不等于微信/真实环境验收。
+- 当前阶段仍未完成：本轮小程序网关/插件项是代码与 mock 验证。下一优先项对照旧操作清单 §6.4 实现/核验小程序路由原生规则、匹配、HTTP/MCP 后端与层级插件链；后续绑定详情、剩余旧版跨端差异和 R0 独立仓库/干净检出验证未做。真实环境由用户人工验收，fixture 不算验收。旧后台 `.gitmodules` 与 `components/config` 工作树改动保留，未提交/推送。
+- 2026-10-30 追加：小程序路由页增加 HTTP/MCP 原生类型选择及切换确认、hostnames 开关/多值输入（区分 null 与 []）、priority 整数编辑，并将新建 HTTP/MCP 默认结构对齐共享模型。mock 覆盖保存与字段保留、hostnames null/[]、类型切换确认/取消；check 通过、14 files / 39 tests passed。R8-R20 的规则/匹配/后端/各级插件链仍未完成，未编译 WXML/实机验收。
+- 2026-10-30 追加：继续补小程序路由 HTTP 原生规则表单：规则 CRUD（至少一条）、match-all/null、多匹配、路径类型/值/重写、7 个方法、header exact/reg_exp 与 rewrite、query exact/regular、rule timeout/mode/balance。新 `route-form.ts` helper 与页面保存 mock 覆盖字段和未知属性保留；check 通过、15 files / 43 tests passed。R14-R20 的 backend、MCP 专属字段、各层实例插件管理仍缺，WXML/设备未验收。
+
+## 2026-10-30 追加：小程序路由后端、MCP 与发现/模板/JSON（进行中）
+
+- 对照旧 `RouteEditorDrawer.vue` 与 R14-R19 补 HTTP/MCP 后端增删、Host/K8sService/File、端口/协议/权重/timeout/HTTP2 控件及提交校验；MCP 限制至少一个后端，支持 Streamable HTTP/Legacy SSE 两套路径、timeout mode、session affinity。后端/规则插件数组目前只提供各自独立 JSON 编辑，未迁移 `PluginListForm` 的实例选择、Wasm 绑定编辑、priority 与排序，R17/R20 仍未完成。
+- R21/R22/R25 增加确认后应用的 API/静态/K8s 路由示例、路由高级 JSON 剪贴板导入导出、后端发现候选选择器。发现 API 失败或没有合法候选不会覆盖当前后端；发现值选择后替换 host，File 清空 port。
+- 页面 mock 覆盖各层插件链数据隔离保存、MCP/后端字段读写、MCP 最小后端、非法端口拒绝写入、发现候选应用/失败保留、示例确认应用、JSON 剪贴板往返。Miniapp `check` 通过；15 个测试文件、49 项通过；新后台、父仓库和旧 Vue 工作树 diff-check 通过。没有微信 DevTools WXML/WXSS 编译、真机或真实 admin/Rust API 验收。
+- 独立拆分快照复验位于 `/tmp/spacegate-admin-split-feasibility-20261030/`：当前 tracked+untracked 源文件复制到独立临时目录后，`pnpm install --offline --frozen-lockfile` 成功；顶层 `pnpm typecheck` 覆盖 contract/service/shared/Web/App/Desktop/miniapp 通过，contract 4 项、service 44 项测试通过，service build、Web production build、miniapp check 与 49 项测试通过。Web 有 vendor chunk 大体积警告。
+- 该目录仅是源快照加临时 Git index 导出的无 `.git` 文件树，没有 commit、push、远端、CI/干净 Git clone 或原生包验证；不能据此宣称独立 Git 仓库正式拆分已验收。旧 Vue 仍保留原有 `.gitmodules` 与 `components/config` 用户改动，本轮没有编辑该仓库。真实环境和生产验收由用户人工完成；迁移整体仍在进行。
+
+## 2026-10-30 追加：路由三层普通插件链及最新快照（进行中）
+
+- route/rule/backend 三级现在都能从原生小程序选择器挂载普通实例、设 int32 priority、调整数组顺序与移除；页面模拟测试确认 rule 链的操作不改变 route/backend 链。Wasm 基础定义不会作为普通实例误挂；但小程序尚未为目标 scope/owner 新建 Wasm 绑定或提供绑定详情编辑，旧版插件选择的 Wasm 专用流程仍是 R17/R20 缺口，不能标为已完成。
+- 最新小程序 check 通过，全量 Vitest 为 15 files / 51 tests；新工程、父仓库和旧 Vue `git diff --check` 通过。无微信 DevTools WXML/WXSS 编译、真机或真实 admin/Rust 验收。
+- 最新独立目录快照 `/tmp/spacegate-admin-split-feasibility-20261030-final/` 离线 frozen-lockfile 安装成功；顶层 typecheck 覆盖所有 workspace 通过，miniapp check/test 51 项、service build、Web production build 通过（vendor chunk >500 kB 警告）。前一轮同系列快照的 contract tests 4 项、service tests 44 项通过，服务包在最新轮未变化。
+- 快照仍不是实际 Git clone 或独立仓库：没有 commit、远端、CI/原生包/真实服务验证。正式拆分仍开放；旧后台 `.gitmodules` 和 `components/config` 修改保留，未提交/推送。
+
+## 2026-10-30 追加：小程序 route/rule/backend Wasm 绑定（进行中）
+
+- route、HTTP rule、HTTP/MCP backend 三层增加基础 Wasm 定义单独选择、schema 原生表单/JSON 编辑、绑定显示名编辑、创建或确定性 ID 复用；插件引用被写入准确层级，priority 保留在 route JSON 插件链。按旧版 `bind-*` ID 与 route/rule/backend/MCP backend owner 命名；编辑既有实例不重建 ID，旧数据直连定义可迁移为专属 binding 并保留链上 priority。
+- 创建/更新 Wasm 实例前重读插件版本并和路由草稿版本匹配；schema 读取版本也需等于草稿快照；写后版本必须正好增加 1，否则记录版本不确定并阻止路由写入。binding 和 route 仍是分开 API 操作，创建后用户需再保存路由，不能视作事务。
+- 新增创建、schema 表单字段、已有同 ID 编辑、同 owner 确定性实例复用、直接定义引用迁移、schema 版本偏移阻断和关闭草稿确认 mock 测试。`pnpm --filter spacegate-admin-miniapp check` 通过；15 files / 60 tests passed。
+- Wasm gateway scope 入口尚缺；YAML/XML 字符串格式在此小程序编辑器仅保留并只可编辑显示名，格式编辑未补齐。DevTools WXML/WXSS、真机、真实 Rust/admin/AI Gateway 均未验收；fixtures 不作为真实环境验收。
+- 此次之后尚未刷新 `/tmp/spacegate-admin-split-feasibility-20261030-final/`，旧快照不包含 Wasm UI 代码，需在结束功能实现后再运行独立目录复验。整个旧版逐项核验与 R0 拆分验证继续开放。
+
+## 2026-10-30 追加：小程序 gateway scope Wasm 绑定（进行中）
+
+- 网关页将 Wasm 定义从普通插件 picker 分离，使用旧版 `gateway` scope 与 `${gatewayName}-gateway` owner，按 `bind-*` 确定性 ID 新建或复用实例；支持 schema 字段、JSON 配置、显示名及链项编辑，编辑保留原 priority。实例 API 写入和 gateway 配置保存是两次操作，UI 提醒之后仍需单独保存 gateway。
+- 版本比较覆盖插件列表与 gateway 草稿、Wasm schema 与 gateway 草稿、插件写入的 `version + 1`。schema/list 偏离时阻止绑定编辑；写后版本不确定会暂停后续写入。新建时继承 Wasm 定义的字符串配置和 mode；已有 YAML/XML 配置在 miniapp 仍不支持格式编辑。
+- mock 测试覆盖普通 picker 过滤、仅选未绑定 named 定义、gateway owner、创建/编辑、priority 保留、字符串配置/mode 保留与 schema 版本不匹配阻断。miniapp `check` 通过；15 files / 66 tests passed。定向 ESLint 新增代码区域无消息，整文件 ESLint 仍有已有风格消息。
+- 没有微信 DevTools/WXML 编译、真实 admin/Rust/AI Gateway 或生产环境验收；fixture/mock 不视为真实环境。独立仓库快照未刷新，本轮 R0 拆分/独立 Git clone 和旧版操作清单逐项核验都继续开放。
+
+## 2026-10-30 追加：Wasm YAML/XML 编辑和模糊写保护（进行中）
+
+- route/gateway Wasm 绑定编辑器按现存 `binding_config_mode` 支持 YAML 对象编辑和 XML 原文编辑。YAML 通过直接依赖 `yaml@2.9.1` 解析/序列化并拒绝数组/标量；XML 按共享后台处理为不透明文本，只拒绝空白。JSON 与原生 schema/default 模式沿用原编辑流程；miniapp 不提供跨格式转换。
+- gateway Wasm 插件写入前校验当前 gateway JSON 草稿，非法草稿不再产生无可引用的实例写入。插件 API 失败视为写入结果/版本不确定，关闭编辑器并阻止重试，要求刷新后复核。路由 Wasm 保存原已有同样的不确定写保护。
+- 新增 YAML 对象 parse/stringify、XML 非空/原文、route YAML 编辑、gateway XML 编辑、错误版本阻断、不确定写失败阻止重试及无效 gateway 草稿阻断测试。miniapp check 通过；16 files / 72 tests passed。新增 route/gateway Wasm 代码区间和通用 YAML/XML helper 的定向 ESLint 无消息。
+- `pnpm install --offline --frozen-lockfile` 因 miniapp 新增同版本的 yaml 直接依赖成功并完成 workspace postinstall。没有微信 DevTools/WXML 编译和真实上游/生产验收；独立仓库快照仍旧，旧后台 R1–R20 与 R0 验证继续进行中。
+
+## 2026-10-30 追加：小程序 Wasm 凭据预览/编辑折叠（进行中）
+
+- 插件列表 `preview` 对 Wasm `oci_auth` 密码、bearer/identity token、secret/API key/private key 等递归脱敏，并将 `http_headers` 的所有值替换为 `[redacted]`。保留 registry 等非机密 metadata。
+- 选择含凭据的插件后，native schema 与完整 JSON 编辑区默认隐藏；用户通过确认框明确接受显示敏感配置后才展开。无凭据插件不改变原 JSON/schema 编辑流程。此方案是折叠加确认，不是专用 password input；确认展开后原值仍可能显示。
+- 新增列表凭据/header 脱敏和确认取消/继续展示 mock 测试。小程序 `check` 通过，16 files / 74 tests passed。DevTools 未编译当前 WXML，未在真机确认折叠视图；实际秘密不会出现在列表摘要，但用户确认后编辑器会按明文展示。
+- Wasm 定义专用字段/默认配置、敏感导入导出、其余 R1–R4 仍需逐项审计；独立仓库快照未纳入上述改动，R0/干净 clone 仍未验证，真实环境由用户手工验收。
+
+## 2026-10-30 追加：小程序自定义 Wasm 定义专用表单（进行中）
+
+- 旧版 `ThirdPartyWasmDrawer.vue` 对照表显示之前小程序的 Wasm UI 只有 schema 预览工具，没有 P10 定义编辑能力。本轮新增六页签自定义 Wasm 定义编辑器，覆盖基本镜像/Schema/phase/priority/pull-policy/secret/SHA/plugin name/fail strategy、默认配置与开关、JSON match rules、root/vm/cache/pool/clusters/limits、高掩码 OCI 凭据和 HTTP header 行编辑。镜像预览使用同一表单的认证字段。
+- 新建/编辑都走受 contract 校验的 `plugin.upsert({plugin:{id,displayName?,spec},version,create})`。映射保留旧版 runtime `plugin_config`、`match_rules`、`_rules_` 语义；`Always` 强制 `use_cache=false`；保留现有 spec 未识别字段。数值边界、phase/policy/fail strategy、JSON 和 header 校验；scalar default config 按旧版包装成 `_config_`。创建后锁定实例名。
+- 编辑基础定义后按每次返回的新版本顺序同步绑定来源，并保留 binding runtime config/owner/display 字段；任一写失败视为版本不确定或部分成功，阻止其他插件写操作/删除，主动刷新列表后才允许继续。删除 Wasm 定义后清空旧草稿并显示全局重载提示。
+- TDD helper/页面 mock 回归覆盖配置构造/水合、凭据字段、边界、contract payload、scalar config、绑定来源同步和逐次版本、不确定部分成功与刷新恢复、删除重载提示；miniapp check passed，17 files / 85 tests passed。helper ESLint clean，plugin page 新代码区间无新增告警。
+- 小程序 WXML/WXSS 尚无工程内编译器，未运行微信 DevTools/真机；测试不替代 Rust/admin 实际写入验收。待继续核对 Wasm schema/预览行为、配置导入导出、旧清单剩余操作；独立 Git clone/构建快照未刷新，R0 可拆分/独立仓库验证未完成，真实环境由用户验收。
+
+## 2026-10-30 追加：P10 凭据清空与 HTTP header 旧版语义核对（进行中）
+
+- 对照旧版 `ThirdPartyWasmDrawer.vue` 的水合/序列化：OCI 凭据字段均为空时应从 `spec` 移除 `oci_auth`；`http_headers` 只接受字符串值，非字符串项在旧表单水合时会丢弃；删除全部 header 后应移除 `http_headers`。miniapp helper 已保持上述行为，同时保留 `spec` 中不认识的扩展字段。
+- 新增 `wasm-definition.test.ts` 回归，覆盖清空全部凭据和 header、丢弃非字符串 header 值、保留 opaque spec 扩展，以及空白 image URL 拒绝；新增 `plugin-page.test.ts` 回归，确认 OCI 凭据与 HTTP header 只随只读 Wasm schema preview 请求发送，不触发插件 upsert。两文件定向 Vitest 27/27 通过。首轮 upsert 未调用断言受共享 mock 历史污染，清理 mock 后通过。此为源代码/单元 fixture 核验，不是实际后台保存或镜像验收。
+- P10 其余 schema/预览、导入导出与 R1–R20 仍需逐项完成；微信 DevTools/真机和真实后台验收留给用户。R0 独立仓库快照/干净检出及拆分验证仍待完成。
+
+## 2026-10-30 追加：小程序全量回归复核（进行中）
+
+- 本轮全量 miniapp Vitest 首轮 139/140，失败是既有路由 Wasm 默认字段标题测试仍期望 `limit`，而 P4 已按旧版 fallback/title-case 规则生成 `Limit`。更新过期断言后全量 22 files / 140 tests passed；`pnpm --filter spacegate-admin-miniapp check`（含 i18n 同步和 `tsc --noEmit`）通过。
+- 此回归只覆盖 miniapp 模拟/纯逻辑，不是微信 DevTools 编译、真机操作、Rust/admin 实际写入或生产验收。按用户要求这些真实环境仍待人工验收；旧清单剩余操作与 R0 独立仓库验证继续进行。
+
+## 2026-10-30 追加：插件 P11–P14 绑定与 schema 来源核对（进行中）
+
+- 对照旧版删除/绑定交互复核现有页级 fixtures：P11 删除 Wasm 后清空旧编辑草稿并给出全局重载提示；P12 route/gateway 选择基础定义后创建 resource-scoped binding 并写入目标引用链；P13 覆盖 default/schema 配置模式和 YAML 对象编辑/往返；P14 schema 读取结果用于初始表单，版本不匹配会阻止 binding 写入。
+- 证据来自 `plugin-page.test.ts`、`route-page.test.ts`、`gateway-page.test.ts` 与 `wasm-config.test.ts`，本轮全量 miniapp 22 files / 140 tests、typecheck 通过。XML 是当前代码支持的原文模式，不把它写成旧版 UI 提供的 selector。
+- 以上 fixtures 不证明真实 OCI/HTTP/file 镜像拉取、Rust/admin 写入或真机交互。继续 P15–P22 与剩余旧操作核验，最后再做 R0 独立仓库验证。
+
+## 2026-10-30 追加：原生插件 P7 mono 单例保护（进行中）
+
+- 复核修订设计 R3 和 miniapp 原生插件保存流程时发现：已可读取/编辑 `kind: mono`，但新建页可以对目录中已有的同 code mono 身份再次发送 `create: true`。
+- 按 TDD 新增 `plugin-page.test.ts` 页面回归，首轮失败并复现会继续 upsert。保存前增加已加载插件目录的唯一身份检查，阻止重复 code mono 创建并显示本地化的“编辑已有实例”提示；更新中/英/日文案。
+- P7 后 miniapp 全量 22 files / 141 tests passed，miniapp `check`（含 i18n sync 与 `tsc --noEmit`）通过。目录尚未加载或并发创建仍须服务端唯一性约束；此页级 mock 不等同 Rust/admin 并发验收。
+- P15–P22 的功能用例已在 inventory 中标注出处；仍继续核验遗漏与真实后台边界，再进行 R0 独立仓库快照/干净检出/构建和拆分验证。
+
+## 2026-10-30 追加：实例 I5 路由级重载目标核对（进行中）
+
+- 新增实例页 regression，断言路由重载请求携带所选 instance、当前 gateway、route 和读到的 version，并接纳上游返回的新 version。定向 Vitest 1/1 通过。
+- 该测试只验证页面调用参数与版本更新，不运行真实 SpaceGate reload，也未覆盖微信设备确认/网络失败体验。继续核对 I1–I7 和 AI 队列操作，再做 R0 独立仓库验证。
+- 纳入 I5 回归后再次运行 miniapp 全量 suite：23 files / 142 tests passed；`pnpm --filter spacegate-admin-miniapp check` 通过。
+
+## 2026-10-30 追加：实例 I1–I4 健康、复制和重载核对（进行中）
+
+- I1 原实现把健康请求失败等同离线，并让健康接口异常阻断实例列表渲染。修复为 instances 列表与 health 分别处理，缺少状态/请求失败显示本地化“未知”中性 chip；增加失败回归。TypeScript target 不含 `Object.hasOwn`，改用 `Object.prototype.hasOwnProperty.call` 后 check 通过。
+- I2 补实例 ID 复制按钮、剪贴板失败提示和中英日文案，回归断言复制选中实例 ID。I3/I4/I5 一并通过 page tests 覆盖 gateway/global/route 重载 payload 与版本推进。
+- `instances-page.test.ts` 4 项；合入 I1–I4 后全量 miniapp 23 files / 145 tests passed，`pnpm --filter spacegate-admin-miniapp check` passed。这里的 API/剪贴板均为 fixture，不是实时重载或真机验收。继续审计 I6/I7、AI 队列 A1–A10，之后 R0。
+
+## 2026-10-30 追加：实例/登录 I6–I7 认证入口与错误态（进行中）
+
+- 登录 flow fixture 已覆盖 `/auth/login` 和会话生命周期；新增 `login-page.test.ts` 回归覆盖 identifier trim、提交凭据、认证失败错误可见、loading 复位并留在登录页。定向 Vitest 1/1 通过。
+- 不使用真实 IAM 凭据或后端；真实账号验证由用户人工验收。I1–I7 源码项现均有实现/测试或局限说明记录，接下来核对 AI 队列 A1–A10。
+
+## 2026-10-30 追加：AI 队列 A1–A10 功能核对与 miniapp quota 补齐（进行中）
+
+- 对照旧 `TenantRateLimitTable.vue` 和修订设计 R4，确认 Web/shared 已覆盖规则列表/过滤/CRUD、Redis key 预览、请求解析、TTL 校验；既有 E2E 使用 mock upstream。miniapp 则缺少专用 RPS/Burst/Cost/TTL 字段和对应验证，只能间接通过 JSON 配置。
+- miniapp 规则编辑器新增结构化 RPS/Burst/Cost/TTL 输入；读回规则字段时回填默认 10/20/1 与有限 TTL，保存覆盖 JSON 草稿中的旧值；验证 tenant/model/path 分隔符、正数、cost≤burst、TTL 正数；TTL 留空按“永久”处理并移除 `ttl_secs`、只读 `ttl_remaining_secs` 与派生 `key`，保留其他未知字段。并补实时 Redis key preview，维度值按旧版字符 sanitizer 生成。
+- `ai-rule-page.test.ts` 5 项覆盖默认值、字段保存/未知字段保留/TTL 清空、校验、key preview，以及 selected dimensions 请求和 resolution/candidate keys 展示；miniapp 定向 test 通过，`pnpm --filter spacegate-admin-miniapp check` 通过。WXML 尚未经 DevTools 编译，mock 不替代真实 quota API/Redis 解析验收。
+- 当前继续审计其余 A1–A9 页面操作细节，并为新增输入跑完整 miniapp suite；之后收尾旧清单再执行 R0 拆分验证。
+
+## 2026-10-30 追加：Schema `anyOf` / `oneOf` 原生控件映射（进行中）
+
+- 对照旧 `schemaEditor.resolveSchema`：`anyOf` nullable scalar 应解析成非 null 分支；`oneOf` 同类型 enum 分支应合并为 picker 选项。小程序之前只有直接 enum 与 oneOf const 分支，造成 optional scalar 回退 JSON、oneOf enum 空选项。
+- 实现 anyOf 非 null 展开并保留外层 schema 元数据；合并同类型 oneOf enum 值，保存时映射回 JSON literal。复杂/不同类型 oneOf 继续 JSON 编辑，原组合对象 fallback 保留。
+- 新增两条 TDD regression；miniapp check passed，17 files / 87 tests passed。新增 schema resolve/options 区域无 ESLint 告警；完整 helper 文件仍有原有 brace/格式类 lint 项，本阶段未全文件格式化。`git diff --check` 通过。
+- 真实插件 schema/微信真机仍未验收。继续功能盘点与修复；R0 独立仓库 clone/build 复核待功能核验后完成。
+
+## 2026-10-30 追加：路由插件引用缺失提示（进行中）
+
+- 旧版插件详情支持缺失实例告警且保留绑定；小程序 route/rule/backend 原来没有此状态。本轮基于插件目录身份集合为三个层级的绑定行增加 `missing`，并在编辑页显示提示，可继续删除或调整该引用。
+- 增加普通插件缺失、Wasm 定义可用、rule/backend 行传递的回归；miniapp `check` 通过，全套 17 files / 89 tests passed。
+- 仅路由页已显示缺失提示，gateway scope 和插件共享配置详情编辑仍未完成；WXML 未经 DevTools 编译，测试是 fixture。R1–R20 操作盘点、真实环境验收和 R0 独立仓库干净 clone/build 仍开放。
+- 复核补充：可用身份来自完整 `plugin.list`，包括不允许作为基础定义再次添加的现有 Wasm binding；避免把有效 Wasm 引用报成缺失。回归确认后，最终 17 files / 89 tests 通过。
+
+## 2026-10-30 追加：gateway 插件引用缺失提示（进行中）
+
+- 将旧版“缺失实例但保留引用”的行为补到 gateway 插件绑定行；依据完整 `plugin.list` 的 code/kind/name/uid 判断，普通失效引用提示可移除，已有 Wasm binding 仍判为有效。
+- route/rule/backend 和 gateway scope 均已在表单行显示缺失实例状态；全套 miniapp 17 files / 90 tests 与 `pnpm check` 通过。新增测试首轮类型检查失败（`pluginRows` 为 unknown），补强测试类型断言后重跑通过。
+- 共享插件配置详情编辑与旧版操作盘点仍在继续。小程序 WXML/真机和实际后台接口未验收；mock 不替代真实环境。随后仍需完成 R1–R20 全项核验，再做 R0 独立仓库 clean clone/build/split 验证。
+- 可靠性补充：route/gateway 只有成功读取插件目录后才显示实例缺失告警；目录 API 失败时显示现有读取错误，不将未知状态误判为缺失。全套 17 files / 90 tests、`pnpm check` 通过。
+
+## 2026-10-30 追加：共享插件实例详情入口与保存语义（进行中）
+
+- 旧版绑定详情支持共享 `display_name` 和 runtime config 编辑。本轮在网关及 route/rule/backend 插件绑定行加入实例配置入口，按实例身份打开插件中心；原生配置加载 schema 后可走原生表单或 JSON 编辑，显示名编辑明确提示会影响所有引用方，返回时保留 binding 页面未保存草稿。
+- 插件实例写入会回传版本标记；返回 dirty gateway/route 时刷新资源版本与插件目录，不重载资源 JSON。新增两页版本刷新/草稿保留测试及 deep link 定位、schema 加载与返回测试。
+- 编辑现有实例时允许以空 `displayName` 清除名称；upstream adapter 将空查询参数传给 Rust，Rust `PluginUpsertQuery` 会将空白名称规范化成 `None`。新增回归修复 adapter 丢弃空值问题；upstream-client 16 tests passed。
+- miniapp 全套 17 files / 95 tests 与 `pnpm check` 通过。真实后台、实际插件 schema、WXML DevTools/真机均未验证；页面 mock 不代表环境验收。详情展示剩余对照、R1–R20 全功能核验及后续 R0 独立干净检出/拆分验证仍开放。
+- 返回版本/目录刷新期间暂时禁用资源保存，避免版本竞态；完成后保留原草稿并恢复保存。
+
+## 2026-10-30 追加：原生插件目录元数据（进行中）
+
+- 补旧版 P2 原生插件元数据展示：小程序调用已有 `plugin.attrAll`，呈现 title/code、version、description、authors、homepage、repository；缺标题回退 code，Wasm 条目不混入原生元数据区。外链地址可选择并复制。
+- helper 与页面 mock 覆盖元数据映射/回退/Wasm 过滤。miniapp 全套 18 files / 97 tests 通过，`pnpm check` 通过。
+- 真实 attrAll 数据、WXML 编译及设备上的浏览器外链行为未验收；主页/仓库提供的是复制操作。旧版 R1–R20/P1–P22 全项核验和后续 R0 独立仓库 clone/build/split 仍开放。
+
+## 2026-10-30 追加：插件搜索与删除影响提示（进行中）
+
+- 对齐旧版 P1/P3：原生目录元数据按 code/description 搜索，实例按 code/name/display name/预览即时过滤；完整列表加载后本地过滤，清空搜索可恢复完整结果。
+- 插件实例删除确认增加被引用网关/路由可能无法加载插件的提醒，支持中英日文案；Wasm 删除后的运行时重载提示保持不变。
+- 定向 plugin 页面/helper 测试通过；miniapp 18 files / 98 tests 通过，`pnpm check` 和 `git diff --check` 通过。真实目录搜索/删除引用效果未验收。
+- 旧版 P4/P5/P7–P22、R1–R20 逐项核验与 R0 独立仓库 clean clone/build/split 验证均未完成，继续开放。
+
+## 2026-10-30 追加：原生插件 Schema JSON 示例（进行中）
+
+- 旧版 `PluginForm.vue` 会从 schema 的 `default`、`example`、`examples` 及类型递归生成 JSON 示例，并支持填入或复制；小程序此前没有该辅助操作。
+- 新增 schema 示例 helper 和插件页“填入示例/复制示例”操作；应用后同步 JSON 与 schema 表单字段。helper/page 定向测试通过，miniapp 18 files / 100 tests 通过，`pnpm check` 通过。
+- 真实 schema、WXML/微信 DevTools、设备剪贴板尚未验收。只完成 P5 的该项，不代表插件表单全项或旧后台核验完成；P4/P5 其余、P7–P22、R1–R20、R0 仍开放。
+
+## 2026-10-30 追加：Wasm 插件卡片与网关启停（进行中）
+
+- 补旧版 P8/P9：新增独立 Wasm 定义卡，过滤 binding scope 与 `ai-gateway-queue`，按旧版标题/描述 fallback 与 priority/title 规则排序，搜索标题和描述；列表仍保留完整 plugin inventory 供绑定 deep link 定位。
+- 卡片启停使用上次选中的已保存网关，启停前刷新网关配置及版本，再提交仅修改 `plugins[]` 的完整资源；为其余插件补齐缺省 priority=0，保留已有有效 priority 和其它字段。失败不重试，重新加载显示状态；成功显示“需人工重载”提示和实例运维入口。
+- Helper/page 定向测试及错误路径测试通过；miniapp 全套 19 files / 105 tests 与根 `pnpm check` 通过。WXML/真机和真实网关写入未验收。
+- P4/P5 其余、P7/P10–P22、R1–R20 仍需逐项核验；之后再执行 R0 独立快照/干净检出和拆分验证。
+
+## 2026-10-30 追加：原生插件创建/编辑 Schema 流程（进行中）
+
+- 旧版 `PluginForm.vue` 会随插件 code 加载 schema；小程序之前只有手动点击。现改为输入/catalog 选择 code 和打开已有 native 实例时自动加载 schema/default；通过请求序号与 code 校验忽略过期响应，失败保留 JSON 编辑并可手动重试。
+- 创建 named 实例默认名 `new-instance`；按 `attrAll` mono 元数据自动选择 mono kind，并显示 mono 说明和实例名用途提示。新增 mono 实例选择/编辑回归，满足修订清单要求的新后台 mono 管理能力。
+- 修正被 Wasm 行过滤的完整目录索引与可见列表索引混用，绑定 deep link 现在依据原始 inventory 定位。miniapp 19 files / 107 tests 通过；顺序执行的根 `pnpm check` 通过。首轮并行检查抓到模拟事件类型缺字段，抽出通用 `selectPluginCode` 方法后 miniapp typecheck 与根检查通过。
+- 实际后台 schema、WXML/微信 DevTools/真机未验收。插件 P4/P5 仍有其他表单交互要核；P10–P22、R1–R20 及 R0 独立 clean clone/build/split 均继续开放。
+
+## 2026-10-30 追加：Wasm 绑定模式审计与修复
+
+- 对照旧版 `PluginSelect.vue` 的 P12/P13：旧版有具名 Wasm 基础配置选择；配置模式 UI 为 `default / schema / yaml`。旧代码含 XML hydration/save 分支，但没有 XML 选项，因此不能将其描述为旧版可选功能。
+- 新后台 Web `WasmBindingEditor` 可选择 default/schema/json/yaml/xml；小程序原有 schema/JSON/YAML/XML 数据处理分支没有模式选择控件，且新建默认 schema，与旧版新建默认 default 的交互不一致。
+- 已给路由与网关绑定面板补模式选择器和多语言文案；新建默认 default，default 保存基础定义配置，用户可切换 schema/JSON/YAML/XML。保留旧有格式处理，模式切换时保留当前可解析的对象配置，并在保存/加载中禁用切换；错误态禁用切换以免无提示丢弃无效文本。
+- 增加 gateway default 保存回归，并将 route schema 默认值用例改为显式选择 schema。定向 route/gateway 测试 38 项、miniapp 全套 19 files / 108 tests 与 miniapp `tsc --noEmit` 通过；`pnpm sync-i18n` 已从 overlay 重建运行时文案。
+- P12 的 identity/owner 核对发现旧 Vue route/rule/backend 使用通用 owner（`route`、`route-rule`、`route-backend`），新设计要求资源专属 owner；此前 handoff 关于“相同 scope owner”的说法不准确，已更正。miniapp route/gateway 现在把 owner 不匹配的旧共享实例当作只读来源，创建/复用资源专属 `bind-*` ID，复制旧 spec 未知字段并仅替换当前链引用；原共享实例不变。
+- 新增两个旧共享 binding 迁移回归，覆盖当前链 ID/priority 更新、配置/spec 字段继承和旧实例保持不变。miniapp 全套 19 files / 110 tests、miniapp `tsc --noEmit`、新仓库根 `pnpm check` 通过。真实后台、镜像拉取、跨服务并发尚未验收；测试夹具不替代真实环境。
+- P17–P22、R1–R20 与 R0 clean clone/build/split 仍开放。WXML/微信 DevTools 和真实设备交互未验收。
+
+## 2026-10-30 追加：Wasm schema、优先级与排序审计
+
+- P14 旧版 `getSavedWasmPluginImageSchema` 通过 `GET /plugin/wasm/schema` 并带具名插件 ID 读取已保存镜像 schema；新服务的 `plugin.wasmSchema` 转发到同一路径及 ID query，并返回带版本的 schema。共享编辑器等待读取后初始化，miniapp route/gateway 检查响应版本与草稿版本。源码路径与契约一致；schema 实际 OCI/HTTP/file 拉取仍依赖真实 admin-server/runtime，mock 测试不构成真实镜像验收。
+- P15 旧版优先级控件为整数 `int32`、默认 0；新 Web clamp 到 `[-2147483648, 2147483647]`，miniapp 拒绝非整数/越界输入，新增越界不改写已有值的回归。
+- P16 旧版拖动重排；小程序用上/下移动按钮，对同一插件链数组交换相邻项，已有 route 与 gateway 页面回归覆盖重排并确保优先级随绑定保留。
+- 本阶段定向 route/gateway 38 tests、miniapp 全套 19 files / 108 tests、miniapp `tsc --noEmit`、新仓库根 `pnpm check` 均通过。真实 Wasm 镜像访问和后台交互仍由用户人工验收；P17–P22、R1–R20、R0 尚未核完。
+
+## 2026-10-30 追加：Wasm binding/schema/refresh/credential 审计
+
+- P17–P19 源码对照：新后台保留 binding 编辑、priority/display name、JSON/schema/YAML/XML 配置模式；旧版刷新是 PluginPanel 重挂载并重读，新 miniapp 调用上游 `POST /plugin/refresh` 后重载。miniapp 共享显示名提示修正为保存绑定后还需保存所属资源，适用于 route 和 gateway。
+- P20/P21：miniapp schema form 补齐数组增删、数组对象递归编辑、数组默认值/必填验证，并将不支持的 object schema 渲染为 JSON textarea；非法输入文本保留到修正。添加数组和非法 JSON 的测试。
+- P22：miniapp OCI password/token 字段是 password 输入；列表预览递归遮盖敏感 spec 值和 HTTP header 值，敏感配置在确认后才展开。仅源码/fixture 范围，未证明真实日志、网络传输或上游行为。
+- miniapp 全套 19 files / 114 tests 通过。首轮失败是 gateway-form 原有断言仍模拟整数组 JSON 控件，因控件模型已变为 array 而修订断言。新仓库根 `pnpm check` 在 Node v24.22.1 下通过，覆盖 contract、service、shared、Web/App/Desktop/miniapp 类型检查。微信 DevTools/WXML 和真实环境均未验收。
+- 旧后台 P1–P22 全量核验、R1–R20、R0 独立仓库快照/clean clone/build/split 仍继续中；未提交、未推送，所有旧后台及新工程既有改动保留。
+
+## 2026-10-30 追加：路由 R1 异步加载竞态
+
+- 路由切换审计发现 miniapp 页面的 `load()` 没有过期请求保护；旧 gateway 的迟到列表可能覆盖新 gateway 状态。现对 selection、route list、plugin list 各异步边界检查 load 序号，错误和 finally 仅由当前请求更新页面状态。
+- 新增旧 gateway 列表迟到时不得覆盖当前 gateway 的竞态回归。miniapp 全套 19 files / 115 tests 与 `tsc --noEmit` 通过。继续 R2–R20 和 R0，不将 mock 视为真实环境验收。
+
+## 2026-10-30 追加：路由 R1–R20 核验与浏览器回归
+
+- R1：除 route list load 外，发现 shared-plugin context refresh 也可能在切换 gateway 后将旧版本/插件上下文写回。新增先失败的竞态测试（旧版本 11 覆盖新版本 22），实现请求序号、gateway/draft snapshot 守卫和过期请求忽略。
+- R2–R20 源码核对并以 miniapp route helper/page tests、共享 UI 与 E2E 检查：HTTP/MCP、创建/复制/改名/删除、hostnames null/空数组、规则及 matcher、路径/方法/header/query、规则和后端策略、Host/K8s/File、端口/权重/HTTP2、MCP transport/session/SSE、各层独立插件链和排序均有实现/覆盖。
+- miniapp 19 files / 116 tests、miniapp typecheck、根 `pnpm check` 通过。根完整 `pnpm test` exit 0（contract 4、miniapp 115、shared 30、service 44；该次在新 refresh-context 测试前，后者由 miniapp 最新 116 全套覆盖）。`pnpm compile` 成功。route grep 浏览器用例 33/33 通过，使用隔离临时数据和 mock upstream；不是真实环境验收。初次 E2E 因用户既有服务占用 3000 停止，未中止该服务，改用空闲隔离端口后成功。
+- R2–R20 的代码/fixture核验已完成，仍须先完成 G/O/W/A/I 旧版操作项全量核对，再开始 R0 独立快照/干净检出/构建测试和 split validation。真实上游和微信 DevTools/真机验收仍由用户执行。
+
+## 2026-10-30 追加：全局 G3 实例健康轮询
+
+- 对照旧版 `App.vue`，新后台缺少 5 秒健康轮询。Web/App/Desktop 管理员会话现在每 5 秒刷新 health；页面隐藏时跳过请求，退出或组件销毁会清理 timer。只修改健康 map，不读取或推进编辑所用配置版本；网络异常静默清空，较旧响应被序号丢弃。
+- 小程序 overview/instances 页在 `onShow` 开始、`onHide` 停止轮询，只请求健康 endpoint；overview 总数和在线数从 health map 重新计算。
+- 共享 store 轮询/停止、配置版本不变、旧响应不覆盖新响应均有 TDD 测试；mini helper 覆盖 5 秒节奏、停止和计数。miniapp 20 files / 118 tests 与 typecheck 通过；全仓 `pnpm check` 通过（该 check 后只修改 overview 纯统计 helper，miniapp typecheck 已复核）；全仓单测 exit 0：contract 4、miniapp 117、shared 32、service 44；全仓 `pnpm compile` 成功；mock overview 浏览器 E2E 1/1 通过。G1/G2/G4/G6–G12、O/W/A/I 与 R0 仍开放。
+
+### 概览 O1–O2 复核修正
+
+- 复核旧版四项指标后发现小程序曾用“实例总数”替代“网关数”，且指标卡无跳转动作。已改为在线实例、网关、路由、插件配置四项指标，每张卡映射到对应管理页；实例健康卡仍展示 `在线/总数`，当前网关由共享 store/小程序全局选择状态保留。
+- 定向 `overview-metrics` 测试断言四项指标顺序、数值和目标页；该测试与路由/健康 helper 测试 3 files / 6 tests 通过，小程序 `typecheck` 通过。继续按清单审计其它页面，真实环境待用户验收。
+- 随后小程序全套回归 22 files / 122 tests 通过，`typecheck` 再次通过；`git diff --check` 通过。WXML 未经微信 DevTools 编译，真实环境待人工验收。
+
+### 网关 W4 删除影响核验
+
+- 源码对照发现共享 Web 已在网关删除确认中展示路由数及“是否级联由上游后端决定”的说明；小程序仍只显示通用确认，缺少旧版的路由影响提示。现小程序删除前读取当前网关 `route.list`，确认框展示网关名、路由数和级联说明；计数请求失败时保留通用级联警示后仍允许用户确认。
+- 新增页面 mock 回归：断言先读取指定网关路由数，再在确认框展示影响，并以当前版本执行删除。miniapp 全量 22 files / 123 tests 通过，typecheck 通过。WXML/真实后端未验收，其他 W 项仍待逐项核对。
+
+### 网关 W10 日志/语言枚举核验
+
+- 对照旧 `GatewayForm.vue` 发现小程序将日志级别与语言渲染为自由文本（虽有保存校验），旧版为枚举选择。现小程序改为 `trace/debug/info/warn/error` 和 `zh-CN/en` 下拉；未配置/null 值仍显示可选占位并保持原保存语义。
+- 新增 enum 选项测试，并由已有“Redis 参数之外字段不应出现”的测试捕获自动写入默认 enum 的回归，修正后 `gateway-form` 7/7 通过，miniapp typecheck 通过。WXML 未经 DevTools 编译，W 其余项仍待核验。
+
+### 网关 W11 可选布尔值语义复核
+
+- 对照旧表单开关，验证 `enable_x_request_id` / `ignore_tls_verification` 的显式 `false` 与 `null` 均保留，缺失字段不被归一化成 `false`。新增纯表单回归测试通过；`gateway-form` 8/8、miniapp 全量 22 files / 125 tests、typecheck 均通过。
+- 这些是本地数据映射/页面测试，不是 WXML 或真实运行时验收；W1–W3、W5–W9、W12–W15 与其余操作继续核验。
+
+### 网关 W5–W8 监听器核验
+
+- 旧 `GatewayForm.vue` 新建监听器默认 `name: "new listener"`、端口 8080、IP/hostname 为 null。小程序原新增时写了显式 `0.0.0.0` 且省略名称；已修正默认及序列化，新增 page mock 验证保存结果；另验证可删除最后一条监听器（旧版允许空列表）。
+- W6 端口边界测试验证 0/65535 可保存、65536 被拒；W7/W8 既有往返测试覆盖 HTTPS Passthrough、证书/私钥和 HTTP/2 开关保留。miniapp 全量 22 files / 128 tests 与 typecheck 通过。
+- WXML 未经微信 DevTools 编译，TLS/监听器未做真实运行环境验收。网关 W1–W3、W9、W12–W15 仍待核验。
+
+### 网关 W13 编辑态 JSON 导入名称
+
+- 增加页面级回归：在编辑网关状态导入剪贴板 JSON（其中包含不同名称），保存仍提交原网关名。该项与既有新建导入取名、非法 JSON 不覆盖草稿、取消脏导入、复制当前名称用例相互补充。
+- miniapp 全量 22 files / 129 tests 与 typecheck 通过。WXML/剪贴板真实设备行为未验收；W1–W3、W9、W12、W14–W15 及其他模块继续开放。
+
+### 网关 W9 Redis 连接池字段
+
+- 对照旧表单确认连接池最大数、等待/建立/回收超时四字段均在 Redis URL 开启时显示；Redis URL 为空时隐藏，但保留原配置。补充测试逐项覆盖四字段显隐和正整数校验。
+- `gateway-form.test.ts` 9/9、miniapp 全量 22 files / 130 tests、typecheck 通过。仍为本地表单验证，不代表后端/真实 Redis 验收。
+
+### 网关 W14 未保存草稿取消
+
+- 补充页面操作测试：对刷新和切换网关两条路径取消确认后，均不调用加载动作并保留草稿；已有新建和 JSON 导入取消用例一并覆盖。
+- miniapp 全量 22 files / 131 tests 与 typecheck 通过。真实小程序原生确认框与关闭/返回操作需人工设备验收。
+
+### 网关 W2 新建默认值对齐
+
+- 对照旧版与共享 Web `newGateway()` 后发现小程序从空网关库存或点击“新建”均使用空 listener 列表和空名称。现两条入口均使用旧版完整默认对象：`new-gateway`、HTTP listener（`http`、`ip:null`、`port:9000`、`hostname:null`）、Redis/log/lang 空值、`enable_x_request_id:false`、observability 默认对象及空插件列表。
+- 新回归先在旧实现上失败（listener 为 `[]`，随后扩展发现参数对象也不匹配），修复后通过。miniapp 全量 22 files / 132 tests 与 typecheck 通过；原生 WXML/真实后端仍待人工验收。W1、W3 原生交互和其它清单仍开放。
+
+### 网关 W1 列表和刷新核验
+
+- 新 Web 网关表展示名称、listener、路由数、插件数、Redis；定向 fixture E2E 新增保存后列表摘要更新及显式刷新读回断言，1/1 通过（本地 mock）。
+- 对照旧页和新版 store，列表详情/路由统计均按 gateway 拉取；修订设计的 contract 没有批量摘要 operation，因此性能上仍有逐 gateway 请求开销。此项只闭合 UI 列表/刷新行为，批量化与真实运行环境均未验收。
+
+### 网关 W3 编辑名称保护
+
+- Web E2E 检查实际 `gateway-name` 内部 input 为 readonly；编辑导入含不同 `name` 的 JSON 后，保存读回仍为 `gateway-a`，导出名仍对应原资源。定向 fixture E2E 1/1 通过。
+- 小程序页面用例验证编辑态导入异名 JSON 后提交仍使用 `editingName`。Web E2E 和 miniapp mock 仅是应用行为验证，设备与真实服务仍未验收。
+
+## 2026-10-30 追加：网关 W12 插件绑定回归（未完成）
+
+- 对照旧版 `PluginListForm.vue` 与新共享 `PluginBindingEditor`：实例复用、整数优先级、顺序调整和删除功能均有对应实现；旧版使用拖拽，新版使用上下移。小程序已有页面 mock 覆盖增删、改优先级、重排和未知字段保留。
+- 新增 Web fixture E2E `gateway plugin bindings can select an instance, set priority, and save`。实际运行发现从网关编辑 Modal 打开插件选择 Drawer 后，点已有实例按钮被底层 `gateway-editor` Modal 子树拦截，60 秒超时。已确认 HAI UI Drawer 默认 `z-50`，Modal 使用 `--hai-z-modal`（默认 1100）。本轮试加共享 Drawer 层级样式，但回归仍失败，且运行时未找到附加的 Drawer `data-testid`；该样式尚未证明生效，需继续查清组件属性/样式作用域并修复后再跑回归。
+- shared Svelte 检查通过（`svelte-check` 0 errors / 0 warnings）。失败用例只连接本地 fixture，不属于真实服务验收。W12 未完成；网关剩余项、其它旧版功能与 R0 独立仓库可行性/拆分验证仍开放。真实环境由用户人工验收。
+
+### W12 修复与复验
+
+- 确认上一轮未验证到新源码的原因：Playwright 前端使用 `vite preview` 服务，读取 Web `dist`；源码修改后未重新构建，因此旧 dist 仍显示 `z-50`。重建 `spacegate-admin-web` 后，专属 Drawer 内容 class 已出现在运行 DOM，`.drawer-side` 的计算 z-index 为 `1101`，高于网关 Modal 的 `1100`。
+- `PluginPicker.svelte` 将 class 加到 HAI Drawer 内容面板，`:has(.plugin-picker-layer)` 选择对应侧栏并提升层级。Web fixture E2E 直接断言 z-index `1101`，再选取 Basic auth 实例、设优先级 17、保存并核对 fixture 状态：1/1 通过。shared `svelte-check` 0 errors / 0 warnings；Web production build 通过。
+- W12 的模拟 Web/miniapp 行为核验完成；生产服务、设备及拖拽体验由用户人工验收。O/W 其余项、插件/路由/AI/实例等旧版功能和 R0 仓库拆分仍未完成。
+
+### 网关 W13–W15 定向复核
+
+- Web fixture E2E 对 W13 JSON 导入/导出及名称保护、W12 实例选择和优先级保存、W14 未保存草稿取消一并复跑：3/3 通过。W13 用例新增 `observability` 完整对象，验证导入文本、JSON round-trip 与 fixture 保存读回。
+- W15 是旧 Vue UI 未包含的新模型字段。修订设计没有要求独立观测性表单，但要求小程序覆盖与其他端相同的功能集合；当前 Web 用 JSON 参数编辑，小程序用完整网关 JSON 编辑。miniapp 页面用例将完整 observability 对象通过 JSON 修改并验证 `api.upsert` 写入，gateway 页面测试 24 项通过。此结论限于 JSON 编辑能力和 mock 写入，不代表真实上游行为。
+- 本轮 Web production build 通过；shared `svelte-check` 0 errors / 0 warnings。下一步继续旧后台操作清单中的网关剩余项及路由/插件/AI/实例逐项审计，最后做 R0 独立仓库检出、构建和拆分验证；真实环境仍由用户验收。
+
+## 2026-10-30 追加：插件 P4/P5 Schema 字段呈现对齐
+
+- 对照旧 Vue `SchemaForm.vue`：字段标题遵循 `x-title-i18n`（zh-CN/en）、`title`、key 标题化回退；字段说明遵循 `x-description-i18n`、`description`，并在输入控件旁显示、作为文本/JSON 输入提示。小程序此前只采用 title/key、没有展示说明。
+- 新增 schema-form 回归先失败，随后在 miniapp schema 字段模型和 WXML 补齐本地化标题、说明显示/placeholder；嵌套对象与数组上下文说明随字段传递。另对照旧版数字控件 `min=0`，补负数拒绝和校验回归。相关 `schema-form.test.ts`、`plugin-page.test.ts`、`gateway-page.test.ts` 合计 3 files / 52 tests 通过；miniapp typecheck 通过。
+- 这是本地 schema/mock 页面验证；真实后台 schema 样本、WXML 编译、微信 DevTools/真机呈现尚未验收。P4/P5 其它表单边界继续审计，旧后台其它功能和 R0 拆分验证仍开放。
+
+### 插件 P8 Wasm 定义卡排序回归
+
+- 再核对旧 `sortWasmPluginCenterConfigs` 的同优先级排序：使用 `spec.display_name`、`spec.title`、`spec.plugin_name`、实例名的回退顺序。miniapp 已按 priority 降序和 title fallback 排序，但同级排序首项用了顶层 `displayName`，与旧版规格字段不同。
+- 新增冲突值回归（顶层 display name 为空，`spec.display_name` 与 `plugin_name` 故意给出相反字母顺序），先失败后通过。修正 miniapp sortTitle 后 `wasm-plugin-cards.test.ts` 4/4 通过。
+- 这只验证本地卡片顺序；真实后端数据形状和设备列表呈现未验收。继续核对 P9–P22 未关闭差异及剩余旧 Vue 功能，之后再做 R0 独立仓库验证。
+
+### 插件 P9 Wasm 定义启停双向核验
+
+- 在既有启用/失败刷新测试外，补 miniapp 页面停用用例：从 gateway 读到版本 11 后关闭 Wasm 引用，upsert 携带版本 11，仅移除目标绑定，保留原生插件顺序、priority 和网关 opaque 字段。
+- P9 页级测试覆盖启用、停用与失败后的重读恢复；连同 P8 排序测试，`plugin-page.test.ts` + `wasm-plugin-cards.test.ts` 共 2 files / 22 tests 通过。miniapp typecheck 在 P8 源码修改后通过。
+- 所有请求为 mock；未验证真实 Rust 后端并发版本冲突、资源运行或用户设备确认。继续 P10+ 与其它清单，再执行 R0 仓库拆分验证。
+
+### 插件 P6 原生实例删除
+
+- 对照旧 Vue `PluginPanel.vue`：删除确认提醒已引用该实例的资源可能无法加载。miniapp `onDelete()` 已有相同影响提示，并在确认前不发删除请求；确认后用当前 `draftVersion` 删除、更新版本并清空编辑态。
+- 新增原生实例专属页面测试，分别走取消和确认分支，断言警告文案、取消不写且保留编辑项，确认按 version 7 删除并恢复新建态。插件/Schema/网关定向测试 3 files / 52 tests 通过，miniapp typecheck 通过。
+- 验证基于 mock `wx` 和 API，不覆盖真实资源引用、上游删除结果或设备原生确认弹窗。继续 P4/P5 其他表单边界、剩余旧 Vue 清单和 R0 拆分验证。
+
+## 2026-10-30 追加：R0 独立工程快照验证（进行中）
+
+- 在 `/tmp/spacegate-admin-r0.wChQQ7/spacegate-admin` 建立独立文件快照，排除 `.git`、node_modules、构建/测试产物和 `.env*`；保留公开 `deploy/spacegate-admin.env.example`。快照 `pnpm install --frozen-lockfile`、`pnpm check`、`pnpm test`、`pnpm compile` 均 exit 0。
+- 独立扫描确认 workspace 内部依赖、Docker build context 和 compose 路径均以新工程根为基准；`deploy/spacegate-admin.env` 原先已被 Git ignore，但未被 `.dockerignore` 排除，而 `images/app.Dockerfile` 使用 `COPY . .`。补 `.dockerignore` 精确排除此文件；用只含 dummy sentinel 的 Docker context 导出验证该文件不进入 context。
+- 另发现 `.gitignore` 忽略整个 `images/dependencies/`，但两份 Dockerfile 都 `COPY images/dependencies/`，clean Git checkout 会丢掉现有 `.gitkeep`。调整忽略规则，让 `.gitkeep` 可跟踪、生成依赖仍忽略；`git status` 显示该既有占位文件现在未跟踪，未暂存/提交。
+- 从公开 env example 派生临时配置后，独立快照 `docker compose -f deploy/compose.yaml config --quiet` exit 0；临时私有名配置已从快照移除。
+- 首次复制时发现父工作树忽略的 `packages/spacegate-admin-serv/data/app.db`/SQLite 辅助文件被带入临时副本；原工作树未改动，已从副本清掉数据库文件并重新生成完全排除 `**/data/`、`.env*` 的干净快照。该快照重新执行 `pnpm install --frozen-lockfile`、`pnpm check`、`pnpm test`、`pnpm compile` 均成功；miniapp 150/150，测试后快照没有运行时 `data/` 或私有 env。pnpm 使用本机既有 store（1101 个包复用、0 下载），因此此项验证了锁文件和隔离安装路径，但未覆盖冷缓存 registry 获取。Compose 校验在提供临时公开 example 派生 env 后通过并已删除。
+
+## 2026-10-30 旧版操作清单全量 fixture E2E 复核
+
+- 正确隔离环境下运行全套 `node scripts/run-e2e.mjs`，共 89 项：88 passed、1 skipped（IAM 邮件 OTP 夹具未配置）；SpaceGate Web/App/Desktop 预览、网关/路由/插件/Wasm/AI queue/实例和用户流程全部使用独立 E2E 数据与 mock upstream，不代表真实服务验收。
+- 命令必须同时设置 `BASE_URL` 与 `HAI_E2E_WEB_URL` 指向同一 Web 预览端口，并单独设置 `SERVICE_BASE_URL`、App/Desktop URL 和 mock upstream 端口。本次先只覆盖了 `BASE_URL`，导致 `spacegate.spec.ts` 的 helper 回退到 4173 并向正在运行的本地开发服务 3000 发出数次 fixture 登录尝试；后续修正 URL 后，单项及全量 fixture suite 通过。未知本地开发进程的认证失败审计副作用无法确认；未查看或改动其 SQLite/业务数据，真实环境继续留给用户人工验收。
+- 全量旧交互覆盖包括：网关摘要/监听器/TLS/Redis/导入导出/插件绑定与删除提示；route CRUD/复制/改名部分失败保护、path/method/header/query 匹配、timeout/balance/backends/MCP/发现器、插件链排序与未保存确认；插件 mono、Wasm 启停/更新/复制/认证脱敏；AI quota/过滤/TTL/解析/key；实例 reload 目标；认证与权限。具体用例名和回归基线见 `spacegate-admin/e2e/spacegate.spec.ts`。新 miniapp 页面与 helper suite 此前为 24 files / 150 tests，`pnpm check` 通过。
+- 路由清单审计发现旧回归只有“改名失败后不重试”，缺成功改名完整性断言。补 `renaming a route moves its full configuration to the new resource name`，先按 fixture 实际的 `priority: 0` 和 `/api` 修正断言，最终单项 1/1 通过；该改动仅增加 E2E 覆盖。未在全 89 项 suite 后重跑新增项以外的全量；观测结果是全量 88 passed / 1 skipped，新增改名项随后独立 1 passed。
+- R0 干净快照另执行临时 `git init` + `git add -A`（未 commit），最终文件集 363 个文件，`git diff --cached --check` 通过；`images/dependencies/.gitkeep` 可进入文件集，runtime `data/` 与私有 `deploy/spacegate-admin.env` 不入文件集且被 ignore，公开 `.env.example` 保留。可行性仅限文件边界/独立 workspace 构建验证；父工程当前仍是唯一真实 Git root，历史分拆、独立远端与干净克隆不能在禁止 commit/push 的条件下验证。
+- 收尾 fresh check：`pnpm check` 成功；miniapp 24 files / 150 tests 成功；两个新增 miniapp 页面测试的 targeted ESLint 成功。`eslint e2e/spacegate.spec.ts` 仍报 9 个风格错误，均位于未改动的旧段落 250-347；新增改名测试无单独 lint 诊断。全 E2E 结果仍为 88/89 加新增改名单项 1/1，未因新增 test-only 用例再次跑 9 分钟全量。
+- Docker service image build 在 Dockerfile 第 1 行的 `node:24.22.1-bookworm-slim` metadata fetch 处 `DeadlineExceeded`，没有进入镜像构建阶段；web Docker image 未尝试同一 registry 依赖。包级 compile 已构建 service/web。当前新工程目录仍嵌在 `spacegate` 父 Git repo 中，没有独立 `.git`；为遵守不提交授权，使用独立工作树快照验证而非伪称 clean Git clone。R0 独立 clone、镜像拉取后 Docker build 及拆分/历史验证仍开放。
+
+### R0 临时 Git index 导出复验及路由 backend Wasm 覆盖
+
+- 从新工程干净快照初始化临时 Git index、stage 文件集并用 `git checkout-index` 导出实际 checkout 形态（363 文件，未 commit）；排除 `.git`、构建产物、`data/`、私有 env 后，在导出树成功运行 `pnpm install --frozen-lockfile`、`pnpm check`、`pnpm test`、`pnpm compile` 和临时公开 env 下 `docker compose -f deploy/compose.yaml config --quiet`。测试计数：contract 4、miniapp 151、shared 32、service 44 通过；Web/App/Desktop 无测试文件。pnpm store 复用了 1101 个包、0 下载，未覆盖冷 registry；无独立真实仓库、历史迁移、clone 或 remote 验证。
+- 旧路由操作核验补上 backend chain 的 Wasm 创建回归：断言 backend binding owner 和引用只写到选定 backend，不污染 rule chain。定向 1/1；miniapp 全量 24 files / 151 tests 通过。当前实现已支持该路径，无代码行为修复；fixture/mock 证据不等价于微信 DevTools 或真实服务验收。
+- 另补 Wasm XML 编辑回归，由 route binding 行进入编辑器并保存，断言 XML 文本仍是 string、`binding_config_mode: xml` 不变；定向 1/1 通过。初始夹具用错 `binding_owner`（应匹配 `xml-route-route`），修正后既有 binding 被正确选中；无需生产代码修改。
+- 该 XML 夹具调整后，fresh miniapp 全量 `pnpm test` 为 24 files / 152 tests 通过，miniapp `pnpm typecheck` 通过。该全量不包含 Web/桌面/小程序 DevTools 或真实服务环境。
+- 继续核对 R17，补普通插件 backend chain 页面用例：选入实例、改 priority、排序、移除，并断言 route/rule 链不受影响。定向 1/1；首次断言遗漏既有 binding priority，修正期望后通过，未涉及生产代码改动。之后 fresh miniapp `pnpm test` 为 24 files / 153 tests 通过，`pnpm typecheck` 通过。
+
+### 全局 G4 语言偏好及失败提示
+
+- 旧 Vue 的 `langs` 菜单仅列 `zh-CN`、`en-US`；虽然 `locales/index.ts` 注册了 `es`，但 `es.ts` 仍是中文内容且缺少部分键，旧活动菜单不可选，因此按修订设计保留 zh-CN/en-US 并提供 ja-JP，不把 `es` 算作可用旧功能。新工程 shared 与四端 Inlang 配置均声明这三个 locale。
+- 新增 miniapp profile 页面测试，覆盖选择 English/Japanese 后即时更新当前文案、locale index 与 `updateProfile({ locale })` 请求；成功时显示当前语言的成功提示，失败时保留本地切换并展示错误提示。
+- 测试暴露真实 UX 缺陷：此前先 toast“语言已切换”再请求偏好，更新失败被静默吞掉，造成虚假成功。现将成功提示移至偏好请求成功后，失败改用 `toastError`，仍保留即时本地语言。profile 定向 2/2；fresh miniapp 全量 25 files / 155 tests 与 `pnpm typecheck` 通过；`eslint` 针对新增 profile page test 和实现文件通过。另以隔离端口运行 managed `e2e/fullstack.spec.ts` 账号/偏好流程，`test-results/run-4RlcNS/group-1/results/.last-run.json` 显示 passed；只属 fixture，不是实际 IAM/真实服务/微信设备验收。
+
+### 插件 Q16 服务端属性缓存刷新
+
+- 核对旧 Vue 的“刷新配置”仅重载前端面板，不刷新服务端 1 小时插件属性缓存；新共享页已有明确的“刷新插件缓存”按钮和成功提示，并由 `managementStore.refreshPlugins()` 调用 `spacegate.plugin.refresh`，读取新版 attributes 与返回版本。小程序插件页 `onRefresh()` 同样调用刷新 endpoint 后再加载插件目录。
+- 补 shared store 回归：管理员刷新会调用 endpoint、替换属性缓存并采用返回版本；非管理员不能触发刷新。补 miniapp 页面 handler 回归：先刷新服务端缓存，更新版本，再调用强制重载目录。shared 5 files / 34 tests、`svelte-check` 0 diagnostics；miniapp 全量 25 files / 156 tests、`typecheck` 通过。
+- miniapp 新用例所在整份 `plugin-page.test.ts` 的既有 ESLint 检查报 78 条；筛选新增用例行范围没有诊断，不能据此宣称整份文件 lint 通过。代码与服务调用为 fixture/mock 证据，不证明真实 SpaceGate `/plugin/refresh` 运行时缓存行为，仍待用户人工验收。
+- 继续逐项核对旧版插件、路由、AI 队列、实例、权限/i18n 清单；R0 的独立仓库可行性/历史拆分及 registry 可用后的镜像构建仍未完成。禁止提交、推送；真实环境由用户人工验收。
+
+### 实例 I4 全局重载确认
+
+- 对照旧版活动行为与逐项清单，确认全局重载按钮在新 Web 和小程序此前都立即调用 endpoint。Web 现弹出确认框并展示目标实例和流量影响提示；取消或关闭不会调用重载，确认后只对所选实例执行。小程序复用 `confirmAction`，确认前不触发请求。
+- 三语言确认文案已加入 shared 与 miniapp；miniapp 实例页测试覆盖确认后提交和取消不提交。miniapp 全量 25 files / 157 tests、`typecheck` 通过；shared `typecheck`（含 `svelte-check`）通过；根 `pnpm compile` 通过（存在既有 app 大 chunk 警告）；隔离 managed E2E 的实例重载用例通过 1/1。
+- 首次新 E2E 先按预期失败（点击后无确认框），实现后首次重跑只因断言措辞与实际本地化文案不一致失败，修正断言后通过；功能实现与最后通过结果已验证。E2E 使用隔离服务和 mock fixture，不构成真实实例验收；用户仍需人工验收真实环境。
+- 继续旧版全功能逐项核验与修复，然后完成独立仓库/拆分可行性验证；工作树保留，未提交、未推送。
+
+### 插件 Q41 与保存失败诊断 Q42
+
+- Q41 核实新 shared `deletePlugin()` 在写入成功后设置成功 notice，页面关闭确认框；miniapp 删除成功路径调用 toast。该差异已在现有实现中修复，无需增加重复提示。
+- Q42 测试先复现网关保存 503 时错误码被通用文案隐藏的实现缺口。shared mutation error handler 现对 400/422、未分类失败显示本地化错误类别并附后端错误码；403/409 继续使用已有权限/冲突提示，服务端 message 不回显，避免泄露内部信息。网关和路由 503 回归均断言错误码可见且后端 message 不泄漏。
+- shared 全量 5 files / 36 tests 通过，`typecheck`/`svelte-check` 0 errors/warnings。此处用 mock API 验证错误映射；真实 admin-server 错误码映射仍待用户真实环境验收。
+- 继续核验旧版其余页面差异并随后完成 R0 独立仓库/拆分验证；不提交、不推送。
+
+### 概览 Q40 插件指标名称
+
+- 复核旧 Vue `Overview.vue` 通过 `getConfigPluginAll()` 统计插件实例，新工程 shared 通过全量 `plugin.list()` 统计同类数据；该指标不是网关/路由内嵌的插件绑定数。将 shared 概览中文和日文标签从“插件配置”改为“插件实例”，英文与小程序三语言标签已一致，无需改计数逻辑。
+- 这是依据旧/新 API 调用和 UI 文案的源代码核验，不是运行时数据验收；继续逐项核对旧版差异及之后的 R0 拆分验证。
+
+### 路由 Q39 后端发现入口核验
+
+- 旧风险清单称活动路由抽屉未引用旧 `BackendForm` 的发现功能。新工程复核后发现共享 `RouteEditor.svelte` 和小程序路由页均已有发现入口，端点接线也存在；选择 K8s backend 保留配置端口、选择 File backend 清除网络端口的 Web E2E 已覆盖，小程序 handler 测试覆盖列表选择及发现失败时保持当前 backend 值。
+- Q39 属已实现并有 fixture 覆盖的功能，不需重复新增入口。mock/E2E 不证明生产 discovery 数据或服务端行为；继续逐项审计。
+
+### Q43–Q45 删除确认、客户端初始化与 schema 加载核验
+
+- Q43 新 shared Gateway/Route editor 用显式确认状态控制删除弹层，按钮由应用控制；小程序 `confirmAction` 返回 boolean，不依赖 Element Plus Promise reject 字符串。
+- Q44 新工程由 `apiClient.create(spacegateAdminContract)` 创建管理 API，运行时配置通过 `globalThis` / 注入 options 读取，不使用旧 `Api.getClient()`。
+- Q45 新工程不再带 Monaco 或硬编码 `http:///api/...` schema URI；插件 schema 通过 `managementApi.spacegate.plugin.wasmSchema` / `previewWasmSchema` contract 调用，预览为只读数据展示。
+- 以上是源码级差异核验，不涉及新增行为或真实服务验收；miniapp typecheck 和 shared typecheck/svelte-check 通过。继续其它旧版项与 R0 验证。
+
+### 插件 Q14–Q15 mono 插件操作核验
+
+- 回核旧清单发现 Q14/Q15 风险行仍标未解决，但新 shared 插件中心的实例列表支持 mono 身份查看/编辑，小程序 plugin page 回归覆盖 mono 更新；创建路径读取 `attr.mono` 生成正确身份，并在已存在同 code mono 时阻止重复创建、引导编辑。更新清单状态以匹配现有实现。
+- 证据为源代码和 miniapp fixture 回归（含重复创建失败保护），不覆盖后端并发唯一性；继续旧版其余风险项。
+
+### 路由 Q8 创建/复制重名保护
+
+- 先加 miniapp failing-first regression，证实创建重复路由名仍会发送 `route.upsert(create: true)`。现 miniapp 在创建/复制前用当前网关已加载的 `routeRows` 拦截重复名；shared store 对 create 写操作用已加载的 `routes` 做同样预检，复用中/英/日提示。
+- 回归：miniapp 25 files / 158 tests 通过；shared 5 files / 37 tests 通过；miniapp typecheck、shared `svelte-check` 通过。此预检依赖最近一次加载的路由列表，不能替代服务端并发唯一性和冲突响应；真实服务端错误映射仍待人工验收。
+
+### 网关/路由 Q1–Q7 差异复核与 Q8 页面验证
+
+- Q1/Q3/Q4/Q6 核对新 shared 与 miniapp 的草稿关闭确认、HTTP/MCP 切换确认、规则级 timeout/balance 字段和 TLS `http2` 开关；现有页面测试/源代码支持这些操作已恢复。Q2 编辑网关名保持只读，是运行时 name 无 rename endpoint 的约束，不能仅靠前端安全支持改名。Q5 shared 有 observability JSON 输入，miniapp 通过高级 JSON 编辑；旧端本来也没有专用字段。
+- Q7 仍是明确边界：RouteEditor 的根对象、路由规则、路径和 backend 有业务校验；Gateway 高级 JSON 仅检查对象类型，缺少完整服务端 schema 级结构验证。合约的资源配置仍是 loose object，直接收紧会有未知字段兼容风险，待确认真实 schema 后再继续处理。
+- Q8 增加 Web E2E：新 Web 新建重复的 `route-a` 时显示冲突提示，服务端版本不变；隔离 managed E2E 最终通过 1/1。miniapp/shared 测试和两端 typecheck 已通过，根 `pnpm compile` 通过（既有大 chunk warning）。所有验证仍属本地 fixture，不替代真实服务确认。
+
+### 插件 Q11–Q13 scope 与共享展示名
+
+- Q11 源码核实 route-level 同一插件 code 会拒绝重复；rule/backend 等嵌套插件链独立编辑，不共用此检查。不同 scope 是否允许相同插件 code 重复执行要由真实执行语义确认，暂不扩大限制，避免改变既有配置。
+- Q12 解绑发生在路由草稿；保存路由后才落库，关闭脏草稿有确认，不是旧版即时持久删除语义。Q13 则有可改进的提示缺口：新 shared PluginEditor 与 miniapp 实例编辑区已增加中/英/日说明，告知展示名属于共享实例并会影响引用它的网关和路由。
+- 按 TDD 先扩展 Wasm 编辑 Web E2E 断言提示，首轮按预期失败；加入文案后隔离 managed E2E 通过 1/1。根 `pnpm compile` 通过（既有 app 大 chunk warning）；仍需 miniapp typecheck，并且微信 DevTools/真实引用刷新仍待人工验收。
+
+### 新增修复后的整套 Web E2E 回归（2026-10-31）
+
+- 在隔离端口对完整 `e2e/spacegate.spec.ts` 执行 managed E2E：79 项中 78 项通过。唯一失败为 Wasm 定义更新用例结束时向 mock upstream `GET /__state` 读取状态遇到 `ECONNRESET`；错误出在 fixture HTTP 读取，不是页面断言或管理 API 请求。该用例此前单独运行通过，整套失败后再次单独运行也通过 1/1。
+- 不能据此宣称完整 E2E 全绿；也不能把 fixture 的非重现 ECONNRESET 归为应用故障或断言已稳定。按用户要求，这些全是 mock/fixture 证据，真实环境仍人工验收。
+
+### R0 当前工作树独立快照/干净检出验证（2026-10-31）
+
+- 从当前 `spacegate-admin` 工作树导出至 `/tmp/spacegate-admin-r0-current.dIBnpL`，排除 `.git`、依赖/构建/测试/数据目录以及非 example `.env*`；保留公共 `.env.example`、锁文件、Docker/Compose 文档和当前已跟踪/未跟踪源码（371 文件）。临时 `git init` + stage + `write-tree` 创建 tree object（无 commit），再用独立 index `read-tree` + `checkout-index` 检出；`diff --cached --check` 与检出工作树 `diff-files --check` 通过。
+- 隔离检出 `pnpm install --frozen-lockfile` 复用 1101 个缓存包、0 下载；`pnpm check`、`pnpm test`、`pnpm compile` 全部退出 0；用公开 `deploy/spacegate-admin.env.example` 暂时生成 Compose env 后，`docker compose -f deploy/compose.yaml config --quiet` 通过，临时文件已清理。
+- 该证据验证独立目录边界与当前源代码在干净树形态可安装/检查/测试/编译/解析 Compose；不是实际 standalone remote、历史迁移或 clone。目标新工程本身仍复用父仓库 `.git`，未 commit/push；真实镜像构建 registry 超时问题仍未解除。后续继续旧端未闭项（Q7、Q9/Q10 服务端语义、Q11 scope 策略）与拆分决策审查。
+
+
+### 旧版风险项 Q17–Q21 与 Q9/Q10 服务语义复核（2026-10-31）
+
+- Q17–Q21 已按当前新端源码/测试状态更新旧版风险清单：Wasm 绑定从定义 `spec` 复制来源与认证字段，再覆盖资源专属配置；schema preview contract 转发认证 header；成功写后重新读取配置版本；reload 仍按 Rust 现有写语义携带并同步版本；409 保留 `serverVersion` 并由客户端提示刷新快照。以上 UI/adapter/mock 覆盖不代替真实 Rust、凭据、部署或并发验收。
+- Q9/Q10 服务层核对后补做了 Q9 失败路径验证：Rust `Rename::rename_config_item_route` 先读旧/新名字，再创建新 route、删除旧 route；多个存储 backend 下创建/删除与事件发布不是共同事务。尤其 Redis `HDEL` 成功但随后 `PUBLISH` 失败会让 delete 返回错误而旧 route 已不存在，因此通用层盲目删新 route 作为补偿有可能把唯一剩下的 route 一并删掉。新管理端使用专用 rename endpoint，并在失败时显示“可能已部分执行”、置冲突态阻断重试，要求刷新并核对两边；`partial route rename blocks retries until the actual routes are reloaded` fixture E2E 本轮 1/1 通过，证明 mock 部分成功态下不会重复写。Q9 的安全失败闭环已具备本地证据；强原子性/自动补偿仍需存储层事务契约，真实后端行为留待用户人工验收。Q10 修正：K8s 删除路由时会逐项执行 `remove_filter_target` 清理目标引用，但保留共享 `SgFilter`/插件配置；Redis/FS 将绑定随 route 配置一起删，不删除独立插件定义。K8s 是先删 route 再更新 target refs，错误仍可造成部分完成，因此不在 UI 侧另行级联删插件。新增路由删除确认/取消及删除后列表状态 fixture E2E，`route delete confirmation can be cancelled and then removes only the selected route` 1/1 通过；只证明 UI/mock 行为，不证明 K8s target-ref 写入。故 Q10 的安全策略有源码证据，K8s 后端部分失败/共享引用仍需真实环境验收。
+- Q7 高级 JSON 完整 schema、Q9/Q10、Q11 跨 scope 重复绑定语义仍开放。继续逐项核验及 R0 独立仓库验证；真实环境验收由用户人工完成，未提交/推送。
+
+- 同批继续复核 Q22：miniapp 登录页失败后保留页面并展示错误，`login-page.test.ts` 覆盖 unauthorized 且断言不调用 `reLaunch`；Web 登录使用 `@h-ai/ui` AuthPanel，本轮尚未单独核查其失败 UX/真实认证。已在 inventory 标出这条边界，不能据 miniapp mock 推断 Web/真实服务均验收。
+
+- 对 Q22 再执行 `pnpm --filter spacegate-admin-miniapp test -- login-page.test.ts`。项目脚本将参数透传给 Vitest，但本次实际运行了 miniapp 全套 25 files / 158 tests，全部通过；这是 mock/组件测试，不是微信 DevTools 或真实认证验收。
+
+
+### 旧版 AI Gateway 接入风险 Q26–Q28 核对（2026-10-31）
+
+- 新端 AI Gateway 请求由服务端 `aiRequest` 代理，有统一 timeout 与 transport/upstream 错误转换；并非 SpaceGate 配置 API，不应假设具有 `X-Client-Version`/409 `serverVersion` 语义。真实部署的网络/认证策略尚未人工验收。
+- 旧 `.env` 的 `VITE_API_BASE_PATH` 与旧 AI API 默认路径冲突不适用于新端：AI Gateway base URL 是服务端配置，前端使用同源管理路由。
+- AI Gateway 删除当前仍是服务端向上游发送 DELETE JSON body；对照旧 Vue 活动代码 `components/config/src/api/aiGateway.ts:139-144`，旧端也使用相同 method/path/body。补强 `upstream-client.test.ts`，断言发出的 DELETE 请求体严格为当前规则 JSON，定向 16/16 passed。该源码对照与测试可防止迁移时丢失现有请求形状，但 mock 不证明真实 AI Gateway/反向代理接受 body；未找到可替换的 path/query/POST 契约，仍待用户真实环境核验，不擅改方法语义。
+
+
+### 旧版 AI Queue 风险 Q29–Q32 对照（2026-10-31）
+
+- Q29 新规则编辑器将空 TTL 序列化为移除 `ttl_secs`，同时删除服务端只读 `ttl_remaining_secs`；miniapp `ai-rule-page.test.ts` 已覆盖，服务端对空 TTL 的真实解释仍需人工验收。
+- Q30 新 shared 页面集中管理规则列表和编辑，无旧版双表；miniapp 为单一规则页。Q31 策略文案使用 locale keys，但本轮只源码核对，没有逐 locale 运行截图。
+- Q32 新端保存规则时才 upsert，表单与列表 store 分离，取消/切换草稿不会直接覆盖已存列表项；尚缺一个专门证明“编辑后放弃不改变列表”的单测，列为后续补证，不声称已完全闭合。
+
+
+### 插件 P17 backend 作用域既有 Wasm 绑定编辑（2026-10-31）
+
+- route/gateway 既有绑定编辑已有覆盖；补齐此前缺少的 rule/backend 绑定编辑回归，验证按 scope/owner 读取现有插件、保留绑定 ID 与 JSON mode、更新 `plugin_config`，并保持目标链引用优先级以及其它 scope 链不变。
+- 定向 `route-page.test.ts` 用例通过（2 passed、31 skipped）；miniapp typecheck 通过。证据限于 mock，backend runtime 行为仍待真实环境人工验收。
+
+- Web `Wasm rule and backend bindings keep their configurations separate` E2E 扩展为分别编辑已存在的 rule/backend binding，验证保存后各自 `plugin_config` 改变且 scope 独立。首轮因 `HAI_E2E_WEB_URL` 未随 `BASE_URL` 改到隔离端口而误连既有 4173 服务、登录失败；修正 runner 环境后 managed 隔离 E2E 1/1 通过。未触碰既有端口服务。
+
+
+### AI Queue Q32 编辑草稿放弃确认回归（2026-10-31）
+
+- 新端规则编辑表单和列表数据分离；新增 miniapp 回归，模拟用户编辑已保存规则后尝试切换到新建，再取消确认。断言保留原编辑索引、持久化快照和当前草稿值，不触发保存。定向 `ai-rule-page.test.ts` 1 passed / 5 skipped，miniapp typecheck 通过。此测试只验证页面状态，不代替真实 AI Gateway 写入验收。
+
+
+### R0 当前源码独立导出与 workspace 拆分复验（2026-10-31）
+
+- Q7 null 边界修正后，重新从 `spacegate-admin` 导出 962-file 快照到 `/var/folders/kx/71r_87k50_78zjk1nsc50zz00000gn/T/spacegate-admin-r0-current-3rmpiu45/repo`。这是 parent/旧 Vue 目录以外的新 `git init` 仓库，无 commit/remote；完整门禁执行时 tree 为 `5bf3af74505757c38524bbe59bd40205f643493a`，同步最终 handoff 纯文档后 tree 为 `bb33a3ec35ccbb30561c32041b00faa06713bf6b`，其余源码与验证内容未变。
+- 在该独立仓库中 `pnpm install --frozen-lockfile`（1101 resolved/reused、0 downloaded）、`pnpm check`、`pnpm test`、`pnpm compile` 均 exit 0；`docker compose -f deploy/compose.yaml config --quiet` 用公开 env example exit 0，临时 env 已删除。compile 保留既有大 chunk warning。
+- 独立仓库源码/配置/workspace 搜索未发现旧 Vue `spacegate-admin-fe` 运行路径依赖。已证明独立源码 Git 初始化、冻结安装、检查、单测、打包及 Compose 静态配置可行；尚未迁移历史/remote、尝试实际远端 clone 或构建 Docker image（目标 Node base image 不在本机 cache，之前 registry fetch 超时）。未提交、未推送。
+
+
+### 旧版实例/概览选择与刷新 Q33–Q37（2026-10-31）
+
+- Q33 新增 route page regression：刷新会针对当前 gateway 重新读 route 列表，定向 1 passed / 33 skipped。Q34 新增 overview page regression：切换 gateway 后重新读取该 gateway 与 routes，指标 route count 更新，并写入共享 current-gateway state；`overview-page.test.ts` 2/2 passed。
+- Q35 新增 miniapp stale selection regression，已有 `loadGatewaySelection` 会把无效 current gateway 回退到第一项；shared `loadOverview` 同样检查旧值是否仍在 config names。Q37 源码显示 shared instance selector 更新同一 `store.selectedGateway` 并清空 route，miniapp overview/instances 使用同一 state/helper。
+- Q36 新端不在前端把 instance ID 拼成 URL，服务端代理将 `instance` 作为 query 传至既有 Rust discovery reload endpoint；instances page test 覆盖目标参数。真实 discovery 定址和设备跨页体验仍由用户人工验收。miniapp typecheck 通过；全是 fixture/源码证据。
+
+- 新增概览/路由页回归后重跑 miniapp 全套：26 files / 164 tests 全部通过；miniapp typecheck 通过。
+
+
+### 旧版全功能核验 Q7 / Q38（2026-10-31）
+
+- Q7：依据 Rust `crates/model/src/gateway.rs`、`observability.rs`、`plugin.rs` 增加 `isGatewayResourceConfig`，网关 JSON 输入/文件导入都校验已知字段结构与类型，同时接受未知扩展字段；新增 shared 单测 3/3，shared typecheck 0 errors/warnings，本次涉及文件定向 ESLint 通过。mock Web import/export E2E 1/1 通过。
+- Q7 首次 E2E 启动超时是测试环境端口参数不一致（设置了 `MOCK_UPSTREAM_BASE_URL` 但漏设 `MOCK_UPSTREAM_PORT`），补齐后通过；没有把 fixture 结果当真实服务端验收。shared 全包 lint 仍被既存其它文件的错误阻断（本轮报 20 项，涉及 `AiQueueRuleEditor.svelte`、`PluginEditor.svelte` 和现有测试等；新增文件 lint 已单独通过）。
+- 复核 Rust `serde(default)` 与 `Option` 边界后补严非可空字段的显式 `null` 拒绝（root/listener/observability）；同一单测增补 3 项边界断言，仍 3 tests passed，shared typecheck 与涉及文件 lint 重跑通过。Q7 代码在首版 R0 后发生此窄修正，因此 R0 快照需再次按当前文件刷新。
+- Q38 对照当前 shared `instances.svelte` 与已有 `instance reload actions send the selected gateway and route scopes` E2E：全局 reload 已先出确认 Modal，取消不触发请求、确认后仅向所选实例发请求；inventory 已同步，属于现有实现核验，不需补代码。
+- R0 已按 Q7 之后当前源码更新为独立导出副本，并通过 frozen install、check/test/compile 与 Compose 静态解析；当前仍没有独立远端/历史 clone，也未 build 容器镜像。
+
+
+### Q9–Q11 后端语义复核（2026-10-31）
+
+- Q9 `crates/config/src/service.rs` 的默认 rename 确认是校验→create new→delete old 两步；已有单测覆盖目标重名、创建失败时保留旧项，但没有 create 成功后 delete 失败的原子/补偿保证。管理端失败警告不改变后端语义；旧 backend 工作树保持不动。
+- Q10 对照 Redis `delete_config_item_route` 只删除 route hash 项；K8s `delete_config_item_route` 先读取 route、移除 route target 的 filter binding，再删除 Route CRD，但不删除全局 plugin config。该数据模型允许配置中心独立插件实例/多 target 引用，不能由 UI 按 route 名猜测级联并删除共享项；待服务端提供引用计数/明确级联契约后再解决孤儿治理。
+- Q11 初步 UI/fixture 检视时仍待执行语义核实；随后追查 Rust runtime 并确认不同 scope 分属不同 mount point、按 binding ID 挂载，无跨 scope `code` 去重，详见下列源码结论。
+- 继续沿 Rust runtime 核验后，Q11 的源码语义已确定：`crates/shell/src/server.rs` 对 Gateway/Route/Rule/Backend 各自构造不同 `MountPointIndex` 并挂载各层 plugin chain；`crates/plugin/src/lib.rs::PluginRepository::mount` 依据完整 binding ID 找实例，不做跨 scope `code` 去重，`PluginInstance` 的 mount-point map 支持同一实例挂多处。故新端允许不同 scope 含同 code 与运行时结构一致，Q11 从“待语义决策”转为“代码契约已核实”，真实运行行为仍人工验收。
+
+
+### 旧版登录失败 Q22 Web 验证补齐（2026-10-31）
+
+- 为核实 Web 委托的 `@h-ai/ui` AuthPanel，新加 `e2e/fullstack.spec.ts` 用例：local service 错误凭据提交后仍留在 login form、出现 alert、没有 logout。隔离 E2E 1/1 passed。该用例是本地 fullstack 集成证据，不是部署或真实 IAM 验收。
+- 当前 R0 快照早于这项 E2E 测试文件变更，待本轮旧功能差异继续收敛后重新生成最终独立仓库快照并完整验证。
+
+
+### 续跑：Q7 Route 高级 JSON 深层结构（2026-10-31）
+
+- 补查发现 RouteEditor 虽有业务校验，但 JSON 入口仅要求根对象，嵌套 `rules[].matches` 等错型可能通过表单；新增 `isRouteResourceConfig`，按 Rust HTTP/MCP route、nested rules/matches、backend host/protocol、plugin binding 结构校验，未知扩展字段保持原值。
+- 加入 shared Route JSON 测试：HTTP/MCP 有效配置及未知扩展字段、坏的 nested matches、path enum、header host、MCP transport、非对象输入；定向 shared 3 个测试文件共 22 tests passed。shared typecheck 为 0 errors / 0 warnings，Gateway/Route 与对应编辑器的定向 ESLint 通过。
+- Web production build 成功；新增的 Route JSON 结构错误不保存旧草稿 fixture E2E 隔离运行 1/1 passed。fixture 仅验证前端防护，不替代 Rust 服务端/真实数据验收。
+- 因这项代码与 E2E 已晚于此前 R0 快照，R0 当前独立仓库验证需重出快照并重跑全 workspace 门禁。Q9 rename 两步操作的失败补偿缺口和 Q10 删除 route 后共享 Wasm 配置清理边界仍需后端策略决策，未做高风险猜测性删除。
+
+
+### R0 前次快照（已被下方刷新快照取代）
+
+- 从当前 `spacegate-admin` 源码重新导出至 `/tmp/spacegate-admin-r0-final.LYAOgM/repo`，独立 `git init` / index / tree，再检出至 sibling `checkout`；独立 tree `d83698af6ca875010a82d5fa3172db802c354249`，310 个文件，无 commit、无 remote。过滤依赖、playwright 结果、构建产物、local cache、私有 env；冻结安装使用共享缓存 1101 reused、0 downloaded。
+- 独立检出中 `pnpm check`、workspace `pnpm test`、`pnpm compile`、公开 env example 对应 Compose 静态 `config --quiet` 均 exit 0；check 中各 workspace Svelte/TypeScript 诊断 0 errors / 0 warnings。build 有既有大 chunk warning。checkout 的 Git index/工作区差异检查通过；验证期间只在临时副本生成构建和测试输出。
+- apps/packages/部署运行配置中无旧 Vue `spacegate-admin-fe` 路径依赖；唯一命中是部署 README 的说明。现有构建证实新后台当前源码可独立初始化、冻结安装、检查、测试、编译和解析 Compose；没有远端仓库、提交历史迁移或 Docker image build 证据（此前目标 Node base image registry 请求超时），不能称为远端拆仓与镜像验收完成。
+- Q9/Q10 已完成旧版语义与新端行为逐项复核：Q9 后端 rename 仍是非事务两步，新端锁定不确定失败后的盲目重试并提示核对两边；安全原子修复需后端多实现支持，未由客户端猜测回滚。Q10 route 删除本来只删除路由及其 target binding，不删除可能共享的独立 Wasm plugin config；新端不级联删除，保持已观察语义并避免误删。两项后端真实运行及故障注入验收仍由用户安排。
+- 此后仍需由用户人工完成真实 Rust/admin auth、部署/发现和设备路径验收；当前本地 E2E/mock、源码与临时拆分构建不被当作这些验收。未提交、未推送，旧 Vue sibling 的改动保留。
+
+
+### R2 多规则/多后端插件链回归补证（2026-10-31）
+
+- 按修订设计 R2 的两规则/多后端插件验收要求审计发现：此前 E2E 分别覆盖一条 rule / 一个 backend chain，另有多 rule 和多 backend 字段测试，但未在同一复杂路由上做链操作和保存重读。
+- 新增 Web fixture E2E `rule and backend plugin edits stay scoped across multiple rules and backends`：路由含 2 条 HTTP rule、每条 2 个 backend；对两条规则链及四条 backend 链分别执行添加/改 priority/排序/移除，保存后从上游 fixture 重读，逐项断言绑定仍处于各自链且 route scope 未变。隔离 managed 运行 1/1 passed。
+- 新增 miniapp `route-page.test.ts` 的多 rule/backend 操作矩阵，覆盖空链添加与已有链编辑、排序、移除及 scope 保持；定向 1 passed / 34 skipped，miniapp typecheck 通过。两者仅为 fixture/handler 证据，不替代 Rust 服务端/插件执行的真实环境验收。
+- 这是 R2 对应 UI 操作的额外测试和代码未变情况下的行为验证；由于新增测试文件已修改，之前 R0 snapshot 已过期，需在本轮稳定后重新独立导出并跑全 workspace 门禁。
+
+- 状态纠正：较早 Q32 复核条目称缺少“编辑后放弃不改变列表”的专门回归；后续 `AI Queue Q32 编辑草稿放弃确认回归` 已补 miniapp 用例并通过 1 passed / 5 skipped、typecheck 通过。以后一条具名回归为准；旧条目保留作时间线。
+
+
+### R3 Wasm 绑定来源/凭据继承契约复核（2026-10-31）
+
+- 复查旧 `buildBoundWasmPluginConfig` 与新 `createWasmBindingConfig` 后确认，两者都以定义 `spec` 为基础构造资源专属绑定，再覆写 binding metadata 与 runtime config；因此会继承 `image_url`/URL、`oci_auth`、`http_headers` 等来源字段。Rust Wasm config 由独立 binding ID 对应的 `PluginConfig` 提供，`binding_scope` 等元数据本身不替代模块来源。早前 Q17 “新端不复制认证字段”的判断错误，已在 inventory 更正。
+- 新 `wasm-binding.test.ts` 扩展为包含 fixture OCI 用户/密码和 Bearer header，route 与 rule scoped binding 均断言来源认证字段保留、runtime config 独立；定向 6/6 通过。该证据覆盖 helper 数据映射，不是实存储或运行时拉取验证。
+- 新 PluginEditor 的 OCI password/bearer/identity token 与 HTTP header value 控件为 `type=password`；SpaceGate 服务端 request debug log 仅写 method/path/status 并显式不写 body。不能据此证明真实上游或代理日志行为，真实凭据验收仍待用户。
+
+
+### R3 schema 表单与 R1 locale key 覆盖核对（2026-10-31）
+
+- 按设计要求复核共享和 miniapp schema helper/表单：已有用例覆盖本地 `$ref`、默认值、数组对象项、enum/同类型 oneOf、异构 oneOf 的 JSON fallback、嵌套必填校验、非法数值和未知字段保留。当前定向 `spacegate-schema.test.ts` 4/4、miniapp `schema-form.test.ts` 11/11 通过。设备端布局/交互真实体验仍由用户验收。
+- 对 shared、Web/App/Desktop overlay、miniapp overlay 和 miniapp i18n base 的 zh-CN/en-US/ja-JP JSON key 集合做只读比较：每组英/日相对中文均缺失 0、额外 0；miniapp compile 统计 shared 527 + overlay 234 keys。该结果只证明 key 结构同步，不证明译文质量或实际切换显示。
+
+
+### R3 Web Wasm OCI/HTTP 认证输入语义（2026-10-31）
+
+- 对照旧 `ThirdPartyWasmDrawer.vue`：旧端在保存时 trim OCI registry/username/password/bearer/identity 字段及 HTTP header 名和值；完全空 OCI/header 删除对应配置；只填 header 名或值时会阻止预览/保存。新 `PluginEditor` 原先 trim header 名和空值判断，但保留 header value 与 OCI 字段外围空白，本轮补了共享 `normalizeWasmAuth` 并用于 schema preview 和保存映射，保留未知 OCI 扩展字段、已填 registry 下空 secret 的显式清除语义。
+- 先新增 `wasm-auth.test.ts`，其首次运行因 helper 尚不存在而红；实现后 helper 与现有 `wasm-binding.test.ts` 共 8/8 通过，`spacegate-admin-shared typecheck` 0 errors / 0 warnings，新增 helper/test 定向 ESLint 通过；组件保存时 trim 的浏览器往返用例在独立 checkout 1/1 通过。
+- 此处是旧/新前端数据规范化映射证据。密码框仍从已读配置载入当前值（与旧版行为相同），schema preview/保存是否安全处理 secret 仍须真实后台/代理验收；没有证明真实存储加密或日志脱敏。
+
+
+### R0 刷新后的独立仓库/干净检出验证（2026-10-31）
+
+- 将最终的 313 个纳入文件从 `spacegate-admin` 导出至 `/tmp/spacegate-admin-r0-current.UPILjI/repo`，新建独立 Git index/tree，并检出到 `checkout`；最终 source bundle 与 checkout tree（含 Q31、Q9、Docker ignore 边界修复及 handoff）：`058e6bcdeba2faaeadce7f11eea80ce340d2ce78`。无 commit、无 remote；干净性按独立 index 验证（`diff-files --quiet`），cached diff check 通过。中间曾有一次导出将三文件平铺到 package 根目录，核对 shared 测试统计时发现并废弃；最终 tree 含正确源路径且门禁通过。未更改旧 Vue 子仓库及其既有 `.gitmodules`、`components/config` 修改。
+- 独立检出 `pnpm install --frozen-lockfile` 成功（1101 包复用本机 store、0 下载）；最终正确路径快照的 `pnpm check`、`pnpm compile` 通过；全量 `pnpm test` 通过：contract 4、shared 45、service 44、miniapp 165，共 258 项。Web/App/Desktop Vitest 按既有配置无 test files，返回成功；compile 有既有大 chunk 体积提示。
+- 首次与 check/compile 并行跑的全量 test 出现 service 1/44 失败；单独 rerun service 5 files / 44 tests 全通过，之后独立串行全量 rerun 同样 5/5 files、44/44 service tests 通过，且全 workspace 全绿。按复现结果记为并行首次运行的不稳定现象，不归因于具体根因。
+- `docker compose -f deploy/compose.yaml config --quiet` 使用复制的公开 env example 静态校验通过；这只是 compose 语法/变量配置检查，不是镜像构建或运行环境验收。`apps/packages/deploy` 源码检索未发现对旧 `spacegate-admin-fe` / `components/config` 的运行时依赖，只有部署 README 的独立仓库文字提及。
+- route rename blocker 与 route delete confirmation 两项 fixture E2E 在独立 checkout 运行 2/2 通过；Wasm credential 编辑回归扩展为带空白 secret/header 的保存往返 `editing a Wasm definition masks and trims secrets while preserving unknown OCI auth fields`，在最新快照独立 checkout 运行 1/1 通过。fixtures 仍只证明 UI/mock 行为。
+- Q28 `upstream-client.test.ts` 对 AI Gateway DELETE method/body 断言纳入此 tree；正确路径独立 checkout 全量 `pnpm test` 再跑，contract 4、shared 45、service 44、miniapp 165，共 258 项通过。
+- Q31 同时修正 `AiQueueRuleEditor`、AI Queue 页筛选/解析共用的策略选项；新增/同步 3 个 shared locale key、6 个 miniapp locale JSON 派生文件。更新后独立 checkout `pnpm check` 通过、`pnpm test` exit 0（258 项）、`pnpm compile` exit 0。三语言 Web 筛选和编辑选项 E2E 1/1 passed；必须同步设置 `HAI_E2E_WEB_URL` 与 `BASE_URL`，且构建时 `PUBLIC_API_BASE` 对齐 `SERVICE_BASE_URL`。测试/编译后 checkout clean，repo 与 checkout tree 相同。
+- 以上仅完成独立仓库拆分可行性、冻结安装、静态/本地门禁；没有 Rust upstream、真实数据库/凭据/AI gateway/微信设备或部署验收。真实环境部分由用户人工验收；本迁移仍有清单未决项，继续逐项核验、修复与记录。
+
+### 旧后台逐项核验续查：Q31 AI Queue 策略文案（2026-10-31）
+
+- 旧 Vue 的 abandon/queue/wait 选项在英文界面也硬编码中文说明。新 Web 原来在筛选、编辑、解析三个位置只显示 enum 值；已改为共享 i18n keys，补充 zh-CN/en-US/ja-JP 的拒绝超额、异步入队、入队等待说明。miniapp 原有策略值已分别使用本地化 keys。
+- `pnpm i18n:compile` 通过；shared typecheck（Svelte 0 errors/warnings）、web typecheck 通过；shared Vitest 8 files / 45 tests passed。
+- 新增浏览器 E2E 遍历英语、日语、简体中文的筛选器和规则编辑选项，独立 checkout 1/1 通过。扩展时先在筛选器断言中复现了遗漏的第二份 hardcoded enum，再将页面筛选/解析与编辑器一起本地化。测试单独使用 `HAI_E2E_WEB_URL`，起初未与 `BASE_URL` 同步而访问默认 4173；将其显式指向本轮 4273 preview 后正常登录并通过。夹具测试不作为真实环境验收。
+- 阶段仍开放：继续旧后台其余清单、修复/验证，再更新独立仓库 snapshot/check。没有提交或推送；真实环境由用户人工验收。
+
+### 旧后台逐项核验续查：Q9 rename 删除阶段失败（2026-10-31）
+
+- `Rename::rename_config_item_route` 源码确认是先 create 新 route、再 delete 旧 route；它们没有共享事务。新增 Rust 回归先红后绿，模拟 delete-old 失败并断言 API 返回错误、old/new 两条 route 均保留、调用顺序为 create→delete；定向 `cargo test -p spacegate-config rename_` 4/4 通过，`cargo fmt --check -p spacegate-config` 通过。
+- 没有增加通用回滚：并发环境中失败后新 route 可能已被其他写入引用，盲目删除不安全。新管理端已有部分 rename 失败提示/冲突状态并阻止盲重试，要求刷新检查；其 mock E2E 1/1 通过。真实后端错误注入与持久化状态由用户人工验收。
+- 该 Rust 源码在 SpaceGate 父仓，不属于 standalone `spacegate-admin` snapshot；本阶段会继续推进其它旧版清单项，R0 admin 快照仍为 313 文件且不包含父仓 crate。
+
+### R0 环境文件与 Docker context 边界复核（2026-10-31）
+
+- 对独立快照内版本控制的 `.env` / `.env.dev` / `.env.prod` / `.env.test` / `.env.example` 做字段级只读检查；已确认密码、访问密钥、token 等真实 secret 值为空，`HAI_IAM_LOGIN_PASSWORD` 与 `HAI_IAM_LOGIN_APIKEY` 是布尔登录方式开关。环境样例由父仓明确版本控制，保留文件，不输出或改写其值。
+- 发现根 `.dockerignore` 只排除 `**/.env.*`、没有排除根 `.env`，而 app Dockerfile `COPY . .` 且 Compose build context 为仓库根。已补 `**/.env`；以临时 `FROM scratch`/`COPY .env` context probe 验证 BuildKit 提示文件被 ignore 并拒绝复制。Dockerfile `--check` 尝试因 Docker Hub 上游 node base image metadata 请求超时退出 1，未做真实镜像构建。
+- 独立 checkout 中以 `.env.example` 临时提供 `deploy/spacegate-admin.env` 后，`docker compose --env-file .env.example -f deploy/compose.yaml config --quiet` exit 0；临时文件已从 checkout 清除。R0 tree 保留 313 个预期文件，repo/checkout hash 一致；静态/测试/编译门禁在 `.dockerignore` 变更前已对同一源码通过，该变更另有 context probe 与 Compose 解析验证。
+
+
+### R0 技能附件、可移植文档与独立 checkout 复核（2026-10-31）
+
+- 发现上次独立快照仅 313 文件，遗漏新后台 README 链接的 `.agents/skills`；将源码中的 66 个技能 Markdown 纳入快照，并确认 README 的 6 个入口均解析到已收录文件。同步修正文档中的本机绝对 workspace/Node 路径；all-in-one 联调指南现在明确依赖单独检出的 SpaceGate 集成工作区，独立启动入口明确指向新后台自己的 README。
+- 以当前源码更新临时独立 Git index/tree 并重新导出至全新隔离目录：tree `b45adfeac6e6d2773f85585a0ce9d9a12577e719`，379 个文件；tree 文件数与新 checkout 文件数一致，index 到 checkout 的 `git diff --exit-code` 通过。该临时仓库无 remote/提交；未对工作区执行 commit/reset 等 Git 操作，本轮文档修改保留在父仓工作树。交接文档也已把先前过时的 W15“待核”状态同步为设计范围内已用 fixture/source 闭合，明确真实上游仍待人工验收。
+- 在 `f68eff7c724932cdd0ce4a9897acc3f49d4677b5` 对应的 379 文件 checkout（应用源码与最终 `b45adfeac6e6d2773f85585a0ce9d9a12577e719` tree 相同；其后仅有 handoff W15 状态文字修正）中，以 Node `v24.8.0`/pnpm `12.11.2` 执行 `pnpm install --frozen-lockfile`（1101 reused/0 downloaded）、`pnpm check`、`pnpm test`、`pnpm compile` 均 exit 0；check 为 0 errors/0 warnings，compile 保留 app 大 chunk warning。README 6 个 skill 链接全部存在，66 个 skill Markdown 已收录。门禁使用 warm pnpm store，冷缓存下载未验证。
+- R0 的 CI 检查仅找到 `.github/copilot-instructions.md`，没有 `.github/workflows` 工作流可运行；CI 建置/权限与远端执行尚未验证。
+- Docker Hub base image metadata 超时导致 `docker buildx --check` 未通过，实际镜像构建仍待可用上游环境。无远端 clone/历史迁移/commit；旧版逐项核验仍继续，真实 SpaceGate、AI Gateway、微信 DevTools/设备、LDAP、原生端及运维环境由用户人工验收，本任务保持开放。
+
+
+### P22 Wasm OCI/HTTP 认证表单归一语义（2026-10-31）
+
+- 对照旧 `ThirdPartyWasmDrawer.vue`：空 name/value 行跳过，不完整行阻止保存，重复 key 以最后行覆盖；全部已知 OCI 凭据清空后不写入空 `oci_auth`。新端 `normalizeWasmAuth` 实现一致。新增 `e2e/spacegate.spec.ts` 编辑往返夹具用例：清空 registry/username/password/bearer/identity、保留未改 `X-Trace-Id`、重复 Authorization 后行获胜、空行忽略；现有创建用例覆盖不完整 header 阻止保存。
+- 验证：隔离端口与临时数据目录下 `pnpm test:e2e --grep='clearing Wasm OCI credentials and editing header rows follows legacy normalization'`（命令先执行 `pnpm compile`）1/1 passed；`pnpm --filter spacegate-admin-shared test -- tests/wasm-auth.test.ts` 实际运行 package 全部 8 个文件 / 45 tests，exit 0。Miniapp `pnpm --filter spacegate-admin-miniapp exec vitest run tests/wasm-definition.test.ts` 9/9 passed，miniapp typecheck passed。ESLint 全文件仍有 10 条位于新测试行范围外的诊断；新增测试行 0 条诊断。以上均为本地 fixture/helper 证据，不是 Rust/upstream、私有镜像或日志安全验收。
+- 旧 Vue 工作树未改；新后台 E2E 文件有既有 staged/unstaged 改动，本轮只追加测试并保留两者。源文件更新后需重出独立 snapshot，R0 门禁记录按新 tree 刷新；整体旧版清单继续保持开放。
+
+
+### R0 纳入 P22 回归后的当前独立快照门禁（2026-10-31）
+
+- 将本轮 E2E 用例与最新 handoff 导出到临时独立 tree `64a8b41a3ded922be63ee1bca8bcef1a3339df41`：379 个文件，含 66 个技能 Markdown，README 6 条技能链接均可解析；tree 与新 checkout 文件清单一致，构建/测试后 index 到 checkout 的 tracked-file `git diff --exit-code` 通过。临时 Git 仓库无 commit、无 remote。
+- 在该 checkout 重新执行 `pnpm install --frozen-lockfile`（1101 reused/0 downloaded）、`pnpm check`、`pnpm test`，均 exit 0；check 各 Svelte package 0 errors / 0 warnings。通过 `pnpm test:e2e --grep='clearing Wasm OCI credentials and editing header rows follows legacy normalization'`，脚本先跑完整 `pnpm compile`，随后隔离端口与临时 SQLite/storage 下 1/1 passed。compile 有既有 app 大 chunk warning。该回归仍使用本地 mock upstream。
+- 本地快照、安装、workspace 检查、测试、编译与新增定向 E2E 已验证；远端 clone/历史迁移/CI workflow/真实容器构建未验证（Docker Hub metadata 请求超时；仓库无 workflow；不提交/推送）。旧版全功能清单及用户负责的真实环境验收继续开放。
+
+### R0 miniapp P22 回归后的最新干净 checkout 与拆分边界复核（2026-10-31）
+
+- 最新导出 tree `aac3799371f47e0755867bcb18b5d9a2225fc66f`（379 文件、66 个 skill 附件）在 `/tmp/spacegate-admin-r0-current.UPILjI/checkout-p22-miniapp-20261031` 独立 checkout。冻结安装、完整 `pnpm check`、完整 `pnpm test` 和最新 checkout 上的 `pnpm compile` 均 exit 0；miniapp 26 个测试文件 / 166 项、serv 5 个文件 / 44 项通过，check 中 Svelte 均为 0 errors / 0 warnings。构建有既有 app 大 chunk 警告。之前 tree `64a8b41a3ded922be63ee1bca8bcef1a3339df41` 已在相同 E2E 源码上执行新增 Wasm OCI/HTTP fixture E2E 1/1；随后最新 tree 的代码差异只有 miniapp helper 回归和交接文档，因此本轮未重复启动完整 E2E。所有 fixture 仍为本机 mock upstream。
+- 对最新 checkout 做源码拆分边界扫描：业务依赖仅使用 monorepo 内部 `workspace:*` 包；未发现本机 `/Users/...` 路径、父仓/旧 Vue 工程运行时引用或向 checkout 外部的 `file:` 依赖。all-in-one 手册中的 `SPACEGATE_WORKSPACE=/path/to/...` 是用户部署参数示例，README 中 `workspace:*` 描述也是发布/monorepo 说明，不是外部依赖。该结果支持源码级独立检出与构建，不等于完成 Git 历史迁移或远端 clone。
+- 最新快照仓库仍是临时 Git index/tree 导出，没有 commit/remote；依用户明确要求，不执行 commit/push。冷缓存依赖下载、真实 registry 镜像构建（Docker Hub metadata 超时）、CI 工作流（仓库无 `.github/workflows`）与真实 SpaceGate/AI Gateway/微信设备验收仍未验证。旧版全功能逐项核验继续开放，不以 R0 本地门禁代替用户人工环境验收。
+
+### 旧后台 P2 插件主页/仓库链接小程序适配（2026-10-31）
+
+- 逐项复核发现 miniapp 已展示原生插件主页与仓库链接，并在 WXML 提供复制操作；之前缺少该专用平台动作的页面 handler regression。新增 `plugin-page.test.ts` 用例分别触发 homepage/repository URL，断言调用 `wx.setClipboardData` 原值且成功提示两次；定向 `pnpm --filter spacegate-admin-miniapp exec vitest run tests/plugin-page.test.ts -t 'copies native plugin homepage and repository links'` 1 passed / 21 skipped。
+- 当前实现与代码夹具证据闭合该 UI 操作，不证明微信 DevTools、设备剪贴板权限或用户设备打开外链行为。最新独立 checkout 的新增测试已验证；根 `pnpm check` 通过。直接调用 miniapp 子包 `typecheck` 时，因为没有先 build 内部 `spacegate-admin-contract` 而报找不到 workspace contract 类型，属于绕过根门禁的调用顺序问题，不是根 `pnpm check` 的失败。
+
+### R0 纳入 P2 页面回归后的独立拆分快照（2026-10-31）
+
+- 同步最终 handoff 后，临时 Git index 最新 tree 为 `2b8cf5d2d4dbad22979b94de91beb2f2c49f5b9d`，`checkout-index` 新鲜导出 379 个文件；cached whitespace check 通过。临时 repo 仍无 commit、无 remote，未触碰用户工作树 staging。
+- 新 checkout 冻结安装复用 1101 个本机缓存包、0 下载；P2 homepage/repository clipboard fixture 1/1 passed，根 `pnpm check` exit 0 且各 Svelte 检查 0 errors / 0 warnings。直接子包 typecheck 单独运行缺少 contract build 产物而失败；随后按工程根脚本运行 `pnpm check` 正常通过。最新源码仅增加该 miniapp regression 和 handoff 文字，前一份独立 checkout 的完整 `pnpm test`、`pnpm compile` 已覆盖其余相同源码；miniapp 整包 `pnpm test` 最新结果已在前一份 tree 通过 26 files / 166 tests。
+- 静态拆分边界扫描仍只见内部 `workspace:*` 依赖，未见父仓绝对路径或旧 Vue runtime 引用。该本地 clean source export/构建检查不等于独立 Git history clone、remote CI 或生产验收；真实环境仍由用户人工验收，迁移目标继续开放。
+
+### 旧后台 P3 原生插件实例列表搜索核验（2026-10-31）
+
+- 对照旧 `PluginPanel.vue::matchesInstanceSearch`，旧 named 实例列表按实例名或 `pluginInstanceDisplayName` 子串匹配；miniapp 的 `onFilterInput` 将输入传入 `filterPluginInstanceRows`，支持 displayName、name，并额外允许 code/preview 搜索。没有发现旧能力缺失。
+- 新增 miniapp 页面级 regression，真实触发 filter handler，以带前后空格且混合大小写的 display name 查询，断言仅匹配对应 named 实例。定向用例 1 passed / 22 skipped；随后完整 `plugin-page.test.ts` 23/23、miniapp typecheck 通过。typecheck 首次发现测试局部 interface 未声明 visible rows 数组，补齐类型后通过。没有改生产实现；目录实际内容/上游动态刷新由用户环境验收。
+- 测试与 handoff 后续将纳入刷新后的 R0 快照，主迁移任务继续开放。
+
+### 旧后台 G3 miniapp 健康轮询生命周期核验（2026-10-31）
+
+- 对照旧 `App.vue` 挂载即请求并每 5 秒刷新健康状态，新 shared store 的健康 timer 为 5 秒且跳过隐藏文档；miniapp overview 与 instances 页面仅在可见生命周期持有 timer，`onHide` 同时使未完成请求结果失效。
+- 原有 helper 测试只手动调用 stop，不能证明页面生命周期接线。本轮在 `overview-page.test.ts` 驱动 `onShow/onHide`，fake timer 证明 5 秒后恰好刷新一次、隐藏后再过 10 秒没有额外刷新。完整 overview 页面测试 3/3、miniapp typecheck 通过；没有改生产代码。微信后台挂起/恢复由设备环境验收。
+
+### 旧后台 G9 JSON 导入/导出小程序适配核对（2026-10-31）
+
+- 对照旧 Gateway 文件导入/导出能力，新 miniapp 采用完整 JSON 文本编辑与剪贴板 paste/copy 的平台适配。现有 `gateway-page.test.ts` 覆盖有效粘贴、非法 JSON 保留草稿、未保存时取消导入和复制当前配置；`route-page.test.ts` 覆盖 route JSON clipboard round-trip。此处无需增加 wx 文件 picker；真实微信剪贴板/文件能力仍待人工设备验收。
+
+### 旧后台 Q8 重名路由创建竞态修复（2026-10-31）
+
+- 当前工作树完整 Web suite 首跑 96 项时发现 `blocks creating a duplicate route name before sending the write request` 失败。error context/trace 证实创建入口在 route.list 完成前已打开表单；此时 `store.routes` 为空，duplicate guard 漏过，浏览器实际发出 `POST /api/v1/spacegate/route/upsert`，fixture 返回 200 并覆盖 `route-a`。
+- shared `routes.svelte` 的两个创建入口现在先 `loadRoutes(selectedGateway)`，成功后才打开草稿；读取期间禁用按钮，失败时不打开草稿并在列表页呈现错误。原 E2E 在隔离端口重新执行（含 compile）1/1 passed，断言冲突可见且配置 version 不变；随后根 `pnpm check` exit 0，Svelte 为 0 errors / 0 warnings。全 suite 修复后复跑 95 passed / 1 skipped（未配置邮件 OTP）、0 failed，耗时 9.9m。
+- 此修复缩小并发窗口但不代替服务端原子 create/冲突处理；当前 API/mock 与旧 Rust 文件创建语义仍待真实环境核验。变更已写入 feature inventory / handoff，最终独立 snapshot 等全功能阶段后刷新。
+
+### 全旧版功能 fixture 回归与工作区单元门禁（2026-10-31）
+
+- Q8 修复后以隔离端口运行完整 `node scripts/run-e2e.mjs`，96 项中 95 passed、1 skipped（IAM email OTP fixture 未配置），0 failed，耗时 9.9 分钟；覆盖 fullstack 登录/用户管理与 SpaceGate Web/App/Desktop fixture，所有 upstream 均为本地 mock。
+- 修复后工作树执行完整 `pnpm test` exit 0：contract 1 file / 4 tests；miniapp 26 files / 169 tests；shared 8 files / 45 tests；serv 5 files / 44 tests。之前根 `pnpm check` exit 0，shared/Web/App/Desktop Svelte diagnostics 为 0 errors / 0 warnings；E2E 命令所含 `pnpm compile` 在修复代码上成功。Miniapp 含 P2/P3/G3 新增页面 regression。
+- 这关闭了当前自动化 fixture 范围的全套 suite 回归；不是生产 Rust/AI Gateway、微信设备或真实运维验收。最终源 tree 更新后，独立仓库 R0 snapshot/install/check/test/compile 仍须再跑。
+
+### R0 独立快照最终阶段验证（2026-10-31）
+
+- 以临时 Git index 从当前 `spacegate-admin/` 导出完整 379 文件源码快照，没有在用户工作树初始化嵌套仓库、创建 commit 或 remote。最终包含 handoff 更新后的 tree：`012cd21dd9d102b8f98c98963914d6ebe00adaf0`。另建空白目录 checkout-index 导出并确认 379 文件；在该独立目录执行 `pnpm install --frozen-lockfile` 成功，`pnpm check` 成功（Web/App/Desktop Svelte diagnostics 均 0 errors / 0 warnings），`pnpm test` 全通过（contract 4、miniapp 169、shared 45、serv 44），`pnpm compile` 成功；测试与构建对应源码 tree `c52c71c84473d70a61f8946a89029dbc053cac67`，最终 tree 仅再包含此次 handoff 文档收尾更新。
+- 独立目录在隔离端口执行 Q8 重名路由定向 Web E2E 1/1 passed。第一次启动因 `MOCK_UPSTREAM_BASE_URL` 指向 4198、但遗漏 `MOCK_UPSTREAM_PORT=4198` 而等待 mock server 超时；按 config 证据补齐同端口后复跑通过。这不是应用逻辑失败。
+- 静态拆分边界检查确认所有 `workspace:*` 均指向本仓内部 package；无 `/Users/yiye`、旧 Vue 工程路径引用。frozen install/check/test/compile 和 E2E 在独立目录成立，支持源码可独立安装/构建的可行性；该临时快照没有 Git 历史、commit、remote，也未执行父仓移除目录或真实远端 clean clone，因此尚未完成物理拆仓/CI/部署迁移。Docker Hub metadata timeout 导致 `docker buildx --check` 未完成；工程未发现 `.github/workflows`。
+- 自动化验收范围已阶段收敛，但整体验收仍未关闭：本地 fixture 不代表 Rust SpaceGate、AI Gateway、LDAP/生产数据、微信 DevTools/真机和运维环境验收。旧 Vue 改动仍保留在其工作树（`.gitmodules`、`components/config` 两项修改），主父工作树包含大量原有 staged/unstaged/untracked 内容，均未清理。下一步是按 inventory 剩余标记逐项复核，并由用户人工完成真实环境验收；拆仓迁移本身仍需后续明确窗口/授权后执行。
+
+### 旧后台 Q8 小程序创建/复制重名预检复核（2026-10-31）
+
+- Inventory 曾明确记录 Web 已强制刷新列表而 miniapp 仍使用已加载列表。现在 miniapp `onStartCreate` 在打开创建草稿前复用当前 `load()` 刷新；`onCopyRoute` 也先刷新列表并检查源 route 仍在当前网关中。加载失败、路由页仍在加载或网关已切换时均不继续；刷新得到的新列表供重名预检，草稿 `draftVersion` 取刷新版本；此后外部并发仍按既有版本快照返回冲突，不自动推进/重试。
+- 新增四个页面用例覆盖创建及复制刷新、刷新失败阻止创建、复制源刷新后消失。有效 RED/GREEN 中，前两项在旧实现下因未调用 route list 读取而失败，修复后通过；`route-page.test.ts` 39/39、miniapp 全量 26 files / 173 tests 通过，`pnpm --filter spacegate-admin-miniapp check` 与 `git diff --check` 通过。首轮 RED 前曾错误模拟 dirty draft 导致确认返回取消，纠正测试初态后重新得到有效 RED。
+- 已更新 feature inventory 与 handoff。上一 R0 tree `012cd21...` 是该小程序修复之前的阶段快照，当前源码已前进；完整旧功能阶段结束后必须按最新源码刷新 R0 snapshot 与 clean checkout gates。该验证仍为 mock/page 证据，服务端原子重名冲突及真实 Rust 行为由用户验收。
+
+### 旧后台 R1/R4 搜索过滤后的路由定位修复（2026-10-31）
+
+- 源码核验发现 WXML 对 `visibleRouteRows` 渲染并传入过滤数组的 `index`，而 edit/copy handler 误按完整 `routeRows[index]` 取值；过滤掉首条后点第一条可编辑/复制另一路由。根因为 handler 与视图使用不同索引空间。
+- `onSelectRoute` 和 `onCopyRoute` 改为从 `visibleRouteRows` 取行；编辑入口另加 loading/gateway guard，避免网关切换时按新 gateway 请求旧列表同名项。新增页面回归覆盖过滤列表映射与 loading 期间不请求。定向测试 3 项通过；`route-page.test.ts` 42/42；miniapp 全量 26 files / 176 tests；miniapp typecheck 与 `git diff --check` 均通过。全量回归首次还发现两条旧 copy 测试缺少可见列表数据，已将 fixture 补至真实 WXML 状态后通过。
+- 已更新 R1/R4 inventory。此修复不改变真实服务契约；独立 R0 快照需在全功能阶段结束后刷新，真实小程序搜索/点击仍待 DevTools/设备验收。
+
+### 修订设计敏感配置导出提示（2026-10-31）
+
+- 对照设计 R1 “导出需明确提示可能含敏感配置”，发现 Gateway 和 Route miniapp JSON 复制按钮直接写剪贴板，没有安全提示。两处现在先弹出可能包含密钥/凭据/访问令牌的本地化确认框；取消不触碰剪贴板，确认后才复制。新增中、英、日文案。
+- Gateway/Route 两个新测试分别验证取消后剪贴板没有写入、确认后写入 JSON 且 modal 内容含敏感值警告；既有剪贴板 round-trip 测试同步改为确认后执行。定向测试 4 passed；miniapp 全量 26 files / 178 tests passed；miniapp typecheck exit 0。
+- 已更新 G9/W13 inventory。证据覆盖 miniapp handler 与 wx mock，Web/App/Desktop JSON 文本框快捷键不拦截系统剪贴板；这轮仅修复有显式导出按钮的小程序流程。真实系统剪贴板、设备提示行为仍由用户验收；最终独立快照要包含本次源码和翻译变更。
+
+### 修订设计敏感 JSON 提示补齐共享 Web 流程（2026-10-31）
+
+- 之前只处理 miniapp 显式 JSON clipboard export；复核共享组件后，发现 `JsonTextarea` 的复制按钮和 `GatewayEditor` 文件导出按钮也没有提示。两处现在均在复制/下载前弹出中/英/日敏感配置确认，取消不触碰 clipboard / Blob 下载。浏览器键盘/系统级文本复制未被拦截。
+- 本地 Web fixture E2E 覆盖 Gateway JSON 文件导出以及 Route JSON 复制确认/取消，2/2 passed；测试捕获原生 confirm 并核对中文“密钥/凭据/访问令牌”文案。此为 fixture UI 证据，不是真实 SpaceGate 验收；本轮未在 App/Desktop 实际运行确认交互。
+- G9/W13 inventory 与 handoff 已更新。旧版全功能对照、最终 R0 快照/独立 clean checkout 刷新和人工环境验收仍未关闭。
+- 随后在当前工作树执行 `pnpm check && pnpm test`，整体 exit 0；共享/Web/App/Desktop Svelte 检查无 errors/warnings，契约、小程序、共享 UI 与 serv 单测通过。此轮源码继续前进，既有 R0 tree 现为历史阶段证据，不能代表该次确认提示代码。
+
+### 敏感 JSON 提示后的 R0 独立快照复验（2026-10-31）
+
+- 从最新源码和 handoff 导出测试 tree `0ee9d2e5d7e87d012e8679feb26529cc4edbab98`（378 文件）；该独立 checkout 完成下列门禁。随后阶段 handoff 仅追加验证记录，再导出最终文档 tree `96a91f0bb46671d42aaa9fe9b44dc5d5f24ec795`（仍为 378 文件）；最终临时 index 到 clean checkout 的 tracked 文件 diff 为 0。旧 379 文件历史 checkout 多一个当前源目录不存在的 `packages/spacegate-admin-shared/PluginEditor.svelte` 根目录副本，本次排除。
+- 测试 tree 上 frozen install、`pnpm check`、`pnpm test`、`pnpm compile` 均 exit 0；测试计数 contract 4、miniapp 178、shared 45、serv 44；Web/App/Desktop Svelte 各 0 errors / 0 warnings。敏感 JSON 定向 Web fixture E2E 2/2 passed。已有 Web vendor UI >500 kB build warning。
+- 拆分边界复核：8 项 `workspace:*` 依赖均指向新仓内部 package；66 个 skills Markdown 随工程收录；没有运行时代码引用父仓绝对路径或旧 Vue 工程；仓库没有 GitHub workflow，仅有 Copilot instructions。此临时 tree 无 commit/remote，也未执行远端 clone、历史迁移、物理拆仓或真实容器/CI 验收。旧版全功能逐项核验和真实环境人工验收仍继续开放。
+
+### 全功能 fixture E2E 复跑与 DevTools 编译能力检查（2026-10-31）
+
+- 当前源码执行完整 managed E2E 复跑：96 passed、1 skipped（未配置邮件 OTP）、0 failed，10.0 分钟。首轮完整测试曾在 hash 路由用例等待 overview 页面时超时；该用例单独连续运行 5 次 5/5 passed，第二轮完整套件同项通过。首轮 trace 仅观察到本地 `/auth/refresh` 401，其后登录和刷新成功；间歇性超时原因未定，不把首次失败抹去。全部 E2E 使用本地 SQLite 与 mock upstream。
+- 复查原生编译能力发现本机安装 `/Applications/wechatwebdevtools.app`。CLI `open` 因 IDE Service Port 默认关闭而请求用户确认开启；没有开启，停止了等待确认的 CLI。CUA 报告 Mac 锁屏，无法进行 GUI 验收。直接调用安装包中的原生 `wcc`/`wcsc`，在最新独立 checkout 静态编译 8 个 WXML 与 9 个 WXSS 文件全部通过；这不证明 IDE 预览、微信运行时或真机行为。
+- 本轮运行完整 E2E 后应用源码未改变。handoff 已追加记录，最终 R0 tree 在 handoff 更新后重导出；手动环境验收仍由用户负责，禁止将 fixtures 视作真实 SpaceGate 验收。
+- 本记录当时的 handoff tree `96a91f0bb46671d42aaa9fe9b44dc5d5f24ec795` 已被后续 DevTools 证据更新替代；见下条最终 R0 export。
+
+### DevTools 原生模板编译与最终 R0 clean export（2026-10-31）
+
+- 从更新后的当前工作树经临时 Git index 导出最终 R0 tree `906c03749d2e4d6c80c1ff4a90d45db11f331dd3`，378 个文件，无 commit/remote。将该 tree archive 到独立目录后逐个比较 378 个 Git blob，missing=0、changed=0。此举没有在父仓或新后台初始化嵌套 Git 仓库。
+- 在最终独立导出目录调用微信 DevTools 自带原生 `wcc`/`wcsc`：WXML 8、WXSS 9，编译失败 0。它只覆盖静态模板语法；未开启 IDE Service Port，也未做 GUI 预览或设备运行。
+- 此最终 R0 tree 的 handoff 变更后，冻结安装、完整 `pnpm check`、`pnpm test`、`pnpm compile` 在仅 handoff 文档不同、应用源码相同的独立导出中均 exit 0；Svelte errors/warnings 为 0，Web 构建有 >500 kB 警告。全量 managed E2E 96 passed / 1 skipped / 0 failed 在同应用源码前序独立 checkout 通过；E2E 仍是本地 fixture。旧版全功能逐项核验继续开放；真实 Rust/AI Gateway/微信设备验收由用户人工进行，远端 Git history/clone、CI、Docker registry 和物理拆仓仍未验证。
+- 复核旧版清单时发现第 4.3、8、9 节仍保留迁移前“缺失/必须补齐”语气，容易与后来 Q 项的实现和 fixture 回归记录冲突。已将它们明确标为历史基线/历史建议，并指向当前逐项记录；清单仍保留真实服务与设备验收限制，不将 mock 结论升级为生产验收。
+
+### 修订 R1–R4 全量回归与 R0 独立仓根复验（2026-10-31）
+
+- 当前工作树执行 `pnpm check && pnpm test && pnpm compile` 均通过，Svelte diagnostics 0 errors/0 warnings，Web 构建保留 >500 kB chunk warning。Rust 路由 rename 删除失败定向测试 `cargo test -p spacegate-config --lib rename_reports_delete_failure_after_creation_without_rolling_back_either_route` 1 passed。
+- 依修订设计重新跑完整 managed E2E。默认 service 3000 已被原有服务占用；首次仅改 Playwright `BASE_URL` 而漏设测试 helper 独立读取的 `HAI_E2E_WEB_URL`，测试误打到 4173 现有服务后即停止；确认端口/URL 后使用独立 Web/App/Desktop/service/mock 端口复跑：97 项中 96 passed、1 skipped（未配置邮件 OTP）、0 failed，10.0 分钟。覆盖新增 AI 宿主 schema/readme 和字段保留、Wasm source 同步/部分失败和跨资源隔离、HTTP/MCP 多规则/多后端链、冲突/不自动重试、关闭草稿确认及全局/路由重载等；全程本地 SQLite + mocked upstream，不代表生产验收。已回收本轮 E2E 服务，保留原有 3000 服务。
+- 在独立导出 clean directory 全新执行 frozen install、完整 `pnpm check`、`pnpm test`、`pnpm compile` 均 exit 0。Compose 使用公开 `deploy/spacegate-admin.env.example` 生成临时本地 env 后，`docker compose -f deploy/compose.yaml config --quiet` 通过；仅做配置解析，未构建镜像。微信 DevTools `wcc/wcsc` 对 8 个 WXML、9 个 WXSS 静态编译通过；未做 IDE/设备运行。
+- 追加历史审计并更新 handoff 后，最终父仓 tree 为 `d8f44a0ff0740f778713ee942ad6c4991f879a2f`（378 文件），独立根 tree `17396f4c24f0caab8c119257b4c731c04d89efca`；最终 archive 的 378/378 Git blob 与 tree 一致。前序的独立 Git 根门禁针对相同代码及仅文档不同的 tree 通过，未建 commit/remote；ignore 与 public env sample 状态如上。
+- 只读父仓路径历史审计：7 个 `spacegate-admin/` 提交、1 位作者身份，范围 2026-10-24..2026-10-29；4 个提交还包含仓内其他路径（最多 11 个），整提交复制会带入无关改动。当前有限敏感扫描命中的是 fenced 私钥文档占位符与 replace 密码示例；7 份 `.env.prod` 无 password/token/key/auth 字段，未发现常见格式凭据文件/值。建议仅在用户之后授权时保留路径过滤历史；本轮未生成新历史、提交或远端。该有限模式扫描不证明不存在任意未知秘密格式。
+- workspace scan 为 8 个内部 `workspace:*`、66 份 skills、0 条父仓绝对路径/旧 Vue runtime 引用；无 `.github/workflows`。真实镜像构建、CI、远端 clone/历史切分和物理切仓未执行；手动上游/设备验收由用户完成。旧 Vue 工作树原有 `.gitmodules`、`components/config` 改动保持原样。
+- 旧后台 `../spacegate-admin-fe` 仍只有原有 `.gitmodules` 与 `components/config` 修改；本轮未改、未提交、未推送。真实 Rust/Kubernetes、AI Gateway、并发 CAS、微信设备及 Capacitor/Tauri 原生打包仍由用户人工验收；全目标尚未整体关闭。
+
+### 旧后台 R2 路由搜索字段与主机列表逐项核验（2026-10-31）
+
+- 旧版清单/修订设计要求路由列表搜索覆盖名称、主机名、匹配和后端；当前 Web 页面 `routeSearchText` 初始只组合主机、匹配摘要/路径与 backend 摘要。本轮补齐 seed route hostname 和页面回归，依次搜索 route 名、hostname、path、method、header 名/值、query key/value 与 backend 地址均命中，`missing-host` 不命中。该回归先暴露 `GET`/header/query 未被搜索的缺口；共享实现现把全部 match 结构加入搜索文本。最终隔离端口运行 `node scripts/run-e2e.mjs --grep='route search includes names, hostnames, match paths, and backend addresses'` 1/1 passed（Web bundle 先以当前源代码重新构建）。
+- 该测试使用本地 SQLite/SpaceGate mock，不是 Rust/生产搜索验收。新增 fixture/test 已使旧 R0 源码快照过时；按阶段要求，待其余旧版功能项继续核验后统一刷新独立快照，不据单个条目关闭迁移任务。父仓与旧 Vue 工作树其余变更保留，未提交/推送。
+- 随后在匹配字段、路由摘要改动稳定后执行 `pnpm check && pnpm test`，均 exit 0：contract 4、shared 45、miniapp 179、serv 44 项通过，Web/App/Desktop/Shared Svelte diagnostics 均为 0 errors / 0 warnings；App/Desktop 无独立 Vitest 文件。定向 ESLint 对新 route-search helper/test 和共享 routes 页面通过；miniapp 整个旧页面文件 ESLint 仍报告 56 条既存诊断（位于本次改动行之外，主要是旧格式/unused import），未在本轮做全文件重排。
+
+### 旧后台 R2 路由列表主机摘要/匹配条件搜索缺口修复（2026-10-31）
+
+- 对照修订设计 R2 的跨端列表字段要求，发现共享 Web/App/Desktop 表格和移动卡片未显示 route `hostnames`；小程序列表只展示截断 JSON，没有可读的 HTTP/MCP 类型、hostnames、match、backend、priority 和 route plugin count。新增 E2E hostname 可见断言先 RED（原 UI 无该元素）。
+- 共享列表补 hostname 列和窄屏卡片字段；miniapp `buildRouteRows` 为每条路由提供结构化摘要，保留完整 JSON 于 search blob 供搜索，WXML 改为显示同组列表信息。增加 helper/搜索和页面列表刷新集成覆盖。Web 搜索/展示 fixture E2E 1/1 passed；miniapp 全套 26 files / 179 tests passed；根 `pnpm check` exit 0，各 Svelte diagnostics 0 errors/0 warnings；微信 DevTools 原生静态编译 WXML 8/8、WXSS 9/9 通过。
+- 全部页面回归仍使用 mock fixture；DevTools 只证明模板/样式静态编译，未做 GUI/真机验收。代码和 handoff 已晚于此前 R0 tree；独立仓库 clean snapshot 门禁需在余下旧功能核验收敛后刷新。父仓/旧 Vue 用户改动保持，未提交/推送。
+
+### 旧后台 R2 路由摘要旧语义补齐（2026-10-31）
+
+- 对照 legacy inventory 2.3.3 后发现共享路由列表还丢失旧 backend `host:port` 与多目标 `+N more` 信息；空 hostname 旧版显示 `*`，新端显示 `—`；HTTP match-all 摘要旧版可见，新端为空占位。给 Web fixture 临时追加第二 backend，摘要断言 `127.0.0.1:9000  +1 more` 先 RED，证实差异。
+- Web/App/Desktop 共享列表现显示 wildcard、HTTP match-all、backend host/port 与多目标计数；miniapp builder 对齐 host port 默认值、wildcard、MCP transport 和多 backend 文案，并保留完整搜索文本。最终共享页面 E2E 1/1 passed，覆盖名称/hostname/path/method/header/query、两个 backend 地址搜索、摘要及窄屏显示；Web build exit 0。
+- 最新 `pnpm check && pnpm test` 均通过：contract 4、shared 45、miniapp 179、serv 44；Svelte diagnostics 0 errors/0 warnings；miniapp 单包复跑 26 files / 179 passed。新 helper/shared 页面定向 ESLint 通过；miniapp routes 整文件 lint 仍有 56 条本次触及行外诊断。E2E/miniapp 仍是本地 mock 证据；R0 源码 tree 又过时，剩余旧项收敛后再刷新。
+
+### 旧后台 R2–R4 创建、编辑与复制逐项复核（2026-10-31）
+
+- 对照旧版操作清单重新检查路由类型切换、编辑与复制：Web 新建 route 在草稿被改动后切 HTTP/MCP 会请求确认，取消保留草稿、确认切换到 MCP 默认模型；Web E2E `changing a modified new route type requires confirmation` 与小程序 `switches a route to MCP only after confirmation and applies the MCP default shape` 均覆盖取消/确认路径。
+- R3 编辑已有 Web E2E 验证 route/rule/backend 插件链写入相互独立；miniapp page 测试覆盖原生结构化编辑和 MCP/未知字段保留。R4 Web fixture E2E 验证复制后 `-copy` 配置保留且源未改变；miniapp 页面测试覆盖复制前刷新、过滤结果索引映射、源已消失时拒绝复制、Wasm 绑定独立化后再写入。对应证据补记在 legacy inventory R2–R4。
+- 上述是源码 + E2E fixture/page mock 证据，不代表真实服务或微信设备验收。先前 `pnpm test` 与 full managed E2E 覆盖这些用例；本阶段继续核验 R5 起及其后旧版操作项，不关闭迁移任务。
+
+### 旧后台 R5–R13 改名/删除与 HTTP 匹配逐项复核（2026-10-31）
+
+- R5–R6 定向 managed E2E 5/5 passed：新建名迁移完整路由配置并删除旧名、部分 rename 失败显示不确定并阻止盲目重试、删除确认取消保持不变/确认只移除选中 route，另含 R2 类型切换与 R4 复制回归。Rust rename 仍是 create 后 delete 的非事务过程，mock 通过不证明实际 Redis/后端事件失败时的真实原子性。
+- R7–R13 核验发现 R1 搜索回归给 mock 全局种子加的 hostname/method/header/query 初值污染了原先依赖空值的 match 用例。已恢复干净 fixture 基线，把搜索场景所需 route 通过版本化 PUT 仅写入 `route search and summaries...` 用例；Web E2E 用专属 match/path/header selectors 验证后重跑 R7–R13 相关子集 13 项均通过（初批 10 passed、3 个受 fixture 污染失败；修复隔离后 4/4 search + 三个受影响项 passed）。
+- 覆盖 hostnames null/empty-array、multi rule/match、Prefix/Exact/RegExp rewrite、method/header exact/regexp/query exact/regular、match-all/null 与 rule timeout/balance。修订后的 legacy inventory 已补上具体回归指针。`pnpm check` exit 0（所有 Svelte 0 errors/0 warnings），miniapp `route-page.test.ts` 43/43 passed，Web build exit 0；全套 miniapp 最新总量仍以先前 26 files / 179 tests 为准。fixture/UI 证据仍不代替真实服务和设备人工验收。
+
+### 旧后台 R14–R19 后端、插件链和 MCP 逐项复核（2026-10-31）
+
+- 针对后端资源形态与 route/rule/backend 三层插件链执行 13 条 managed E2E，13/13 passed：Wasm binding scope 分离、各链排序/互不覆盖、MCP legacy SSE 和 streamable HTTP、多 backend、File 无端口、Host discovery 失败保留手工值、K8s/File discovery 字段归一、端口/权重校验、rule timeout/balance 层级。
+- Web MCP SSE 用例额外覆盖 timeout `request` 与 session affinity `none`；miniapp route page 覆盖 MCP 至少保留一 backend、transport/path/timeout/session 与 backend kind/字段更新。详细证据已补到 inventory R14–R19，均是本机 upstream fixture 与 page mock。
+- 无真实 Kubernetes/Filesystem backend、TLS/HTTP2 数据面、Redis/Wasm runtime 或微信真机验收；旧版清单阶段继续 R20–R25，之后进入独立仓可行性/拆分门禁。
+
+### 旧后台 R20–R25 插件链、示例、JSON 与发现器复核（2026-10-31）
+
+- R20–R25 managed E2E 7/7 passed：拒绝重复插件 code、route plugin 排序、非法 route JSON 不误写先前草稿、复制 JSON 前敏感信息确认、backend discovery 失败保留手工输入、编辑器脏草稿取消确认、route 示例覆盖前确认。结合前面的三层 plugin / backend discovery E2E 与 miniapp route page 43/43，确认 inventory 这些项都有对应实现或合适的平台原生替代。
+- miniapp page mocks 另覆盖 route example 确认后应用且保留名称、JSON clipboard paste/copy、非法 backend port 阻止写入、发现结果字段选择；Web 侧 route JSON 错误/结构校验阻止请求、敏感值复制确认。legacy inventory R20–R25 已逐行补证据。
+- 以上都不证明生产 schema、真实上游存储或实际浏览器/微信剪贴板/原生确认框行为。R1–R25 的代码级 fixture 审核已逐项覆盖并完成针对性修复/回归；下一阶段按既定顺序开展独立仓 feasibility/split validation，实际服务/设备验收仍留给用户人工进行。
+
+### R0 独立源码可行性/拆分边界复验（2026-10-31）
+
+- 从当前 `spacegate-admin/` 源码（含 staged、unstaged 与 untracked 改动）复制到 `/tmp/spacegate-admin-r0-20261031.RYwgvd/seed`，在该临时目录独立 `git init`、stage 文件集并 `git checkout-index` 到 sibling `checkout/`；没有写父仓 index。源码 tree `f4424c009cc2f8a1881d8a906b626aaf749a4883`，378 files，cached whitespace check 通过；临时 repo 没有 commit/remote。
+- 独立目录 `pnpm install --frozen-lockfile` exit 0（1101 reused、0 downloaded），`pnpm check` / `pnpm test` / `pnpm compile` 均 exit 0；Svelte 0 errors/0 warnings。单测数以当前快照为准：contract 4、shared 45、miniapp 179、serv 44；App/Desktop 无 standalone Vitest files。Compose `config --quiet` 用公开 env example 在临时 checkout 中成功。
+- 在该独立源码 checkout 运行完整 managed E2E：97 项中 96 passed、1 skipped（邮件 OTP 未配置）、0 failed，10.0 分钟；另独立 route search R1 用例 1/1。所有 fixture 指向本地 mock upstream，不是 Rust/AI Gateway/真实数据验收。
+- 拆分边界扫描确认 `pnpm-workspace.yaml` package globs 均是本仓 `packages/*`、`apps/*`；所有 `workspace:*` 解析到当前 workspace packages，没有 `file:` 外部源码依赖；运行时代码/部署配置未发现父仓或旧 Vue 工程路径、本机 `/Users/yiye` 绝对路径。`file:///tmp/config` 是 Desktop 测试值，不是外部依赖。
+- 已验证当前源码可在独立目录 frozen-install/typecheck/test/build/Compose-parse/E2E；这支持源码级拆分可行性，但**没有**迁移 Git 历史、remote/CI、生产部署，也没有把目录物理移出父仓。实际镜像 registry/Docker build 尚未验证；真实 Rust/AI Gateway/LDAP/微信设备验收按用户要求留作人工验收。当前旧版 R1–R25 自动化核验完成，主任务仍开放以等待真实环境验收和后续物理拆仓授权/窗口。
+
+### 旧版全功能清单复核与当前 R0 独立快照门禁（2026-10-31）
+
+- 按修订设计继续复核 Wasm P10/P13：旧版 `ThirdPartyWasmDrawer.vue` 的 image pull secret、SHA-256、fail strategy、OCI/HTTP(S) 凭据和高级参数在新 shared/miniapp 定义编辑器均可见并保留；miniapp XML binding 可编辑原文，写入后仍保留 `binding_config_mode: xml`，route 与 gateway 页面用例均有覆盖。历史 inventory 把 XML 误记为仅代码级、无 UI 选择器，本轮更正父仓和新工程副本的 P13 行。相关证据：`apps/spacegate-admin-miniapp/tests/route-page.test.ts`、`gateway-page.test.ts`、Web `e2e/spacegate.spec.ts`。均是页面/fixture 回归，不代表真实 Wasm runtime。
+- 本轮重新从 `spacegate-admin/` 的 tracked + 未忽略 untracked 文件导出独立临时 Git 根和 checkout，没有改父仓 index；tree `1f166d4a30e8a554e04942f47ba02f336f3ddfc8`，378 files。独立 checkout `pnpm install --frozen-lockfile` 成功（1101 reused、0 downloaded），`pnpm check`、`pnpm test`（contract 4、shared 45、miniapp 179、serv 44）和 `pnpm compile` 成功；Svelte check 0 errors/0 warnings。Docker Compose `config --quiet` 使用公开 env example 配置成功；临时 env 已从 checkout 移除。编译保留 >500 kB vendor chunk warning。
+- 拆分边界再次核对：所有 8 个 `workspace:*` workspace links 在独立根安装/解析；无外部 `file:` 源码依赖或运行时代码对父仓、新目录外路径、旧 Vue 工程、本机 `/Users/yiye` 的引用。README 中仍有旧仓库名作为历史/说明文字，非运行时依赖。独立源码可安装、检查、测试、编译和静态解析部署配置；未搬移物理目录、未迁 Git history/remote、未做远端 clone/CI 或真实 Docker image build。
+- 此阶段继续保留旧 Vue `.gitmodules`、`components/config` 改动及父仓 staged/unstaged/untracked 状态；无提交/推送。R1–R25 已有本地 fixture/page mock 逐项证据，不能替代 Rust SpaceGate、AI Gateway、LDAP、并发版本/运行时插件与微信设备真实验收；主迁移任务继续开放，真实环境由用户人工验收。
+
+### 旧版全功能清单复核与当前 R0 独立快照门禁（2026-10-31）
+
+- 按修订设计继续复核 Wasm P10/P13：旧版 `ThirdPartyWasmDrawer.vue` 的 image pull secret、SHA-256、fail strategy、OCI/HTTP(S) 凭据和高级参数在新 shared/miniapp 定义编辑器均可见并保留；miniapp XML binding 可编辑原文，写入后仍保留 `binding_config_mode: xml`，route 与 gateway 页面用例均有覆盖。历史 inventory 把 XML 误记为仅代码级、无 UI 选择器，本轮更正父仓和新工程副本的 P13 行。相关证据：`apps/spacegate-admin-miniapp/tests/route-page.test.ts`、`gateway-page.test.ts`、Web `e2e/spacegate.spec.ts`。均是页面/fixture 回归，不代表真实 Wasm runtime。
+- 本轮从 `spacegate-admin/` 的 tracked + 未忽略 untracked 文件导出独立临时 Git 根和 checkout，没有改父仓 index；被完整门禁验证的源码树 `1f166d4a30e8a554e04942f47ba02f336f3ddfc8`，378 files。独立 checkout `pnpm install --frozen-lockfile` 成功（1101 reused、0 downloaded），`pnpm check`、`pnpm test`（contract 4、shared 45、miniapp 179、serv 44）和 `pnpm compile` 成功；Svelte check 0 errors/0 warnings。Docker Compose `config --quiet` 使用公开 env example 配置成功；临时 env 已从 checkout 移除。之后只更新了应用仓库内交接/清单文档，没有改应用代码。编译保留 >500 kB vendor chunk warning。
+- 拆分边界再次核对：所有 8 个 `workspace:*` workspace links 在独立根安装/解析；无外部 `file:` 源码依赖或运行时代码对父仓、新目录外路径、旧 Vue 工程、本机 `/Users/yiye` 的引用。README 中仍有旧仓库名作为历史/说明文字，非运行时依赖。独立源码可安装、检查、测试、编译和静态解析部署配置；未搬移物理目录、未迁 Git history/remote、未做远端 clone/CI 或真实 Docker image build。
+- 此阶段继续保留旧 Vue `.gitmodules`、`components/config` 改动及父仓 staged/unstaged/untracked 状态；无提交/推送。R1–R25 已有本地 fixture/page mock 逐项证据，不能替代 Rust SpaceGate、AI Gateway、LDAP、并发版本/运行时插件与微信设备真实验收；主迁移任务继续开放，真实环境由用户人工验收。
+
+### 旧版原生插件 P4/P5 schema 语义补证（2026-10-31）
+
+- 复核修订设计中本地 `$ref`、嵌套对象/数组默认值、enum/oneOf、未知字段保留要求。miniapp `schema-form.ts` 已实现本地引用解析和 oneOf 常量选项，但既有页面库测试未直接覆盖两者与嵌套默认值/opaque 值组合。本轮为 `tests/schema-form.test.ts` 增加回归，验证 `$ref` 展开、oneOf const 原值选择、嵌套默认值和未知字段保持，并校验必填状态；测试 12/12 通过。
+- 随后 miniapp 全套 26 files / 180 tests 通过，`pnpm --filter spacegate-admin-miniapp typecheck` 通过。回归未发现需要改运行时代码的缺陷。本地单测不证明真实插件 catalog/schema 或微信 DevTools/真机行为；P4/P5 真实后台及设备验收仍待用户人工完成。
+- 父仓与新工程的旧操作 inventory 已补入 P4/P5 证据；此前 P10/P13 更正和 R0 独立源码门禁继续有效。旧版其他操作项仍需继续逐项审计，任务保持开放。
+
+### P4/P5 schema 回归进入最新 R0 独立快照（2026-10-31）
+
+- 把 P4/P5 小程序 schema 回归和同步后的工程清单纳入独立源码快照 tree `0485fd6c267d86f9e76f45a89df69a6de3df2535`（378 files）；独立根无嵌套 Git。`pnpm install --frozen-lockfile` 成功（1101 reused、0 downloaded），`pnpm check`、`pnpm test`（contract 4、shared 45、miniapp 180、serv 44）、`pnpm compile` 与 `docker compose --env-file deploy/spacegate-admin.env.example -f deploy/compose.yaml config --quiet` 均成功；Svelte diagnostics 0 errors/0 warnings，编译保留大于 500 kB chunk 提示。完整 managed E2E 未因本次仅新增 schema 单测而重跑；先前同应用运行时代码 fixture 结果为 96 passed / 1 skipped / 0 failed。
+- 拆分扫描再次在独立 checkout 完成：全部 `workspace:*` 可由 8 项 workspace 安装解析；packages/apps/deploy/images/.github 未发现父工程或旧 Vue 运行路径、本机绝对路径；package/lockfile 未发现外部 `file:` 源码依赖；packages/apps 下无嵌套 `.git`。仍未迁 Git 历史/remote、远端 clone/CI、构建真实 Docker image 或物理拆仓。
+- 测试和源码快照证明可行性，不证明 Rust SpaceGate/AI Gateway/LDAP/微信设备/并发运行时的真实验收。父仓与旧 Vue 改动继续保留；未提交/推送。后续继续审计 G/O/W/P/A/I 其余操作，整体迁移不关闭。
+
+### 2026-10-31 续办：概览 O3 旧功能差异修复
+
+- 对照旧版 `Overview.vue` 与 `console-utils.ts`，发现 miniapp 当前网关卡缺少监听器、网关级插件数量和 Redis 地址；共享 Web/App/Desktop 与旧版监听器摘要相比少了 `/protocol`。已补齐 miniapp 的三项摘要和共享监听器协议后缀，并为页面状态及 Web fixture 增加回归断言。
+- miniapp 概览页面测试 4/4、miniapp 全套 26 files / 181 tests、miniapp typecheck 通过；改动的 WXML 与 WXSS 使用本机 WeChat DevTools 编译器静态编译通过。`pnpm compile` 通过。managed Web fixture E2E 1/1，明确断言 `http:8080/http`、网关插件数和 fixture Redis 地址。以上均为本地自动化证据，不替代真实后台或微信设备验收。
+- 父仓与新工程清单已同步 O3。最新 R0 独立快照尚未包含本轮运行时代码修改，待旧版操作项审计阶段完成后再刷新；继续核验 O4 及其余操作，主任务保持开放。
+
+### 2026-10-31 续办：概览 O5 路由摘要语义修复
+
+- 对照旧版 `console-utils.ts` 与共享 `routeMatchSummary`，新增红测确认共享端原来只读 path，且将缺少 rule/matches 为 null/空 matches/不支持条件全部混为 `*`；MCP transport 字符串和 legacy SSE 默认路径也不完整。按旧版行为恢复 HTTP path/method/header/query/custom/match-all、多规则后缀及 MCP/SSE 摘要。
+- 新增共享摘要 3 项回归（HTTP 各 match 类型、规则边界/MCP）；定向 3/3、共享包全测 9 files / 48 tests 通过。`pnpm --filter spacegate-admin-shared typecheck`、根 `pnpm check` 和根 `pnpm compile` 通过（各 Svelte check 均 0 errors / 0 warnings；bundle 保持既有大 chunk 提示）。根 `pnpm test` 已运行；其间 contract 4、shared 48、serv 44 通过，miniapp 此前 O3 全套 181 通过；本轮没有把 mock/fixture 记为真实环境验收。
+- 旧后台 O5 清单已同步。O6 AI 治理说明复核了 shared 三语言文案及到插件中心的导航，没有发现新的差异。O4/O6 本地页面证据与真实环境人工验收边界维持不变；继续核验其余网关/路由/插件操作，待阶段完成再刷新独立 checkout。
+
+### 2026-10-31 续办：W1 网关列表/刷新审计
+
+- 对照旧版 `Gateways.vue`、共享 `gateways.svelte` 和 miniapp 网关页：共享列表展示名称、listener、route/plugin 数和 Redis 摘要，保留路由/编辑入口并用 `store.loadGateways()` 刷新；miniapp 以 gateway picker 选择当前上下文并提供显式刷新，属于原生交互适配。既有 managed fixture E2E 覆盖保存后摘要更新和显式刷新，源代码无新操作差异。
+- 已将 W1 核验结果补到父仓与新工程清单。仍存在 gateway/route 详情多请求，当前 contract 没有批量 summary operation；记为已知性能差异，不作无 API 基础的前端猜测优化。真实 gateway 列表及服务端结果待用户人工验收。
+- 继续按旧版操作清单推进 W2+，还未到刷新最新 R0 checkout 或物理拆仓阶段。
+
+### O5 原生端 match-all/custom 语义补齐（2026-10-31）
+
+- 将 O5 差异扩展核到 miniapp：原生预览此前也把无 rule、`matches: null`、空 matches 和无法摘要的匹配都显示为 `*`。新增页面 helper 回归先失败，再调整为区分 `match all` 与 `custom match`，并补回旧版多规则后缀。shared 与 miniapp 摘要定向回归各 3/3；miniapp 全套 26 files / 182 tests 和 typecheck 通过，最新 `pnpm compile` 通过。
+- O5 两份操作清单已同步此差异和证据。fixture E2E 继续仅作为本地展示证据；实际网关返回结构由用户人工验收。G/W/R/P/A/I 其余操作仍需继续审计，最新独立 snapshot 尚待后续刷新。
+
+### 2026-10-31 续办：W2/W3 网关创建默认值与编辑名称约束
+
+- 逐字段对照旧版 `Gateways.vue:newGateway()` 与 shared `newGateway()`、miniapp 空配置，Redis pool/log/lang/ignore TLS、request-id、observability 子项、HTTP `http:9000` listener、空插件列表一致。新增 shared 默认对象回归；miniapp 已有完整默认对象页面回归。shared 全测 10 files / 49 tests 通过。
+- W3 编辑态只读名称在 shared `GatewayEditor` 上由 `readonly={!isCreate}` 保证；JSON 导入覆盖字段时强制恢复 `originalRuntimeName`，miniapp paste 同样保留 `editingName`。现有 miniapp case 与 `gateway JSON import and export preserve the edit name and round-trip config` fixture E2E 覆盖写回，源检查未发现名字漂移。所有这些只证明本地表单/fixture 行为。
+- 父仓与新工程清单已补 W2 测试证据。继续核验 W4+删除、监听器和参数操作，不刷新独立 snapshot。
+
+### 2026-10-31 续办：W5 共享监听器新增默认值修复
+
+- 追踪旧版 `GatewayForm.vue` 与 `GatewayEditor.svelte` 的实际调用，确认旧版新增名称固定为 `new listener`，shared helper 却按序号生成 `listener-{index}`；miniapp 已使用旧值。新 shared helper 回归先失败，随后改为 `new listener` 并简化无用 index 参数。
+- shared default 定向测试 2/2、共享包全套 10 files / 50 tests、shared typecheck、根 `pnpm compile` 通过；浏览器 HTTPS listener 场景 fixture E2E 新增默认名称断言并通过 1/1。真实 gateway listener 写入/生效仍待人工验收。W5 双份清单已同步修复。
+- 继续核验 W6 及后续旧操作项，再刷新 independent checkout；未提交/推送。
+
+### 2026-10-31 续办：W6–W9 监听器/TLS/Redis 参数语义复核
+
+- 对比旧 `ListenerForm.vue` watcher、optional field 和端口输入边界与 shared/miniapp 当前写回逻辑：空 IP/hostname 表示 null；共享端端口控件是 0..65535、整数步进；HTTP/HTTPS 切换会像旧 watcher 一样重置协议/TLS 子对象。miniapp 既有页面回归覆盖 0/65535/65536 边界；本轮刚通过的 listener Web fixture 覆盖新增、TLS mode/cert/key/http2 保存；HTTP2 是新端显式能力，旧版仅 JSON。
+- 复核 Redis：连接池四字段仍只在 `redis_url` 有值时显示；清空 URL 只切换显隐，不会清理隐藏的连接池值，符合旧 OptionalField 对未显示值的保留行为。已有 miniapp 测试覆盖显隐、值保留和正整数校验。以上仅代码/fixture，不验收真实 TLS 或 Redis。
+- W6/W7/W9 双份清单已补此次核对。继续审计 W10–W15 及其他剩余类别，独立仓库快照仍在后续阶段。
+
+### 2026-10-31 续办：W10/W11 网关 optional 参数复核
+
+- 对比旧版 `GatewayForm.vue` 与 shared/miniapp：日志枚举仍为 trace/debug/info/warn/error，语言为 zh-CN/en，空选项写回 null；request-id 与 ignore-TLS 开关遵循布尔值语义。miniapp 既有测试覆盖显式 false/null 保留与缺失值不被自动补写，shared 开关仅在用户操作时改写字段。
+- 源码核对未发现新差异，相关证据仍为页面/mock 回归，真实上游参数效果待人工验收。新工程清单已补 W10/W11 当前结论，继续推进 W12+。
+
+### 2026-10-31 续办：W12–W15 网关插件与草稿行为复核
+
+- 对照旧 `PluginListForm.vue` 与 shared/miniapp：共享端以实例选择、优先级和上下移保留插件链顺序；miniapp 页面回归覆盖绑定增删、优先级/重排。重跑 managed Web plugin binding E2E 1/1，实例选择和优先级写入通过。
+- W13/W14/W15 对照导入导出和草稿逻辑：JSON 编辑导入后恢复原网关名，导出敏感警告需确认；未保存关闭/切换/刷新由 `requestClose` 保护；observability 原始 JSON 进入保存草稿且保留未知子字段。重跑 gateway page tests 25/25 和 managed gateway JSON E2E 1/1；本轮 mock/fixture 仅验证本地 UI 与请求边界，不代表 Rust 后台。
+- Gateway 操作项 W2–W15 已按清单逐项回核并同步证据（W5 有 shared 默认名称修复）。下一步转入其余 G/R/P/A/I 项的当前源码审计，再刷新独立 checkout。
+
+### 2026-10-31 续办：G7 版本冲突流程复验
+
+- 对照旧 `main.ts` 409 提示与修订设计的“不自动重试”要求，重跑 managed Web fixture `version conflict requires explicit reload and never retries automatically`，1/1 通过：冲突只发生一次写尝试，取消不触发 reload，用户明确确认后才回读。
+- 父/新工程清单已补本轮证据。该 fixture 不能证明真实并发 compare-and-swap；Rust 版本检查非原子 CAS 的限制和生产并发验收仍保留。
+
+### 2026-10-31 续办：G1 桌面侧栏折叠差异修复
+
+- 当前对照旧版 `App.vue` 与 shared `AppShell.svelte`，发现旧版桌面侧栏折叠操作未迁移；此前只有小屏抽屉。按旧交互补共享桌面收起/展开（窄栏图标、可访问名称），移动抽屉仍在小屏断点独立使用且保留文字标签；新增 en-US/zh-CN/ja-JP 控件文案。
+- 新 Web fixture E2E 先以侧栏缺失失败，修复后通过 1/1，覆盖桌面收起/展开、导航 aria-label 和小屏抽屉标签。`pnpm check` 与根 `pnpm compile` 通过，Svelte diagnostics 0 errors/0 warnings。mock 浏览器不代表微信原生导航设备验收。
+- 父仓与新工程清单已更新 G1；继续核验 G2–G6 与 G8–G12。最新源码变更后独立 checkout 快照仍需后续重做。
+
+### 2026-10-31 续办：G2 顶栏网关上下文补齐
+
+- 旧版 `ConsoleGatewaySelect.vue` 有顶栏选择、刷新、管理入口；shared shell 曾缺对应控件。现补选择器、刷新和管理入口，切换走现有 store 详情/路由读取；刷新后当前网关被删除时加载可用网关。国际化同步三种 locale。
+- Web fixture E2E 覆盖刷新到新网关、切换并打开网关管理页 1/1。并发回归先复现旧响应覆盖当前选择，现通过 context request id 忽略过期详情/路由响应；`spacegate-store.test.ts` 18/18，Web fixture E2E 重跑 1/1。根 `pnpm check`、`pnpm compile` 通过。夹具不是真实环境验收，真实上游行为待用户人工验收。
+- 双份操作清单已同步 G2，继续 G3/G4 等余项；最终源码稳定后再刷新独立 checkout。
+
+### 2026-10-31 续办：G3/G4 证据复核与 G6 会话失效回归
+
+- 复核既有 G3：shared 每 5 秒轮询、隐藏页跳过请求、管理员退出/销毁时清理；miniapp 只在页面可见期间轮询。浏览器后台抑制是资源控制差异，原生挂起/恢复未由 fixture 证明。
+- G4 依据旧菜单排除不可用 `es`，保留设计规定的 zh-CN/en-US/ja-JP；历史语言偏好及本地回归证据已有记录，真实 locale 体验留给人工验收。
+- G6 给 shared store 增加 401 会话失效覆盖；`spacegate-store.test.ts` 18/18 通过，断言 user 清理、页面状态重置、过期提示、凭据清除。真实 IAM/LDAP 会话过程仍待人工验收。
+- 双份清单同步 G4/G6；继续 G8–G12 与其他旧版操作，完成后再更新独立检出/split 证据。
+
+### 2026-10-31 续办：G8–G12 原生适配复核
+
+- 核对 shared 浏览器 clipboard/file 与 miniapp wx clipboard/JSON 文本适配；外链复制和实例页 `navigateTo` 与微信平台边界明确。导出含敏感配置先确认，fixture 不代表微信系统行为。
+- 新增 G12 miniapp handler 目标断言；`plugin-page.test.ts` 24/24 通过。G8/G9/G10/G11 的 clipboard round-trip、敏感导出确认、binding 顺序、插件外链复制已有 targeted tests。
+- 双份清单已同步 G8–G12；继续剩余全功能项与 G2/G6 最终回归，随后重做独立 snapshot/split。
+
+### 2026-10-31 旧版操作审计阶段收束与最新独立源码门禁
+
+- G1–G12 清单逐项核对完成（G5 标注为旧版不存在的非回归项）；补齐 G1 桌面折叠、G2 顶栏网关上下文，并发现/修复 G2 快速切换时旧网关详情和路由响应覆盖新上下文的竞态。G6 新增 401 会话清理回归，G12 新增 miniapp 实例导航目标回归。O/W/P/R/A/I 各区域的既有逐项记录保留，所有 mock/page fixture 均明确不算真实环境验收。
+- 从当前 `spacegate-admin/`（staged、unstaged、untracked）重新导出独立临时 Git seed 与 checkout：tree `3d592978a248fde1159b29623317bb9df7775192`，380 个文件，index whitespace check 通过，无嵌套 Git。Node v24.8.0/pnpm 12.11.2 下 frozen install 成功（1101 reused、0 downloaded），`pnpm check` 成功（Svelte 0 errors/0 warnings），`pnpm test` 中 contract 4、shared 52、miniapp 183、serv 44 全部通过，Web/App/Desktop 无独立 unit 文件；`pnpm compile` 各 build 完成，保留既有 >500 kB vendor chunk 提示。
+- Compose `config --quiet` 首次提示文件缺失（compose 要求被忽略的 `deploy/spacegate-admin.env`）；仅在隔离 checkout 临时复制公开 example，静态配置解析通过后移除。独立 checkout 运行 G1/G2 fixture E2E 2/2 通过，仍是本地 mock。
+- 边界扫描：workspace root 有 8 个项目，所有 `workspace:*` 可在本仓解析，manifest 无 `file:` 外部源码依赖；运行时代码未发现父仓、旧 Vue 或本机路径依赖。README/迁移文档中旧仓名为说明文字。未迁移 Git history/remote/CI，未物理移动目录，未做 Docker image build 或生产部署。旧 Vue 状态复核仍仅 `.gitmodules` 和 `components/config` 两项修改；父仓 staged/unstaged 状态保留，cached/working diff whitespace check 通过。
+- 代码级全功能核验及独立源码拆分可行性验证已完成；SpaceGate/Rust、AI Gateway、真实 IAM/LDAP 并发/会话、微信 DevTools/设备体验仍由用户人工验收。本次不提交、不推送，物理拆仓/远端接入不在此轮操作范围。
+
+### 2026-10-31 新后台移至工作区根目录
+
+- 按用户明确要求，将 `spacegate/spacegate-admin/` 移至工作区根目录 `spacegate-admin/`，并将其设为独立 Git 根目录。旧父仓库不再包含该路径；父仓库中其他已暂存、未暂存变更和旧 Vue 独立仓库的 `.gitmodules`、`components/config` 改动均保留。
+- 从父仓库中该目录的 7 个提交拆出独立历史，保留原作者及提交信息；新仓库分支 `feat/hai-admin-migration`，尚无 remote、无新提交、未推送。Git 对象库已脱离父仓库并通过 `git fsck --full --no-reflogs`。
+- 原工作树中的暂存、未暂存和未跟踪源改动分别保持为 112、56、10 项；`node_modules/` 和本地 `.env*` 文件仍保留在新目录。由于父仓库历史曾包含环境文件，独立历史排除了 `.env`、`.env.dev`、`.env.prod`、`.env.test`；新仓库忽略环境配置，仅保留 `.env.example`，没有删除本机配置。
+- 本次仅验证目录/Git 边界、历史、工作树状态和忽略规则；未重跑应用测试、干净安装、CI、Docker image 或部署验收。旧版全功能核验与前述本地验证结论不变；SpaceGate/Rust、AI Gateway、真实 IAM/LDAP、原生设备仍由用户人工验收。此项变更不代表迁移任务整体完成；不提交、不推送、不配置远端。
+
+### 2026-10-31 用户截图反馈：重新打开 R3 插件绑定复刻核验
+
+- 用户对比旧/新管理后台截图，指出插件绑定抽屉布局、交互和功能差异明显，并强调必须保留“复用已有插件实例”与“为当前路由新建实例”两种明确选择。旧版 `PluginListForm.vue` / `PluginSelect.vue` 在一个绑定抽屉内提供类型、配置方式、已有实例、优先级和保存；新版此前用卡片直接绑定且优先级固定为 0。此前阶段的代码清单不能代替用户要求的旧后台布局/交互复刻验收，故重新打开 R3，并继续旧功能全量核对。
+- 新版 `PluginPicker` 现用 Hai UI 抽屉、Tabs、FormField、Select、Input、Button 实现按展示名排序的原生插件筛选、复用 named 实例/新建实例、优先级及显式保存/取消；路由级重复插件 code 在选择器中排除，规则/后端/网关保留旧版可选范围。Route/Gateway 的创建后回调保留原始目标上下文及优先级。Wasm 定义仍转入资源作用域绑定编辑器。
+- `spacegate-admin-shared typecheck` 通过（0 errors / 0 warnings），`pnpm compile` 通过（既有 vendor chunk >500 kB warning），插件/Wasm managed mock fixture E2E 27/27 通过，覆盖网关复用、路由新建、规则/后端隔离及 Wasm 绑定流程。改动相关 ESLint 定向通过；未抑制规则的初始检查中本轮新写的 2 处风格项已修复，仍有 11 处既有 E2E/GatewayEditor lint 规则问题。它们不是 Rust/真实 SpaceGate/生产验收。E2E 本轮临时端口 45800–45804 已关闭；此前已存在的 `pnpm ... dev` 服务仍占用 4173/5175/5176、API 3000，本轮未启动或停止该服务。
+- 新源码晚于既有 R0 snapshot，独立仓库最终快照/clean checkout/split 门禁需在剩余旧版逐项复核后刷新。保持父仓 staged/unstaged、旧 Vue 工作树及未提交内容，不提交/推送；真实环境验收由用户人工执行。
+- 下一项 R3 对照已记录：旧版点击绑定项后在单个 `PluginBindingDetail` 对话框编辑展示名、优先级和运行时配置；新版将优先级放在绑定行，将配置编辑拆到原生/Wasm editor。继续复刻详情布局及保存交互，插件选择器修复不代表整体旧后台迁移完成。
+
+### 2026-10-31 续办：R3 绑定详情和真实本地跨端复核
+
+- 依旧版 `PluginBindingDetail` 将原生/Wasm 已绑定实例改为同一个 Hai Modal 编辑展示名、int32 优先级和运行时配置；原生和 Wasm 都显式保存，Wasm 新建仍走资源作用域编辑器。详情 Modal 宽度收至 48rem，避免旧截图反馈的宽屏抽屉观感。修订设计和旧版操作清单已明确单面板要求及用户截图基线。
+- shared typecheck 0 errors/0 warnings，最新 `pnpm compile` 完成。独立端口上的 targeted fixture E2E 5/5：新建插件后回到路由保存、Wasm 规则/后端隔离、已有 Wasm 编辑、原生详情优先级、过期路由版本保护。测试临时端口 4673/4675/4676/4700/4701 在运行器退出后已确认无 LISTEN 进程。
+- 经用户授权在真实本地服务上验证：API `/health` 可用；Web 实际路由配置写入 priority 19、重新读取一致，路由原 JSON 已恢复，临时插件已删除，未 reload gateway。Web 登录和配置读取成功；App/Desktop 登录后从同一 API 读取路由页，各有 2 个 route rows。App/Desktop 本次只读。真实环境不等同生产，IAM/LDAP、Rust 并发、微信设备仍待用户人工验收。
+- 真实服务端口 3000/4173/5175/5176 由本轮授权测试使用，因旧后台逐项复核与 UI 复刻还在继续，暂不提前关闭；整项迁移结束时统一停止并核对无残留进程。独立源码快照已在后续 R0 阶段条目刷新；不提交/推送。
+
+### 2026-10-31 续办：R0 独立仓库快照复验
+
+- 从根目录新仓库当前完整工作树做隔离快照（排除 `.git`、依赖/构建目录与 `.env*`），最终临时 tree `bb7102cb23a31efff7c37e45f461b6decdec1957`，373 files；该 tree 在代码验证后仅刷新了阶段文档。冻结安装 1101 reused / 0 downloaded，8 个 workspace 项目解析；`pnpm check` 通过（Svelte 0/0），`pnpm test` 全过（contract 4、shared 52、miniapp 183、service 44），`pnpm compile` 通过（既有 Web vendor chunk >500 kB warning），R3 targeted fixture E2E 5/5 通过。
+- 独立 Compose `config --quiet` 使用临时公开 example env 解析成功后移除；package manifest 无 `file:` 外部源码依赖，运行时代码无父目录、旧 Vue 或本机路径硬依赖，快照内只有单一 Git root。根工作树 `pnpm test` 首轮一次 service 5 秒 timeout，空闲后重跑完整 283 项均通过；diff whitespace check（staged/unstaged）通过。
+- 这是 source split feasibility 门禁，不代表已迁移提交历史、配置 remote/CI、构建/发布镜像或完成生产验收。用户人工验收及余下旧版 UI/交互逐项核对继续开放；指定真实服务留到整项任务结束再停。
+
+### 2026-10-31 续办：R2 后端发现与实例重载范围复核
+
+- 新 RouteEditor 在每个后端编辑区恢复旧 `BackendForm` 的 `/discovery/backends` 分组选择。独立快照 fixture 3/3 覆盖失败后保留手填值、K8s 选择保留端口、File 选择清除网络端口；实例 route reload fixture 1/1 校验已选 gateway/route 和 `instance + gateway + route` request scope，global reload 有确认。
+- 实际 Web 只读访问 Rust admin-server discovery，观察到 File `/var/www/html` 与 `/var/www/spacegate-admin`，取消后关闭编辑器，未保存配置。实际 Instances 页在线 0/0、没有注册实例行，因此 route reload 没有真实目标且没有触发任何 reload；实际实例上的重载行为留待用户人工验收。
+- 旧活动 UI 本身缺 route reload；新版入口是修订设计要求补上的运维能力，不把它写成旧版已有功能。修订设计、清单、handoff 已同步。完整旧版逐项/视觉复刻继续，不提交/推送；指定四个真实本地服务等整项任务完成时再统一关闭。
+
+### 2026-10-31 续办：R3 复用实例真实分支与 Wasm 数值边界
+
+- 真实本地 Rust admin-server 上验证插件选择器“复用已有插件实例”分支：创建临时 rewrite 实例，移除自动加入的绑定，再从命名实例选择器选回该实例，保存 priority 19 并从 route API 读回；恢复 route JSON、删除临时插件，未触发 reload。页面证据 `/tmp/spacegate-admin-real-picker-reuse.png`。
+- 新增 Wasm 定义数值范围 mock E2E，覆盖 priority `[-100000,100000]`、VM pool `[1,64]`、wait pool `[0,64]`，边界剪裁与保存读回 1/1 通过；隔离端口 49800–49804，已由 runner 回收。
+- 这是插件绑定真实本地路径及 Wasm 浏览器 fixture 证据，不代表生产/AI Gateway/Wasm runtime 验收，也不关闭旧后台全量 UI/功能核验。真实服务 3000/4173/5175/5176 保持至迁移整项结束时统一停止；不提交/推送。
+
+### 2026-10-31 续办：R3 目录卡片与旧截图尺寸复刻
+
+- 新 picker 原先实测约 47.5% viewport width，旧用户截图中的插件目录约占 90%。现用 Hai Drawer `90vw` 和可搜索纵向插件卡片（展示名/code/版本/描述/新建入口），选中项仍保留同一流程的实例复用或为当前资源新建、优先级和显式保存/取消；卡片区滚动，常见桌面视口内保存按钮固定可见。绑定详情仍独立使用约 48rem 单面板。
+- `spacegate-admin-shared typecheck` 0 errors/0 warnings；`pnpm compile` 成功，保留既有 vendor chunk >500 kB warning；定向 fixture E2E 5/5 通过。源码宽度改动首次未进入 preview dist，测试仍测到 0.475；重建 Web/App/Desktop 后最新测试通过。
+- 真实 Web 只读实测 0.9 viewport width、23 张插件卡片、两种 mode 显示、保存按钮视口内可见；取消退出，无 route 写入。真实截图 `/tmp/spacegate-admin-live-picker-reference.png`。修订设计已同步两个仓库。新源码/测试/文档应更新 R0 独立快照；全量旧 UI/功能核验和人工验收仍未完成，不提交/推送，指定端口继续保留。
+
+### 2026-10-31 续办：R0 包含 R3 目录复刻的独立快照
+
+- 最新独立快照 tree `5fd69a4ff8513e139991ad4aa8514361b5ba4f27`，373 files，包含 90vw picker、卡片交互 E2E 和阶段设计/进度文档。快照 frozen install 沿用此前 1101 reused/0 downloaded 依赖验证；本轮 `pnpm check`、`pnpm test`、`pnpm compile` 均退出 0，E2E 相关项在独立快照 5/5 通过，Svelte diagnostics 0/0，单测计数 contract 4、shared 52、miniapp 183、service 44。`git diff --cached --check` 与 snapshot worktree `git diff --check` 通过；没有 commit/remote。
+- 此源码独立快照仍不代表 Git history/remote/CI/镜像部署已迁移，也不代表用户已完成真实环境验收。旧版剩余全量 UI/功能对照继续开放，不提交/推送；真实端口在整项任务结束时再停止。
+
+### 2026-10-31 续办：R3 旧版两步插件选择流程
+
+- 按用户补充和旧截图复核插件选择要分为目录和绑定两步：目录约 `90vw`，含搜索、插件展示名/code/版本/描述卡片及“新建实例”入口；选择类型后转入约 `40vw` 绑定面板，提供“复用已有插件实例”与“为当前资源新建实例”、priority、返回目录和显式保存/取消。两处均使用 Hai UI Drawer 与现有表单控件。绑定详情宽度过渡稳定后量测，避免测试把动画中间态当最终宽度。
+- 真实 Web 只读确认目录宽度比 `0.9`、绑定面板稳定宽度比 `0.4`，新建范围提示、复用/创建选项和视口内保存按钮可见；取消无写入。先前真实 Rust admin-server 已有实例复用+priority 19 保存读回并恢复/清理的真实往返证据。真实 4173/5175/5176 与用户 API 3000 仍保留，未执行用户人工验收。
+- Shared typecheck 0 errors/warnings、`pnpm compile` 退出 0（既有 vendor UI chunk >500 kB 提示）、定向 managed E2E 3/3 通过。源代码、E2E 与文档已更新，必须刷新 R0 独立快照再复核。仍未完成旧后台全量逐项、其他页面视觉协调性、真实 IAM/运行时、设备验收；不提交/推送，不停止指定服务。
+
+### 2026-10-31 续办：R0 与多端 picker 核验
+
+- 最新 R0 临时独立 Git tree `85afe7d2472c6ff4c0a857b8c5020acdbbb0cec5`，373 个源/文档路径，只保留索引无 commit/remote。`pnpm check`、`pnpm test`、`pnpm compile` 完成；Svelte diagnostics 四端 0 errors/0 warnings，contract 4、shared 52、miniapp 183、service 44 项通过；定向 managed E2E 3/3 通过；`git diff --cached --check` clean。保留既有 vendor UI 大 chunk 提示。
+- 真实 App 5175 与 Desktop 5176 只读复核同一两步 picker：各显示 23 张插件卡片，目录宽度比 `0.9`、绑定详情稳定后 `0.4`，复用/新建选项存在且保存按钮可见；取消退出，没有资源写入。真实 API 3000 及三前端仍按用户指示运行，用户人工验收尚待执行。
+
+### 2026-10-31 续办：全量 UI 回归与真实 picker 新建路由绑定
+
+- 独立快照完整 E2E 89 条首跑 87 passed、2 timeout；失败是两条旧 E2E 操作仍假设目录里直接有 create mode、链行有 named 插件 priority 输入。适配两步交互和绑定详情后隔离重跑 2/2；89 条均分别通过，但没有把单轮套件结果记作 89/89。
+- 真实 Web 通过 route picker 新建临时 rewrite 命名实例，按 priority 4 保存 `static` 路由并从真实 API/编辑器读回；随后恢复 route 原始 JSON、删除实例，二次读取确认 route 无插件、实例不存在；没有 reload。此为真实本地上游 API 的可恢复验证，不替代生产、并发、IAM 或用户验收。首次脚本异常及 UI 删除等待误判均已复核清理。
+- 后续当前独立源码快照已加入 E2E 适配与子仓阶段记录。
+
+### 2026-10-31 续办：R0 含最新 E2E 与阶段文档快照
+
+- 最新独立临时 Git tree `4bc7184d7de34ef4811aee5a936984d3c60bb494`，373 个源码/阶段文档路径；没有 commit 或 remote。该 tree 收录已适配两条旧选择器流程的 E2E spec 和完整 handoff/操作清单；`git diff --cached --check` clean。
+- `pnpm check`、`pnpm test`、`pnpm compile` 在同一代码快照上此前已退出成功；之后只更新 E2E 操作选择器和阶段文档，变更测试目标在隔离快照定向 2/2 passed，完整套件既有轮其余 87/89 passed，故记录为逐项 89/89 而非单次全套 89/89。源码运行逻辑未改动。
+- 用户本地真实 Web create path 的 API 往返已验证并恢复/清理。旧后台其余逐项、真实人工验收与拆分上线仍未完成；不要提交/推送，保留本地四服务。
+
+### 2026-10-31 续办：R0 最新快照与全量 E2E 单轮通过
+
+- 最终阶段源码/文档快照 tree `45319246299cc7c21f164ac3a1e3c8127c65c3ae`，373 个源/文档路径，只生成临时索引，没有 commit/remote；cached diff check clean。运行逻辑未改；新增的 E2E 等待时间调整在隔离快照完整 `e2e/spacegate.spec.ts` 89/89 passed（10.4m）。此前 `pnpm check`、`pnpm test`、`pnpm compile` 对同一运行逻辑已完成；后续仅改 E2E helper 与阶段记录。
+- 真实 picker 创建实例→route 写入/readback→恢复原 route JSON→删除临时实例/readback 的可逆路径完成，无 reload；真实 App/Desktop picker 只读尺寸/交互亦已核验。仍待用户人工验收的生产 IAM/并发/运行时、微信设备与注册实例 reload 不由 fixture 或本地服务结果代替。用户四项本地服务保留；不提交/推送。
+
+### 2026-10-31 续办：路由编辑抽屉与插件绑定宽度对照
+
+- 旧截图路由编辑区域约 60vw，绑定详情约 40vw，插件目录约 90vw。Hai Drawer 的 `4xl` 是固定 `42rem`；在 1920px fixture 视口路由抽屉实测仅 0.35，与旧版主从关系相反。RouteEditor 已改为 `clamp(28rem, 60vw, 80rem)`；PluginPicker 仍为目录 `90vw`、绑定详情约 `40vw`。
+- 添加 1920px 视口的真实 Drawer 内容区宽度断言，改动前红灯为 0.35，修复后独立快照 `pnpm compile` 通过，目标 route/plugin E2E 1/1 通过。真实用户 4173 页面尚待人工重看本改动效果；fixture 不作为真实 UI 验收。用户端口继续保留，不提交/推送。
+- 将本轮 RouteEditor、E2E 和阶段文档同步进独立临时 Git 根后，最新 tree 为 `2520ebef8a42a7d5e4b66d3bf52264b8548b1e9e`；373 路径，cached diff check clean，无 commit/remote。
+
+### 2026-10-31 续办：9080 旧后台实测后再次修正比例
+
+- 上一条中 60/40 与 90vw 是基于附件对错阶段的估计，现由用户指定的旧页面 live DOM 测量 supersede：2043px 视口下旧 route editor 为 1594px/0.78，旧插件绑定面板 640px/0.313。新 4173 修正前 route drawer 为 0.60、插件目录 0.90、绑定面板 0.376。
+- 新 RouteEditor 已改为 `clamp(42rem, 78vw, 100rem)`；PluginPicker 两步骤统一 `clamp(28rem, 32vw, 40rem)`。真实新 4173 DOM 现在分别是 route 1594px/0.78、目录640px/0.313、绑定640px/0.313；旧新弹窗均取消关闭、没有保存。独立快照编译及目标 fixture E2E 2/2 通过，仍待用户人工视觉验收，不以 fixture 代替。
+- 再次同步新工程代码与阶段文档后，独立临时 Git tree 为 `7395d82da7d0145d87f117c3f6e6b6619fcdef16`（373 路径，无 commit/remote，cached diff check clean）。
+
+### 2026-10-31 续办：旧版路由交互分组核对
+
+- 用户指出路由交互仍偏离旧版。实测旧/新插件页及源码后发现规则级插件被移到新后台“匹配条件”折叠区；移回旧版“插件链”页并列显示，保留 API 字段层级和后端插件在对应后端区的行为。旧版示例按钮直接覆盖表单草稿，新版此前有额外覆盖确认；现也对齐旧版状态转换，仍需用户显式保存。
+- 改前 E2E 对插件页规则链的可见性断言失败（无此元素）；改后规则/后端独立保存、Wasm scope、多规则多后端和示例保存/readback fixture E2E 7/7 通过。测试发现连续打开路由编辑器时会留在上次高级 JSON 页；RoutesPage 现在按每次新建/编辑/复制创建独立编辑会话，恢复基础页起点并重新读草稿。真实 Web 4173 只核对可见分组，没有保存路由；不将 fixture 结果说成真实数据验收。
+- 来源对照：`spacegate-admin-fe/src/components/RouteEditorDrawer.vue`、`spacegate-admin-shared/src/lib/components/spacegate/RouteEditor.svelte`；设计、handoff、操作清单均已同步修订。完整路由字段验证、真实上游写入回读、旧后台其他页面对照仍待完成。
+- 按独立仓可行性验证约定再次同步临时快照；当前 `git write-tree` 为 `c57e13849af2a0fec47deac6abb330351a56ba0b`（373 个路径，无 commit/remote，cached diff check clean）。此快照不修改正式仓库索引或历史。
+
+### 2026-10-31 续办：路由草稿切换与无效 JSON 示例覆盖
+
+- 继续对照旧版源码，纠正此前“切换 HTTP/MCP 要保护未保存草稿”的错误记录：旧版类型切换立即生成对应默认模型并保留路由名；新版额外的确认弹层已去掉。快速示例现在即使当前 JSON 输入无效，也会覆盖草稿、清除错误状态并恢复保存按钮；保存仍是唯一服务端写入动作。
+- 更新 E2E：无效 JSON 后点击 API 示例验证原路由名、HTTP payload 和保存状态，修改中的新建 HTTP 路由切到 MCP 验证立即替换为 `MCPRoute` 默认结构。完整 `pnpm compile` 成功；7 项插件链/示例/类型切换回归通过。4173 上也实际输入无效 JSON→点击 API 示例→切换 MCP，检查路由名保留和 MCP 默认 JSON，随后关闭并丢弃草稿，没有保存业务路由；真实服务写入与最终 UI 验收仍由用户人工完成。
+- 同步修订设计文档及 legacy 操作清单中与旧源码不一致的草稿保护描述；旧文档中的确认弹层记录保留为历史，现行行为以上述源码对照和新回归为准。按可行性验证方式同步独立仓临时快照：373 个路径，`git write-tree` 为 `55a569ea35d8380016858916a81ee1c8bb9982d0`，无 commit、无 remote，cached diff check clean；这只是索引树快照，不创建提交。正式新仓与旧仓均不提交、不推送。
+
+### 2026-10-31 续办：插件链 E2E 与冲突后重新打开修复
+
+- 全路由 fixture 首轮 58 项中 46 项通过，12 项因规则链恢复到插件页后旧用例的全局 `plugin-bind`/`plugin-bindings` 选择器变得歧义而失败。为路由链增加 `route-plugin-bindings` 明确测试作用域并修订断言；原 12 项失败集复跑 12/12 通过，包括复制插件、Wasm 配置、原生实例编辑、失效配置、部分复制错误恢复。结合首轮通过项，58 个路由范围用例均已覆盖通过。
+- 失败注入用例进一步发现真实状态错误：局部 Wasm copy 失败后执行冲突刷新，再次点击复制没有打开编辑抽屉。源码确认 `RouteEditor.seenEpoch` 固定为 0，新组件遇到 store 已递增的 `reloadEpoch` 就误触发关闭；改为以 `store.reloadEpoch` 初始化。修复后局部创建失败→版本冲突→人工刷新→再次复制并读回 route/rule 两个绑定实例，E2E 1/1。
+- `pnpm compile` 全构建通过；插件失败组 12/12 通过。完整 route suite 的 58 项结果由首轮 46 项及修复后 12 项分组复跑组成，并非单一一次执行。最新真实 4173 只操作未保存草稿并确认丢弃；服务端配置未写入。测试进程退出，用户服务 3000/4173/5175/5176 保持运行。继续旧后台其余功能逐项核验及独立仓拆分验证；不提交、不推送。
+
+### 2026-10-31 续办：真实 4173/API 路由写入与清理
+
+- 根据用户授权，使用真实 4173 管理后台和 API 3000 做一次唯一命名的可清理写入：新建 `codex-route-verification-20261031-01`，应用 API 示例并显式保存；界面列表读回 Prefix `/api/`、Host `127.0.0.1:8080`、priority 100；重新编辑高级 JSON 读回相同路由名、匹配/重写/后端和 timeout 配置。
+- 通过新后台删除此临时路由并确认路由列表恢复为原有 `static`；未更改既有业务路由。3000/4173/5175/5176 是用户原有进程并保持运行，E2E 临时端口没有残留。真实写入/readback/delete 已验证，UI 最终视觉验收仍由用户完成。

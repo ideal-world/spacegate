@@ -378,6 +378,7 @@ mod tests {
     struct RenameTestBackend {
         routes: Mutex<BTreeMap<String, SgRoute>>,
         operations: Mutex<Vec<&'static str>>,
+        fail_route_delete: bool,
     }
 
     impl Create for RenameTestBackend {
@@ -402,8 +403,11 @@ mod tests {
         }
 
         async fn delete_config_item_route(&self, _gateway_name: &str, route_name: &str) -> Result<(), BoxError> {
-            self.routes.lock().expect("routes lock").remove(route_name);
             self.operations.lock().expect("operations lock").push("delete");
+            if self.fail_route_delete {
+                return Err("simulated route delete failure".into());
+            }
+            self.routes.lock().expect("routes lock").remove(route_name);
             Ok(())
         }
 
@@ -486,6 +490,26 @@ mod tests {
             assert!(backend.rename_config_item_route("edge", "orders-v1", "orders-v2", route("orders-v3")).await.is_err());
             assert_eq!(backend.routes.lock().expect("routes lock").len(), 1);
             assert!(backend.operations.lock().expect("operations lock").is_empty());
+        });
+    }
+
+    #[test]
+    fn rename_reports_delete_failure_after_creation_without_rolling_back_either_route() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().expect("runtime").block_on(async {
+            let backend = RenameTestBackend {
+                fail_route_delete: true,
+                ..RenameTestBackend::default()
+            };
+            backend.routes.lock().expect("routes lock").insert("orders-v1".to_string(), route("orders-v1"));
+
+            let result = backend.rename_config_item_route("edge", "orders-v1", "orders-v2", route("orders-v2")).await;
+
+            assert!(result.is_err());
+            let routes = backend.routes.lock().expect("routes lock");
+            assert_eq!(routes.len(), 2);
+            assert!(routes.contains_key("orders-v1"));
+            assert!(routes.contains_key("orders-v2"));
+            assert_eq!(*backend.operations.lock().expect("operations lock"), ["create", "delete"]);
         });
     }
 }

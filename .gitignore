@@ -31,5 +31,6 @@ devsh/*
 scripts
 # Generated Hai workspace keeps its build/e2e scripts under version control.
 !spacegate-admin/scripts/
+!spacegate-admin/apps/spacegate-admin-miniapp/scripts/
 mix
 dist/

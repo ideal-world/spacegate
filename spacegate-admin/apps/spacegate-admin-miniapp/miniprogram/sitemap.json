@@ -1,9 +1,0 @@
-{
-  "desc": "SpaceGate 管理端小程序页面不参与搜索索引。",
-  "rules": [
-    {
-      "action": "disallow",
-      "page": "*"
-    }
-  ]
-}
