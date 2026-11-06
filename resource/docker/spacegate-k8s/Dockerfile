@@ -1,4 +1,4 @@
-FROM rust:1.88-bookworm AS builder
+FROM mirror.gcr.io/library/rust:1.88-bookworm AS builder
 
 WORKDIR /app
 RUN apt-get update \
@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --manifest-path /hai-hub/Cargo.toml --release -p hai-hub-spacegate --config /hai-hub/.cargo/config.toml \
     && install -Dm755 target/release/hai-hub-spacegate /hai-plugin/hai-hub-spacegate
 
-FROM debian:bookworm-slim
+FROM mirror.gcr.io/library/debian:bookworm-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tini \

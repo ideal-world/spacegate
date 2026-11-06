@@ -25,9 +25,11 @@ export ADMIN_DOCKER_CONTEXT="$SPACEGATE_ROOT"
 export ADMIN_DOCKER_DIR="$SPACEGATE_ROOT/resource/docker/spacegate-admin"
 export ARTIFACT_DIR="$WORKSPACE_ROOT/image-artifacts"
 
-# VERSION 建议使用 Git tag、日期版本或交付版本号，例如 20260709-001。
-export VERSION="1.0.3"
-
+# VERSION 建议使用 Git tag、日期版本或交付版本号，例如 v2026.07.10-001。 
+# 注意：如果希望按当天日期自动生成，必须使用命令替换 $(...)，
+# 写成 export VERSION="date +%Y.%m.%d-001" 会把命令当成字面量，
+# 导致镜像 tag 中出现空格和 %，报 invalid reference format。
+export VERSION="v$(date +%Y.%m.%d)-001"
 export SPACEGATE_IMAGE="spacegate:$VERSION"
 export SPACEGATE_ADMIN_IMAGE="spacegate-admin:$VERSION"
 export AI_GATEWAY_SERVICE_IMAGE="ai-gateway-service:$VERSION"
@@ -40,6 +42,14 @@ export HAI_HUB_ROOT="/path/to/hai-hub"
 
 mkdir -p "$ARTIFACT_DIR"
 ```
+# 校验镜像 tag 合法性，尽早发现变量拼装错误
+for _img in "$SPACEGATE_IMAGE" "$SPACEGATE_ADMIN_IMAGE" "$AI_GATEWAY_SERVICE_IMAGE"; do
+  if ! printf '%s' "${_img##*:}" | grep -qE '^[A-Za-z0-9_][A-Za-z0-9._-]*$'; then
+    echo "非法镜像 tag: $_img（检查 VERSION 是否误用了字面量 date）" >&2
+    return 1 2>/dev/null || exit 1
+  fi
+done
+echo "VERSION=$VERSION"
 
 检查必要目录：
 
