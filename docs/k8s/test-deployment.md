@@ -107,7 +107,7 @@ APPLY_OTEL_STACK=false OTEL_ENABLED=false ./deploy/k8s/test-spacegate/deploy.sh
 | `OTEL_ENDPOINT` | `http://spacegate-otel-collector.spacegate.svc.cluster.local:4317` | OTLP Collector 地址 |
 | `OTEL_PROTOCOL` | `grpc` | OTLP 协议，支持 `grpc` / `http` |
 | `OTEL_TRACES_ENABLED` | `true` | 是否导出 traces |
-| `OTEL_TRACES_SAMPLE_RATIO` | `1.0` | trace 采样率 |
+| `OTEL_TRACES_SAMPLE_RATIO` | `0.1` | trace 采样率（仅诊断用，审计以 logs 为准） |
 | `OTEL_METRICS_ENABLED` | `true` | 是否导出 metrics |
 | `OTEL_METRICS_EXPORT_INTERVAL_MS` | `60000` | metrics 导出间隔 |
 | `OTEL_LOGS_ENABLED` | `true` | 是否导出 logs |
@@ -240,7 +240,7 @@ env:
   - name: SPACEGATE_OTEL_TRACES_ENABLED
     value: "true"
   - name: SPACEGATE_OTEL_TRACES_SAMPLE_RATIO
-    value: "1.0"
+    value: "0.1"
   - name: SPACEGATE_OTEL_METRICS_ENABLED
     value: "true"
   - name: SPACEGATE_OTEL_METRICS_EXPORT_INTERVAL_MS

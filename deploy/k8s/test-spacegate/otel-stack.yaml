@@ -83,7 +83,82 @@ data:
             endpoint: 0.0.0.0:4318
 
     processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
+
+      # 只保留 HAI 审计行和 WARN/ERROR 日志；普通 INFO 访问日志不再入库。
+      filter/audit_logs:
+        error_mode: ignore
+        log_conditions:
+          - context: log
+            conditions:
+              - 'severity_number < 13 and not (attributes["event"] == "http_access" and (attributes["route_name"] == "hai-route" or IsMatch(attributes["path"], "^/api/v1/[^/]+/[^/]+(/.*)?$") or IsMatch(attributes["path"], "^/mcp-services/[^/]+(/.*)?$") or IsMatch(attributes["status_code"], "^[45][0-9][0-9]$")))'
+
+      # req 可能携带 Authorization 等请求头，禁止进入 ClickHouse。
+      attributes/scrub:
+        actions:
+          - key: req
+            action: delete
+          - key: code.file.path
+            action: delete
+          - key: code.module.name
+            action: delete
+          - key: code.line.number
+            action: delete
+          - key: target
+            action: delete
+          - key: thread.name
+            action: delete
+          - key: thread.id
+            action: delete
+          - key: idle_ns
+            action: delete
+          - key: busy_ns
+            action: delete
+
+      attributes/log_slim:
+        actions:
+          - key: host
+            action: delete
+          - key: peer_addr
+            action: delete
+          - key: downstream_remote_address
+            action: delete
+          - key: request_body_size
+            action: delete
+          - key: response_body_size
+            action: delete
+          - key: x_forwarded_for
+            action: delete
+          - key: user_agent
+            action: delete
+          - key: protocol_name
+            action: delete
+
+      # traces 不参与看板：丢弃健康检查/连接级 span 和 INFO/DEBUG span event。
+      filter/noise_spans:
+        error_mode: ignore
+        trace_conditions:
+          - context: span
+            conditions:
+              - 'span.name == "GET /iam/ui/"'
+              - 'span.name == "route"'
+              - 'span.name == "connection"'
+          - context: spanevent
+            conditions:
+              - 'spanevent.name == "http access log"'
+              - 'spanevent.attributes["level"] != "WARN" and spanevent.attributes["level"] != "ERROR"'
+
+      probabilistic_sampler:
+        sampling_percentage: 10
+        hash_seed: 42
+
       batch:
+        timeout: 5s
+        send_batch_size: 8192
+        send_batch_max_size: 10000
 
     exporters:
       clickhouse:
@@ -91,6 +166,8 @@ data:
         database: otel
         async_insert: true
         compress: lz4
+        # 只对新建表生效；已有表需执行 ALTER TABLE ... MODIFY TTL。
+        ttl: 720h
         create_schema: true
         logs_table_name: otel_logs
         traces_table_name: otel_traces
@@ -116,15 +193,15 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [batch]
+          processors: [memory_limiter, filter/noise_spans, attributes/scrub, probabilistic_sampler, batch]
           exporters: [clickhouse]
         metrics:
           receivers: [otlp]
-          processors: [batch]
+          processors: [memory_limiter, batch]
           exporters: [clickhouse]
         logs:
           receivers: [otlp]
-          processors: [batch]
+          processors: [memory_limiter, filter/audit_logs, attributes/scrub, attributes/log_slim, batch]
           exporters: [clickhouse]
 ---
 apiVersion: apps/v1
