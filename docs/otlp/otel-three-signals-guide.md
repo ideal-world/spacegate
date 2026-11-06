@@ -414,18 +414,23 @@ GROUP BY asset_id;
 ### 本地审计验证
 
 ```text
-logs: enabled
-traces: enabled, sample_ratio = 1.0
+logs: enabled，Collector 只保留 HAI http_access + WARN/ERROR
+traces: enabled, sample_ratio = 0.1，Collector 再按 10% 抽样并丢弃 INFO/DEBUG span event
 metrics: disabled
 ```
 
 ### 生产审计
 
 ```text
-logs: enabled
-traces: enabled, parent-based sampling
+logs: enabled，Collector 只保留 HAI http_access + 4xx/5xx + WARN/ERROR
+traces: enabled, parent-based sampling，Collector 继续降采样并清理高基数属性
 metrics: enabled, 30s 或 60s interval
 ```
+
+> `tracing-opentelemetry` 会把 `RUST_LOG=debug` 打开的 tracing 事件记录为 span event。
+> 如果不加过滤，`http_access` 会在 `otel_logs` 和 `otel_traces.Events` 中各存一份，
+> 插件调试事件也会全部进入 traces。SpaceGate 已在 trace layer 只保留 span 和
+> WARN/ERROR 事件；Collector 侧仍建议配置 `filter`/`attributes` 作为兜底。
 
 ### 生产监控
 

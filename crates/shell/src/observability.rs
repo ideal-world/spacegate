@@ -12,7 +12,7 @@ use opentelemetry_sdk::{
     Resource,
 };
 use spacegate_config::model::{ObservabilityConfig, OtlpProtocol};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{filter::filter_fn, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 static OTEL_GUARD: OnceLock<ObservabilityGuard> = OnceLock::new();
 
@@ -147,7 +147,7 @@ fn build_guard(config: &ObservabilityConfig) -> Result<ObservabilityGuard, Box<d
                 let tracer = provider.tracer("spacegate");
                 global::set_tracer_provider(provider.clone());
                 guard.tracer_provider = Some(provider);
-                Some(tracing_opentelemetry::layer().with_tracer(tracer).boxed())
+                Some(tracing_opentelemetry::layer().with_tracer(tracer).with_filter(filter_fn(keep_trace_metadata)).boxed())
             }
             Err(err) => {
                 eprintln!("failed to initialize OpenTelemetry traces, disabling traces: {err}");
@@ -213,6 +213,15 @@ fn log_level_filter(config: &ObservabilityConfig) -> tracing_subscriber::filter:
     config.logs.level.parse::<tracing_subscriber::filter::LevelFilter>().unwrap_or(tracing_subscriber::filter::LevelFilter::INFO)
 }
 
+/// traces 只保留 span 和 WARN/ERROR 事件。
+///
+/// `http_access` 已经通过 logs 管道写入，`RUST_LOG=debug` 打开的插件调试事件也会
+/// 被 tracing-opentelemetry 记录为 span event。若全部导出，会把同一条审计事实
+/// 和大量调试上下文重复写入 `otel_traces`，显著放大采集与存储量。
+fn keep_trace_metadata(metadata: &tracing::Metadata<'_>) -> bool {
+    metadata.is_span() || *metadata.level() <= tracing::Level::WARN
+}
+
 fn build_span_exporter(config: &ObservabilityConfig) -> Result<opentelemetry_otlp::SpanExporter, opentelemetry_otlp::ExporterBuildError> {
     let timeout = Duration::from_secs(5);
     match config.protocol {
@@ -253,6 +262,39 @@ mod tests {
         };
 
         assert_eq!(log_level_filter(&config), tracing_subscriber::filter::LevelFilter::INFO);
+    }
+
+    #[derive(Clone, Default)]
+    struct TraceCapture {
+        spans: std::sync::Arc<std::sync::Mutex<usize>>,
+        events: std::sync::Arc<std::sync::Mutex<Vec<tracing::Level>>>,
+    }
+
+    impl<S: tracing::Subscriber> Layer<S> for TraceCapture {
+        fn on_new_span(&self, _attrs: &tracing::span::Attributes<'_>, _id: &tracing::span::Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+            *self.spans.lock().expect("span capture lock") += 1;
+        }
+
+        fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+            self.events.lock().expect("event capture lock").push(*event.metadata().level());
+        }
+    }
+
+    #[test]
+    fn trace_filter_keeps_spans_and_warn_or_error_events() {
+        let capture = TraceCapture::default();
+        let subscriber = tracing_subscriber::registry().with(capture.clone().with_filter(filter_fn(keep_trace_metadata)));
+
+        tracing::subscriber::with_default(subscriber, || {
+            let _span = tracing::info_span!("captured_span").entered();
+            tracing::debug!("debug event");
+            tracing::info!("info event");
+            tracing::warn!("warn event");
+            tracing::error!("error event");
+        });
+
+        assert_eq!(*capture.spans.lock().expect("span capture lock"), 1);
+        assert_eq!(*capture.events.lock().expect("event capture lock"), vec![tracing::Level::WARN, tracing::Level::ERROR]);
     }
 
     #[test]
