@@ -1,5 +1,9 @@
 pub mod builder;
-use std::{collections::HashMap, ops::Index, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::Index,
+    sync::Arc,
+};
 
 use crate::{
     backend_service::ArcHyperService,
@@ -124,7 +128,10 @@ impl Router for GatewayRouter {
 pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallback: ArcHyperService) -> RouterService<HttpRoutedService, GatewayRouter, ArcHyperService> {
     let mut services = Vec::new();
     let mut routers = Vec::new();
-    let mut hostname_tree = HostnameTree::<Vec<_>>::new();
+    // Route collection must not use HostnameTree::get_mut() here: get_mut() falls
+    // back to the wildcard bucket, so an explicit hostname can accidentally be
+    // appended to the wildcard route list.
+    let mut hostname_indices = BTreeMap::<String, Vec<(usize, i16)>>::new();
     for (idx, route) in routes.enumerate() {
         let priority = route.priority;
         let idx_with_priority = (idx, priority);
@@ -136,21 +143,7 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
             rules_services.push(rule_service);
             rules_router.push(rule.r#match.clone());
         }
-        if route.hostnames.is_empty() {
-            if let Some(indices) = hostname_tree.get_mut("*") {
-                indices.push(idx_with_priority)
-            } else {
-                hostname_tree.set("*", vec![idx_with_priority]);
-            }
-        } else {
-            for hostname in route.hostnames.iter() {
-                if let Some(indices) = hostname_tree.get_mut(hostname) {
-                    indices.push(idx_with_priority)
-                } else {
-                    hostname_tree.set("*", vec![idx_with_priority]);
-                }
-            }
-        }
+        index_route_hostnames(&mut hostname_indices, &route.hostnames, idx_with_priority);
         services.push(rules_services);
         routers.push(HttpRouter {
             name: route.name.clone().into(),
@@ -160,9 +153,8 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
         });
     }
 
-    // sort the indices by priority
-    // we put the highest priority at the front of the vector
-    hostname_tree.iter_mut().for_each(|indices| indices.sort_unstable_by_key(|(_, p)| -*p));
+    // sort the indices by priority; higher priority routes go first.
+    let hostname_tree = build_hostname_tree(hostname_indices);
     debug!("hostname_tree: {hostname_tree:?}");
     RouterService::new(
         HttpRoutedService { services: services.into() },
@@ -172,6 +164,53 @@ pub fn create_http_router<'a>(routes: impl Iterator<Item = &'a HttpRoute>, fallb
         },
         fallback,
     )
+}
+
+fn index_route_hostnames(hostname_indices: &mut BTreeMap<String, Vec<(usize, i16)>>, hostnames: &[String], route_index: (usize, i16)) {
+    if hostnames.is_empty() {
+        hostname_indices.entry("*".to_string()).or_default().push(route_index);
+        return;
+    }
+    for hostname in hostnames {
+        hostname_indices.entry(hostname.clone()).or_default().push(route_index);
+    }
+}
+
+fn build_hostname_tree(hostname_indices: BTreeMap<String, Vec<(usize, i16)>>) -> HostnameTree<Vec<(usize, i16)>> {
+    let mut hostname_tree = HostnameTree::<Vec<_>>::new();
+    for (hostname, mut indices) in hostname_indices {
+        indices.sort_unstable_by_key(|(_, priority)| -*priority);
+        hostname_tree.set(&hostname, indices);
+    }
+    hostname_tree
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_host_routes_do_not_join_the_wildcard_bucket() {
+        let mut indices = BTreeMap::new();
+        index_route_hostnames(&mut indices, &[], (0, 1));
+        index_route_hostnames(&mut indices, &["api.example.com".to_string()], (1, 2));
+        let tree = build_hostname_tree(indices);
+
+        assert_eq!(tree.get("api.example.com"), Some(&vec![(1, 2)]));
+        assert_eq!(tree.get("other.example.com"), Some(&vec![(0, 1)]));
+    }
+
+    #[test]
+    fn missing_host_uses_fallback_without_fabricating_route_name() {
+        let router = GatewayRouter {
+            routers: Vec::<HttpRouter>::new().into(),
+            hostname_tree: Arc::new(HostnameTree::new()),
+        };
+        let mut request = Request::builder().uri("/health").body(SgBody::empty()).expect("request without host");
+
+        assert!(router.route(&mut request).is_none());
+        assert!(request.extensions().get::<RouteName>().is_none());
+    }
 }
 
 fn insert_route_name(req: &mut Request<SgBody>, name: Arc<str>) {

@@ -136,7 +136,7 @@ impl AccessLogFinalizer {
 
 /// 保持响应数据原样透传，并将 access-log 收尾推迟到 body 生命周期结束。
 struct AccessLogBody {
-    inner: SgBody,
+    inner: Option<SgBody>,
     finalizer: AccessLogFinalizer,
 }
 
@@ -146,26 +146,42 @@ impl Body for AccessLogBody {
 
     fn poll_frame(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let this = self.as_mut().get_mut();
-        let poll = Pin::new(&mut this.inner).poll_frame(cx);
+        let poll = match this.inner.as_mut() {
+            Some(inner) => Pin::new(inner).poll_frame(cx),
+            None => Poll::Ready(None),
+        };
         if matches!(poll, Poll::Ready(None) | Poll::Ready(Some(Err(_)))) {
-            this.finalizer.finish();
+            let (inner, finalizer) = (&mut this.inner, &mut this.finalizer);
+            drop_inner_then_finalize(inner, || finalizer.finish());
         }
         poll
     }
 
     fn is_end_stream(&self) -> bool {
-        self.inner.is_end_stream()
+        self.inner.as_ref().map(SgBody::is_end_stream).unwrap_or(true)
     }
 
     fn size_hint(&self) -> hyper::body::SizeHint {
-        self.inner.size_hint()
+        self.inner.as_ref().map(SgBody::size_hint).unwrap_or_else(|| {
+            let mut hint = hyper::body::SizeHint::new();
+            hint.set_exact(0);
+            hint
+        })
     }
 }
 
 impl Drop for AccessLogBody {
     fn drop(&mut self) {
-        self.finalizer.finish();
+        // Inner observers write their final telemetry from Drop. Drop the body
+        // before taking the access-log snapshot so cancellation keeps those fields.
+        let (inner, finalizer) = (&mut self.inner, &mut self.finalizer);
+        drop_inner_then_finalize(inner, || finalizer.finish());
     }
+}
+
+fn drop_inner_then_finalize<T>(inner: &mut Option<T>, finalize: impl FnOnce()) {
+    drop(inner.take());
+    finalize();
 }
 
 pub mod http_route;
@@ -414,7 +430,7 @@ where
                     active_request_labels,
                 };
                 let (parts, body) = resp.into_parts();
-                Ok(Response::from_parts(parts, SgBody::new(AccessLogBody { inner: body, finalizer })))
+                Ok(Response::from_parts(parts, SgBody::new(AccessLogBody { inner: Some(body), finalizer })))
             }
             .instrument(span),
         )
@@ -439,6 +455,29 @@ impl ArcHyperService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inner_body_is_dropped_before_the_access_log_finalizer() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct DropMarker(Arc<AtomicBool>);
+        impl Drop for DropMarker {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+
+        let inner_dropped = Arc::new(AtomicBool::new(false));
+        let mut inner = Some(DropMarker(inner_dropped.clone()));
+        let mut finalized = false;
+
+        drop_inner_then_finalize(&mut inner, || {
+            assert!(inner_dropped.load(Ordering::SeqCst));
+            finalized = true;
+        });
+
+        assert!(finalized);
+    }
 
     fn test_access_log_finalizer() -> AccessLogFinalizer {
         AccessLogFinalizer {
@@ -488,7 +527,7 @@ mod tests {
     #[test]
     fn access_log_body_finishes_only_after_response_eof() {
         let mut body = AccessLogBody {
-            inner: SgBody::full("x"),
+            inner: Some(SgBody::full("x")),
             finalizer: test_access_log_finalizer(),
         };
         let waker = futures_util::task::noop_waker();
@@ -502,5 +541,6 @@ mod tests {
 
         assert!(matches!(Pin::new(&mut body).poll_frame(&mut context), Poll::Ready(None)));
         assert!(body.finalizer.finalized);
+        assert!(body.inner.is_none(), "inner observer must finish before the EOF snapshot");
     }
 }
