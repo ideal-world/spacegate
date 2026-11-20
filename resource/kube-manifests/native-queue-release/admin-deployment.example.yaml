@@ -1,0 +1,73 @@
+# 新安装/对照用完整 Deployment + Service。已有部署优先使用 admin.patch.yaml，
+# 避免遗漏现场资源限制、调度约束、额外挂载等设置。不要将本例与补丁同时反复应用。
+# 前置：已有 spacegate-admin ServiceAccount 及经审定的原 RBAC，先创建 runtime-config.yaml。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: spacegate-admin
+  template:
+    metadata:
+      labels:
+        app: spacegate-admin
+    spec:
+      serviceAccountName: spacegate-admin
+      terminationGracePeriodSeconds: 60
+      # 当前合并入口需 root 完成目录准备/gosu，再以 node 用户运行 Node。
+      # 若集群要求 non-root / 只读根文件系统，需另做镜像及目录适配，不能直接声称兼容。
+      containers:
+        - name: spacegate-admin
+          image: spacegate-admin:v2026.11.20-queue-001
+          imagePullPolicy: IfNotPresent
+          # 不再挂载旧 spacegate-admin-nginx ConfigMap。
+          envFrom:
+            - configMapRef:
+                name: spacegate-admin-config-v2026.11.20-queue-001
+            - secretRef:
+                name: spacegate-admin-private-v2026.11.20-queue-001
+          env:
+            # 只给 Admin 管理 token，不将网关 AWS 凭据注入后台。
+            - name: HAI_QUEUE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hai-quota-runtime-v2026.11.20-queue-001
+                  key: HAI_QUEUE_ADMIN_TOKEN
+          ports:
+            - name: http
+              containerPort: 9080
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 9080
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9080
+            periodSeconds: 20
+          # resources / imagePullSecrets / 节点调度使用现场值，不能据本例推断容量。
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spacegate-admin
+  namespace: spacegate
+spec:
+  selector:
+    app: spacegate-admin
+  ports:
+    - name: http
+      port: 9080
+      targetPort: 9080

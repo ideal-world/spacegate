@@ -19,6 +19,7 @@ pub struct AccessLogContext {
 
 #[derive(Debug, Clone, Default)]
 struct AccessLogContextFields {
+    request_id: Option<String>,
     route_name: Option<String>,
     upstream_host: Option<String>,
 }
@@ -96,6 +97,17 @@ impl TelemetryContext {
 }
 
 impl AccessLogContext {
+    /// 保存中间件生成的请求 ID，供响应头产生前的取消审计使用。
+    pub fn set_request_id(&self, value: impl Into<String>) {
+        if let Ok(mut fields) = self.fields.lock() {
+            fields.request_id = Some(value.into());
+        }
+    }
+
+    pub fn request_id(&self) -> Option<String> {
+        self.fields.lock().ok().and_then(|fields| fields.request_id.clone())
+    }
+
     pub fn set_route_name(&self, value: impl Into<String>) {
         let Ok(mut fields) = self.fields.lock() else {
             return;

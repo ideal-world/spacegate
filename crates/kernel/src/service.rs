@@ -1,5 +1,6 @@
 use std::{
     convert::Infallible,
+    future::Future,
     net::SocketAddr,
     pin::Pin,
     sync::Arc,
@@ -182,6 +183,59 @@ impl Drop for AccessLogBody {
 fn drop_inner_then_finalize<T>(inner: &mut Option<T>, finalize: impl FnOnce()) {
     drop(inner.take());
     finalize();
+}
+
+/// 响应头产生前也持有收尾器；取消时先丢弃插件 Future，再读取最终 telemetry。
+struct AccessLogFuture {
+    inner: Option<BoxFuture<'static, Result<Response<SgBody>, Infallible>>>,
+    finalizer: Option<AccessLogFinalizer>,
+    context: AccessLogContext,
+}
+
+impl Future for AccessLogFuture {
+    type Output = Result<Response<SgBody>, Infallible>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.as_mut().get_mut();
+        let resp = match this.inner.as_mut().expect("request future polled after completion").as_mut().poll(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(result) => result.expect("infallible"),
+        };
+        drop(this.inner.take());
+        let mut finalizer = this.finalizer.take().expect("request finalizer");
+        let status = resp.status();
+        if status.is_server_error() {
+            tracing::warn!(status = ?status, headers = ?resp.headers(), "server error response");
+        } else if status.is_client_error() {
+            tracing::debug!(status = ?status, headers = ?resp.headers(), "client error response");
+        } else if status.is_success() {
+            tracing::trace!(status = ?status, headers = ?resp.headers(), "success response");
+        }
+        finalizer.status = status;
+        finalizer.response_body_size = content_length(resp.headers());
+        if let Some(id) = resp.headers().get("x-request-id").and_then(|value| value.to_str().ok()) {
+            finalizer.request_id = id.to_owned();
+        }
+        finalizer.route_name = resp.extensions().get::<RouteName>().map(|route| route.to_string()).unwrap_or_else(|| this.context.route_name());
+        finalizer.upstream_host = resp.extensions().get::<BackendHost>().map(|host| host.to_string()).unwrap_or_else(|| this.context.upstream_host());
+        let (parts, body) = resp.into_parts();
+        Poll::Ready(Ok(Response::from_parts(parts, SgBody::new(AccessLogBody { inner: Some(body), finalizer }))))
+    }
+}
+
+impl Drop for AccessLogFuture {
+    fn drop(&mut self) {
+        // 插件取消守卫同步更新审计状态后，才允许访问日志做快照。
+        drop(self.inner.take());
+        if let Some(mut finalizer) = self.finalizer.take() {
+            finalizer.route_name = self.context.route_name();
+            finalizer.upstream_host = self.context.upstream_host();
+            if let Some(id) = self.context.request_id() {
+                finalizer.request_id = id;
+            }
+            finalizer.finish();
+        }
+    }
 }
 
 pub mod http_route;
@@ -385,55 +439,36 @@ where
         req.extensions_mut().insert(enter_time);
         req.extensions_mut().insert(telemetry_context.clone());
         req.extensions_mut().insert(access_log_context.clone());
-        let span_for_recording = span.clone();
-        Box::pin(
-            async move {
-                let resp = service.call(req).await.expect("infallible");
-                // if method != hyper::Method::HEAD && method != hyper::Method::OPTIONS && method != hyper::Method::CONNECT {
-                //     with_length_or_chunked(&mut resp);
-                // }
-                let status = resp.status();
-                if status.is_server_error() {
-                    tracing::warn!(status = ?status, headers = ?resp.headers(), "server error response");
-                } else if status.is_client_error() {
-                    tracing::debug!(status = ?status, headers = ?resp.headers(), "client error response");
-                } else if status.is_success() {
-                    tracing::trace!(status = ?status, headers = ?resp.headers(), "success response");
-                }
-                let response_body_size = content_length(resp.headers());
-                let access_request_id = resp.headers().get("x-request-id").and_then(|v| v.to_str().ok()).map(str::to_string).unwrap_or(request_id);
-                let authority = host.clone();
-                let route_name = resp.extensions().get::<RouteName>().map(|route| route.to_string()).unwrap_or_else(|| access_log_context.route_name());
-                let upstream_host = resp.extensions().get::<BackendHost>().map(|host| host.to_string()).unwrap_or_else(|| access_log_context.upstream_host());
-                let finalizer = AccessLogFinalizer {
-                    finalized: false,
-                    enter_time,
-                    span: span_for_recording,
-                    telemetry_context,
-                    gateway: gateway_label,
-                    method: method_label,
-                    path,
-                    host,
-                    client_ip: client_ip_label,
-                    x_forwarded_for,
-                    user_agent,
-                    authority,
-                    downstream_remote_address: peer_addr_label.clone(),
-                    route_name,
-                    upstream_host,
-                    protocol_version: protocol_version_label,
-                    status,
-                    request_id: access_request_id,
-                    peer_addr: peer_addr_label,
-                    request_body_size,
-                    response_body_size,
-                    active_request_labels,
-                };
-                let (parts, body) = resp.into_parts();
-                Ok(Response::from_parts(parts, SgBody::new(AccessLogBody { inner: Some(body), finalizer })))
-            }
-            .instrument(span),
-        )
+        let finalizer = AccessLogFinalizer {
+            finalized: false,
+            enter_time,
+            span: span.clone(),
+            telemetry_context,
+            gateway: gateway_label,
+            method: method_label,
+            path,
+            authority: host.clone(),
+            host,
+            client_ip: client_ip_label,
+            x_forwarded_for,
+            user_agent,
+            downstream_remote_address: peer_addr_label.clone(),
+            route_name: String::new(),
+            upstream_host: String::new(),
+            protocol_version: protocol_version_label,
+            // 仅用于响应产生前取消的内部审计，不向已断开的客户端发送响应。
+            status: StatusCode::from_u16(499).expect("client closed request status"),
+            request_id,
+            peer_addr: peer_addr_label,
+            request_body_size,
+            response_body_size: None,
+            active_request_labels,
+        };
+        Box::pin(AccessLogFuture {
+            inner: Some(Box::pin(async move { service.call(req).await })),
+            finalizer: Some(finalizer),
+            context: access_log_context,
+        }.instrument(span))
     }
 }
 
@@ -455,6 +490,62 @@ impl ArcHyperService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn access_log_records_cancel_before_response_after_inner_drop() {
+        use std::{io::Write, sync::Mutex};
+        use tokio::{io::AsyncWriteExt, net::TcpListener, sync::Notify};
+
+        #[derive(Clone)]
+        struct Capture(Arc<Mutex<Vec<u8>>>);
+        impl Write for Capture {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+        }
+        struct FinishTelemetry(TelemetryContext);
+        impl Drop for FinishTelemetry {
+            fn drop(&mut self) {
+                self.0.insert("test.cancelled", "true");
+            }
+        }
+        let output = Capture(Arc::new(Mutex::new(Vec::new())));
+        let writer = output.clone();
+        let subscriber = tracing_subscriber::fmt().without_time().with_ansi(false)
+            .with_writer(move || writer.clone()).finish();
+        let _subscriber = tracing::subscriber::set_default(subscriber);
+        let entered = Arc::new(Notify::new());
+        let inner_entered = entered.clone();
+        let service = ArcHyperService::new(hyper::service::service_fn(move |req: Request<SgBody>| {
+            let entered = inner_entered.clone();
+            async move {
+                let _finish = FinishTelemetry(req.extensions().get::<TelemetryContext>().unwrap().clone());
+                req.extensions().get::<AccessLogContext>().unwrap().set_route_name("cancel-before-response");
+                entered.notify_one();
+                std::future::pending::<()>().await;
+                Ok::<_, Infallible>(Response::new(SgBody::empty()))
+            }
+        }));
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let connection = tokio::spawn(async move {
+            let (stream, peer) = listener.accept().await.unwrap();
+            let _ = Http::new(service).handle(stream, peer).await;
+        });
+        let mut client = TcpStream::connect(address).await.unwrap();
+        client.write_all(b"GET /cancel-before-response HTTP/1.1\r\nHost: localhost\r\nx-request-id: cancel-before-response\r\n\r\n").await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(2), entered.notified()).await.unwrap();
+        drop(client);
+        tokio::time::timeout(std::time::Duration::from_secs(2), connection).await.unwrap().unwrap();
+        let logs = String::from_utf8(output.0.lock().unwrap().clone()).unwrap();
+        let access: Vec<_> = logs.lines().filter(|line| line.contains("http access log")).collect();
+        assert_eq!(access.len(), 1, "cancelled request must emit exactly one access log: {logs}");
+        assert!(access[0].contains("499"), "cancellation must not report HTTP success");
+        assert!(access[0].contains("test.cancelled"), "inner future must finalize before telemetry snapshot");
+        assert!(access[0].contains("cancel-before-response"));
+    }
 
     #[test]
     fn inner_body_is_dropped_before_the_access_log_finalizer() {

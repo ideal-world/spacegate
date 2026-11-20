@@ -1,5 +1,9 @@
 # SpaceGate 拆分服务镜像构建 Runbook
 
+> 新版发布请使用 [SpaceGate 与新 Admin 镜像交付及 K8s 发布操作手册](native-queue-release-runbook.md)。新手册覆盖导出本地已验收镜像、当前本地配置对照、首次新 Admin 切换、原生队列和回滚；本文后续旧 Vue / Wasm 步骤保留作兼容参考。
+
+> 2026-11-19：Rust `admin-server` 源码已迁入相邻 `spacegate-admin/rust/admin-server`。本文后续旧 Vue 合并镜像流程仅用于兼容旧交付；新 Web + Node API + Rust 的合并后台使用 [`spacegate-admin/README.md`](../../../spacegate-admin/README.md) 的 `images/combined.Dockerfile`。网关可独立部署，管理后台可选；原生 `hai-quota` 不要求旧 `ai-gateway-service`。
+
 本文档用于从 `spacegate-workspace` 工作区直接构建拆分部署所需的三个服务镜像，并将镜像制品打包成 tar 包，便于通过 U 盘复制到其他服务器。
 
 1. `spacegate`：网关运行时镜像，包含 K8s、Wasm、native dylib 支持。
@@ -184,6 +188,7 @@ test -f "$ADMIN_DOCKER_DIR/dist/index.html"
 
 docker build --progress=plain \
   --build-context "spacegate_src=$SPACEGATE_ROOT" \
+  --build-context "admin_src=$WORKSPACE_ROOT/spacegate-admin" \
   --build-arg "NGINX_IMAGE=$ADMIN_NGINX_IMAGE" \
   -f "$ADMIN_DOCKER_DIR/Dockerfile" \
   -t "$SPACEGATE_ADMIN_IMAGE" \
@@ -318,6 +323,20 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 ### 3.2 构建网关镜像
 
+只需交付静态 HAI 网关、管理后台已独立部署时，可使用专用源码入口，避免重新构建旧 Wasm 服务及后台：
+
+```bash
+docker build --platform linux/amd64 \
+  --build-context hai_hub="$HAI_HUB_ROOT" \
+  --build-arg CARGO_BUILD_JOBS=2 \
+  -f "$SPACEGATE_ROOT/resource/docker/spacegate-runtime/hai.Dockerfile" \
+  -t "$SPACEGATE_IMAGE" "$SPACEGATE_ROOT"
+```
+
+该入口从当前 HAI/SpaceGate 源码编译网关，使用宿主的 HAI 锁文件与同一套本地 SpaceGate patch；不使用历史镜像中的旧二进制，也不编译 Admin。Rust 默认两个任务并发，Cargo 缓存与既有 HAI 构建共享。运行时配置、原生插件卷和必要的外部 Wasm 文件仍由部署提供。需要旧 Wasm 制品一并交付时继续使用下面的完整 K8s 入口。
+
+`hai-quota` 原 namespace 因 Redis 重启出现 `recovery_required` 时，更新镜像或启动 Admin 的 Node scheduler 不会自动恢复旧控制身份。新源码的受控恢复步骤、dry-run、幂等回执与拒绝条件见相邻 HAI 仓库 `docs/hai-quota-controlled-recovery.md`；不得清空 Redis、直接覆盖 run_id 或重放旧请求来代替恢复验收。
+
 执行构建时回到工作区根目录，便于统一引用 `SPACEGATE_ROOT` 和 `HAI_HUB_ROOT`：
 
 ```bash
@@ -409,6 +428,7 @@ test -f "$ADMIN_DOCKER_DIR/dist/index.html"
 
 docker build \
   --build-context "spacegate_src=$SPACEGATE_ROOT" \
+  --build-context "admin_src=$WORKSPACE_ROOT/spacegate-admin" \
   --build-arg "NGINX_IMAGE=$ADMIN_NGINX_IMAGE" \
   -f "$ADMIN_DOCKER_DIR/Dockerfile" \
   -t "$SPACEGATE_ADMIN_IMAGE" \
@@ -518,6 +538,7 @@ test -f "$ADMIN_DOCKER_DIR/dist/index.html"
 
 docker build \
   --build-context "spacegate_src=$SPACEGATE_ROOT" \
+  --build-context "admin_src=$WORKSPACE_ROOT/spacegate-admin" \
   --build-arg "NGINX_IMAGE=$ADMIN_NGINX_IMAGE" \
   -f "$ADMIN_DOCKER_DIR/Dockerfile" \
   -t "$SPACEGATE_ADMIN_IMAGE" \

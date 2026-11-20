@@ -51,11 +51,11 @@ The release image must be compiled with K8s, Wasm and native dylib support:
 cargo build --release -p spacegate --features build-k8s,wasm,dylib
 ```
 
-The base DaemonSet scans both `/lib/spacegate/plugins` for image-bundled plugins and `/var/lib/spacegate/plugins` for mounted plugins. The latter is an `emptyDir` mount in the base manifest, so it exists even when no external plugin is supplied. Mounting directly over `/lib/spacegate/plugins` can hide plugins already packaged in the image.
+The base DaemonSet sets `PLUGINS` for the upstream SpaceGate executable, which scans `/lib/spacegate/plugins` and `/var/lib/spacegate/plugins`. The HAI gateway image reads one directory from `PLUGIN_DIR`. Set it to `/var/lib/spacegate/plugins` when using the external mount with that image. The base manifest provides that mount as an `emptyDir`, so the directory exists even when no external plugin is supplied. Mounting directly over `/lib/spacegate/plugins` can hide plugins already packaged in the image.
 
 Wasm modules using `file:///plugins/<name>.wasm` are different from native dylibs. The base DaemonSet mounts each node's `/opt/spacegate/wasm` host directory read-only at `/plugins`; place the same verified Wasm artifact on every node before applying an SgFilter that references it.
 
-Native dylibs are scanned only during process startup. Use an InitContainer or a volume that already contains the Linux `.so` before SpaceGate starts; adding a file to the mounted directory later requires restarting the SpaceGate Pod. Do not use a macOS `.dylib` or other non-Linux binary.
+See [external native plugin release and installation](../develop/native-plugin-release.md) for the build and compatibility checks. Native dylibs are scanned only during process startup. Use an InitContainer or a volume that already contains the Linux `.so` before SpaceGate starts; adding a file to the mounted directory later requires restarting the SpaceGate Pod. Do not use a macOS `.dylib` or other non-Linux binary.
 
 ## Optional OpenTelemetry export
 

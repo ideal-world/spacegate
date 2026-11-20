@@ -24,6 +24,9 @@ pub async fn x_request_id<A: XRequestIdAlgo>(mut request: Request<SgBody>, inner
         request.headers_mut().insert(X_REQUEST_ID_HEADER_NAME, id.clone());
         id
     };
+    if let (Some(context), Ok(id)) = (request.extensions().get::<crate::observability::AccessLogContext>(), id.to_str()) {
+        context.set_request_id(id);
+    }
     let mut resp = inner.call(request).await;
     resp.headers_mut().insert(X_REQUEST_ID_HEADER_NAME, id);
     resp

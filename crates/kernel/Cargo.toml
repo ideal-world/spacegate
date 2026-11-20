@@ -68,6 +68,7 @@ base64 = { workspace = true }
 
 ipnet = { workspace = true, optional = true }
 [dev-dependencies]
+socket2 = "0.6"
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
 axum = { workspace = true, features = ["multipart"] }
 axum-server = { version = "0.7", features = ["tls-rustls"] }

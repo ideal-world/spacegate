@@ -1,0 +1,144 @@
+# Strategic Merge Patch：已有旧/新 Admin 的升级入口，不是完整 Deployment。
+# 通过 kubectl patch --type=strategic --patch-file 使用。不要 kubectl apply 本补丁。
+# 保留原 ServiceAccount、资源限制、调度、其他容器和无关挂载/环境变量。
+# envFrom 是原子列表：若现场已有其他必要 envFrom，在下面列表中保留其引用。
+# 旧模板的 nginx-config 仅挂到 /etc/nginx/nginx.conf；实际名称/挂载不同先核对再改。
+spec:
+  revisionHistoryLimit: 10
+  template:
+    spec:
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: nginx-config
+          $patch: delete
+      containers:
+        - name: spacegate-admin
+          image: spacegate-admin:v2026.11.20-queue-001
+          imagePullPolicy: IfNotPresent
+          command: null
+          args: null
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              $patch: delete
+          envFrom:
+            - configMapRef:
+                name: spacegate-admin-config-v2026.11.20-queue-001
+            - secretRef:
+                name: spacegate-admin-private-v2026.11.20-queue-001
+          env:
+            # 显式 env 优先于 envFrom；删除所有由本模板接管的同名旧值。
+            # 不删除其他现场自定义变量。增加集中字段时同步本删除列表。
+            - name: NODE_ENV
+              $patch: delete
+            - name: HAI_CORE_ENV
+              $patch: delete
+            - name: HAI_CORE_LOGGING_LEVEL
+              $patch: delete
+            - name: CONFIG
+              $patch: delete
+            - name: GATEWAY_CLASS_NAME
+              $patch: delete
+            - name: GATEWAY_INSTANCE
+              $patch: delete
+            - name: HAI_SERV_CORS_ORIGIN
+              $patch: delete
+            - name: HAI_SERV_CORS_CREDENTIALS
+              $patch: delete
+            - name: PUBLIC_API_BASE
+              $patch: delete
+            - name: HAI_SPACEGATE_ADMINAK
+              $patch: delete
+            - name: HAI_DB_TYPE
+              $patch: delete
+            - name: HAI_DB_HOST
+              $patch: delete
+            - name: HAI_DB_PORT
+              $patch: delete
+            - name: HAI_DB_DATABASE
+              $patch: delete
+            - name: HAI_DB_USER
+              $patch: delete
+            - name: HAI_DB_SSL
+              $patch: delete
+            - name: HAI_DB_URL
+              $patch: delete
+            - name: HAI_CACHE_TYPE
+              $patch: delete
+            - name: HAI_CACHE_HOST
+              $patch: delete
+            - name: HAI_CACHE_PORT
+              $patch: delete
+            - name: HAI_CACHE_DB
+              $patch: delete
+            - name: HAI_CACHE_KEYPREFIX
+              $patch: delete
+            - name: HAI_CACHE_TLS
+              $patch: delete
+            - name: HAI_CACHE_URL
+              $patch: delete
+            - name: HAI_STORAGE_TYPE
+              $patch: delete
+            - name: HAI_STORAGE_ENDPOINT
+              $patch: delete
+            - name: HAI_STORAGE_BUCKET
+              $patch: delete
+            - name: HAI_STORAGE_REGION
+              $patch: delete
+            - name: HAI_STORAGE_FORCEPATHSTYLE
+              $patch: delete
+            - name: HAI_SPACEGATE_NATIVEQUEUETARGETS
+              $patch: delete
+            - name: HAI_ADMIN_DEFAULT_PASSWORD
+              $patch: delete
+            - name: HAI_CRYPTO_TRANSPORT_SERVERKEYRING
+              $patch: delete
+            - name: HAI_SPACEGATE_ADMINSK
+              $patch: delete
+            - name: HAI_RUST_JWT_KEY
+              $patch: delete
+            - name: HAI_DB_PASSWORD
+              $patch: delete
+            - name: HAI_CACHE_PASSWORD
+              $patch: delete
+            - name: HAI_STORAGE_ACCESSKEYID
+              $patch: delete
+            - name: HAI_STORAGE_SECRETACCESSKEY
+              $patch: delete
+            - name: HAI_REACH_PROVIDERS
+              $patch: delete
+            - name: HAI_QUEUE_ADMIN_TOKEN
+              value: null
+              valueFrom:
+                configMapKeyRef: null
+                fieldRef: null
+                resourceFieldRef: null
+                secretKeyRef:
+                  name: hai-quota-runtime-v2026.11.20-queue-001
+                  key: HAI_QUEUE_ADMIN_TOKEN
+                  optional: false
+          startupProbe:
+            exec: null
+            tcpSocket: null
+            grpc: null
+            httpGet:
+              path: /ready
+              port: 9080
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec: null
+            tcpSocket: null
+            grpc: null
+            httpGet:
+              path: /ready
+              port: 9080
+            periodSeconds: 10
+          livenessProbe:
+            exec: null
+            tcpSocket: null
+            grpc: null
+            httpGet:
+              path: /health
+              port: 9080
+            periodSeconds: 20

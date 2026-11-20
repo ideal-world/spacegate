@@ -183,9 +183,9 @@ spacegate/
 ./spacegate --config file:/etc/spacegate --plugins /lib/spacegate/plugins
 ```
 
-#### `binary/admin-server`
+#### 管理服务（已迁移）
 
-配置管理 REST API 服务器，提供 CRUD 接口操作网关配置，支持文件系统和 Kubernetes 两种后端。
+配置管理 REST API 已迁至相邻仓库 `spacegate-admin/rust/admin-server`，支持文件系统和 Kubernetes 后端。独立 Cargo workspace 及合并后台镜像构建方式见 [spacegate-admin README](../../../spacegate-admin/README.md)。网关 workspace 不再包含 `binary/admin-server`。
 
 ### 2.3 Crate 依赖关系
 
@@ -487,6 +487,8 @@ fn main() {
 ```
 
 #### 方式二：动态库插件（`.so` / `.dylib` / `.dll`）
+
+面向已发布网关构建、验包和安装时，请按[外部原生插件交付与安装](native-plugin-release.md)操作。以下示例展示原版 SpaceGate 的加载接口。
 
 动态库插件通过 `#[no_mangle]` 导出注册函数：
 
