@@ -4,7 +4,7 @@
 
 本文替代旧 `service-image-build-runbook.md` 中的新版本发布主流程。旧文档保留作旧 Vue / Wasm 服务交付参考。本文是已有 K8s 环境的升级手册，不是空集群的一键安装脚本。
 
-**给运维的集中 YAML 文件包：** [native-queue-release/README.md](../../resource/kube-manifests/native-queue-release/README.md)。已包含 ConfigMap、Secret、现有 Admin/网关升级补丁和完整 Admin 对照文件。推荐按文件包集中填写并审查 old/new 差异，无需逐条添加环境变量；本文保留变量解释、镜像交付、队列初始化、验收和回滚依据。文件包与第 6 节命令创建配置的方式二选一，不混用不同 Secret 命名。
+**给运维的部署文件包：** [native-queue-release/README.md](../../resource/kube-manifests/native-queue-release/README.md)。配置已简化为每个服务一份 `.env`：`spacegate-admin.env` 与 `spacegate.env`，普通项和凭据写在一起，整份导入并由对应工作负载加载。模板见 [配置说明](../../../spacegate-admin/deploy/k8s/README.md)，镜像导出和交付步骤见 [工作区交付手册](../../../镜像导出与配置交付.md)。旧版集中 YAML 和拆分配置不再作为发布入口。
 
 ## 1. 先选择本次操作范围
 
@@ -320,7 +320,7 @@ docker push "$REGISTRY/spacegate-admin:$VERSION"
 | `HAI_DB_TYPE` | `postgresql` | 推荐保留，连接单独 Admin 数据库 |
 | `HAI_DB_HOST` / `HAI_DB_PORT` | `host.docker.internal` / `5432` | 改实际 PG Service/DNS；K8s 不使用本机 Docker 宿主别名 |
 | `HAI_DB_DATABASE` / `HAI_DB_USER` | `spacegate_admin` / `user` | 数据库名与有权限账号；不要指向 Hub 业务库当作账号迁移 |
-| `HAI_DB_PASSWORD` | `<REDACTED>` | Secret 注入，不出现在 ConfigMap |
+| `HAI_DB_PASSWORD` | `<REDACTED>` | 填写在 Admin 同一份配置文件，部署时整体导入 |
 | `HAI_DB_SSL` / `HAI_DB_URL` | 本地未注入，YAML 回退 `false` / 空 | 按实际 TLS 配置；非空 URL 优先，残留 URL 会覆盖分项连接字段 |
 | `HAI_CACHE_TYPE` | `redis` | 保留共享 Redis；Admin Redis 与队列 Redis 是独立用途 |
 | `HAI_CACHE_HOST` / `HAI_CACHE_PORT` | `host.docker.internal` / `6379` | 改集群实际连接地址 |
@@ -358,7 +358,7 @@ docker push "$REGISTRY/spacegate-admin:$VERSION"
 
 1. 创建独立 Admin 数据库，账号具备目标 schema 的建表、索引及读写权限。IAM、审计、通知、调度器等表由应用初始化，不要求额外手工 SQL；这不代表已有账号会自动迁移。
 2. 准备 Admin Redis 与隔离前缀；准备队列 Redis。可以复用实例，但用途和故障影响要明确。
-3. 队列 Redis 当前要求单主、加载完成、`noeviction`，不支持 Redis Cluster；账号须能执行队列 Lua/键操作以及 `INFO all`、`CONFIG GET maxmemory-policy`。受管服务禁止这些命令时先解决兼容性，不能绕过健康检查上线。
+3. 队列 Redis 当前要求单主、加载完成、`noeviction`，不支持 Redis Cluster；账号须能执行队列 Lua/键操作以及 `INFO all`。新网关从 INFO 的 `maxmemory_policy` 读取淘汰策略，不再强制要求 CONFIG 权限；仅兼容服务未返回该字段时才尝试只读的 `CONFIG GET maxmemory-policy`。无法确认策略时保持拒绝准入，不能绕过健康检查上线。
 4. 准备 Admin bucket 和网关请求体专用 bucket/prefix。网关需要上传、读取、删除及 multipart 相关权限；启用版本控制时核对版本清理权限。
 5. 核对 Collector/ClickHouse 地址与链路，保留原访问审计配置。只发布 Admin/网关不要求重新部署这些服务。
 
@@ -387,129 +387,47 @@ docker push "$REGISTRY/spacegate-admin:$VERSION"
 - HAI 配置值会按 YAML 解析。纯数字密码等特殊字面值可能需在实际 HAI 环境值内保留 YAML 字符串引号；自动生成的带字母前缀密码/十六进制随机密钥可减少这种歧义。不要把需要原样比较的 queue token 随意加上实际引号。
 - 密钥环 JSON 可以多 key，但 activeKeyId 必须对应 keys 中现存项。SM2 key 必须用生成器生成，不能用占位字符串或普通 UUID。
 
-### 6.6 首次创建私有配置与密钥
+### 6.6 每个服务一份配置
 
-执行位置：运维机。私有目录不在仓库或 tar 交付目录中，文件不能提交 Git。
+从 [两份模板](../../../spacegate-admin/deploy/k8s/README.md) 复制并交付：
+
+| 文件 | 内容 |
+| --- | --- |
+| `config/spacegate-admin.env` | Admin 的全部部署参数，包含数据库/缓存/头像存储、SM2/JWT/内部凭据、队列管理目标和 token |
+| `config/spacegate.env` | 网关启动模式、namespace、插件目录、队列管理 token 和请求体存储 AK/SK |
+
+所有活动字段已填格式有效的示例值或有意留空，按 `[需替换]` / `[需核对]` 修改。SM2 示例是真实算法生成的公开示例密钥对，JWT 示例为 32 字节的 Base64；正式环境必须换成自己的密钥。已有部署升级沿用原密钥，不随镜像版本重新生成。两个文件的 `HAI_QUEUE_ADMIN_TOKEN` 必须完全相同。
+
+普通参数与凭据放在同一文件，不再另建 token/key/secrets 文件。生产通知 Provider 也在 Admin 同一文件填写；test 使用镜像默认 console Provider。所有中间件地址、账号、密码、bucket 等必须与目标服务实际一致，模板不会创建第三方账号和桶。
+
+以下从解包交付目录执行：
 
 ```bash
+export RELEASE_DIR=/收到的交付目录
+export VERSION="$(cat "$RELEASE_DIR/VERSION")"
+export PRIVATE_DIR="$RELEASE_DIR/generated"
 umask 077
-export PRIVATE_DIR="$HOME/.local/state/spacegate-release/$VERSION"
-mkdir -p "$PRIVATE_DIR"
-chmod 700 "$PRIVATE_DIR"
-
-# 在本机或源码可达的安全机器执行；只在首次部署新后台时生成。
-# ADMIN_ROOT 指向该机器上的 spacegate-admin 源码目录。
-(
-  set -euo pipefail
-  for name in transport-keyring.json admin-sk.txt rust-jwt-key.txt admin-password.txt; do
-    test ! -e "$PRIVATE_DIR/$name"
-  done
-  node "$ADMIN_ROOT/deploy/generate-transport-keyring.mjs" \
-    | tr -d '\n' > "$PRIVATE_DIR/transport-keyring.json"
-  openssl rand -hex 32 | tr -d '\n' > "$PRIVATE_DIR/admin-sk.txt"
-  openssl rand -base64 32 | tr -d '\n' > "$PRIVATE_DIR/rust-jwt-key.txt"
-  node -e 'process.stdout.write("Admin-"+require("node:crypto").randomBytes(24).toString("hex")+"!")' \
-    > "$PRIVATE_DIR/admin-password.txt"
-)
+mkdir -m 700 "$PRIVATE_DIR"
 ```
 
-生成块在独立子 shell 中检查所有输出文件均不存在，并启用失败中止与 pipefail；任何一步失败先检查私有目录，不删除已有文件盲目重跑。上述生成块只执行一次；若目录已有密钥，不执行该块，复用受管原件。后续版本的私有配置目录可以引用/安全复制既有密钥，但不能重新生成替换。生产通过既有 Secret 管理平台分发同一份值。
+填写后的两份文件包含凭据，保留原环境副本供后续升级；生成内容不要输出到公共日志。
 
-首次启用全新队列管理且尚无既有 token 时，再单独生成：
+### 6.7 整体导入版本化配置
+
+执行位置：有 kubectl 的运维机。`NS` 和 `GATEWAY_NS` 使用第 5 节的实际 namespace。先生成文件，再分别校验、应用：
 
 ```bash
-(
-  set -euo pipefail
-  test ! -e "$PRIVATE_DIR/queue-token.txt"
-  openssl rand -hex 32 | tr -d '\n' > "$PRIVATE_DIR/queue-token.txt"
-)
+kubectl -n "$NS" create secret generic "spacegate-admin-config-$VERSION" --from-env-file="$RELEASE_DIR/config/spacegate-admin.env" --dry-run=client -o yaml > "$PRIVATE_DIR/admin-config.yaml"
+kubectl -n "$GATEWAY_NS" create secret generic "spacegate-config-$VERSION" --from-env-file="$RELEASE_DIR/config/spacegate.env" --dry-run=client -o yaml > "$PRIVATE_DIR/gateway-config.yaml"
+kubectl apply --dry-run=server -f "$PRIVATE_DIR/admin-config.yaml"
+kubectl apply --dry-run=server -f "$PRIVATE_DIR/gateway-config.yaml"
+kubectl apply -f "$PRIVATE_DIR/admin-config.yaml"
+kubectl apply -f "$PRIVATE_DIR/gateway-config.yaml"
 ```
 
-已有队列 namespace 必须复用其管理 token，不能因为 Admin 更新而重新生成。若已有 IAM 数据库或上一轮密钥，则先备份和迁移，不执行“首次空库”流程。
+每份服务配置整体存入一个 K8s Secret，工作负载通过一个 `envFrom` 引用加载，无需区分安全变量。不同 namespace 自动生成各自对象，不做跨 namespace 引用；Admin 不读取网关 AWS 凭据。仅内存 Body 模式可删除网关文件中的 AWS 两项，token 仍保留。
 
-创建并填写两份文件：
-
-`$PRIVATE_DIR/admin-config.env`（非密钥，但仍按部署私有文件管理）：
-
-```dotenv
-NODE_ENV=test
-HAI_CORE_ENV=test
-HAI_CORE_LOGGING_LEVEL=info
-HAI_SERV_CORS_ORIGIN=https://admin.test.example.com
-PUBLIC_API_BASE=
-HAI_SPACEGATE_ADMINAK=spacegate-admin
-HAI_DB_TYPE=postgresql
-HAI_DB_HOST=postgres.database.svc.cluster.local
-HAI_DB_PORT=5432
-HAI_DB_DATABASE=spacegate_admin
-HAI_DB_USER=spacegate_admin
-HAI_DB_SSL=false
-HAI_CACHE_TYPE=redis
-HAI_CACHE_HOST=redis.cache.svc.cluster.local
-HAI_CACHE_PORT=6379
-HAI_CACHE_DB=0
-HAI_CACHE_KEYPREFIX=spacegate-admin_
-HAI_STORAGE_TYPE=s3
-HAI_STORAGE_ENDPOINT=https://storage.test.example.com
-HAI_STORAGE_BUCKET=spacegate-admin-test
-HAI_STORAGE_REGION=us-east-1
-HAI_STORAGE_FORCEPATHSTYLE=true
-HAI_SPACEGATE_NATIVEQUEUETARGETS=[{"id":"test-node-1","gateway":"REPLACE_GATEWAY_NAME","runtimeGateway":"REPLACE_RUNTIME_GATEWAY_NAME","baseUrl":"http://REPLACE_NODE_IP:9876","tokenEnv":"HAI_QUEUE_ADMIN_TOKEN"}]
-```
-
-`$PRIVATE_DIR/admin-secrets.env`（用编辑器替换占位内容）：
-
-```dotenv
-HAI_DB_PASSWORD=REPLACE_DATABASE_PASSWORD
-HAI_CACHE_PASSWORD=REPLACE_REDIS_PASSWORD_OR_EMPTY
-HAI_STORAGE_ACCESSKEYID=REPLACE_ADMIN_STORAGE_ACCESS_KEY
-HAI_STORAGE_SECRETACCESSKEY=REPLACE_ADMIN_STORAGE_SECRET_KEY
-```
-
-所有示例 DNS、IP、数据库、TLS、bucket 均须替换。生产模式另在私有文件加入真实 `HAI_REACH_PROVIDERS` JSON，不能遗留 console 默认。旧 `SK` / `KEY`、浏览器登录密码、Node-Rust 服务凭据是不同用途，不混用。
-
-### 6.7 写入版本化 ConfigMap / Secret
-
-执行位置：已选定测试集群的运维机。
-
-```bash
-export ADMIN_CONFIG_NAME="spacegate-admin-config-$VERSION"
-export ADMIN_SECRET_NAME="spacegate-admin-secret-$VERSION"
-export QUEUE_SECRET_NAME="hai-quota-runtime-$VERSION"
-
-kubectl -n "$NS" create configmap "$ADMIN_CONFIG_NAME" \
-  --from-env-file="$PRIVATE_DIR/admin-config.env" --dry-run=client -o yaml \
-  | kubectl apply -f -
-
-kubectl -n "$NS" create secret generic "$ADMIN_SECRET_NAME" \
-  --from-env-file="$PRIVATE_DIR/admin-secrets.env" \
-  --from-file=HAI_CRYPTO_TRANSPORT_SERVERKEYRING="$PRIVATE_DIR/transport-keyring.json" \
-  --from-file=HAI_SPACEGATE_ADMINSK="$PRIVATE_DIR/admin-sk.txt" \
-  --from-file=HAI_RUST_JWT_KEY="$PRIVATE_DIR/rust-jwt-key.txt" \
-  --from-file=HAI_ADMIN_DEFAULT_PASSWORD="$PRIVATE_DIR/admin-password.txt" \
-  --from-file=HAI_QUEUE_ADMIN_TOKEN="$PRIVATE_DIR/queue-token.txt" \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
-
-网关需要对象存储时，再准备 `$PRIVATE_DIR/gateway-secrets.env`：
-
-```dotenv
-AWS_ACCESS_KEY_ID=REPLACE_GATEWAY_BODY_STORAGE_ACCESS_KEY
-AWS_SECRET_ACCESS_KEY=REPLACE_GATEWAY_BODY_STORAGE_SECRET_KEY
-```
-
-```bash
-kubectl -n "$GATEWAY_NS" create secret generic "$QUEUE_SECRET_NAME" \
-  --from-env-file="$PRIVATE_DIR/gateway-secrets.env" \
-  --from-file=HAI_QUEUE_ADMIN_TOKEN="$PRIVATE_DIR/queue-token.txt" \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
-
-仅内存 Body 模式可省略 AWS 两项，创建网关 Secret 时也省略 `--from-env-file`，仍注入 queue token。两个工作负载不在同 namespace 时分别创建各自 Secret，不能跨 namespace 引用同一个 Secret 对象。
-
-版本化对象使回滚可引用旧配置；同一个 VERSION 对应的配置审定后不再覆盖，后续变更使用新版本名称。后续只更新镜像、不改配置时，继续引用原配置对象即可。更新 Secret/ConfigMap 本身不会更新已有进程的环境变量。
-
-这些值使用 K8s Secret 保存并不等于 etcd 已加密；沿用集群既有 Secret 访问控制和备份策略。不要把上述管道的中间 YAML 保存到普通目录，或加 `tee` 输出到构建日志。
+本包补丁以 `v2026.11.20-queue-001` 为版本替换标记，交付手册会替换为本次 VERSION；资源名与镜像 tag 必须对应。保留旧配置对象和 revision 供回滚；后续只更新镜像可继续引用已有配置。更新对象本身不会改变运行进程环境，必须 rollout 重建 Pod 才生效。
 
 ## 7. K8s 配置修改与首次 Admin 切换
 
@@ -579,7 +497,7 @@ kubectl set image --local -f "$PRIVATE_DIR/admin.before.json" \
 1. 删除旧 `/etc/nginx/nginx.conf` 的 `nginx-config` volumeMount；没有其他使用方后再删除对应 volume。旧 ConfigMap 可保留供回滚，不再挂到新后台。
 2. 移除旧 `command` / `args` 启动覆盖，使用镜像 ENTRYPOINT。新路径不是 `/usr/src/app/admin-server`。
 3. 合并下面的 envFrom，保留已有仍需的引用。删除 `env` 中与新 envFrom 冲突的旧变量：显式 `env` 优先于 envFrom，否则会悄悄继续连接旧数据库/旧 target。
-4. 设置实际 `CONFIG`、`GATEWAY_CLASS_NAME`、`GATEWAY_INSTANCE`，对外端口为 9080；内部 HOST/PORT 由镜像入口处理。
+4. 在 `spacegate-admin.env` 设置实际 `CONFIG`、`GATEWAY_CLASS_NAME`、`GATEWAY_INSTANCE`，对外端口为 9080；内部 HOST/PORT 由镜像入口处理。
 5. 首轮保留单副本，配置启动/就绪/存活探针。`terminationGracePeriodSeconds` 按现有任务退出预算确定，示例 60 秒。
 
 当前合并入口先以 root 创建/调整运行目录，再通过 gosu 以 node 用户启动 Node；Nginx/Rust 也由同一监管入口拉起。若现场有 `runAsNonRoot`、固定 `runAsUser` 或只读根文件系统约束，先核验这些启动和目录写入是否兼容；不兼容时需另行适配镜像/目录挂载，不能仅更改 image 宣称支持，也不要临时关闭集群安全策略掩盖问题。
@@ -597,17 +515,8 @@ spec:
           image: spacegate-admin:v2026.11.20-queue-001
           imagePullPolicy: IfNotPresent
           envFrom:
-            - configMapRef:
-                name: spacegate-admin-config-v2026.11.20-queue-001
             - secretRef:
-                name: spacegate-admin-secret-v2026.11.20-queue-001
-          env:
-            - name: CONFIG
-              value: k8s:spacegate
-            - name: GATEWAY_CLASS_NAME
-              value: spacegate
-            - name: GATEWAY_INSTANCE
-              value: spacegate.spacegate
+                name: spacegate-admin-config-v2026.11.20-queue-001
           ports:
             - name: http
               containerPort: 9080
@@ -623,7 +532,7 @@ spec:
             periodSeconds: 20
 ```
 
-文件须用本次实际变量值替换示例值，不能把 shell `$ADMIN_SECRET_NAME` 原样写进 YAML 并期望 K8s 展开。已有新的合并 Admin 时，不再重复“首次”删除或生成用户，保留已验收配置。
+文件须用本次实际变量值替换示例值，不能把 shell `$VERSION` 原样写进 YAML 并期望 K8s 展开。已有新的合并 Admin 时，不再重复“首次”删除或生成用户，保留已验收配置。
 
 ### 7.4 准备网关目标清单
 
@@ -644,21 +553,12 @@ spec:
         - name: spacegate
           image: spacegate:v2026.11.20-queue-001
           imagePullPolicy: IfNotPresent
-          env:
-            - name: STARTUP_MODE
-              value: k8s
-            - name: K8S_NAMESPACE
-              value: spacegate
-            - name: GATEWAY_CLASS_NAME
-              value: spacegate
-            - name: PLUGIN_DIR
-              value: /var/lib/spacegate/plugins
           envFrom:
             - secretRef:
-                name: hai-quota-runtime-v2026.11.20-queue-001
+                name: spacegate-config-v2026.11.20-queue-001
 ```
 
-移除本地文件模式的 `CONFIG_FILE_PATH` / `STARTUP_MODE=file`；若保留 `CONFIG=k8s:<namespace>`，须与上述一致。保留原有其他 envFrom，消除 token/AWS 凭据的显式旧 env 覆盖。不要向 HAI 网关追加旧 CLI 的 `args: ["-c", "k8s:..."]` 作为配置方式。
+在 `spacegate.env` 设置 `STARTUP_MODE=k8s`、`CONFIG=k8s:<namespace>`、`K8S_NAMESPACE`、`GATEWAY_CLASS_NAME` 与 `PLUGIN_DIR`。清除显式旧 env 中所有与该文件重复的键，包括 `CONFIG_FILE_PATH`，避免覆盖整体导入配置；保留原有其他必要 envFrom。不要向 HAI 网关追加旧 CLI 的 `args: ["-c", "k8s:..."]` 作为配置方式。
 
 插件目录可以不同，但目录必须存在且与 PLUGIN_DIR 一致。新纯网关创建 `/var/lib/spacegate/plugins`、`/plugins`；不能假定还存在旧 `/lib/spacegate/plugins`。`PLUGINS` 是另一入口的参数，不等同于此 HAI 入口的 PLUGIN_DIR。
 

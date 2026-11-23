@@ -22,10 +22,8 @@ spec:
               mountPath: /etc/nginx/nginx.conf
               $patch: delete
           envFrom:
-            - configMapRef:
-                name: spacegate-admin-config-v2026.11.20-queue-001
             - secretRef:
-                name: spacegate-admin-private-v2026.11.20-queue-001
+                name: spacegate-admin-config-v2026.11.20-queue-001
           env:
             # 显式 env 优先于 envFrom；删除所有由本模板接管的同名旧值。
             # 不删除其他现场自定义变量。增加集中字段时同步本删除列表。
@@ -108,15 +106,7 @@ spec:
             - name: HAI_REACH_PROVIDERS
               $patch: delete
             - name: HAI_QUEUE_ADMIN_TOKEN
-              value: null
-              valueFrom:
-                configMapKeyRef: null
-                fieldRef: null
-                resourceFieldRef: null
-                secretKeyRef:
-                  name: hai-quota-runtime-v2026.11.20-queue-001
-                  key: HAI_QUEUE_ADMIN_TOKEN
-                  optional: false
+              $patch: delete
           startupProbe:
             exec: null
             tcpSocket: null

@@ -11,10 +11,11 @@ use opentelemetry_sdk::{
     trace::{Sampler, SdkTracerProvider},
     Resource,
 };
-use spacegate_config::model::{ObservabilityConfig, OtlpProtocol};
+use spacegate_config::model::{ObservabilityConfig, ObservabilityRuntimeSnapshot, OtlpProtocol};
 use tracing_subscriber::{filter::filter_fn, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 static OTEL_GUARD: OnceLock<ObservabilityGuard> = OnceLock::new();
+static OTEL_RUNTIME: OnceLock<ObservabilityRuntimeSnapshot> = OnceLock::new();
 
 #[derive(Debug)]
 pub struct ObservabilityGuard {
@@ -51,19 +52,55 @@ impl Drop for ObservabilityGuard {
 
 pub fn init(config: &ObservabilityConfig) {
     let config = config_with_env_overrides(config, |key| std::env::var(key));
-    let _ = OTEL_GUARD.get_or_init(|| match build_guard(&config) {
-        Ok(guard) => guard,
-        Err(err) => {
-            eprintln!("failed to initialize OpenTelemetry, falling back to stdout tracing: {err}");
-            init_stdout_only();
-            ObservabilityGuard {
-                tracer_provider: None,
-                meter_provider: None,
-                logger_provider: None,
+    let _ = OTEL_GUARD.get_or_init(|| {
+        let (guard, initialization_failed) = match build_guard(&config) {
+            Ok(guard) => (guard, false),
+            Err(err) => {
+                eprintln!("failed to initialize OpenTelemetry, falling back to stdout tracing: {err}");
+                init_stdout_only();
+                (
+                    ObservabilityGuard {
+                        tracer_provider: None,
+                        meter_provider: None,
+                        logger_provider: None,
+                    },
+                    true,
+                )
             }
-        }
+        };
+        let _ = OTEL_RUNTIME.set(ObservabilityRuntimeSnapshot {
+            config: config.clone(),
+            traces_active: guard.tracer_provider.is_some(),
+            metrics_active: guard.meter_provider.is_some(),
+            logs_active: guard.logger_provider.is_some(),
+            initialization_failed,
+        });
+        guard
     });
 }
+
+/// 返回首次初始化时的生效值；不重新读取环境变量，也不返回可能含凭据的 URI 部分。
+pub fn runtime_snapshot() -> Option<ObservabilityRuntimeSnapshot> {
+    let mut snapshot = OTEL_RUNTIME.get()?.clone();
+    snapshot.config.otlp_endpoint = public_endpoint(&snapshot.config.otlp_endpoint);
+    Some(snapshot)
+}
+
+fn public_endpoint(endpoint: &str) -> String {
+    let endpoint = endpoint.split('#').next().unwrap_or_default();
+    let Ok(uri) = endpoint.parse::<hyper::Uri>() else {
+        return "[invalid endpoint]".into();
+    };
+    let (Some(scheme), Some(authority)) = (uri.scheme_str(), uri.authority()) else {
+        return "[invalid endpoint]".into();
+    };
+    let host = authority.as_str().rsplit('@').next().unwrap_or_default();
+    format!("{scheme}://{host}{}", uri.path())
+}
+
+// TODO(管理端 OTLP 配置): 可将进程全局配置交给 Admin 持久化并分发，避免手工修改集群变量。
+// 实施前需明确环境变量覆盖规则、跨节点应用确认，并以可替换的 Provider 生命周期替代 OnceLock；
+// 切换时须先刷新旧导出器再释放资源。单网关 parameters.observability 不能直接驱动进程全局配置。
 
 fn config_with_env_overrides<F>(config: &ObservabilityConfig, mut get_env: F) -> ObservabilityConfig
 where

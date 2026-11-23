@@ -53,6 +53,12 @@ impl Gateway {
     pub fn as_service(&self) -> ArcHyperService {
         let gateway_name = GatewayName::new(self.gateway_name.clone());
         let add_gateway_name_layer = MapRequestLayer::new(add_extension(gateway_name, true));
+        // 服务持有网关扩展及其中的插件挂载标记；构建器释放后仍须保持挂载可见。
+        let extensions = self.ext.clone();
+        let add_gateway_extensions_layer = MapRequestLayer::new(move |mut req: Request<SgBody>| {
+            req.extensions_mut().extend(extensions.clone());
+            req
+        });
         let gateway_plugins = self.http_plugins.iter();
         let http_routes = self.http_routes.values();
         let route = create_http_router(http_routes, self.http_fallback.clone());
@@ -63,7 +69,7 @@ impl Gateway {
         };
         #[cfg(not(feature = "reload"))]
         let service = route;
-        ArcHyperService::new(add_gateway_name_layer.layer(fold_layers(gateway_plugins, ArcHyperService::new(service))))
+        ArcHyperService::new(add_gateway_extensions_layer.layer(add_gateway_name_layer.layer(fold_layers(gateway_plugins, ArcHyperService::new(service)))))
     }
 }
 

@@ -13,6 +13,23 @@ use tracing::info;
 pub(crate) mod matches_convert;
 pub mod plugin_filter_dto;
 
+type ConfigAppliedHook = std::sync::Arc<dyn Fn(Config) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
+static CONFIG_APPLIED_HOOKS: std::sync::OnceLock<std::sync::RwLock<Vec<ConfigAppliedHook>>> = std::sync::OnceLock::new();
+
+/// 注册配置应用完成后的资源生命周期回调。配置中的绑定关系不受旧请求存活时间影响。
+pub fn register_config_applied_hook(hook: ConfigAppliedHook) {
+    CONFIG_APPLIED_HOOKS.get_or_init(Default::default).write().expect("config hooks lock").push(hook);
+}
+
+async fn notify_config_applied<C: Retrieve>(source: &C) -> Result<(), BoxError> {
+    let hooks = CONFIG_APPLIED_HOOKS.get_or_init(Default::default).read().expect("config hooks lock").clone();
+    if !hooks.is_empty() {
+        let config = source.retrieve_config().await?;
+        for hook in hooks { hook(config.clone()).await; }
+    }
+    Ok(())
+}
+
 pub struct ListenerWrapper<L: Listen>(L);
 
 impl<L: Listen> Stream for ListenerWrapper<L> {
@@ -51,6 +68,7 @@ where
     };
     let mut listener = ListenerWrapper(listener);
     RunningSgGateway::global_init(init_config, shutdown_signal.clone()).await;
+    notify_config_applied(&config).await?;
     info!("[SG.Config] Entering listening");
     let mut local_queue = VecDeque::new();
     let gateway_shutdown_signal = shutdown_signal.child_token();
@@ -146,5 +164,5 @@ async fn handler<C: Retrieve>(event: ListenEvent, config: &C, gateway_shutdown_s
         }
     }
 
-    Result::<(), BoxError>::Ok(())
+    notify_config_applied(config).await
 }

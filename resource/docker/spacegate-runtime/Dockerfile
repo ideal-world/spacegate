@@ -3,6 +3,7 @@ LABEL org.opencontainers.image.source="https://github.com/ideal-world/spacegate"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libssl3 tini \
+    && mkdir -p /lib/spacegate/plugins /var/lib/spacegate/plugins /plugins \
     && rm -rf /var/lib/apt/lists/*
 
 COPY spacegate /usr/local/bin/spacegate

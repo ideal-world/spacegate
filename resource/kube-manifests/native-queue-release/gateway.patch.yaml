@@ -1,67 +1,45 @@
-# Strategic Merge Patch：只能通过 kubectl patch --type=strategic --patch-file 使用。
-# 它不是完整 DaemonSet，不能 kubectl apply -f 本文件或直接 apply 整个目录。
-# 保留现场 hostNetwork、ServiceAccount、resources、插件/证书卷、OTel 和其他环境变量。
-# 只适用于已有的 HAI 网关入口，实际资源名、namespace 在 kubectl 命令中选择。
+# Strategic Merge Patch：通过 kubectl patch --type=strategic --patch-file 使用。
+# 不是完整 DaemonSet，不能直接 kubectl apply 本文件或整个目录。
+# 保留现场 hostNetwork、ServiceAccount、resources、插件/证书卷和无关环境变量。
+# envFrom 是原子列表：若现场已有其他必要引用，在下面列表中一并保留。
 spec:
   template:
     spec:
-      # 按现场长请求退出预算核对；建议先停止新增流量并等待队列/执行/Body 清零。
+      # 按现场长请求退出预算核对；先停止新增流量并等待队列/执行/Body 清零。
       terminationGracePeriodSeconds: 60
       containers:
         - name: spacegate
           image: spacegate:v2026.11.20-queue-001
           imagePullPolicy: IfNotPresent
-          # 删除旧 CLI 启动覆盖；使用新镜像自带的 HAI ENTRYPOINT。
+          # 使用新镜像自带的 HAI ENTRYPOINT。
           command: null
           args: null
+          envFrom:
+            - secretRef:
+                name: spacegate-config-v2026.11.20-queue-001
           env:
+            # 删除被 spacegate.env 接管的显式旧值，避免 env 覆盖 envFrom。
             - name: STARTUP_MODE
-              valueFrom: null
-              value: "k8s"
+              $patch: delete
             - name: CONFIG
-              valueFrom: null
-              value: "k8s:spacegate"
+              $patch: delete
             - name: K8S_NAMESPACE
-              valueFrom: null
-              value: "spacegate"
+              $patch: delete
             - name: GATEWAY_CLASS_NAME
-              valueFrom: null
-              value: "spacegate"
+              $patch: delete
             - name: CONFIG_FILE_PATH
               $patch: delete
             - name: PLUGIN_DIR
-              valueFrom: null
-              value: "/var/lib/spacegate/plugins"
+              $patch: delete
+            - name: RUST_LOG
+              $patch: delete
             - name: HAI_QUEUE_ADMIN_TOKEN
-              value: null
-              valueFrom:
-                configMapKeyRef: null
-                fieldRef: null
-                resourceFieldRef: null
-                secretKeyRef:
-                  name: hai-quota-runtime-v2026.11.20-queue-001
-                  key: HAI_QUEUE_ADMIN_TOKEN
-                  optional: false
+              $patch: delete
             - name: AWS_ACCESS_KEY_ID
-              value: null
-              valueFrom:
-                configMapKeyRef: null
-                fieldRef: null
-                resourceFieldRef: null
-                secretKeyRef:
-                  name: hai-quota-runtime-v2026.11.20-queue-001
-                  key: AWS_ACCESS_KEY_ID
-                  optional: false
+              $patch: delete
             - name: AWS_SECRET_ACCESS_KEY
-              value: null
-              valueFrom:
-                configMapKeyRef: null
-                fieldRef: null
-                resourceFieldRef: null
-                secretKeyRef:
-                  name: hai-quota-runtime-v2026.11.20-queue-001
-                  key: AWS_SECRET_ACCESS_KEY
-                  optional: false
-          # 没有删除任何插件卷。PLUGIN_DIR 必须与实际现有挂载匹配。
-          # 当前纯网关没有旧 /lib/spacegate/wasm/spacegate_plugin_ai_gateway_queue.wasm，
-          # 目标仍引用该文件时先补制品或迁移旧绑定，不要直接换镜像。
+              $patch: delete
+            - name: AWS_SESSION_TOKEN
+              $patch: delete
+          # PLUGIN_DIR 必须与现场现有挂载匹配；本补丁不删除插件卷。
+          # 当前纯网关不含旧 ai_gateway_queue.wasm，旧绑定需先补制品或迁移。

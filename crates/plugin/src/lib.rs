@@ -329,8 +329,10 @@ impl PluginRepository {
         };
         let mut instances = self.instances.write().expect("SgPluginRepository register error");
         if let Some(instance) = instances.get_mut(&id) {
-            let new_inner_pf = attr.make_pf(config)?;
+            let new_inner_pf = attr.make_pf(config.clone())?;
             instance.plugin_function.swap(new_inner_pf);
+            // 创建成功后再更新快照，管理诊断与后台恢复必须读取实际加载的配置。
+            instance.config = config;
         } else {
             let instance = attr.make_instance(config)?;
             instance.after_create()?;

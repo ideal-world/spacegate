@@ -1,6 +1,7 @@
 # 新安装/对照用完整 Deployment + Service。已有部署优先使用 admin.patch.yaml，
 # 避免遗漏现场资源限制、调度约束、额外挂载等设置。不要将本例与补丁同时反复应用。
-# 前置：已有 spacegate-admin ServiceAccount 及经审定的原 RBAC，先创建 runtime-config.yaml。
+# 前置：已有 spacegate-admin ServiceAccount 及经审定的原 RBAC，
+# 先从 spacegate-admin.env 整体导入 spacegate-admin-config-<版本>。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,17 +28,8 @@ spec:
           imagePullPolicy: IfNotPresent
           # 不再挂载旧 spacegate-admin-nginx ConfigMap。
           envFrom:
-            - configMapRef:
-                name: spacegate-admin-config-v2026.11.20-queue-001
             - secretRef:
-                name: spacegate-admin-private-v2026.11.20-queue-001
-          env:
-            # 只给 Admin 管理 token，不将网关 AWS 凭据注入后台。
-            - name: HAI_QUEUE_ADMIN_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hai-quota-runtime-v2026.11.20-queue-001
-                  key: HAI_QUEUE_ADMIN_TOKEN
+                name: spacegate-admin-config-v2026.11.20-queue-001
           ports:
             - name: http
               containerPort: 9080

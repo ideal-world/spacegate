@@ -36,6 +36,7 @@ impl Default for RedisPoolConfig {
 pub struct RedisClient {
     /// Pooled Redis client.
     pub redis_conn_pool: Pool,
+    connection_url: std::sync::Arc<str>,
 }
 
 impl std::fmt::Debug for RedisClient {
@@ -60,7 +61,15 @@ impl RedisClient {
             recycle: Some(config.recycle_timeout),
         };
         let redis_conn_pool = Pool::builder(Manager::new(url)?).config(pool_config).runtime(deadpool_redis::Runtime::Tokio1).build().expect("Failed to create Redis pool");
-        Ok(Self { redis_conn_pool })
+        Ok(Self { redis_conn_pool, connection_url: url.into() })
+    }
+    /// 比较连接目标、凭据和池参数；仅返回布尔值，不公开 URL 或凭据。
+    pub fn same_configuration(&self, other: &Self) -> bool {
+        let one = self.redis_conn_pool.timeouts();
+        let two = other.redis_conn_pool.timeouts();
+        self.connection_url == other.connection_url
+            && self.redis_conn_pool.status().max_size == other.redis_conn_pool.status().max_size
+            && one.wait == two.wait && one.create == two.create && one.recycle == two.recycle
     }
     /// Get a connection from the pool.
     pub async fn get_conn(&self) -> Result<Connection, PoolError> {
