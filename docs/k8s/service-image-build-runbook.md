@@ -1,5 +1,7 @@
 # SpaceGate 拆分服务镜像构建 Runbook
 
+> 2026-11-24：本文中的旧 Vue / Wasm 部署步骤仅作历史参考。当前发布使用 [网关与新 Admin 发布手册](native-queue-release-runbook.md)；旧前端仓库与 all-in-one 文件已移至工作区外的 `spacegate-legacy-reference`，不再参与当前构建。
+
 > 新版发布请使用 [SpaceGate 与新 Admin 镜像交付及 K8s 发布操作手册](native-queue-release-runbook.md)。新手册覆盖导出本地已验收镜像、当前本地配置对照、首次新 Admin 切换、原生队列和回滚；本文后续旧 Vue / Wasm 步骤保留作兼容参考。
 
 > 2026-11-19：Rust `admin-server` 源码已迁入相邻 `spacegate-admin/rust/admin-server`。本文后续旧 Vue 合并镜像流程仅用于兼容旧交付；新 Web + Node API + Rust 的合并后台使用 [`spacegate-admin/README.md`](../../../spacegate-admin/README.md) 的 `images/combined.Dockerfile`。网关可独立部署，管理后台可选；原生 `hai-quota` 不要求旧 `ai-gateway-service`。

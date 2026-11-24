@@ -29,6 +29,8 @@ RUN sed -i '/"backend\/hai-hub-observe"/d;/"backend\/hai-hub-resource"/d;/"servi
     'spacegate-plugin = { path = "/app/crates/plugin" }' \
     'spacegate-shell = { path = "/app/crates/shell" }' > /hai-hub/.cargo/config.toml
 WORKDIR /hai-hub
+# 仅影响构建；断网时可显式复用已完整下载的 Cargo 缓存。
+ARG CARGO_NET_OFFLINE=false
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/hai-hub/target \

@@ -1,5 +1,7 @@
 # SpaceGate 生产 K8S 部署手册
 
+> 2026-11-24：本文中的旧 Vue / Wasm 部署步骤仅作历史参考。当前发布使用 [网关与新 Admin 发布手册](native-queue-release-runbook.md)；旧前端仓库与 all-in-one 文件已移至工作区外的 `spacegate-legacy-reference`，不再参与当前构建。
+
 本文档用于指导运维和开发把当前工作区的 SpaceGate、SpaceGate Admin、AI Gateway 后端和 Wasm 插件按生产 K8S 方式部署。本文不使用 `Dockerfile.all-in-one` 单容器方案；生产环境必须按组件拆分部署、独立扩缩容、独立升级和回滚。
 
 ## 1. 适用范围
